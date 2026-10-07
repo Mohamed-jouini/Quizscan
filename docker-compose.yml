@@ -1,0 +1,18 @@
+services:
+  quizscan:
+    build: .
+    # QUIZSCAN_BIND (.env) : 127.0.0.1 par défaut — l'application n'est
+    # joignable que depuis le serveur, un reverse proxy (Caddy) la publie.
+    # Mettez 0.0.0.0 pour un accès direct depuis le réseau, par exemple
+    # QUIZSCAN_BIND=0.0.0.0 et QUIZSCAN_PORT=80.
+    ports:
+      - "${QUIZSCAN_BIND:-127.0.0.1}:${QUIZSCAN_PORT:-5011}:8000"
+    # Réglages propres au serveur : fichier .env (copie de .env.example),
+    # jamais versionné, donc conservé lors des mises à jour automatiques.
+    env_file: .env
+    environment:
+      DEBUG: "0"
+    volumes:
+      - ./data:/app/data     # base de données SQLite
+      - ./media:/app/media   # fiches PDF, scans, images de contrôle
+    restart: unless-stopped

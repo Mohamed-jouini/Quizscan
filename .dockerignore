@@ -1,0 +1,10 @@
+data/
+media/
+venv/
+__pycache__/
+*.pyc
+*.zip
+.env
+deploy/
+media_test/
+staticfiles/

@@ -1,0 +1,20 @@
+{% comment %}
+Barre de pagination réutilisable. Conserve les autres paramètres de l'URL
+(filtre par lot, étudiant…) en ne remplaçant que « page ».
+Un commentaire {# … #} ne tient que sur UNE ligne : sur plusieurs, Django ne
+le reconnaît pas et l'affiche tel quel dans la page.
+{% endcomment %}
+{% if page.paginator.num_pages > 1 %}
+<p class="helptext" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+  {% if page.has_previous %}
+    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page=1">⏮ Début</a>
+    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.previous_page_number }}">◀ Précédent</a>
+  {% endif %}
+  <span>{{ label|default:"Lignes" }} {{ page.start_index }} à {{ page.end_index }}
+        sur {{ page.paginator.count }} — page {{ page.number }} / {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}
+    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.next_page_number }}">Suivant ▶</a>
+    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.paginator.num_pages }}">Fin ⏭</a>
+  {% endif %}
+</p>
+{% endif %}

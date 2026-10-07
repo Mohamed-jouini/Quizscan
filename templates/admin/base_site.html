@@ -1,0 +1,390 @@
+{% extends "admin/base.html" %}
+{% load i18n %}
+
+{# Habillage de l'interface d'administration aux couleurs de QuizScan.      #}
+{# Django 5 expose ses couleurs en variables CSS : on les redéfinit plutôt  #}
+{# que de lutter contre sa feuille de style, ce qui reste valable quand     #}
+{# Django change ses règles internes. Le thème sombre est couvert aussi.    #}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | QuizScan{% endblock %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+html[data-theme="light"], :root{
+  --qs-blue:#4356c9;
+  --qs-violet:#8b5cf6;
+  --qs-grad:linear-gradient(135deg,#4356c9,#8b5cf6);
+
+  --primary:#4356c9;
+  --secondary:#36469f;
+  --accent:#c9b4ee;
+  --primary-fg:#fff;
+
+  --body-fg:#1a1f3c;
+  --body-bg:#eceef7;
+  --body-quiet-color:#5f668c;
+  --body-medium-color:#434a73;
+  --body-loud-color:#0f1330;
+
+  --header-color:#dfe3fb;
+  --header-branding-color:#fff;
+  --header-bg:transparent;          /* le dégradé est posé sur #header */
+  --header-link-color:#fff;
+
+  --breadcrumbs-fg:#5f668c;
+  --breadcrumbs-link-fg:#4356c9;
+  --breadcrumbs-bg:transparent;
+
+  --link-fg:#4356c9;
+  --link-hover-color:#2b3a95;
+  --link-selected-fg:#36469f;
+
+  --hairline-color:#e2e6f3;
+  --border-color:#dde2f2;
+
+  --error-fg:#c5221f;
+  --message-success-bg:#e8f4ec;
+  --message-warning-bg:#fdf1dc;
+  --message-error-bg:#fbe9e8;
+
+  --darkened-bg:#f5f6fc;
+  --selected-bg:#eef0fb;
+  --selected-row:#f2f0ff;
+
+  --button-fg:#fff;
+  --button-bg:#4356c9;
+  --button-hover-bg:#36469f;
+  --default-button-bg:#4356c9;
+  --default-button-hover-bg:#36469f;
+  --close-button-bg:#6b7399;
+  --close-button-hover-bg:#4e5577;
+  --delete-button-bg:#c5221f;
+  --delete-button-hover-bg:#a11b19;
+
+  --object-tools-bg:#36469f;
+  --object-tools-hover-bg:#2b3a95;
+}
+
+/* Thème sombre : même famille de couleurs, simplement assombrie. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --primary:#6a71d8;
+    --body-bg:#14162b;
+    --body-fg:#e8eaf6;
+    --body-quiet-color:#a8aecd;
+    --body-medium-color:#c6cae3;
+    --body-loud-color:#fff;
+    --darkened-bg:#1b1e38;
+    --selected-bg:#232745;
+    --selected-row:#2a2550;
+    --hairline-color:#2a2e4d;
+    --border-color:#333858;
+    --link-fg:#a9b3ee;
+    --link-hover-color:#c6cdf7;
+    --breadcrumbs-fg:#a8aecd;
+    --breadcrumbs-link-fg:#a9b3ee;
+  }
+}
+html[data-theme="dark"]{
+  --primary:#6a71d8;
+  --body-bg:#14162b;
+  --body-fg:#e8eaf6;
+  --body-quiet-color:#a8aecd;
+  --body-medium-color:#c6cae3;
+  --body-loud-color:#fff;
+  --darkened-bg:#1b1e38;
+  --selected-bg:#232745;
+  --selected-row:#2a2550;
+  --hairline-color:#2a2e4d;
+  --border-color:#333858;
+  --link-fg:#a9b3ee;
+  --link-hover-color:#c6cdf7;
+  --breadcrumbs-fg:#a8aecd;
+  --breadcrumbs-link-fg:#a9b3ee;
+}
+
+/* --- Fond de page : mêmes halos que l'application, mais discrets : ici il
+       n'y a pas de grand panneau blanc pour les masquer au centre. -------- */
+body{background:var(--body-bg);padding:clamp(10px,2vw,24px)}
+body::before,body::after{
+  content:"";position:fixed;border-radius:50%;filter:blur(120px);
+  opacity:.22;pointer-events:none;z-index:0;
+}
+body::before{width:34rem;height:34rem;background:#9fb0f2;top:-12rem;left:-8rem}
+body::after{width:38rem;height:38rem;background:#c9b4ee;bottom:-16rem;right:-10rem}
+
+/* Le conteneur reprend le panneau en verre du reste de l'application, et
+   se divise comme lui : barre latérale à gauche, contenu à droite.
+   Django lui impose width:100%, min-width:980px, height:100% et
+   display:flex ; on lève ces contraintes pour en faire une carte centrée. */
+#container{
+  position:relative;z-index:1;
+  width:auto;min-width:0;height:auto;
+  max-width:1320px;margin:0 auto;
+  min-height:calc(100vh - 2 * clamp(10px,2vw,24px));
+  display:grid;grid-template-columns:238px minmax(0,1fr);
+  border-radius:26px;overflow:hidden;
+  background:rgba(255,255,255,.80);
+  border:1px solid rgba(255,255,255,.85);
+  backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
+  box-shadow:0 40px 90px -30px rgba(26,31,60,.45);
+}
+/* Fenêtre de sélection (loupe d'une clé étrangère) : pas de barre latérale */
+body.popup #container{grid-template-columns:1fr}
+.qs-main{display:flex;flex-direction:column;min-width:0}
+
+/* ----- barre latérale, identique à celle de l'application -------------- */
+.qs-side{
+  padding:22px 14px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;
+  background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,.25));
+  border-right:1px solid rgba(255,255,255,.7);
+}
+.qs-brand{display:flex;align-items:center;gap:10px;padding:4px 10px 20px}
+.qs-mark{
+  width:34px;height:34px;border-radius:10px;flex:none;background:var(--qs-grad);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 18px -8px var(--qs-blue);
+}
+.qs-mark svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:1.9}
+.qs-wordmark{font-weight:700;font-size:16px;line-height:1.1;letter-spacing:.2px;
+  color:var(--body-fg)}
+.qs-wordmark small{display:block;font-size:9.5px;font-weight:600;letter-spacing:1.3px;
+  text-transform:uppercase;color:var(--body-quiet-color);margin-top:2px}
+.qs-wordmark small{display:block;font-size:9.5px;font-weight:600;letter-spacing:1.3px;
+  text-transform:uppercase;color:var(--body-quiet-color);margin-top:2px}
+.qs-nav{display:flex;flex-direction:column;gap:3px}
+.qs-item{
+  display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;
+  text-decoration:none;color:var(--body-quiet-color);font-size:14px;font-weight:500;
+}
+.qs-item svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7}
+.qs-item:hover{background:rgba(255,255,255,.75);color:var(--body-fg)}
+.qs-item.is-active{background:#fff;color:var(--qs-blue);font-weight:600;
+  box-shadow:0 6px 16px -10px rgba(26,31,60,.5)}
+.qs-sub{font-size:13.5px;padding:7px 12px 7px 20px}
+.qs-group{
+  font-size:10px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;
+  color:var(--body-quiet-color);opacity:.75;margin:18px 0 6px;padding:0 12px;
+}
+.qs-foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--border-color);
+  display:flex;flex-direction:column;gap:2px}
+.qs-logout{
+  width:100%;margin-top:6px;padding:9px 12px;border-radius:10px;cursor:pointer;
+  border:1px solid var(--border-color);background:#fff;color:var(--body-fg);
+  font:inherit;font-size:13.5px;font-weight:600;
+}
+.qs-logout:hover{border-color:var(--qs-blue);color:var(--qs-blue)}
+html[data-theme="dark"] .qs-item.is-active,
+html[data-theme="dark"] .qs-logout{background:#1b1e38}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .qs-item.is-active,
+  :root:not([data-theme="light"]) .qs-logout{background:#1b1e38}
+}
+
+/* ----- barre du haut : même présentation que l'application ------------- */
+.qs-avatar{
+  width:38px;height:38px;border-radius:50%;flex:none;background:var(--qs-grad);
+  color:#fff;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:13px;text-transform:uppercase;overflow:hidden;
+  /* seules les deux premières lettres de l'identifiant sont visibles */
+  letter-spacing:.5px;text-indent:0;max-width:38px;
+}
+.qs-hello{line-height:1.25}
+.qs-hello small{display:block;font-size:12px;opacity:.75}
+.qs-hello b{font-size:16px}
+/* la colonne de droite du tableau de bord est flottante chez Django :
+   on lui rend un fond transparent pour ne pas trouer le panneau */
+#content-related{background:transparent}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) #container{
+    background:rgba(28,31,56,.78);border-color:rgba(255,255,255,.1);
+  }
+}
+html[data-theme="dark"] #container{
+  background:rgba(28,31,56,.78);border-color:rgba(255,255,255,.1);
+}
+
+/* --- Bandeau du haut ---------------------------------------------------- */
+#header{
+  background:var(--qs-grad);color:#fff;
+  padding:14px 26px;align-items:center;gap:14px;
+}
+#branding{display:none}        /* la marque est dans la barre latérale */
+#user-tools{display:flex;align-items:center;gap:12px;margin-left:auto}
+#user-tools{font-size:12.5px;text-transform:none;letter-spacing:0}
+#user-tools a{border-bottom:0;text-decoration:underline;text-underline-offset:3px}
+
+/* --- Fil d'Ariane ------------------------------------------------------- */
+div.breadcrumbs{
+  background:transparent;color:var(--breadcrumbs-fg);
+  padding:16px 28px 4px;font-size:13px;border:0;
+}
+
+/* --- Panneaux ----------------------------------------------------------- */
+#content{padding:18px 28px 28px}
+.module,.inline-group,.dashboard #content-related .module{
+  border-radius:16px;overflow:hidden;border:1px solid var(--border-color);
+  background:var(--body-bg);
+  box-shadow:0 18px 40px -26px rgba(26,31,60,.5);
+}
+html[data-theme="light"] .module,:root .module{background:#fff}
+html[data-theme="dark"] .module{background:#1b1e38}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .module{background:#1b1e38}
+}
+.module h2,.module caption,.inline-group h2{
+  background:var(--qs-grad);color:#fff;
+  font-size:12px;letter-spacing:.7px;padding:11px 16px;
+}
+.module table{margin:0}
+.module tbody th,.module tbody td{border-bottom:1px solid var(--hairline-color)}
+.module tbody tr:last-child th,.module tbody tr:last-child td{border-bottom:0}
+#content-related .module h2{background:var(--qs-grad)}
+
+/* --- Boutons ------------------------------------------------------------ */
+.button,input[type=submit],input[type=button],.submit-row input,a.button{
+  border-radius:10px;padding:9px 16px;font-weight:600;
+  box-shadow:0 10px 22px -14px var(--qs-blue);
+}
+.submit-row input.default{background:var(--qs-grad);border:0}
+.object-tools a{border-radius:999px;font-weight:600;letter-spacing:.2px}
+
+/* --- Formulaires -------------------------------------------------------- */
+/* Django pose les libellés dans une colonne de largeur fixe et les champs
+   en flux : sur un écran large les champs flottent loin de leur libellé.
+   On repasse chaque ligne en grille « libellé | champ », avec des cartes
+   par groupe de champs. */
+#content-main > form > div > fieldset.module,
+#content-main > form fieldset.module{
+  border-radius:16px;overflow:hidden;margin-bottom:18px;
+  border:1px solid var(--border-color);box-shadow:0 18px 40px -26px rgba(26,31,60,.5);
+}
+fieldset.module > h2{
+  background:var(--qs-grad);color:#fff;font-size:12px;letter-spacing:.7px;
+  padding:11px 18px;
+}
+fieldset.module .description{
+  padding:12px 18px 0;color:var(--body-quiet-color);font-size:13px;margin:0;
+}
+.form-row{
+  display:grid;grid-template-columns:230px minmax(0,1fr);gap:4px 20px;
+  align-items:start;padding:14px 18px;border-bottom:1px solid var(--hairline-color);
+}
+.form-row:last-child{border-bottom:0}
+/* « display:contents » dissout les div d'enrobage pour que libelle et champ
+   deviennent des cellules de la grille. Il ne doit PAS toucher le bloc
+   d'aide : selon les pages il est enfant direct de la ligne, et il se
+   dissoudrait aussi — son placement en colonne 2 serait alors ignore. */
+.aligned .form-row > div:not(.help):not(.errorlist),
+.aligned .form-row .flex-container{display:contents}
+.form-row > label,
+.aligned .form-row label{
+  width:auto;padding:7px 0 0;font-size:13px;font-weight:600;
+  color:var(--body-medium-color);text-align:left;float:none;
+}
+/* Django aligne l'aide sous le champ avec « padding-left:170px », dans une
+   regle plus specifique que la notre (form .aligned div.help) : on remonte
+   la specificite, sinon l'aide reste decalee vers la droite. */
+form .aligned .form-row div.help,
+form .aligned .form-row p.help,
+.form-row .help,.form-row .helptext{
+  grid-column:2;margin:3px 0 0;padding:0;font-size:12.5px;text-align:left;
+  color:var(--body-quiet-color);line-height:1.5;max-width:64ch;
+}
+.form-row .help div,.form-row .help p{padding:0;margin:0}
+.form-row .errorlist{grid-column:2;margin:0 0 4px;padding:0;list-style:none}
+/* Cases à cocher : case et libellé restent ensemble dans la colonne des
+   champs. Sans cela, « display:contents » les sépare — la case se retrouve
+   dans la colonne des libellés et le texte en face. */
+.form-row .flex-container.checkbox-row{
+  display:flex;grid-column:2;align-items:center;gap:8px;
+}
+.form-row .checkbox-row label{padding:0;font-weight:500;font-size:14px;
+  color:var(--body-fg)}
+.aligned .form-row input[type=checkbox]{margin:0}
+.form-row ul.radiolist{grid-column:2;margin:0;padding:0;list-style:none}
+.form-row ul.radiolist li{margin:0 0 6px;display:flex;gap:8px;align-items:flex-start}
+.form-row ul.radiolist label{font-weight:400;font-size:14px;padding:0}
+
+/* Barre d'enregistrement : posée, arrondie, bien détachée */
+.submit-row{
+  border-radius:14px;padding:14px 18px;margin:0 0 18px;
+  background:var(--darkened-bg);border:1px solid var(--border-color);
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+}
+.submit-row a.deletelink{margin-left:auto}
+
+/* Le mot de passe : bouton net, pas d'empreinte technique */
+.qs-pw-btn{display:inline-block}
+.qs-pw-help{margin-top:6px!important}
+.qs-pw-none{color:var(--error-fg);font-weight:600;display:block;margin-bottom:8px}
+.qs-pw-link{font-weight:600}
+/* Pastilles de rôle dans la liste des comptes */
+.qs-tag{
+  display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;
+  font-weight:600;background:var(--selected-bg);color:var(--body-medium-color);
+}
+.qs-tag--admin{background:#e8e6fb;color:#4a45b0}
+
+@media (max-width:860px){
+  .form-row{grid-template-columns:1fr;padding:12px 14px}
+  .form-row .help,.form-row .helptext,
+  .form-row .errorlist,.form-row ul.radiolist{grid-column:1}
+}
+
+input[type=text],input[type=password],input[type=email],input[type=url],
+input[type=number],input[type=tel],textarea,.vTextField{
+  border-radius:9px;border:1px solid var(--border-color);padding:8px 10px;
+}
+/* Django fixe une hauteur aux <select> : sans height:auto, le texte est
+   rogné dès qu'on ajoute du remplissage. */
+select{
+  border-radius:9px;border:1px solid var(--border-color);
+  padding:7px 9px;height:auto;line-height:1.4;
+}
+input:focus,select:focus,textarea:focus{
+  outline:none;border-color:var(--qs-blue);
+  box-shadow:0 0 0 3px rgba(67,86,201,.16);
+}
+.selector-chosen h2{background:var(--qs-grad)}
+
+/* --- Listes ------------------------------------------------------------- */
+/* Le tableau partage la largeur avec le panneau de filtres : on le laisse
+   défiler sur lui-même plutôt que de pousser toute la page. */
+#changelist .results{border-radius:14px;overflow:auto}
+#changelist-filter{border-radius:14px;overflow:hidden}
+#changelist table thead th{white-space:nowrap}
+#changelist-filter h2{background:var(--qs-grad);color:#fff}
+.paginator a:link,.paginator a:visited{background:var(--qs-blue);border-radius:7px}
+.paginator .this-page{border-radius:7px}
+tr.selected{background:var(--selected-row)}
+
+/* --- Messages ----------------------------------------------------------- */
+ul.messagelist li{border-radius:10px;padding:11px 15px 11px 42px;font-size:14px}
+
+/* --- Connexion (si l'écran QuizScan n'est pas utilisé) ------------------ */
+.login #header{border-radius:14px 14px 0 0}
+.login #container{border-radius:14px;box-shadow:0 30px 70px -30px rgba(26,31,60,.5)}
+
+@media (max-width:980px){
+  #container{grid-template-columns:1fr}
+  .qs-side{
+    flex-direction:row;align-items:center;gap:6px;overflow-x:auto;
+    padding:12px 14px;border-right:0;
+    border-bottom:1px solid rgba(255,255,255,.7);
+  }
+  .qs-brand{padding:0 12px 0 4px}
+  .qs-wordmark small{display:none}
+  .qs-nav{flex-direction:row;gap:4px}
+  .qs-item{white-space:nowrap}
+  .qs-group{display:none}
+  .qs-foot{margin:0 0 0 auto;padding:0 0 0 12px;border-top:0;
+    border-left:1px solid var(--border-color);flex-direction:row;align-items:center}
+}
+@media (max-width:767px){
+  #header{padding:12px 16px}
+  div.breadcrumbs{padding:12px 16px 4px}
+  #content{padding:14px 16px 22px}
+}
+</style>
+{% endblock %}

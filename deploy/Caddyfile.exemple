@@ -1,0 +1,42 @@
+# Exemple de configuration Caddy pour QuizScan sur son propre sous-domaine.
+# À adapter puis à reporter dans /etc/caddy/Caddyfile, suivi de :
+#     sudo systemctl reload caddy
+#
+# Le fichier .env de l'application doit porter, en vis-à-vis :
+#     ALLOWED_HOSTS=quiz.mon-etablissement.tn,192.168.1.10,localhost
+#     CSRF_TRUSTED_ORIGINS=https://quiz.mon-etablissement.tn
+#     URL_PREFIX=
+#     QUIZSCAN_BIND=127.0.0.1
+#     QUIZSCAN_PORT=5011
+#     HTTPS=1
+# Vérification : docker compose exec quizscan python manage.py verifier_deploiement
+
+
+# ---------------------------------------------------------------------------
+# CAS 1 — le nom résout publiquement vers une machine joignable depuis
+# Internet. Caddy obtient et renouvelle seul un certificat Let's Encrypt,
+# et redirige http vers https. Rien d'autre à faire.
+# ---------------------------------------------------------------------------
+quiz.mon-etablissement.tn {
+    reverse_proxy 127.0.0.1:5011 {
+        header_up X-Real-IP {remote_host}
+    }
+}
+
+
+# ---------------------------------------------------------------------------
+# CAS 2 — le nom ne résout qu'en interne, vers une adresse IP privée
+# (192.168.x.x). Let's Encrypt ne peut PAS valider le domaine : sans
+# « tls internal », Caddy échoue en boucle sur la demande de certificat.
+# Caddy signe alors avec son autorité locale.
+#
+# Les navigateurs afficheront un avertissement tant que le certificat racine
+# de Caddy n'est pas installé sur les postes. Il se récupère sur le serveur :
+#     /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+# ---------------------------------------------------------------------------
+# quiz.mon-etablissement.tn {
+#     tls internal
+#     reverse_proxy 127.0.0.1:5011 {
+#         header_up X-Real-IP {remote_host}
+#     }
+# }

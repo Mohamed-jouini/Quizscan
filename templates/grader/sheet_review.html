@@ -1,0 +1,87 @@
+{% extends "grader/base.html" %}
+{% block content %}
+<h1>Vérification de la copie — {{ sheet.source_name }}
+  <span class="badge grey">copie {{ position }} / {{ total }}</span></h1>
+<p>
+  <a class="btn small secondary" href="{% url 'batch_detail' sheet.batch.pk %}">← Retour au lot</a>
+  {% if prev_id %}<a class="btn small secondary" href="{% url 'sheet_review' prev_id %}">◀ Copie précédente</a>{% endif %}
+  {% if next_id %}<a class="btn small secondary" href="{% url 'sheet_review' next_id %}">Copie suivante ▶</a>{% endif %}
+</p>
+
+<form method="post">{% csrf_token %}
+<div class="grid2">
+  <div class="card">
+    <h2>Image contrôlée</h2>
+    <p class="helptext">
+      Cercle <b style="color:#00a">bleu</b> = bonne réponse attendue,
+      <b style="color:#0a0">vert</b> = réponse de l'étudiant correcte,
+      <b style="color:#c00">rouge</b> = réponse fausse,
+      <b style="color:#e37400">orange</b> = plusieurs cases cochées.
+    </p>
+    {% if sheet.overlay_image %}
+      <a href="{{ sheet.overlay_image.url }}" target="_blank">
+        <img src="{{ sheet.overlay_image.url }}" style="width:100%;border:1px solid var(--line);border-radius:6px">
+      </a>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Étudiant</h2>
+      <p>Nom lu par OCR : <b>{{ sheet.ocr_name_raw|default:"(rien)" }}</b>
+        {% if sheet.match_score %}<span class="helptext">confiance {{ sheet.match_score|floatformat:0 }} %</span>{% endif %}</p>
+      {% if sheet.name_crop %}<p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}"></p>{% endif %}
+      <label>Affecter à</label>
+      <select name="student">
+        <option value="">— non identifié —</option>
+        {% for s in students %}
+        <option value="{{ s.pk }}" {% if sheet.student_id == s.pk %}selected{% endif %}>{{ s.full_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="card">
+      <h2>Réponses</h2>
+      <table>
+        <tr><th>Q</th><th>Détecté</th><th>Attendu</th><th>Correction</th><th>Points</th></tr>
+        {% for a in answers %}
+        <tr>
+          <td>{{ a.question.order }}</td>
+          {% if a.question.qtype == "qcm" %}
+          <td>{{ a.detected_letter }}{% if a.is_multiple %} <span class="badge warn">multiple</span>{% endif %}</td>
+          <td>{{ a.question.correct_letter }}</td>
+          <td>
+            <select name="choice_{{ a.pk }}">
+              <option value="blank" {% if a.detected_choice is None %}selected{% endif %}>vide</option>
+              {% for i, letter in a.question.letter_options %}
+              <option value="{{ i }}" {% if a.detected_choice == i %}selected{% endif %}>{{ letter }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>{{ a.points_awarded|floatformat:"-2"|default:"—" }} / {{ a.question.points|floatformat:"-2" }}</td>
+          {% else %}
+          <td colspan="2">
+            Réponse manuscrite :
+            {% if a.open_crop %}<br><a href="{{ a.open_crop.url }}" target="_blank">
+              <img src="{{ a.open_crop.url }}" style="max-width:100%;border:1px solid var(--line);border-radius:4px"></a>{% endif %}
+          </td>
+          <td><input type="text" name="points_{{ a.pk }}" style="width:70px"
+                     value="{{ a.points_awarded|floatformat:'-2'|default_if_none:'' }}"
+                     placeholder="note"></td>
+          <td>/ {{ a.question.points|floatformat:"-2" }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </table>
+      <p>
+        {% if next_id %}
+        <button class="btn" type="submit" name="save_next" value="1">
+          Enregistrer et copie suivante ▶</button>
+        {% endif %}
+        <button class="btn secondary" type="submit">Enregistrer et retour au lot</button>
+      </p>
+    </div>
+  </div>
+</div>
+</form>
+{% endblock %}

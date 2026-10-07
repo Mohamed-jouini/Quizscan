@@ -1,0 +1,156 @@
+{% extends "grader/base.html" %}
+{% block title %}Tableau de bord — QuizScan{% endblock %}
+{% block content %}
+
+{# ---- Rangée de tuiles : les chiffres que l'enseignant regarde en premier #}
+<div class="tiles">
+
+  <div class="tile">
+    <span class="tile__label">Épreuves</span>
+    <div class="tile__row">
+      <span class="tile__value">{{ n_quizzes }}</span>
+      <div class="spark" title="Copies notées sur les 7 derniers jours">
+        {% for d in week %}<i title="{{ d.date|date:'d/m' }} : {{ d.count }} copie(s)"><b style="height:{{ d.height }}%"></b></i>{% endfor %}
+      </div>
+    </div>
+    <span class="tile__note">
+      {{ n_classes }} classe{{ n_classes|pluralize }} · {{ n_students }} étudiant{{ n_students|pluralize }}
+    </span>
+  </div>
+
+  <div class="tile">
+    <span class="tile__label">Lecture automatique</span>
+    <div class="tile__row">
+      <span class="tile__value">{{ auto_pct }}<span class="tile__unit">%</span></span>
+      {# anneau de progression : circonférence 2*pi*r = 125.6 pour r = 20 #}
+      <svg class="donut" viewBox="0 0 54 54" role="img"
+           aria-label="{{ auto_pct }} % des copies lues sans intervention">
+        <circle class="bg" cx="27" cy="27" r="20"/>
+        <circle class="fg" cx="27" cy="27" r="20" stroke-dasharray="125.6"
+                style="stroke-dashoffset:calc(125.6px * (100 - {{ auto_pct }}) / 100)"/>
+      </svg>
+    </div>
+    <span class="tile__note">
+      {{ n_auto }} copie{{ n_auto|pluralize }} lue{{ n_auto|pluralize }} sans intervention
+      sur {{ n_sheets }}
+    </span>
+  </div>
+
+  <div class="tile">
+    <span class="tile__label">Copies scannées</span>
+    <div class="tile__row">
+      <span class="tile__value">{{ n_sheets }}</span>
+      {% if week_total %}<span class="chip">+{{ week_total }} cette semaine</span>{% endif %}
+    </div>
+    <span class="tile__note">{{ week_total }} sur les 7 derniers jours</span>
+  </div>
+
+  <div class="tile">
+    <span class="tile__label">À traiter</span>
+    <div class="tile__row">
+      <span class="tile__value">{{ n_attention|add:n_open_pending }}</span>
+      {% if n_attention %}<span class="chip bad">{{ n_attention }} à identifier</span>
+      {% elif n_open_pending %}<span class="chip warn">{{ n_open_pending }} manuscrites</span>
+      {% else %}<span class="chip">rien en attente</span>{% endif %}
+    </div>
+    <span class="tile__note">
+      {% if n_attention or n_open_pending %}
+        {{ n_attention }} copie{{ n_attention|pluralize }} à identifier ·
+        {{ n_open_pending }} réponse{{ n_open_pending|pluralize }} manuscrite{{ n_open_pending|pluralize }} à noter
+      {% else %}Toutes les copies scannées sont corrigées.{% endif %}
+    </span>
+  </div>
+</div>
+
+<div class="grid2">
+  {# ---- Épreuves récentes ---- #}
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <h2 style="margin:0">Mes épreuves</h2>
+      <span class="spacer"></span>
+      <a class="btn small secondary" href="{% url 'class_list' %}">Tout voir</a>
+    </div>
+    {% if quizzes %}
+    <table>
+      {% for q in quizzes %}
+      <tr>
+        <td><a href="{% url 'quiz_detail' q.pk %}"><b>{{ q.title }}</b></a>
+          <span class="helptext">{{ q.class_group.name }} ·
+            {{ q.questions.count }} question{{ q.questions.count|pluralize }}</span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <a class="btn small secondary" href="{% url 'quiz_results' q.pk %}">Résultats</a></td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="helptext">Aucune épreuve pour le moment.
+      <a href="{% url 'quiz_create' %}">Créez la première</a>.</p>
+    {% endif %}
+  </div>
+
+  <div>
+    {# ---- Lots de scans récents ---- #}
+    <div class="card">
+      <h2>Derniers lots de copies</h2>
+      {% if batches %}
+      <table>
+        {% for b in batches %}
+        <tr>
+          <td><a href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
+            <span class="helptext">{{ b.quiz.title|truncatechars:34 }}</span></td>
+          <td style="white-space:nowrap">
+            {% if b.status == "processing" %}
+              <span class="badge warn">{{ b.processed_pages }}/{{ b.total_pages }}</span>
+            {% elif b.status == "pending" %}
+              <span class="badge grey">en attente</span>
+            {% elif b.status == "error" %}
+              <span class="badge bad">erreur</span>
+            {% else %}
+              <span class="badge ok">{{ b.sheets.count }} page{{ b.sheets.count|pluralize }}</span>
+            {% endif %}
+          </td>
+          <td class="helptext" style="white-space:nowrap">{{ b.created_at|date:"d/m H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p class="helptext">Aucun lot scanné. Générez la fiche d'une épreuve,
+        imprimez-la, puis téléversez les copies.</p>
+      {% endif %}
+    </div>
+
+    {# ---- Copies demandant une intervention ---- #}
+    {% if to_review %}
+    <div class="card">
+      <h2>Copies à vérifier</h2>
+      <table>
+        {% for s in to_review %}
+        <tr>
+          <td><a href="{% url 'sheet_review' s.pk %}">{{ s.source_name|truncatechars:36 }}</a></td>
+          <td style="text-align:right">
+            {% if s.status == "no_match" %}<span class="badge warn">à identifier</span>
+            {% elif s.status == "no_markers" %}<span class="badge bad">repères non détectés</span>
+            {% else %}<span class="badge bad">{{ s.get_status_display }}</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
+
+    {# ---- Rappel du cycle, utile tant qu'il n'y a pas de données ---- #}
+    {% if not batches %}
+    <div class="card">
+      <h2>Le cycle d'une épreuve</h2>
+      <ol class="helptext" style="line-height:1.95;padding-left:20px;margin:0">
+        <li>Créez une <a href="{% url 'class_list' %}">classe</a> et importez la liste des étudiants.</li>
+        <li>Créez un <a href="{% url 'quiz_create' %}">quiz</a> : questions QCM et questions manuscrites.</li>
+        <li>Générez et imprimez la <b>fiche de réponses PDF</b>.</li>
+        <li>Après l'épreuve, scannez les copies et téléversez le PDF ou les images.</li>
+        <li>Corrigez les parties manuscrites à l'écran, puis exportez les notes.</li>
+      </ol>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

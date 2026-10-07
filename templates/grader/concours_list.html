@@ -1,0 +1,43 @@
+{% extends "grader/base.html" %}
+{% block topbar_actions %}
+<a class="btn" href="{% url 'quiz_create' %}?concours=1">
+  <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M12 5v14M5 12h14"/></svg>
+  Nouveau concours</a>
+{% endblock %}
+{% block content %}
+<h1>Concours</h1>
+
+<div class="card">
+  <h2>Mes concours ({{ quizzes|length }})</h2>
+  {% if quizzes %}
+  <table>
+    <tr><th>Titre</th><th>Candidats</th><th>Questions</th><th></th></tr>
+    {% for q in quizzes %}
+    <tr>
+      <td><a href="{% url 'quiz_detail' q.pk %}">{{ q.title }}</a></td>
+      <td>{{ q.class_group.students.count }}</td>
+      <td>{{ q.questions.count }}</td>
+      <td>
+        <a class="btn small" href="{% url 'class_detail' q.class_group.pk %}">👥 Candidats & QR</a>
+        <a class="btn small secondary" href="{% url 'quiz_results' q.pk %}">Résultats</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p>Aucun concours pour le moment.
+     <a href="{% url 'quiz_create' %}?concours=1">Créez le premier</a>.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Comment ça marche</h2>
+  <ol style="line-height:1.9;padding-left:20px">
+    <li>Créez un <a href="{% url 'quiz_create' %}?concours=1">concours</a> (aucune classe à choisir : un conteneur de candidats est créé automatiquement).</li>
+    <li>Sur la page du concours, cliquez sur <b>« 👥 Candidats & étiquettes QR »</b> et importez la liste des candidats (Excel : Nom, Prénom, N° d'inscription).</li>
+    <li>Imprimez la <b>planche d'étiquettes QR</b> sur papier autocollant, et collez une étiquette dans l'emplacement réservé de chaque copie.</li>
+    <li>Générez et imprimez la <b>feuille de réponses</b> (et le sujet), faites composer, puis scannez les copies.</li>
+    <li>Chaque copie est identifiée par le QR de l'étiquette, notée automatiquement.</li>
+  </ol>
+</div>
+{% endblock %}

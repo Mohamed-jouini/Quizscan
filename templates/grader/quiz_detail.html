@@ -1,0 +1,414 @@
+{% extends "grader/base.html" %}
+{% block content %}
+<h1>{{ quiz.title }} <span class="badge grey">{{ quiz.class_group.name }}</span>
+  <span class="badge grey">{{ quiz.get_language_display }}</span></h1>
+<p>
+  Barème total : <b>{{ quiz.max_score|floatformat:"-2" }} points</b>
+  {% if quiz.wrong_penalty %} — pénalité {{ quiz.wrong_penalty }} pt / faute{% endif %}
+  &nbsp; <a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}">Voir les résultats</a>
+  &nbsp; <a class="btn small" href="{% url 'class_detail' quiz.class_group.pk %}">👥 Candidats & étiquettes QR</a>
+</p>
+{% if quiz.auto_enroll %}
+<ul class="messages"><li>
+  🏆 <b>Concours</b> — importez la liste des candidats (fichier Excel : Nom, Prénom,
+  N° d'inscription) et générez leurs étiquettes QR depuis la page
+  <a href="{% url 'class_detail' quiz.class_group.pk %}"><b>« Candidats & étiquettes QR »</b></a>.
+</li></ul>
+{% endif %}
+
+<form method="post" style="background:#f0f3f7;border:1px solid var(--line);border-radius:8px;
+     padding:10px 14px;margin-bottom:16px;display:flex;gap:18px;align-items:end;flex-wrap:wrap">
+  {% csrf_token %}
+  <div style="flex-basis:100%">
+    <label style="margin:0 0 3px">Type de fiche</label>
+    <select name="sheet_mode" style="max-width:560px">
+      {% for val, label in quiz.SHEET_MODES %}
+      <option value="{{ val }}" {% if quiz.sheet_mode == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div style="flex-basis:100%">
+    <label style="margin:0 0 3px">Identification des copies</label>
+    <select name="id_mode" style="max-width:560px">
+      {% for val, label in id_modes %}
+      <option value="{{ val }}" {% if quiz.id_mode == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div id="row_id_digits">
+    <label style="margin:0 0 3px">Chiffres du n° d'inscription</label>
+    <input type="number" name="id_digits" value="{{ quiz.id_digits }}" min="3" max="10"
+           style="width:90px">
+  </div>
+  <div>
+    <label style="margin:0 0 3px">Pénalité par mauvaise réponse</label>
+    <input type="text" name="wrong_penalty" value="{{ quiz.wrong_penalty|floatformat:'-2' }}"
+           style="width:90px">
+  </div>
+  {% if quiz.auto_enroll %}
+  <div>
+    <label style="margin:0 0 3px">Correction des copies</label>
+    <select name="grading_mode" style="width:auto">
+      <option value="immediate" {% if quiz.grading_mode == "immediate" %}selected{% endif %}>Immédiate (dès le téléversement)</option>
+      <option value="deferred" {% if quiz.grading_mode == "deferred" %}selected{% endif %}>Après scan (bouton « Lancer la correction »)</option>
+    </select>
+  </div>
+  {% endif %}
+  <button class="btn small" name="update_settings" value="1" type="submit">Enregistrer les réglages</button>
+  <span class="helptext" style="flex-basis:100%;margin:0">
+    Choisissez « Sujet séparé + feuille de réponses » pour obtenir deux PDF (questions d'un
+    côté, grille de l'autre), puis cliquez sur « Régénérer les PDF » plus bas.
+    Le nombre de choix (A, B, C…) se règle pour chaque question.
+  </span>
+</form>
+
+{% if pending_batches %}
+<div class="card" style="border:2px solid var(--blue);background:#f3f7fc">
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div style="flex:1;min-width:260px">
+      <h2 style="margin:0 0 4px">📥 Copies scannées en attente de correction</h2>
+      <b>{{ pending_pages }} page(s)</b> dans {{ pending_batches|length }} lot(s) :
+      {% for b in pending_batches %}{{ b }}{% if not forloop.last %}, {% endif %}{% endfor %}.
+      <span class="helptext">Téléversez toutes les copies, puis lancez la correction : elles seront
+        lues et notées en une seule fois.</span>
+    </div>
+    <form method="post">{% csrf_token %}
+      <button class="btn" name="launch_grading" value="1" type="submit"
+              style="font-size:16px;padding:11px 22px"
+              {% if sans_corrige %}disabled title="Complétez d'abord le corrigé"{% endif %}
+              onclick="return confirm('Lancer la correction de {{ pending_pages }} page(s) ?')">
+        ▶ Lancer la correction</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% if processing_pages %}
+<ul class="messages"><li style="background:#e8f0fe;color:#174ea6">
+  ⏳ <b>Correction en cours : {{ processing_done }} / {{ processing_pages }} page(s) notée(s)</b>
+  — cette page se met à jour toute seule.
+</li></ul>
+<script>setTimeout(function () { location.reload(); }, 5000);</script>
+{% endif %}
+
+{% if n_qcm %}
+<div class="card" style="{% if sans_corrige %}border:2px solid var(--warn);background:#fffaf0{% else %}background:#f4faf6;border-color:#cfe6d8{% endif %}">
+  <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+    <div style="flex:1;min-width:280px">
+      {% if sans_corrige %}
+      <h2 style="margin:0 0 6px">📝 Corrigé incomplet —
+        {{ sans_corrige|length }} question(s) sur {{ n_qcm }} sans bonne réponse</h2>
+      <p class="helptext" style="margin:0">
+        Questions n° {% for n in sans_corrige %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}.
+        <b>La correction des copies ne peut pas démarrer</b> tant qu'il en manque
+        une : ces questions seraient comptées fausses pour tout le monde.
+        Renseignez-les dans le tableau ci-dessous, ou scannez la fiche remplie
+        avec les bonnes réponses.
+      </p>
+      {% else %}
+      <h2 style="margin:0 0 6px">✅ Corrigé complet — {{ n_qcm }} question(s) QCM</h2>
+      <p class="helptext" style="margin:0">Les copies peuvent être corrigées.</p>
+      {% endif %}
+    </div>
+    <form method="post" action="{% url 'quiz_answer_key' quiz.pk %}"
+          enctype="multipart/form-data" style="min-width:300px;flex:1">
+      {% csrf_token %}
+      <label style="margin-top:0">{{ answer_key_form.files.label }}</label>
+      {{ answer_key_form.files }}
+      <span class="helptext">{{ answer_key_form.files.help_text }}</span>
+      <p style="margin-bottom:0"><button class="btn" type="submit"
+        {% if not quiz.sheet_pdf %}disabled title="Générez d'abord la fiche PDF"{% endif %}>
+        Lire le corrigé scanné</button></p>
+    </form>
+  </div>
+
+  {% if answer_key_sheets %}
+  <table style="margin-top:14px">
+    <tr><th>Corrigé scanné</th><th>Page</th><th>Lues</th><th>Date</th><th></th></tr>
+    {% for k in answer_key_sheets %}
+    <tr>
+      <td>{{ k.source_name|truncatechars:42 }}</td>
+      <td>page {{ k.page_index|add:1 }}</td>
+      <td>{% if k.status == "ok" %}<span class="badge ok">{{ k.nb_lues }} réponse(s)</span>
+          {% elif k.status == "partial" %}<span class="badge warn">{{ k.nb_lues }} lue(s),
+            {{ k.unreadable|length }} illisible(s)</span>
+          {% else %}<span class="badge bad">{{ k.get_status_display }}</span>{% endif %}
+          {% if k.error_message %}<span class="helptext">{{ k.error_message }}</span>{% endif %}</td>
+      <td class="helptext" style="white-space:nowrap">{{ k.created_at|date:"d/m/Y H:i" }}</td>
+      <td style="text-align:right">{% if k.overlay_image %}
+        <a class="btn small secondary" href="{{ k.overlay_image.url }}" target="_blank">Voir</a>
+        {% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <span class="helptext">Les fiches de corrigé sont conservées avec l'épreuve :
+    elles font foi sur l'origine du barème.{% if n_answer_key_sheets > 12 %}
+    ({{ n_answer_key_sheets }} au total, les 12 plus récentes sont affichées.){% endif %}</span>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if layout_stale %}
+<ul class="messages"><li class="error">
+  ⚠️ Les questions ont changé depuis la génération de la fiche PDF.
+  Régénérez la fiche avant d'imprimer et de scanner.
+</li></ul>
+{% endif %}
+
+<div class="grid2">
+  <div class="card">
+    <h2>Questions ({{ quiz.questions.count }})</h2>
+    {% if quiz.questions.all %}
+    <table>
+      <tr><th>N°</th><th>Type</th><th>Choix</th><th>Bonne rép.</th><th>Barème</th><th></th></tr>
+      {% for q in quiz.questions.all %}
+      <tr>
+        <td>{{ q.order }}</td>
+        <td>{% if q.qtype == "qcm" %}QCM{% else %}Manuscrite{% endif %}
+            {% if q.text %}<span class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>{{ q.text|truncatechars:50 }}</span>{% endif %}
+            {% if q.qtype == "qcm" and q.choices %}
+              <div class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>
+                {% for ch in q.choices %}{{ ch }}{% if not forloop.last %} · {% endif %}{% endfor %}
+              </div>
+            {% endif %}</td>
+        <td>{% if q.qtype == "qcm" %}{{ q.num_bubbles }}{% else %}—{% endif %}</td>
+        <td colspan="2">
+          <form class="inline qedit" method="post">{% csrf_token %}
+            {% if q.qtype == "qcm" %}
+            <select name="correct" title="Bonne réponse"
+                    {% if q.correct_choice is None %}style="border-color:var(--warn);background:#fffaf0"{% endif %}
+                    onchange="this.form.querySelector('button').hidden=false">
+              <option value="" {% if q.correct_choice is None %}selected{% endif %}>— à définir —</option>
+              {% for i, letter in q.letter_options %}
+              <option value="{{ i }}" {% if q.correct_choice == i %}selected{% endif %}>{{ letter }}</option>
+              {% endfor %}
+            </select>
+            {% endif %}
+            <input type="text" name="points" value="{{ q.points|floatformat:'-2' }}" title="Barème (points)"
+                   oninput="this.form.querySelector('button').hidden=false"> pt
+            <button class="btn small" name="edit_question" value="{{ q.pk }}" hidden title="Enregistrer — les notes sont recalculées">✓</button>
+          </form>
+        </td>
+        <td><form class="inline" method="post">{% csrf_token %}
+          <button class="btn small danger" name="delete_question" value="{{ q.pk }}"
+                  onclick="return confirm('Supprimer la question {{ q.order }} ?')">✕</button>
+        </form></td>
+      </tr>
+      {% endfor %}
+    </table>
+    <span class="helptext">Le corrigé et le barème restent modifiables après l'épreuve :
+      les notes des copies déjà scannées sont recalculées immédiatement.</span>
+    {% else %}<p>Aucune question pour le moment.</p>{% endif %}
+
+    <h2 style="margin-top:20px">
+      {% if quiz.sheet_mode == "split" %}Documents PDF{% else %}Fiche de réponses{% endif %}
+    </h2>
+    <form method="post">{% csrf_token %}
+      {% if quiz.id_mode == "qr" and quiz.auto_enroll %}
+        <label>Nombre d'exemplaires de la fiche anonyme</label>
+        <input type="number" name="qr_count" value="100" min="1" max="2000"
+               style="width:120px;margin-bottom:8px">
+        <span class="helptext" style="margin-bottom:8px">Les exemplaires sont
+          identiques : l'identification vient de l'étiquette QR du candidat,
+          collée dans l'emplacement réservé de sa copie.</span>
+      {% endif %}
+      <button class="btn" name="generate_pdf" value="1" type="submit">
+        {% if quiz.sheet_pdf %}Régénérer les PDF{% else %}Générer les PDF{% endif %}
+      </button>
+      {% if quiz.sheet_mode == "split" and quiz.subject_pdf %}
+        <a class="btn secondary" href="{{ quiz.subject_pdf.url }}" target="_blank">📄 Sujet (questions)</a>
+      {% endif %}
+      {% if quiz.sheet_pdf %}
+        <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">
+          {% if quiz.sheet_mode == "split" %}📝 Feuille de réponses{% else %}📄 Télécharger la fiche{% endif %}</a>
+      {% endif %}
+    </form>
+    <span class="helptext">
+      {% if quiz.sheet_mode == "split" %}
+        <b>Sujet</b> : les questions et leurs choix, à distribuer (non scanné).
+        <b>Feuille de réponses</b> : la grille de cases à imprimer, faire remplir
+        puis scanner. Imprimez les deux en A4 à 100 %.
+      {% elif quiz.id_mode == "qr" %}
+        Mode QR : le PDF contient une fiche <b>nominative</b> par étudiant (nom
+        pré-imprimé + QR code). Imprimez en A4 à 100 % et distribuez à chacun la sienne.
+      {% else %}
+        Imprimez cette fiche en A4 (100 %, sans mise à l'échelle) : une copie par étudiant.
+      {% endif %}
+    </span>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Ajout rapide de QCM (corrigé)</h2>
+      <form method="post">{% csrf_token %}
+        {{ bulk_form.non_field_errors }}
+        {{ bulk_form.answer_key.errors }}
+        <label>{{ bulk_form.answer_key.label }}</label>{{ bulk_form.answer_key }}
+        <span class="helptext">{{ bulk_form.answer_key.help_text }}</span>
+        {{ bulk_form.num_choices.errors }}
+        <label>{{ bulk_form.num_choices.label }}</label>{{ bulk_form.num_choices }}
+        <label>{{ bulk_form.points.label }}</label>{{ bulk_form.points }}
+        <p><button class="btn" name="bulk_add" value="1" type="submit">Créer les questions</button></p>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Importer un questionnaire</h2>
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}
+        {{ import_form.file }}
+        <span class="helptext">Excel (colonnes Question, A, B, C…, Réponse, Barème — voir
+          <code>modele_questions.xlsx</code>), Word, PDF ou texte : questions numérotées
+          « 1. … », choix « A) … », bonne réponse marquée d'un <b>*</b> ou ligne
+          « Réponse : B », barème « (2 pts) ». Une question sans choix devient manuscrite.</span>
+        <p><button class="btn" name="import_questions" value="1" type="submit">Importer</button></p>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Banque de questions</h2>
+      {% if bank_form.fields.source.queryset.exists %}
+      <form method="post">{% csrf_token %}
+        {{ bank_form.non_field_errors }}
+        <label>{{ bank_form.source.label }}</label>{{ bank_form.source }}
+        {{ bank_form.orders.errors }}
+        <label>{{ bank_form.orders.label }}</label>{{ bank_form.orders }}
+        <span class="helptext">Les questions de vos épreuves précédentes (intitulé, choix,
+          bonne réponse, barème) sont copiées à la suite de ce quiz.</span>
+        <p><button class="btn secondary" name="copy_questions" value="1" type="submit">Reprendre les questions</button></p>
+      </form>
+      {% else %}
+      <p class="helptext">Vos questions sont conservées d'une épreuve à l'autre : dès qu'un
+        autre de vos quiz contient des questions, vous pourrez les reprendre ici.</p>
+      {% endif %}
+    </div>
+    <div class="card">
+      <h2>Ajouter une question</h2>
+      <form method="post">{% csrf_token %}
+        {% if qform.errors %}<ul class="messages"><li class="error">
+          La question n'a pas été ajoutée : corrigez les champs signalés ci-dessous.
+          {% for e in qform.non_field_errors %}<br><b>{{ e }}</b>{% endfor %}
+        </li></ul>{% endif %}
+        {% for field in qform %}
+          <div id="row_{{ field.name }}">
+            {{ field.errors }}
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+            {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
+          </div>
+        {% endfor %}
+        {# Remplace la ligne « Nombre de cases » quand les choix sont saisis :  #}
+        {# le nombre de cases suit alors ce qui est tapé, le champ ne sert plus #}
+        <div id="row_cases_auto" hidden>
+          <label>Nombre de cases à imprimer</label>
+          <p class="helptext" style="margin:0">
+            <b id="cases_auto_n"></b> — d'après les choix saisis
+            (<span id="cases_auto_lettres"></span>).
+          </p>
+        </div>
+        <p><button class="btn" name="add_question" value="1" type="submit">Ajouter</button></p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var letters = [{% for l in choice_letters_full %}"{{ l }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+  var ta = document.getElementById("id_choices_text");
+  var sel = document.getElementById("id_correct_letter");
+  var num = document.getElementById("id_num_choices");
+  var digitsRow = document.getElementById("row_id_digits");
+  var idMode = document.querySelector("select[name=id_mode]");
+  if (idMode && digitsRow) {
+    var syncDigits = function () { digitsRow.hidden = idMode.value !== "grid"; };
+    idMode.addEventListener("change", syncDigits); syncDigits();
+  }
+  if (!ta || !sel) return;
+  var qtype = document.getElementById("id_qtype");
+  var rowNum = document.getElementById("row_num_choices");
+  var rowAuto = document.getElementById("row_cases_auto");
+  var autoN = document.getElementById("cases_auto_n");
+  var autoL = document.getElementById("cases_auto_lettres");
+  var rows = {};
+  ["choices_text", "num_choices", "correct_letter", "open_height_mm"]
+    .forEach(function (n) { rows[n] = document.getElementById("row_" + n); });
+
+  function rebuild() {
+    var lines = ta.value.split("\n").filter(function (l) { return l.trim() !== ""; });
+    var defN = parseInt(num && num.value, 10) || 4;
+    var n = Math.min(Math.max(lines.length || defN, 2), letters.length);
+    var auto = lines.length > 0;   // les choix saisis décident du nombre de cases
+
+    // « Nombre de cases » n'a d'effet que sans texte de choix : on le masque
+    // dans le cas contraire, et on affiche à la place ce qui s'applique.
+    if (rowNum) rowNum.hidden = auto;
+    if (num) num.disabled = auto;
+    if (rowAuto) {
+      rowAuto.hidden = !auto;
+      if (auto) {
+        autoN.textContent = n + (n > 1 ? " cases" : " case");
+        autoL.textContent = letters.slice(0, n).join(", ");
+      }
+    }
+
+    // Une question manuscrite n'a ni choix ni bonne réponse ; une QCM n'a pas
+    // de hauteur de zone de réponse.
+    var open = qtype && qtype.value === "open";
+    ["choices_text", "num_choices", "correct_letter"].forEach(function (name) {
+      if (rows[name]) rows[name].hidden = open || (name === "num_choices" && auto);
+    });
+    if (rowAuto) rowAuto.hidden = open || !auto;
+    if (rows.open_height_mm) rows.open_height_mm.hidden = !open;
+
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">— à définir plus tard —</option>';
+    for (var i = 0; i < n; i++) {
+      var o = document.createElement("option");
+      o.value = i; o.textContent = letters[i];
+      if (String(i) === cur) o.selected = true;
+      sel.appendChild(o);
+    }
+  }
+  ta.addEventListener("input", rebuild);
+  if (num) num.addEventListener("input", rebuild);
+  if (qtype) qtype.addEventListener("change", rebuild);
+  rebuild();
+})();
+</script>
+
+<div class="card">
+  <h2>Copies scannées</h2>
+  <form method="post" action="{% url 'quiz_upload' quiz.pk %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="grid2">
+      <div>
+        <label>{{ upload_form.label.label }}</label>{{ upload_form.label }}
+      </div>
+      <div>
+        <label>{{ upload_form.files.label }}</label>{{ upload_form.files }}
+        <span class="helptext">{{ upload_form.files.help_text }}</span>
+      </div>
+    </div>
+    <p><button class="btn" type="submit" {% if not quiz.sheet_pdf %}disabled title="Générez d'abord la fiche PDF"{% endif %}>
+      {% if deferred or sans_corrige %}Téléverser (correction lancée plus tard){% else %}Téléverser et corriger automatiquement{% endif %}</button></p>
+    {% if sans_corrige %}<span class="helptext">Le corrigé est incomplet : les copies
+      seront reçues et mises en attente, puis corrigées dès que toutes les bonnes
+      réponses seront renseignées.</span>{% endif %}
+    {% if deferred %}<span class="helptext">Correction après scan : les copies sont mises en
+      attente ; le bouton « ▶ Lancer la correction » apparaît en haut de la page.</span>{% endif %}
+  </form>
+
+  {% if batches %}
+  <table>
+    <tr><th>Lot</th><th>Date</th><th>Pages</th><th>Identifiées</th><th></th></tr>
+    {% for b in batches %}
+    <tr>
+      <td><a href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
+          {% if b.is_processing %}<span class="badge warn">correction {{ b.processed_pages }}/{{ b.total_pages }}</span>
+          {% elif b.status == "pending" %}<span class="badge grey">en attente — {{ b.total_pages }} page(s)</span>{% endif %}</td>
+      <td>{{ b.created_at|date:"d/m/Y H:i" }}</td>
+      <td>{{ b.sheets.count }}</td>
+      <td>{{ b.identified_count }}</td>
+      <td><a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}?batch={{ b.pk }}">Résultats du lot</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,168 @@
+{% load i18n static %}<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}
+{% comment %}
+Gabarit de base de l'interface d'administration, remplacé pour que
+l'administration s'ouvre dans le MÊME cadre que le reste de l'application :
+barre latérale QuizScan à gauche, barre du haut avec le compte connecté,
+contenu de Django au centre.
+
+On reprend toute la structure attendue par Django — mêmes blocs, mêmes
+identifiants (#container, #main, #content…), mêmes feuilles de style et
+scripts — pour que les listes, les formulaires et les fenêtres de sélection
+continuent de fonctionner. Seule l'ossature autour change.
+
+La barre latérale remplace aussi la navigation par défaut de Django
+(admin.site.enable_nav_sidebar = False) : les tables sont listées ici, sous
+les rubriques de l'application, pour n'avoir qu'une seule colonne de
+navigation au lieu de deux.
+{% endcomment %}
+<html lang="{{ LANGUAGE_CODE|default:"fr" }}" dir="{{ LANGUAGE_BIDI|yesno:'rtl,ltr,auto' }}">
+<head>
+<title>{% block title %}{% endblock %}</title>
+<link rel="stylesheet" href="{% block stylesheet %}{% static "admin/css/base.css" %}{% endblock %}">
+{% block dark-mode-vars %}
+  <link rel="stylesheet" href="{% static "admin/css/dark_mode.css" %}">
+  <script src="{% static "admin/js/theme.js" %}"></script>
+{% endblock %}
+{% block extrastyle %}{% endblock %}
+{% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% block stylesheet_rtl %}{% static "admin/css/rtl.css" %}{% endblock %}">{% endif %}
+{% block extrahead %}{% endblock %}
+{% block responsive %}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static "admin/css/responsive.css" %}">
+    {% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% static "admin/css/responsive_rtl.css" %}">{% endif %}
+{% endblock %}
+{% block blockbots %}<meta name="robots" content="NONE,NOARCHIVE">{% endblock %}
+</head>
+
+<body class="{% if is_popup %}popup {% endif %}{% block bodyclass %}{% endblock %}"
+  data-admin-utc-offset="{% now "Z" %}">
+<a href="#content-start" class="skip-to-content-link">{% translate 'Skip to main content' %}</a>
+
+<div id="container">
+
+  {% if not is_popup %}
+  {# ---------- Barre latérale : rubriques de l'application + tables ------ #}
+  <aside class="qs-side">
+    <div class="qs-brand">
+      <span class="qs-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
+      </span>
+      <span class="qs-wordmark">QuizScan<small>D Technology</small></span>
+    </div>
+
+    <nav class="qs-nav">
+      <a class="qs-item" href="{% url 'dashboard' %}">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+        <span>Tableau de bord</span></a>
+      <a class="qs-item" href="{% url 'class_list' %}">
+        <svg viewBox="0 0 24 24"><path d="M3 19.5a6.5 6.5 0 0 1 13 0"/><circle cx="9.5" cy="8" r="3.5"/><path d="M17 11.5a4.5 4.5 0 0 1 4 4.5"/><circle cx="17.5" cy="6.5" r="2.5"/></svg>
+        <span>Classes</span></a>
+      <a class="qs-item" href="{% url 'concours_list' %}">
+        <svg viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M6 4h12v5a6 6 0 0 1-12 0z"/><path d="M6 6H4v1.5A3.5 3.5 0 0 0 6.6 11"/><path d="M18 6h2v1.5A3.5 3.5 0 0 1 17.4 11"/></svg>
+        <span>Concours</span></a>
+      <a class="qs-item is-active" href="{% url 'admin:index' %}">
+        <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6.2v5c0 4.5 3.1 8.6 7.5 9.8 4.4-1.2 7.5-5.3 7.5-9.8v-5L12 3Z"/></svg>
+        <span>Administration</span></a>
+    </nav>
+
+    {# Tables administrables, fournies par Django dans « available_apps ». #}
+    {% for app in available_apps %}
+      {% if app.models %}
+      <div class="qs-group">{{ app.name }}</div>
+      <nav class="qs-nav">
+        {% for model in app.models %}
+          {% if model.admin_url %}
+          <a class="qs-item qs-sub {% if model.admin_url in request.path %}is-active{% endif %}"
+             href="{{ model.admin_url }}">{{ model.name }}</a>
+          {% endif %}
+        {% endfor %}
+      </nav>
+      {% endif %}
+    {% endfor %}
+
+    <div class="qs-foot">
+      <a class="qs-item qs-sub" href="{{ site_url|default:'/' }}">← Retour à l'application</a>
+      {% if user.has_usable_password %}
+      <a class="qs-item qs-sub" href="{% url 'admin:password_change' %}">Modifier le mot de passe</a>
+      {% endif %}
+      <form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}
+        <button class="qs-logout" type="submit">Déconnexion</button>
+      </form>
+    </div>
+  </aside>
+  {% endif %}
+
+  <div class="qs-main">
+    {% if not is_popup %}
+    {% block header %}
+      <header id="header">
+        <div id="branding">{% block branding %}{% endblock %}</div>
+        {% block usertools %}
+        {% if has_permission %}
+        <div id="user-tools">
+          <span class="qs-avatar">{% firstof user.get_short_name user.get_username as qui %}{{ qui|slice:":2"|upper }}</span>
+          <span class="qs-hello">
+            <small>{% block welcome-msg %}{% translate 'Welcome,' %}{% endblock %}</small>
+            <b>{% firstof user.get_short_name user.get_username %}</b>
+          </span>
+          {% block userlinks %}{% endblock %}
+          {% include "admin/color_theme_toggle.html" %}
+        </div>
+        {% endif %}
+        {% endblock %}
+        {% block nav-global %}{% endblock %}
+      </header>
+    {% endblock %}
+    {% block nav-breadcrumbs %}
+      <nav aria-label="{% translate 'Breadcrumbs' %}">
+        {% block breadcrumbs %}
+          <div class="breadcrumbs">
+            <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+            {% if title %} &rsaquo; {{ title }}{% endif %}
+          </div>
+        {% endblock %}
+      </nav>
+    {% endblock %}
+    {% endif %}
+
+    <div class="main" id="main">
+      {% comment %}
+      La navigation par tables de Django est remplacée par la barre latérale
+      ci-dessus : deux colonnes de navigation feraient double emploi. Le bloc
+      reste défini, des gabarits de Django l'attendent.
+      {% endcomment %}
+      {% block nav-sidebar %}{% endblock %}
+      <main id="content-start" class="content" tabindex="-1">
+        {% block messages %}
+          {% if messages %}
+            <ul class="messagelist">{% for message in messages %}
+              <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message|capfirst }}</li>
+            {% endfor %}</ul>
+          {% endif %}
+        {% endblock messages %}
+        <div id="content" class="{% block coltype %}colM{% endblock %}">
+          {% block pretitle %}{% endblock %}
+          {% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
+          {% block content_subtitle %}{% if subtitle %}<h2>{{ subtitle }}</h2>{% endif %}{% endblock %}
+          {% block content %}
+            {% block object-tools %}{% endblock %}
+            {{ content }}
+          {% endblock %}
+          {% block sidebar %}{% endblock %}
+          <br class="clear">
+        </div>
+      </main>
+    </div>
+    <footer id="footer">{% block footer %}{% endblock %}</footer>
+  </div>
+</div>
+
+<svg xmlns="http://www.w3.org/2000/svg" class="base-svgs">
+  <symbol viewBox="0 0 24 24" width="1.5rem" height="1.5rem" id="icon-auto"><path d="M0 0h24v24H0z" fill="currentColor"/><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2V4a8 8 0 1 0 0 16z"/></symbol>
+  <symbol viewBox="0 0 24 24" width="1.5rem" height="1.5rem" id="icon-moon"><path d="M0 0h24v24H0z" fill="currentColor"/><path d="M10 7a7 7 0 0 0 12 4.9v.1c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2h.1A6.979 6.979 0 0 0 10 7zm-6 5a8 8 0 0 0 15.062 3.762A9 9 0 0 1 8.238 4.938 7.999 7.999 0 0 0 4 12z"/></symbol>
+  <symbol viewBox="0 0 24 24" width="1.5rem" height="1.5rem" id="icon-sun"><path d="M0 0h24v24H0z" fill="currentColor"/><path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-2a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11 1h2v3h-2V1zm0 19h2v3h-2v-3zM3.515 4.929l1.414-1.414L7.05 5.636 5.636 7.05 3.515 4.93zM16.95 18.364l1.414-1.414 2.121 2.121-1.414 1.414-2.121-2.121zm2.121-14.85l1.414 1.415-2.121 2.121-1.414-1.414 2.121-2.121zM5.636 16.95l1.414 1.414-2.121 2.121-1.414-1.414 2.121-2.121zM23 11v2h-3v-2h3zM4 11v2H1v-2h3z"/></symbol>
+</svg>
+{% block extrabody %}{% endblock extrabody %}
+</body>
+</html>

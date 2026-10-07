@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+venv/
+data/
+media/
+staticfiles/
+*.zip
+media_test/
+.env

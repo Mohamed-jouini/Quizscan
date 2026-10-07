@@ -1,0 +1,78 @@
+{# Connexion de l'espace administration. Meme mise en page que la connexion   #}
+{# enseignant, mais palette bleu / violet et carte en verre depoli : un       #}
+{# administrateur voit immediatement qu'il n'est pas sur l'ecran enseignant.  #}
+{#                                                                           #}
+{# Ce gabarit sert a DEUX vues :                                             #}
+{#   - grader.views.AdminLoginView            (/comptes/administration/)      #}
+{#   - la connexion de l'interface d'administration Django (/admin/login/),   #}
+{#     via admin.site.login_template dans grader/admin.py                     #}
+{# d'ou le formulaire poste sur l'URL courante plutot que sur une URL figee.  #}
+{% extends "registration/auth_base.html" %}
+
+{% block title %}Administration — QuizScan{% endblock %}
+{% block brand_suffix %}· Administration{% endblock %}
+
+{% block palette %}
+<style>
+/* Même palette que l'espace enseignant (héritée du gabarit), assombrie d'un
+   cran : l'administration reste reconnaissable sans changer de famille de
+   couleurs. */
+:root{
+  --art-2:#e7ebfa; --art-3:#c6cef2; --art-4:#949fe8;
+  --art-5:#6a71d8; --art-6:#4a45b0; --art-7:#2e2975; --art-leaf:#1b1752;
+}
+</style>
+{% endblock %}
+
+{% block panel %}
+<h1>Administration</h1>
+<p class="lede">Gestion des comptes enseignants et vue d'ensemble de
+  l'établissement. Réservé aux comptes administrateurs.</p>
+
+{% if form.errors %}
+<div class="alert" role="alert">
+  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><path d="M12 16h.01"/></svg>
+  <span>
+    {% for error in form.non_field_errors %}{{ error }}{% empty %}
+      Identifiant ou mot de passe incorrect.
+    {% endfor %}
+  </span>
+</div>
+{% endif %}
+
+<form method="post" novalidate>{% csrf_token %}
+  <div class="field">
+    <label for="id_username">Identifiant administrateur</label>
+    <div class="wrap">
+      <input type="text" name="username" id="id_username" autocomplete="username"
+             placeholder="admin" autofocus required>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="id_password">Mot de passe</label>
+    <div class="wrap">
+      <input type="password" name="password" id="id_password"
+             autocomplete="current-password" placeholder="••••••••" required>
+      <button type="button" class="reveal" data-target="id_password"
+              aria-pressed="false" aria-label="Afficher le mot de passe">
+        <svg class="off" viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>
+        <svg class="on" viewBox="0 0 24 24" hidden><path d="M2 12s3.6-6.5 10-6.5c2 0 3.7.6 5.2 1.5"/><path d="M21.3 9.6c.5.9.7 1.4.7 1.4s-3.6 6.5-10 6.5c-1.3 0-2.5-.3-3.6-.7"/><path d="M4 20 20 4"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <input type="hidden" name="next" value="{{ next }}">
+  <button class="submit" type="submit">Accéder à l'administration</button>
+</form>
+
+<div class="sep">ou</div>
+<a class="alt" href="{% url 'login' %}">
+  <svg viewBox="0 0 24 24"><path d="M3.5 19.5a8.5 8.5 0 0 1 17 0"/><circle cx="12" cy="7.5" r="4"/></svg>
+  Connexion enseignant
+</a>
+
+<p class="note">Les données (copies, notes, bulletins) restent hébergées sur le
+  serveur de l'établissement. Toute connexion administrateur donne accès aux
+  données de tous les enseignants.</p>
+{% endblock %}

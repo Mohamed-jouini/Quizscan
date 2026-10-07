@@ -1,0 +1,11 @@
+[Unit]
+Description=Mise à jour automatique de QuizScan depuis GitHub
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# Adapter le chemin si le dépôt est cloné ailleurs
+ExecStart=/opt/apps/dtech/quizscan-git/quizscan/deploy/update.sh
+StandardOutput=append:/var/log/quizscan-update.log
+StandardError=append:/var/log/quizscan-update.log

@@ -1,0 +1,57 @@
+{# Connexion de l'espace enseignant. Palette verte (decor « papier decoupe »). #}
+{# Vue : django.contrib.auth.views.LoginView — le formulaire est poste sur    #}
+{# l'URL courante, « next » est repris tel quel.                              #}
+{% extends "registration/auth_base.html" %}
+
+{% block title %}Connexion — QuizScan{% endblock %}
+{% block brand_suffix %}· Espace enseignant{% endblock %}
+
+{% block panel %}
+<h1>Connexion</h1>
+<p class="lede">Vos classes, vos épreuves et vos copies corrigées.
+  Chaque enseignant n'accède qu'à ses propres données.</p>
+
+{% if form.errors %}
+<div class="alert" role="alert">
+  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><path d="M12 16h.01"/></svg>
+  <span>Identifiant ou mot de passe incorrect. Vérifiez votre saisie,
+    en tenant compte des majuscules.</span>
+</div>
+{% endif %}
+
+<form method="post" novalidate>{% csrf_token %}
+  <div class="field">
+    <label for="id_username">Identifiant</label>
+    <div class="wrap">
+      <input type="text" name="username" id="id_username" autocomplete="username"
+             placeholder="prenom.nom" autofocus required>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="id_password">Mot de passe</label>
+    <div class="wrap">
+      <input type="password" name="password" id="id_password"
+             autocomplete="current-password" placeholder="••••••••" required>
+      <button type="button" class="reveal" data-target="id_password"
+              aria-pressed="false" aria-label="Afficher le mot de passe">
+        <svg class="off" viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>
+        <svg class="on" viewBox="0 0 24 24" hidden><path d="M2 12s3.6-6.5 10-6.5c2 0 3.7.6 5.2 1.5"/><path d="M21.3 9.6c.5.9.7 1.4.7 1.4s-3.6 6.5-10 6.5c-1.3 0-2.5-.3-3.6-.7"/><path d="M4 20 20 4"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <input type="hidden" name="next" value="{{ next }}">
+  <button class="submit" type="submit">Se connecter</button>
+</form>
+
+<div class="sep">ou</div>
+<a class="alt" href="{% url 'admin_login' %}">
+  <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6.2v5c0 4.5 3.1 8.6 7.5 9.8 4.4-1.2 7.5-5.3 7.5-9.8v-5L12 3Z"/></svg>
+  Accès administration
+</a>
+
+<p class="note">Les comptes enseignants sont créés par l'administrateur de
+  votre établissement. Mot de passe oublié ou compte bloqué&nbsp;?
+  Contactez-le, il peut le réinitialiser.</p>
+{% endblock %}

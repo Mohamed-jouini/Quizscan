@@ -1,0 +1,44 @@
+{% extends "grader/base.html" %}
+{% block content %}
+<h1>Classes</h1>
+
+<div class="card">
+  <h2>Quiz de classe ({{ quizzes|length }})</h2>
+  {% if quizzes %}
+  <table>
+    <tr><th>Titre</th><th>Classe</th><th>Questions</th><th></th></tr>
+    {% for q in quizzes %}
+    <tr>
+      <td><a href="{% url 'quiz_detail' q.pk %}">{{ q.title }}</a></td>
+      <td>{{ q.class_group.name }}</td>
+      <td>{{ q.questions.count }}</td>
+      <td><a class="btn small secondary" href="{% url 'quiz_results' q.pk %}">Résultats</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p>Aucun quiz de classe. <a href="{% url 'quiz_create' %}">Créez le premier</a>.</p>{% endif %}
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2>Mes classes ({{ classes|length }})</h2>
+    {% if classes %}
+    <table>
+      <tr><th>Classe</th><th>Étudiants</th></tr>
+      {% for c in classes %}
+      <tr><td><a href="{% url 'class_detail' c.pk %}">{{ c.name }}</a></td>
+          <td>{{ c.students.count }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p>Aucune classe pour le moment.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Nouvelle classe</h2>
+    <form method="post">{% csrf_token %}
+      {{ form.name.errors }}
+      <label>Nom de la classe</label>{{ form.name }}
+      <p><button class="btn" type="submit">Créer</button></p>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "grader/base.html" %}
+{% block topbar_actions %}{% endblock %}
+{% block content %}
+<h1>{% if is_concours %}Nouveau concours{% else %}Nouveau quiz{% endif %}</h1>
+{% if is_concours %}
+<ul class="messages"><li>
+  🏆 Un concours a sa propre liste de candidats, séparée des classes : après la
+  création, importez-la (Excel : Nom, Prénom, N° d'inscription) et imprimez les
+  étiquettes QR depuis la page « Candidats & étiquettes QR ».
+</li></ul>
+{% endif %}
+<div class="card" style="max-width:560px">
+  <form method="post">{% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}
+      <div id="row_{{ field.name }}"{% if field.name == "grading_mode" %} class="radios"{% endif %}>
+      {{ field.errors }}
+      <label>{{ field.label }}</label>{{ field }}
+      {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
+      </div>
+    {% endfor %}
+    <span class="helptext">Le nombre de choix (A, B, C…) se règle pour chaque question.</span>
+    <p><button class="btn" type="submit">
+      {% if is_concours %}Créer le concours{% else %}Créer le quiz{% endif %}</button></p>
+  </form>
+</div>
+<script>
+// « Nombre de chiffres du n° » ne concerne que la grille de n° d'inscription
+(function () {
+  var mode = document.getElementById("id_id_mode");
+  var row = document.getElementById("row_id_digits");
+  if (!mode || !row) return;
+  function sync() { row.hidden = mode.value !== "grid"; }
+  mode.addEventListener("change", sync); sync();
+})();
+</script>
+{% endblock %}

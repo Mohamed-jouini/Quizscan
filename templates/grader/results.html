@@ -1,0 +1,115 @@
+{% extends "grader/base.html" %}
+{% block content %}
+<h1>Résultats — {{ quiz.title }}</h1>
+<p>
+  <a class="btn small secondary" href="{% url 'quiz_detail' quiz.pk %}">← Retour au quiz</a>
+  <a class="btn small" href="{% url 'quiz_results_xlsx' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">
+    ⬇ Exporter en Excel</a>
+  <a class="btn small" href="{% url 'quiz_bulletins_pdf' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">
+    🧾 Bulletins PDF (tous)</a>
+</p>
+
+{% if batches|length > 1 %}
+<p>Filtrer par lot :
+  <a href="{% url 'quiz_results' quiz.pk %}" {% if not batch %}style="font-weight:700"{% endif %}>Tous</a>
+  {% for b in batches %} |
+  <a href="?batch={{ b.pk }}" {% if batch.pk == b.pk %}style="font-weight:700"{% endif %}>{{ b }}</a>
+  {% endfor %}
+</p>
+{% endif %}
+
+{% if pending_pages %}
+<ul class="messages"><li style="background:#f3f7fc;color:#1f4e79">
+  📥 {{ pending_pages }} page(s) scannée(s) attendent encore la correction —
+  <a href="{% url 'quiz_detail' quiz.pk %}"><b>lancez la correction</b></a> depuis la page du concours.
+</li></ul>
+{% endif %}
+{% if unmatched %}
+<ul class="messages"><li class="error">
+  ⚠️ {{ unmatched_total }} page(s) non identifiée(s) — leurs notes ne figurent pas ci-dessous.
+  {% for s in unmatched %}
+    <a href="{% url 'sheet_review' s.pk %}">{{ s.source_name }}</a>{% if not forloop.last %}, {% endif %}
+  {% endfor %}
+  {% if unmatched_total > unmatched|length %}
+    … et {{ unmatched_total|add:"-200" }} autre(s) — voir la liste des pages du lot.
+  {% endif %}
+</li></ul>
+{% endif %}
+
+<div class="card">
+  {% include "grader/_pagination.html" with page=rows_page label="Étudiants" querystring=batch_qs %}
+  <table>
+    <tr>
+      <th>Étudiant</th><th>Note</th><th>Répondues</th><th>Correctes</th>
+      <th>Fausses</th><th>Sans réponse</th><th>Manuscrites à corriger</th><th></th>
+    </tr>
+    {% for r in rows_page %}
+    <tr>
+      <td><b>{{ r.student.full_name }}</b>
+          {% if r.student.student_number %}<span class="helptext">n° {{ r.student.student_number }}</span>{% endif %}</td>
+      <td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>
+      <td>{{ r.answered }}</td>
+      <td><span class="badge ok">{{ r.correct }}</span></td>
+      <td><span class="badge bad">{{ r.wrong }}</span></td>
+      <td><span class="badge grey">{{ r.blank }}</span></td>
+      <td>{% if r.pending_open %}<span class="badge warn">{{ r.pending_open }}</span>{% else %}—{% endif %}</td>
+      <td>{% for s in r.sheets %}
+        <a class="btn small secondary" href="{% url 'sheet_review' s.pk %}">copie p{{ s.page_index|add:1 }}</a>
+      {% endfor %}
+        <a class="btn small secondary" title="Bulletin individuel"
+           href="{% url 'quiz_bulletins_pdf' quiz.pk %}?student={{ r.student.pk }}{% if batch %}&batch={{ batch.pk }}{% endif %}">🧾</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="8">Aucune copie identifiée pour le moment.</td></tr>
+    {% endfor %}
+  </table>
+  {% include "grader/_pagination.html" with page=rows_page label="Étudiants" querystring=batch_qs %}
+</div>
+
+{% if stats %}
+<div class="grid2">
+  <div class="card">
+    <h2>Statistiques de l'épreuve</h2>
+    <p>
+      {{ stats.n }} étudiant(s) —
+      moyenne <b>{{ stats.mean|floatformat:"-2" }}</b>,
+      médiane <b>{{ stats.median|floatformat:"-2" }}</b>,
+      meilleure note <b>{{ stats.best|floatformat:"-2" }}</b>,
+      plus basse <b>{{ stats.worst|floatformat:"-2" }}</b>
+      (sur {{ stats.max_score|floatformat:"-2" }}).
+    </p>
+    <h2 style="margin-top:16px">Répartition des notes</h2>
+    <table>
+      {% for h in stats.histogram %}
+      <tr>
+        <td style="width:80px">{{ h.label }}</td>
+        <td><span class="bar" style="width:{{ h.bar }}%"></span>
+            &nbsp;{{ h.count }} ({{ h.pct }} %)</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="card">
+    <h2>Réussite par question</h2>
+    <table>
+      <tr><th>Q</th><th>Réussite</th><th>Justes</th><th>Fausses</th><th>Vides</th></tr>
+      {% for s in stats.questions %}
+      <tr {% if s.success < 40 %}style="background:#fff4f2"{% endif %}>
+        <td><b>{{ s.question.order }}</b>
+            {% if s.question.qtype == "open" %}<span class="helptext">manuscrite</span>{% endif %}</td>
+        <td><span class="bar" style="width:{{ s.success }}%;max-width:80px"></span>
+            &nbsp;{{ s.success }} %</td>
+        {% if s.question.qtype == "qcm" %}
+        <td>{{ s.correct }}</td><td>{{ s.wrong }}</td><td>{{ s.blank }}</td>
+        {% else %}
+        <td colspan="3"><span class="helptext">{{ s.graded }} copie(s) notée(s)</span></td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </table>
+    <p class="helptext">Les lignes surlignées (&lt; 40 % de réussite) signalent
+      les questions les plus ratées.</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

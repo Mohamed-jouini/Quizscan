@@ -1,0 +1,57 @@
+{% extends "grader/base.html" %}
+{% block content %}
+<h1>Classe : {{ group.name }}</h1>
+<div class="grid2">
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 style="margin:0">Candidats ({{ students_total }})</h2>
+      <span class="spacer"></span>
+      {% if students_total %}
+      <a class="btn small" href="{% url 'class_labels_pdf' group.pk %}"
+         target="_blank">🏷️ Planche d'étiquettes (PDF)</a>
+      {% endif %}
+    </div>
+    {% if students_page.object_list %}
+    {% include "grader/_pagination.html" with page=students_page label="Candidats" %}
+    <table>
+      <tr><th>Nom</th><th>Prénom</th><th>N°</th><th>QR</th><th></th></tr>
+      {% for s in students_page %}
+      <tr>
+        <td>{{ s.last_name }}</td><td>{{ s.first_name }}</td>
+        <td>{{ s.student_number }}</td>
+        <td><img src="{% url 'student_qr' s.pk %}" alt="QR {{ s.full_name }}"
+                 width="46" height="46" style="display:block"></td>
+        <td><form class="inline" method="post">{% csrf_token %}
+          <button class="btn small danger" name="delete_student" value="{{ s.pk }}"
+                  onclick="return confirm('Supprimer {{ s.full_name }} ?')">✕</button>
+        </form></td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% include "grader/_pagination.html" with page=students_page label="Candidats" %}
+    {% else %}<p>Aucun candidat : importez la liste ci-contre.</p>{% endif %}
+  </div>
+  <div>
+    <div class="card">
+      <h2>Importer depuis un fichier</h2>
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}
+        {{ xlsx_form.file.errors }}
+        {{ xlsx_form.file }}
+        <span class="helptext">{{ xlsx_form.file.help_text }}</span>
+        <p><button class="btn" name="import_xlsx" value="1" type="submit">
+          Importer le fichier</button></p>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Copier-coller une liste</h2>
+      <form method="post">{% csrf_token %}
+        {{ import_form.text.errors }}
+        {{ import_form.text }}
+        <span class="helptext">{{ import_form.text.help_text }}</span>
+        <p><button class="btn secondary" name="import" value="1" type="submit">
+          Importer le texte</button></p>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

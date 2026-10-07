@@ -1,0 +1,267 @@
+{% comment %}
+Gabarit commun aux deux pages de connexion (enseignant et administration).
+
+Mise en page : une carte arrondie en deux colonnes — le formulaire à gauche,
+un décor « papier découpé » (couches ondulées superposées) à droite. Chaque
+page fille ne redéfinit que sa palette (bloc « palette ») et le contenu du
+formulaire ; la géométrie, le décor et le comportement sont partagés.
+
+Le CSS est écrit dans la page, comme dans grader/base.html : l'application
+est interne et à faible trafic, cela évite un aller-retour de plus et garde
+la connexion lisible même si les fichiers statiques ne sont pas collectés.
+{% endcomment %}<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Connexion — QuizScan{% endblock %}</title>
+<style>
+:root{
+  /* Palette par défaut — la même que l'application (grader/base.html) :
+     la connexion et le tableau de bord forment un seul ensemble. */
+  --page-bg:#eceef7;
+  --halo-1:#9fb0f2;  --halo-2:#c9b4ee;
+  --card-bg:rgba(255,255,255,.76);
+  --card-border:rgba(255,255,255,.85);
+  --card-blur:26px;
+  --band:150px;   /* hauteur du bandeau décoratif sur mobile */
+  --ink:#1a1f3c;     --muted:#5f668c;
+  --field-bg:rgba(255,255,255,.9);
+  --field-border:#d3d9ee;  --field-focus:#4356c9;
+  --btn:#4356c9;     --btn-hover:#36469f;     --btn-ink:#fff;
+  --link:#4356c9;
+  --art-1:#ffffff; --art-2:#eef1fc; --art-3:#d3d9f6; --art-4:#a9b3ee;
+  --art-5:#7c83e0; --art-6:#5a55bd; --art-7:#3a3488; --art-leaf:#241f63;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{
+  margin:0;
+  min-height:100%;
+  display:flex;align-items:center;justify-content:center;
+  padding:clamp(16px,4vw,40px);
+  font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  font-size:15px;color:var(--ink);
+  background:var(--page-bg);
+  -webkit-font-smoothing:antialiased;
+}
+/* Halos flous : rappellent le feuillage hors champ des maquettes */
+body::before,body::after{
+  content:"";position:fixed;border-radius:50%;
+  filter:blur(90px);opacity:.6;pointer-events:none;z-index:0;
+}
+body::before{width:34rem;height:34rem;background:var(--halo-1);top:-10rem;left:-7rem}
+body::after{width:40rem;height:40rem;background:var(--halo-2);bottom:-14rem;right:-10rem}
+
+.auth{
+  position:relative;z-index:1;
+  width:min(1040px,100%);
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  border-radius:28px;overflow:hidden;
+  background:var(--card-bg);
+  border:1px solid var(--card-border);
+  backdrop-filter:blur(var(--card-blur));
+  -webkit-backdrop-filter:blur(var(--card-blur));
+  box-shadow:0 36px 90px -24px rgba(12,28,20,.42),0 2px 8px rgba(12,28,20,.07);
+}
+
+/* ---------------------------------------------------------- colonne form */
+.auth__panel{
+  padding:clamp(32px,5vw,64px);
+  display:flex;flex-direction:column;justify-content:center;
+  min-height:min(640px,84vh);
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.3px;
+  font-size:15px;color:var(--ink);margin-bottom:auto}
+.brand__mark{
+  width:30px;height:30px;border-radius:9px;flex:none;
+  background:linear-gradient(135deg,#4356c9,#8b5cf6);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 16px -8px #4356c9;
+}
+.brand__mark svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:1.9}
+.brand__suffix{opacity:.5;font-weight:600}
+.auth h1{
+  font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif;
+  font-size:clamp(30px,4vw,40px);font-weight:600;letter-spacing:-.4px;
+  margin:28px 0 6px;
+}
+.lede{color:var(--muted);font-size:14px;line-height:1.55;margin:0 0 26px;max-width:38ch}
+
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12.5px;font-weight:600;letter-spacing:.2px;
+  color:var(--muted);margin:0 0 7px}
+.field .wrap{position:relative;display:flex;align-items:center}
+.field input{
+  width:100%;padding:13px 16px;border-radius:999px;
+  border:1px solid var(--field-border);background:var(--field-bg);
+  font:inherit;font-size:14.5px;color:var(--ink);
+  transition:border-color .15s,box-shadow .15s;
+}
+.field input::placeholder{color:#a7b3ac}
+.field input:focus{outline:none;border-color:var(--field-focus);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--field-focus) 16%,transparent)}
+.field input[type=password]{padding-right:48px}
+.reveal{
+  position:absolute;right:6px;width:36px;height:36px;border:0;border-radius:50%;
+  background:transparent;color:var(--muted);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.reveal:hover{color:var(--ink);background:rgba(0,0,0,.05)}
+.reveal:focus-visible{outline:2px solid var(--field-focus);outline-offset:1px}
+.reveal svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7}
+
+.submit{
+  width:100%;margin-top:10px;padding:14px 20px;border:0;border-radius:999px;
+  background:linear-gradient(135deg,#4356c9,#8b5cf6);color:var(--btn-ink);
+  font:inherit;font-size:15px;font-weight:600;letter-spacing:.2px;cursor:pointer;
+  transition:background .15s,transform .08s,box-shadow .15s;
+  box-shadow:0 10px 24px -10px color-mix(in srgb,var(--btn) 75%,transparent);
+}
+.submit:hover{filter:brightness(1.08)}
+.submit:active{transform:translateY(1px)}
+.submit:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+.sep{display:flex;align-items:center;gap:14px;margin:26px 0 18px;
+  color:var(--muted);font-size:12.5px}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--field-border)}
+
+.alt{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  width:100%;padding:12px 18px;border-radius:999px;text-decoration:none;
+  border:1px solid var(--field-border);background:rgba(255,255,255,.55);
+  color:var(--ink);font-size:14px;font-weight:600;
+  transition:border-color .15s,background .15s;
+}
+.alt:hover{border-color:var(--field-focus);background:#fff}
+.alt svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7}
+
+.note{margin:22px 0 0;font-size:12.5px;line-height:1.6;color:var(--muted)}
+.note a{color:var(--link);font-weight:600}
+
+.alert{
+  display:flex;gap:10px;align-items:flex-start;
+  margin:0 0 20px;padding:12px 14px;border-radius:12px;
+  background:#fdeceb;border:1px solid #f3c6c2;color:#8c1813;
+  font-size:13.5px;line-height:1.5;
+}
+.alert svg{flex:none;width:18px;height:18px;margin-top:1px;fill:none;
+  stroke:currentColor;stroke-width:1.8}
+
+/* Reflet de verre sur la carte (effet « glassmorphism » de la maquette) */
+.auth::before{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+  border-radius:inherit;
+  background:linear-gradient(135deg,rgba(255,255,255,.5),rgba(255,255,255,0) 42%);
+}
+
+/* ---------------------------------------------------------- colonne décor */
+.auth__art{position:relative;overflow:hidden;background:var(--art-1)}
+.auth__art svg{position:absolute;inset:0;width:100%;height:100%}
+/* Chaque couche porte son ombre portée : c'est elle qui donne l'effet
+   « papier découpé » des maquettes (feuilles superposées en relief). */
+.layer{filter:drop-shadow(-10px 0 14px rgba(20,40,28,.22))}
+.sprig{opacity:.42;color:var(--art-leaf)}
+.sprig use{filter:drop-shadow(-4px 2px 5px rgba(10,24,16,.3))}
+
+/* ---------------------------------------------------------- responsive */
+@media (max-width:860px){
+  .auth{grid-template-columns:1fr}
+  /* Sur mobile, le décor devient un bandeau horizontal : on fait pivoter le
+     même dessin d'un quart de tour. Le SVG est dimensionné AVANT rotation
+     (largeur = hauteur du bandeau, hauteur = largeur de l'écran) pour qu'il
+     couvre toute la bande une fois tourné, sans laisser de bords blancs. */
+  .auth__art{order:-1;height:var(--band);position:relative}
+  .auth__art svg{
+    inset:auto;top:50%;left:50%;
+    width:var(--band);height:100vw;
+    transform:translate(-50%,-50%) rotate(-90deg);
+  }
+  .auth__panel{min-height:0;padding:30px clamp(22px,6vw,38px) 36px}
+  .brand{margin-bottom:0}
+  .auth h1{margin-top:18px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+{% block palette %}{% endblock %}
+</head>
+<body>
+<main class="auth">
+  <div class="auth__panel">
+    <div class="brand">
+      <span class="brand__mark">
+        <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
+      </span>
+      QuizScan <span class="brand__suffix">{% block brand_suffix %}{% endblock %}</span>
+    </div>
+    {% block panel %}{% endblock %}
+  </div>
+
+  <div class="auth__art" aria-hidden="true">
+    <svg viewBox="0 0 640 900" preserveAspectRatio="xMidYMid slice" role="presentation">
+      <path class="layer" fill="var(--art-2)" d="M40,0 C-10,150 110,290 30,450 C-40,600 90,760 20,900 L640,900 L640,0 Z"/>
+      <path class="layer" fill="var(--art-3)" d="M100,0 C55,160 170,300 85,455 C10,600 145,765 70,900 L640,900 L640,0 Z"/>
+      <path class="layer" fill="var(--art-4)" d="M165,0 C120,140 235,300 148,462 C72,612 205,760 132,900 L640,900 L640,0 Z"/>
+      <path class="layer" fill="var(--art-5)" d="M235,0 C182,170 302,300 216,466 C142,616 268,770 197,900 L640,900 L640,0 Z"/>
+      <path class="layer" fill="var(--art-6)" d="M305,0 C256,150 368,312 288,470 C212,616 332,776 262,900 L640,900 L640,0 Z"/>
+      <path class="layer" fill="var(--art-7)" d="M378,0 C332,160 442,300 362,472 C286,620 402,776 332,900 L640,900 L640,0 Z"/>
+      <!-- Frondes de fougere posees sur les couches, comme le feuillage
+           des maquettes. Definies une fois, reutilisees avec <use>. -->
+      <defs>
+      <g id="frond" fill="currentColor">
+        <path d="M0 0 Q 95 -9 190 -4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <ellipse cx="31.6" cy="0" rx="31.6" ry="7.3" transform="translate(16.4 -1.6) rotate(-59.8)"/>
+        <ellipse cx="31.6" cy="0" rx="31.6" ry="7.3" transform="translate(16.4 -1.6) rotate(59.8)"/>
+        <ellipse cx="30.7" cy="0" rx="30.7" ry="7.1" transform="translate(32.8 -3.1) rotate(-57.5)"/>
+        <ellipse cx="30.7" cy="0" rx="30.7" ry="7.1" transform="translate(32.8 -3.1) rotate(57.5)"/>
+        <ellipse cx="29.5" cy="0" rx="29.5" ry="6.9" transform="translate(49.1 -4.4) rotate(-55.3)"/>
+        <ellipse cx="29.5" cy="0" rx="29.5" ry="6.9" transform="translate(49.1 -4.4) rotate(55.3)"/>
+        <ellipse cx="27.9" cy="0" rx="27.9" ry="6.5" transform="translate(65.5 -5.3) rotate(-53.0)"/>
+        <ellipse cx="27.9" cy="0" rx="27.9" ry="6.5" transform="translate(65.5 -5.3) rotate(53.0)"/>
+        <ellipse cx="26.0" cy="0" rx="26.0" ry="6.2" transform="translate(81.9 -5.9) rotate(-50.8)"/>
+        <ellipse cx="26.0" cy="0" rx="26.0" ry="6.2" transform="translate(81.9 -5.9) rotate(50.8)"/>
+        <ellipse cx="23.8" cy="0" rx="23.8" ry="5.7" transform="translate(98.3 -6.0) rotate(-48.6)"/>
+        <ellipse cx="23.8" cy="0" rx="23.8" ry="5.7" transform="translate(98.3 -6.0) rotate(48.6)"/>
+        <ellipse cx="21.4" cy="0" rx="21.4" ry="5.2" transform="translate(114.7 -5.7) rotate(-46.3)"/>
+        <ellipse cx="21.4" cy="0" rx="21.4" ry="5.2" transform="translate(114.7 -5.7) rotate(46.3)"/>
+        <ellipse cx="18.7" cy="0" rx="18.7" ry="4.6" transform="translate(131.0 -5.0) rotate(-44.1)"/>
+        <ellipse cx="18.7" cy="0" rx="18.7" ry="4.6" transform="translate(131.0 -5.0) rotate(44.1)"/>
+        <ellipse cx="15.8" cy="0" rx="15.8" ry="4.0" transform="translate(147.4 -3.9) rotate(-41.8)"/>
+        <ellipse cx="15.8" cy="0" rx="15.8" ry="4.0" transform="translate(147.4 -3.9) rotate(41.8)"/>
+        <ellipse cx="12.6" cy="0" rx="12.6" ry="3.4" transform="translate(163.8 -2.5) rotate(-39.6)"/>
+        <ellipse cx="12.6" cy="0" rx="12.6" ry="3.4" transform="translate(163.8 -2.5) rotate(39.6)"/>
+        <ellipse cx="9.2" cy="0" rx="9.2" ry="2.6" transform="translate(180.2 -1.0) rotate(-37.3)"/>
+        <ellipse cx="9.2" cy="0" rx="9.2" ry="2.6" transform="translate(180.2 -1.0) rotate(37.3)"/>
+      </g>
+      </defs>
+      <g class="sprig">
+        <use href="#frond" transform="translate(372 648) rotate(-18) scale(1.15)"/>
+        <use href="#frond" transform="translate(392 690) rotate(14) scale(.95)"/>
+        <use href="#frond" transform="translate(408 742) rotate(44) scale(.8)"/>
+        <use href="#frond" transform="translate(640 128) rotate(158) scale(1.05)"/>
+        <use href="#frond" transform="translate(632 196) rotate(196) scale(.85)"/>
+        <use href="#frond" transform="translate(592 854) rotate(-58) scale(.7)"/>
+      </g>
+    </svg>
+  </div>
+</main>
+
+<script>
+// Œil « afficher / masquer » du champ mot de passe (comme dans la maquette).
+document.querySelectorAll(".reveal").forEach(function (btn) {
+  var input = document.getElementById(btn.dataset.target);
+  if (!input) return;
+  btn.addEventListener("click", function () {
+    var shown = input.type === "text";
+    input.type = shown ? "password" : "text";
+    btn.setAttribute("aria-pressed", String(!shown));
+    btn.setAttribute("aria-label", shown ? "Afficher le mot de passe"
+                                         : "Masquer le mot de passe");
+    btn.querySelector(".off").hidden = shown;
+    btn.querySelector(".on").hidden = !shown;
+  });
+});
+</script>
+</body>
+</html>
