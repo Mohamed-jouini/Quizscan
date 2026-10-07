@@ -440,6 +440,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » |
 | `test_e2e_web.py` | par l'interface : étiquettes QR d'une classe, correction en arrière-plan, secours OCR, corrigé modifié après l'épreuve, alerte de fiche périmée, droits d'accès |
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
+| `test_e2e_design.py` | une seule feuille de style pour toutes les pages, aucun style redéclaré en ligne, aucun jeton défini deux fois |
 | `test_e2e_corrige.py` | bonne réponse facultative, corrigé scanné et conservé, correction bloquée tant qu'il manque une réponse |
 | `test_e2e_robustesse.py` | pannes d'OCR (Tesseract absent, paquet de langue manquant), fiches de plus de 12 pages, QR collés de travers dans leur cadre, contenu de la planche d'étiquettes, identifiants d'URL bricolés |
 
@@ -478,9 +479,23 @@ Le **tableau de bord** donne les quatre chiffres utiles — nombre d'épreuves,
 taux de copies lues sans intervention, copies scannées (avec les 7 derniers
 jours) et ce qui reste à traiter — puis les épreuves et lots récents.
 
+Le panneau s'étend jusqu'à 1760 px et **épouse son contenu** en hauteur : sur
+un écran large il n'y a ni bandes vides sur les côtés, ni grande zone blanche
+sous le contenu. Au-delà de 1700 px, la typographie et la barre latérale
+montent d'un cran — un corps de 15 px est peu lisible sur un 2560 px.
+
 Sous 980 px, la barre latérale devient une barre d'icônes horizontale et les
 panneaux se mettent en colonne : les pages restent utilisables sur tablette et
 téléphone.
+
+**Un seul système de style.** Tout — espace enseignant, pages de connexion et
+administration — vient de `grader/static/grader/quizscan.css` : un seul jeu de
+jetons (couleurs, rayons, ombres, mesures), une seule barre latérale, un seul
+jeu de composants (carte, tuile, bouton, champ, pastille, tableau). Les trois
+contextes avaient auparavant trois feuilles séparées qui redéfinissaient les
+mêmes couleurs sous des noms différents ; une règle oubliée dans l'une écrasait
+l'autre. `test_e2e_design.py` monte la garde : il vérifie que chaque page
+charge cette feuille et qu'aucune ne redéclare le style en ligne.
 
 L'**interface d'administration** (`/admin/`) s'ouvre dans le **même cadre** que
 le reste : même barre latérale, même barre du haut, même panneau. La barre
@@ -489,17 +504,16 @@ administrables ; celle de Django est désactivée
 (`admin.site.enable_nav_sidebar = False`) pour ne pas avoir deux colonnes de
 navigation.
 
-Deux fichiers s'en chargent :
+`templates/admin/base.html` en fournit l'ossature : elle reprend tous les
+blocs et identifiants attendus par Django (`#container`, `#main`, `#content`…)
+pour que listes, formulaires et fenêtres de sélection continuent de
+fonctionner. Les fenêtres de sélection (loupe d'une clé étrangère) s'affichent
+sans la barre latérale, comme il se doit.
 
-- `templates/admin/base.html` — l'ossature, qui reprend tous les blocs et
-  identifiants attendus par Django (`#container`, `#main`, `#content`…) pour
-  que listes, formulaires et fenêtres de sélection continuent de fonctionner.
-  Les fenêtres de sélection (loupe d'une clé étrangère) s'affichent sans la
-  barre latérale, comme il se doit ;
-- `templates/admin/base_site.html` — les couleurs. Django 5 expose les siennes
-  en variables CSS : on les redéfinit plutôt que de lutter contre sa feuille de
-  style, ce qui reste valable quand Django fait évoluer ses règles internes.
-  Le thème sombre est couvert aussi.
+Django 5 expose ses couleurs en variables CSS (`--primary`, `--body-bg`…) : la
+feuille unique les fait **pointer sur les jetons de QuizScan** plutôt que de
+lutter contre sa feuille de style — ce qui reste valable quand Django fait
+évoluer ses règles internes. Le thème sombre est couvert aussi.
 
 ## Le nombre de cases d'une question
 
@@ -634,5 +648,6 @@ python manage.py comptes_demo --supprimer
   défaut) : il suffit de renseigner `POSTGRES_DB`, `POSTGRES_USER`,
   `POSTGRES_PASSWORD` (et au besoin `POSTGRES_HOST` / `POSTGRES_PORT`) dans
   `.env`, le pilote est déjà installé dans l'image.
-#   Q u i z s c a n  
+#   Q u i z s c a n 
+ 
  

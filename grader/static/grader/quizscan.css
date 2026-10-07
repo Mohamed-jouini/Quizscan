@@ -1,0 +1,697 @@
+/* ===========================================================================
+   QuizScan — feuille de style unique
+   ---------------------------------------------------------------------------
+   Un seul fichier pour les trois contextes de l'application :
+     - l'espace enseignant   (templates/grader/base.html)
+     - les pages de connexion(templates/registration/auth_base.html)
+     - l'administration      (templates/admin/base.html)
+
+   Ils partageaient auparavant trois feuilles séparées qui redéfinissaient les
+   mêmes couleurs sous des noms différents (--blue / --btn / --qs-blue pour un
+   seul #4356c9) et les mêmes composants : une règle oubliée dans l'une
+   écrasait l'autre. Tout est désormais défini une fois.
+
+   Sommaire
+     1. Jetons
+     2. Base
+     3. Ossature (barre latérale, barre du haut)
+     4. Composants
+     5. Connexion
+     6. Pont vers l'administration Django
+     7. Adaptation aux écrans
+     8. Thème sombre
+   =========================================================================== */
+
+/* === 1. Jetons ============================================================ */
+:root{
+  /* Couleurs de marque */
+  --qs-blue:#4356c9;
+  --qs-blue-dark:#36469f;
+  --qs-violet:#8b5cf6;
+  --qs-grad:linear-gradient(135deg,#4356c9,#8b5cf6);
+  --qs-halo-1:#9fb0f2;
+  --qs-halo-2:#c9b4ee;
+
+  /* Surfaces et texte */
+  --qs-page:#eceef7;
+  --qs-surface:#fff;
+  --qs-glass:rgba(255,255,255,.78);
+  --qs-glass-edge:rgba(255,255,255,.85);
+  --qs-ink:#1a1f3c;
+  --qs-ink-soft:#434a73;
+  --qs-muted:#5f668c;
+  --qs-faint:#8d93b4;
+  --qs-line:#e2e6f3;
+  --qs-field-line:#d3d9ee;
+
+  /* États */
+  --qs-ok:#1e8e3e;      --qs-ok-bg:#e8f4ec;    --qs-ok-ink:#145c2a;
+  --qs-bad:#c5221f;     --qs-bad-bg:#fbe9e8;   --qs-bad-ink:#8c1813;
+  --qs-warn:#e37400;    --qs-warn-bg:#fdf1dc;
+
+  /* Formes */
+  --qs-r-panel:26px;    /* grand panneau en verre */
+  --qs-r-card:18px;     /* carte */
+  --qs-r-field:10px;    /* champ, bouton */
+  --qs-shadow-card:0 18px 40px -22px rgba(26,31,60,.35);
+  --qs-shadow-panel:0 40px 90px -30px rgba(26,31,60,.45);
+
+  /* Mesures */
+  --qs-side-w:238px;
+  --qs-max-w:1760px;
+  --qs-gutter:clamp(12px,2.2vw,30px);
+  --qs-pad:clamp(16px,2.4vw,28px);
+
+  /* Décor « papier découpé » des pages de connexion : couches de la plus
+     claire à la plus sombre. login_admin.html les assombrit d'un cran. */
+  --art-1:#ffffff; --art-2:#eef1fc; --art-3:#d3d9f6; --art-4:#a9b3ee;
+  --art-5:#7c83e0; --art-6:#5a55bd; --art-7:#3a3488; --art-leaf:#241f63;
+  --qs-band:150px;   /* hauteur du bandeau décoratif sur mobile */
+
+  /* Alias historiques, conservés : des gabarits les utilisent encore */
+  --blue:var(--qs-blue); --grad:var(--qs-grad); --line:var(--qs-line);
+  --ink:var(--qs-ink); --muted:var(--qs-muted); --faint:var(--qs-faint);
+  --ok:var(--qs-ok); --bad:var(--qs-bad); --warn:var(--qs-warn);
+  --r:var(--qs-r-card); --side-w:var(--qs-side-w);
+  --shadow:var(--qs-shadow-card); --panel-solid:var(--qs-surface);
+}
+
+/* === 2. Base ============================================================== */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{
+  margin:0;min-height:100%;
+  font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  font-size:15px;line-height:1.5;color:var(--qs-ink);background:var(--qs-page);
+  -webkit-font-smoothing:antialiased;
+}
+/* Halos diffus du fond : ils donnent la profondeur des maquettes. */
+body::before,body::after{
+  content:"";position:fixed;border-radius:50%;filter:blur(100px);
+  opacity:.45;pointer-events:none;z-index:0;
+}
+body::before{width:38rem;height:38rem;background:var(--qs-halo-1);top:-12rem;left:-8rem}
+body::after{width:42rem;height:42rem;background:var(--qs-halo-2);bottom:-16rem;right:-10rem}
+
+a{color:var(--qs-blue)}
+h1{font-size:23px;margin:0 0 16px;letter-spacing:-.3px}
+h2{font-size:15.5px;margin:0 0 14px;letter-spacing:-.1px}
+.spacer{flex:1}
+
+/* === 3. Ossature ========================================================== */
+/* #container est le conteneur de l'administration Django : il reçoit la même
+   mise en page que .shell__inner pour que les deux ne fassent qu'un design. */
+.shell{
+  position:relative;z-index:1;
+  max-width:var(--qs-max-w);margin:0 auto;padding:var(--qs-gutter);
+  display:grid;grid-template-columns:var(--qs-side-w) minmax(0,1fr);
+}
+.shell__inner,
+body #container{
+  display:grid;grid-template-columns:var(--qs-side-w) minmax(0,1fr);
+  border-radius:var(--qs-r-panel);overflow:hidden;
+  background:var(--qs-glass);
+  border:1px solid var(--qs-glass-edge);
+  backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
+  box-shadow:var(--qs-shadow-panel);
+  /* La carte épouse son contenu : forcée à 100vh, elle laissait une grande
+     zone vide sous le contenu sur un écran haut. Un plancher suffit. */
+  min-height:min(620px,calc(100vh - 2 * var(--qs-gutter)));
+}
+.shell__inner{grid-column:1/-1}
+body #container{
+  position:relative;z-index:1;
+  width:auto;min-width:0;height:auto;
+  max-width:var(--qs-max-w);margin:0 auto;
+}
+
+/* --- Barre latérale ------------------------------------------------------ */
+.side{
+  padding:22px 16px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;
+  background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,.25));
+  border-right:1px solid rgba(255,255,255,.7);
+}
+.side__brand{display:flex;align-items:center;gap:10px;padding:4px 10px 20px}
+.side__mark{
+  width:34px;height:34px;border-radius:10px;flex:none;background:var(--qs-grad);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 18px -8px var(--qs-blue);
+}
+.side__mark svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:1.9}
+.side__name{font-weight:700;font-size:16px;letter-spacing:.2px;line-height:1.1;
+  color:var(--qs-ink)}
+.side__name small{display:block;font-size:9.5px;font-weight:600;letter-spacing:1.3px;
+  color:var(--qs-faint);text-transform:uppercase;margin-top:2px}
+
+.nav{display:flex;flex-direction:column;gap:3px}
+.nav__item{
+  display:flex;align-items:center;gap:11px;
+  padding:10px 12px;border-radius:11px;text-decoration:none;
+  color:var(--qs-muted);font-size:14px;font-weight:500;
+  transition:background .15s,color .15s;
+}
+.nav__item svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;
+  stroke-width:1.7}
+.nav__item:hover{background:rgba(255,255,255,.75);color:var(--qs-ink)}
+.nav__item.is-active{
+  background:var(--qs-surface);color:var(--qs-blue);font-weight:600;
+  box-shadow:0 6px 16px -10px rgba(26,31,60,.5);
+}
+.nav__item--sub{font-size:13.5px;padding:7px 12px 7px 20px}
+.nav__group{
+  font-size:10px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;
+  color:var(--qs-faint);margin:18px 0 6px;padding:0 12px;
+}
+.side__foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--qs-line);
+  display:flex;flex-direction:column;gap:2px}
+
+/* --- Barre du haut ------------------------------------------------------- */
+.main{display:flex;flex-direction:column;min-width:0}
+.topbar{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:18px var(--qs-pad);
+  border-bottom:1px solid rgba(255,255,255,.7);
+}
+.avatar{
+  width:40px;height:40px;border-radius:50%;flex:none;
+  background:var(--qs-grad);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:14px;letter-spacing:.5px;text-transform:uppercase;
+  box-shadow:0 8px 18px -9px var(--qs-blue);
+}
+.hello{line-height:1.25}
+.hello small{display:block;color:var(--qs-faint);font-size:12.5px}
+.hello b{font-size:16.5px}
+.content{padding:var(--qs-pad);flex:1}
+
+/* === 4. Composants ======================================================== */
+.card{
+  background:var(--qs-surface);border:1px solid var(--qs-line);
+  border-radius:var(--qs-r-card);padding:20px;margin-bottom:18px;
+  box-shadow:var(--qs-shadow-card);
+}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+
+/* --- Tuiles de statistiques --------------------------------------------- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));
+  gap:16px;margin-bottom:18px}
+.tile{
+  background:var(--qs-surface);border:1px solid var(--qs-line);
+  border-radius:var(--qs-r-card);padding:17px 18px;box-shadow:var(--qs-shadow-card);
+  display:flex;flex-direction:column;gap:9px;text-decoration:none;color:inherit;
+}
+a.tile:hover{border-color:#c4ccec}
+.tile__label{font-size:12.5px;font-weight:600;color:var(--qs-muted)}
+.tile__row{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.tile__value{font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px}
+.tile__unit{font-size:14px;font-weight:600;color:var(--qs-faint);margin-left:3px}
+.tile__note{font-size:12px;color:var(--qs-faint)}
+
+.chip{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;
+  background:var(--qs-ok-bg);color:var(--qs-ok);white-space:nowrap}
+.chip.warn{background:var(--qs-warn-bg);color:var(--qs-warn)}
+.chip.bad{background:var(--qs-bad-bg);color:var(--qs-bad)}
+
+.spark{display:flex;align-items:flex-end;gap:4px;height:36px}
+.spark i{width:7px;height:100%;border-radius:3px;background:#eef0f8;
+  display:flex;align-items:flex-end}
+.spark b{width:100%;border-radius:3px;background:var(--qs-grad);display:block;
+  min-height:3px}
+.donut{width:54px;height:54px;flex:none}
+.donut circle{fill:none;stroke-width:7;stroke-linecap:round}
+.donut .bg{stroke:#e9ecf8}
+.donut .fg{stroke:url(#gradDonut);transform:rotate(-90deg);transform-origin:50% 50%}
+
+/* --- Tableaux ------------------------------------------------------------ */
+/* Portee limitee a .shell : l'administration Django a ses propres tableaux,
+   et une regle globale sur th les affichait en MAJUSCULES. */
+.shell table{border-collapse:collapse;width:100%}
+.shell th,.shell td{padding:9px 10px;border-bottom:1px solid var(--qs-line);
+  text-align:left;vertical-align:middle}
+.shell th{font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--qs-faint);font-weight:700}
+.shell tbody tr:last-child td,.shell table tr:last-child td{border-bottom:0}
+.shell tr:hover td{background:#f7f8fd}
+
+/* --- Boutons ------------------------------------------------------------- */
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  background:var(--qs-grad);color:#fff;border:0;border-radius:var(--qs-r-field);
+  padding:9px 16px;font:inherit;font-size:14px;font-weight:600;
+  cursor:pointer;text-decoration:none;
+  box-shadow:0 10px 22px -12px var(--qs-blue);
+  transition:filter .15s,transform .08s;
+}
+.btn:hover{filter:brightness(1.08)}
+.btn:active{transform:translateY(1px)}
+.btn[disabled]{opacity:.5;cursor:not-allowed;box-shadow:none}
+.btn.secondary{background:var(--qs-surface);color:var(--qs-ink);
+  border:1px solid var(--qs-line);box-shadow:none}
+.btn.secondary:hover{border-color:#c4ccec;background:#fbfbff;filter:none}
+.btn.danger{background:var(--qs-surface);color:var(--qs-bad);
+  border:1px solid #f3d4d2;box-shadow:none}
+.btn.danger:hover{background:#fdf2f1;filter:none}
+.btn.small{padding:5px 11px;font-size:13px;border-radius:8px}
+form.inline{display:inline}
+
+/* --- Formulaires --------------------------------------------------------- */
+/* Portee limitee a .shell, pour les memes raisons que les tableaux :
+   « width:100% » sur tous les champs deformait les formulaires de Django. */
+.shell label{font-weight:600;font-size:12.5px;display:block;margin:12px 0 5px;
+  color:var(--qs-muted)}
+.shell input[type=text],.shell input[type=number],.shell input[type=password],
+.shell input[type=email],.shell input[type=file],.shell select,.shell textarea{
+  border:1px solid var(--qs-field-line);border-radius:var(--qs-r-field);
+  padding:9px 11px;font:inherit;font-size:14px;width:100%;
+  background:var(--qs-surface);color:var(--qs-ink);
+  transition:border-color .15s,box-shadow .15s;
+}
+input:focus,select:focus,textarea:focus{
+  outline:none;border-color:var(--qs-blue);
+  box-shadow:0 0 0 3px rgba(67,86,201,.14);
+}
+/* Champs de l'administration : meme trait, sans largeur imposee. */
+#container input[type=text],#container input[type=password],
+#container input[type=email],#container input[type=url],
+#container input[type=number],#container textarea,#container .vTextField{
+  border:1px solid var(--border-color);border-radius:9px;padding:8px 10px;
+}
+#container select{
+  border:1px solid var(--border-color);border-radius:9px;padding:7px 9px;
+  height:auto;line-height:1.4;
+}
+.helptext{color:var(--qs-faint);font-size:12.5px;display:block;margin-top:4px;
+  line-height:1.5}
+.radios label{font-weight:400;font-size:14px;display:flex;gap:8px;
+  align-items:flex-start;margin:6px 0;color:var(--qs-ink)}
+.radios > label{font-weight:600;font-size:12.5px;color:var(--qs-muted)}
+.qedit{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.qedit select{width:auto;padding:4px 7px}
+.qedit input[type=text]{width:56px;padding:4px 7px}
+
+/* --- Pastilles et messages ----------------------------------------------- */
+.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;
+  font-weight:600;white-space:nowrap}
+.badge.ok{background:var(--qs-ok-bg);color:var(--qs-ok)}
+.badge.bad{background:var(--qs-bad-bg);color:var(--qs-bad)}
+.badge.warn{background:var(--qs-warn-bg);color:var(--qs-warn)}
+.badge.grey{background:#eef0f8;color:var(--qs-muted)}
+
+.messages{list-style:none;padding:0;margin:0 0 18px}
+.messages li{padding:11px 15px;border-radius:12px;margin-bottom:9px;
+  background:var(--qs-ok-bg);color:var(--qs-ok-ink);font-size:14px;
+  line-height:1.55;border:1px solid #cfe6d8}
+.messages li.error{background:var(--qs-bad-bg);color:var(--qs-bad-ink);
+  border-color:#f3cdca}
+
+.bar{display:inline-block;background:var(--qs-grad);height:10px;
+  border-radius:999px;vertical-align:middle;min-width:2px}
+.thumb{max-height:70px;border:1px solid var(--qs-line);border-radius:7px}
+.score{font-weight:700;font-size:15px}
+.errors{color:var(--qs-bad);font-size:13px;margin:4px 0}
+.errorlist{color:var(--qs-bad);font-size:13px;font-weight:600;margin:4px 0;
+  padding-left:18px}
+.userbox{font-size:13.5px;color:var(--qs-muted)}
+
+/* === 5. Connexion ========================================================= */
+body.auth-page{
+  display:flex;align-items:center;justify-content:center;
+  padding:clamp(16px,4vw,40px);
+}
+.auth{
+  position:relative;z-index:1;
+  width:min(1040px,100%);
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  border-radius:28px;overflow:hidden;
+  background:rgba(255,255,255,.76);
+  border:1px solid var(--qs-glass-edge);
+  backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
+  box-shadow:0 36px 90px -24px rgba(12,28,20,.42),0 2px 8px rgba(12,28,20,.07);
+}
+/* Reflet de verre */
+.auth::before{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+  border-radius:inherit;
+  background:linear-gradient(135deg,rgba(255,255,255,.5),rgba(255,255,255,0) 42%);
+}
+.auth__panel{
+  padding:clamp(32px,5vw,64px);
+  display:flex;flex-direction:column;justify-content:center;
+  min-height:min(640px,84vh);
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;
+  letter-spacing:.3px;font-size:15px;color:var(--qs-ink);margin-bottom:auto}
+.brand__mark{
+  width:30px;height:30px;border-radius:9px;flex:none;background:var(--qs-grad);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 16px -8px var(--qs-blue);
+}
+.brand__mark svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:1.9}
+.brand__suffix{opacity:.5;font-weight:600}
+.auth h1{
+  font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif;
+  font-size:clamp(30px,4vw,40px);font-weight:600;letter-spacing:-.4px;
+  margin:28px 0 6px;
+}
+.lede{color:var(--qs-muted);font-size:14px;line-height:1.55;margin:0 0 26px;
+  max-width:38ch}
+
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12.5px;font-weight:600;letter-spacing:.2px;
+  color:var(--qs-muted);margin:0 0 7px}
+.field .wrap{position:relative;display:flex;align-items:center}
+.field input{
+  width:100%;padding:13px 16px;border-radius:999px;
+  border:1px solid var(--qs-field-line);background:rgba(255,255,255,.9);
+  font:inherit;font-size:14.5px;color:var(--qs-ink);
+}
+.field input::placeholder{color:#a7adc8}
+.field input:focus{border-color:var(--qs-blue);
+  box-shadow:0 0 0 4px rgba(67,86,201,.16)}
+.field input[type=password]{padding-right:48px}
+.reveal{
+  position:absolute;right:6px;width:36px;height:36px;border:0;border-radius:50%;
+  background:transparent;color:var(--qs-muted);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.reveal:hover{color:var(--qs-ink);background:rgba(0,0,0,.05)}
+.reveal:focus-visible{outline:2px solid var(--qs-blue);outline-offset:1px}
+.reveal svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7}
+
+.submit{
+  width:100%;margin-top:10px;padding:14px 20px;border:0;border-radius:999px;
+  background:var(--qs-grad);color:#fff;
+  font:inherit;font-size:15px;font-weight:600;letter-spacing:.2px;cursor:pointer;
+  transition:filter .15s,transform .08s;
+  box-shadow:0 10px 24px -10px rgba(67,86,201,.75);
+}
+.submit:hover{filter:brightness(1.08)}
+.submit:active{transform:translateY(1px)}
+.submit:focus-visible{outline:2px solid var(--qs-ink);outline-offset:2px}
+
+.sep{display:flex;align-items:center;gap:14px;margin:26px 0 18px;
+  color:var(--qs-muted);font-size:12.5px}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--qs-field-line)}
+
+.alt{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  width:100%;padding:12px 18px;border-radius:999px;text-decoration:none;
+  border:1px solid var(--qs-field-line);background:rgba(255,255,255,.55);
+  color:var(--qs-ink);font-size:14px;font-weight:600;
+  transition:border-color .15s,background .15s;
+}
+.alt:hover{border-color:var(--qs-blue);background:var(--qs-surface)}
+.alt svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7}
+
+.note{margin:22px 0 0;font-size:12.5px;line-height:1.6;color:var(--qs-muted)}
+.note a{color:var(--qs-blue);font-weight:600}
+
+.alert{
+  display:flex;gap:10px;align-items:flex-start;
+  margin:0 0 20px;padding:12px 14px;border-radius:12px;
+  background:var(--qs-bad-bg);border:1px solid #f3c6c2;color:var(--qs-bad-ink);
+  font-size:13.5px;line-height:1.5;
+}
+.alert svg{flex:none;width:18px;height:18px;margin-top:1px;fill:none;
+  stroke:currentColor;stroke-width:1.8}
+
+/* Décor « papier découpé » : chaque couche porte son ombre. */
+.auth__art{position:relative;overflow:hidden;background:var(--art-1)}
+.auth__art svg{position:absolute;inset:0;width:100%;height:100%}
+.layer{filter:drop-shadow(-10px 0 14px rgba(20,40,28,.22))}
+.sprig{opacity:.42;color:var(--art-leaf)}
+.sprig use{filter:drop-shadow(-4px 2px 5px rgba(10,24,16,.3))}
+
+/* === 6. Pont vers l'administration Django ================================= */
+/* Django 5 expose ses couleurs en variables CSS. On les fait pointer sur nos
+   jetons plutôt que de lutter contre sa feuille de style : cela reste valable
+   quand Django fait évoluer ses règles internes. Cette feuille est chargée
+   APRÈS admin/css/base.css, donc ces valeurs l'emportent. */
+html[data-theme="light"],:root{
+  --primary:var(--qs-blue);
+  --secondary:var(--qs-blue-dark);
+  --accent:var(--qs-halo-2);
+  --primary-fg:#fff;
+  --body-fg:var(--qs-ink);
+  --body-bg:var(--qs-page);
+  --body-quiet-color:var(--qs-muted);
+  --body-medium-color:var(--qs-ink-soft);
+  --body-loud-color:#0f1330;
+  --header-color:#dfe3fb;
+  --header-branding-color:#fff;
+  --header-bg:transparent;      /* le dégradé est posé sur #header */
+  --header-link-color:#fff;
+  --breadcrumbs-fg:var(--qs-muted);
+  --breadcrumbs-link-fg:var(--qs-blue);
+  --breadcrumbs-bg:transparent;
+  --link-fg:var(--qs-blue);
+  --link-hover-color:#2b3a95;
+  --link-selected-fg:var(--qs-blue-dark);
+  --hairline-color:var(--qs-line);
+  --border-color:#dde2f2;
+  --error-fg:var(--qs-bad);
+  --message-success-bg:var(--qs-ok-bg);
+  --message-warning-bg:var(--qs-warn-bg);
+  --message-error-bg:var(--qs-bad-bg);
+  --darkened-bg:#f5f6fc;
+  --selected-bg:#eef0fb;
+  --selected-row:#f2f0ff;
+  --button-fg:#fff;
+  --button-bg:var(--qs-blue);
+  --button-hover-bg:var(--qs-blue-dark);
+  --default-button-bg:var(--qs-blue);
+  --default-button-hover-bg:var(--qs-blue-dark);
+  --close-button-bg:#6b7399;
+  --close-button-hover-bg:#4e5577;
+  --delete-button-bg:var(--qs-bad);
+  --delete-button-hover-bg:#a11b19;
+  --object-tools-bg:var(--qs-blue-dark);
+  --object-tools-hover-bg:#2b3a95;
+}
+
+body.popup #container{grid-template-columns:1fr}  /* fenêtre de sélection */
+.qs-main{display:flex;flex-direction:column;min-width:0}
+
+#header{
+  background:var(--qs-grad);color:#fff;
+  padding:14px 26px;align-items:center;gap:14px;
+}
+#branding{display:none}        /* la marque est dans la barre latérale */
+#user-tools{
+  display:flex;align-items:center;gap:12px;margin-left:auto;
+  font-size:12.5px;text-transform:none;letter-spacing:0;
+}
+#user-tools a{border-bottom:0;text-decoration:underline;text-underline-offset:3px}
+
+div.breadcrumbs{
+  background:transparent;color:var(--breadcrumbs-fg);
+  padding:16px 26px 4px;font-size:13px;border:0;
+}
+#content{padding:18px 26px 26px}
+#content-related{background:transparent}
+
+.module,.inline-group,.dashboard #content-related .module{
+  border-radius:16px;overflow:hidden;border:1px solid var(--border-color);
+  background:var(--qs-surface);
+  box-shadow:0 18px 40px -26px rgba(26,31,60,.5);
+}
+.module h2,.module caption,.inline-group h2,fieldset.module > h2,
+#changelist-filter h2,.selector-chosen h2,#content-related .module h2{
+  background:var(--qs-grad);color:#fff;
+  font-size:12px;letter-spacing:.7px;padding:11px 18px;
+}
+.module table{margin:0}
+.module tbody th,.module tbody td{border-bottom:1px solid var(--hairline-color)}
+.module tbody tr:last-child th,.module tbody tr:last-child td{border-bottom:0}
+fieldset.module .description{
+  padding:12px 18px 0;color:var(--body-quiet-color);font-size:13px;margin:0;
+}
+
+/* Lignes de formulaire : Django pose le libellé dans une colonne fixe et le
+   champ en flux, ce qui les éloigne sur un écran large. On repasse chaque
+   ligne en grille « libellé | champ ». */
+.aligned .form-row > div:not(.help):not(.errorlist),
+.aligned .form-row .flex-container{display:contents}
+.form-row{
+  display:grid;grid-template-columns:230px minmax(0,1fr);gap:4px 20px;
+  align-items:start;padding:14px 18px;
+  border-bottom:1px solid var(--hairline-color);
+}
+.form-row:last-child{border-bottom:0}
+.form-row > label,.aligned .form-row label{
+  width:auto;padding:7px 0 0;font-size:13px;font-weight:600;
+  color:var(--body-medium-color);text-align:left;float:none;
+}
+/* Django aligne l'aide avec « padding-left:170px » dans une règle plus
+   spécifique que la nôtre : on remonte la spécificité. */
+form .aligned .form-row div.help,
+form .aligned .form-row p.help,
+.form-row .help,.form-row .helptext{
+  grid-column:2;margin:3px 0 0;padding:0;font-size:12.5px;text-align:left;
+  color:var(--body-quiet-color);line-height:1.5;max-width:64ch;
+}
+.form-row .help div,.form-row .help p{padding:0;margin:0}
+.form-row .errorlist{grid-column:2;margin:0 0 4px;padding:0;list-style:none}
+/* Case et libellé restent ensemble : « display:contents » les séparerait. */
+.form-row .flex-container.checkbox-row{
+  display:flex;grid-column:2;align-items:center;gap:8px;
+}
+.form-row .checkbox-row label{padding:0;font-weight:500;font-size:14px;
+  color:var(--body-fg)}
+.aligned .form-row input[type=checkbox]{margin:0}
+.form-row ul.radiolist{grid-column:2;margin:0;padding:0;list-style:none}
+.form-row ul.radiolist li{margin:0 0 6px;display:flex;gap:8px;align-items:flex-start}
+.form-row ul.radiolist label{font-weight:400;font-size:14px;padding:0}
+
+.button,input[type=submit],input[type=button],.submit-row input,a.button{
+  border-radius:var(--qs-r-field);padding:9px 16px;font-weight:600;
+  box-shadow:0 10px 22px -14px var(--qs-blue);
+}
+.submit-row{
+  border-radius:14px;padding:14px 18px;margin:0 0 18px;
+  background:var(--darkened-bg);border:1px solid var(--border-color);
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+}
+.submit-row input.default{background:var(--qs-grad);border:0}
+.submit-row a.deletelink{margin-left:auto}
+.object-tools a{border-radius:999px;font-weight:600;letter-spacing:.2px}
+
+#changelist .results{border-radius:14px;overflow:auto}
+#changelist-filter{border-radius:14px;overflow:hidden}
+#changelist table thead th{white-space:nowrap}
+.paginator a:link,.paginator a:visited{background:var(--qs-blue);border-radius:7px}
+.paginator .this-page{border-radius:7px}
+tr.selected{background:var(--selected-row)}
+ul.messagelist li{border-radius:10px;padding:11px 15px 11px 42px;font-size:14px}
+
+/* Gestion des comptes */
+.qs-avatar{
+  width:38px;height:38px;border-radius:50%;flex:none;background:var(--qs-grad);
+  color:#fff;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.5px;
+}
+.qs-hello{line-height:1.25}
+.qs-hello small{display:block;font-size:12px;opacity:.75}
+.qs-hello b{font-size:16px}
+.qs-tag{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;
+  font-weight:600;background:var(--selected-bg);color:var(--body-medium-color)}
+.qs-tag--admin{background:#e8e6fb;color:#4a45b0}
+.qs-pw-btn{display:inline-block}
+.qs-pw-help{margin-top:6px!important}
+.qs-pw-none{color:var(--error-fg);font-weight:600;display:block;margin-bottom:8px}
+.qs-pw-link{font-weight:600}
+.qs-logout{
+  width:100%;margin-top:6px;padding:9px 12px;border-radius:var(--qs-r-field);
+  cursor:pointer;border:1px solid var(--border-color);background:var(--qs-surface);
+  color:var(--body-fg);font:inherit;font-size:13.5px;font-weight:600;
+}
+.qs-logout:hover{border-color:var(--qs-blue);color:var(--qs-blue)}
+
+/* === 7. Adaptation aux écrans ============================================= */
+/* Au-delà de 1700 px, un corps de 15 px est peu lisible : tout monte d'un cran. */
+@media (min-width:1700px){
+  :root{--qs-side-w:268px}
+  body{font-size:16px}
+  h1{font-size:26px}
+  h2{font-size:17px}
+  .content,.topbar{padding:24px 32px}
+  .card{padding:24px}
+  .tile{padding:20px 22px}
+  .tile__value{font-size:34px}
+  .tile__label{font-size:13.5px}
+  .tile__note{font-size:13px}
+  .nav__item{font-size:15px;padding:11px 14px}
+  .tiles{gap:20px}
+  .grid2{gap:22px}
+  .shell th,.shell td{padding:11px 12px}
+  .shell th{font-size:12px}
+  .helptext{font-size:13px}
+  #content{padding:24px 32px}
+  .form-row{grid-template-columns:260px minmax(0,1fr);padding:16px 22px}
+  .module h2,fieldset.module > h2{padding:12px 22px}
+}
+
+/* Tablette : la barre latérale devient une barre d'icônes horizontale. */
+@media (max-width:980px){
+  .shell,.shell__inner,body #container{grid-template-columns:1fr}
+  .side{
+    flex-direction:row;align-items:center;gap:6px;overflow-x:auto;
+    padding:14px;border-right:0;border-bottom:1px solid rgba(255,255,255,.7);
+  }
+  .side__brand{padding:0 12px 0 4px}
+  .side__name small{display:none}
+  .nav{flex-direction:row;gap:4px}
+  .nav__item{white-space:nowrap;padding:8px 12px}
+  .nav__group{display:none}
+  .side__foot{
+    margin:0 0 0 auto;padding:0 0 0 12px;border-top:0;
+    border-left:1px solid var(--qs-line);flex-direction:row;align-items:center;
+  }
+  .grid2{grid-template-columns:1fr}
+  #header{padding:12px 16px}
+  div.breadcrumbs{padding:12px 16px 4px}
+  #content{padding:14px 16px 22px}
+}
+@media (max-width:860px){
+  .auth{grid-template-columns:1fr}
+  /* Le décor devient un bandeau : on fait pivoter le même dessin d'un quart
+     de tour. Le SVG est dimensionné AVANT rotation (largeur = hauteur du
+     bandeau, hauteur = largeur de l'écran) pour couvrir toute la bande. */
+  .auth__art{order:-1;height:var(--qs-band);position:relative}
+  .auth__art svg{
+    inset:auto;top:50%;left:50%;
+    width:var(--qs-band);height:100vw;
+    transform:translate(-50%,-50%) rotate(-90deg);
+  }
+  .auth__panel{min-height:0;padding:30px clamp(22px,6vw,38px) 36px}
+  .brand{margin-bottom:0}
+  .auth h1{margin-top:18px}
+  .form-row{grid-template-columns:1fr;padding:12px 14px}
+  .form-row .help,.form-row .helptext,
+  .form-row .errorlist,.form-row ul.radiolist,
+  .form-row .flex-container.checkbox-row{grid-column:1}
+}
+@media (max-width:620px){
+  .nav__item span{display:none}
+  .nav__item{padding:9px 11px}
+  .nav__item--sub span{display:inline}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* === 8. Thème sombre (administration) ===================================== */
+/* Même famille de couleurs, simplement assombrie. */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --primary:#6a71d8;
+    --body-bg:#14162b; --body-fg:#e8eaf6;
+    --body-quiet-color:#a8aecd; --body-medium-color:#c6cae3;
+    --body-loud-color:#fff;
+    --darkened-bg:#1b1e38; --selected-bg:#232745; --selected-row:#2a2550;
+    --hairline-color:#2a2e4d; --border-color:#333858;
+    --link-fg:#a9b3ee; --link-hover-color:#c6cdf7;
+    --breadcrumbs-fg:#a8aecd; --breadcrumbs-link-fg:#a9b3ee;
+  }
+  :root:not([data-theme="light"]) body #container{
+    background:rgba(28,31,56,.78);border-color:rgba(255,255,255,.1);
+  }
+  :root:not([data-theme="light"]) .module{background:#1b1e38}
+  :root:not([data-theme="light"]) .nav__item.is-active,
+  :root:not([data-theme="light"]) .qs-logout{background:#1b1e38}
+}
+html[data-theme="dark"]{
+  --primary:#6a71d8;
+  --body-bg:#14162b; --body-fg:#e8eaf6;
+  --body-quiet-color:#a8aecd; --body-medium-color:#c6cae3;
+  --body-loud-color:#fff;
+  --darkened-bg:#1b1e38; --selected-bg:#232745; --selected-row:#2a2550;
+  --hairline-color:#2a2e4d; --border-color:#333858;
+  --link-fg:#a9b3ee; --link-hover-color:#c6cdf7;
+  --breadcrumbs-fg:#a8aecd; --breadcrumbs-link-fg:#a9b3ee;
+}
+html[data-theme="dark"] body #container{
+  background:rgba(28,31,56,.78);border-color:rgba(255,255,255,.1);
+}
+html[data-theme="dark"] .module{background:#1b1e38}
+html[data-theme="dark"] .nav__item.is-active,
+html[data-theme="dark"] .qs-logout{background:#1b1e38}

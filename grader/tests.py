@@ -15,6 +15,7 @@ Lancez-les un par un (base et documents de test séparés de la production) :
     python test_e2e_web.py        # parcours complet par l'interface web
     python test_e2e_comptes.py    # comptes, rôles et mots de passe
     python test_e2e_corrige.py    # corrigé facultatif puis scanné
+    python test_e2e_design.py     # un seul système de style pour toutes les pages
     python test_e2e_robustesse.py # pannes d'OCR, fiches longues, URL bricolées
 
 Les tests qui lisent un nom manuscrit (test_e2e_ar, test_e2e_web et la

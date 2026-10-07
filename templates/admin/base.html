@@ -24,6 +24,9 @@ navigation au lieu de deux.
   <link rel="stylesheet" href="{% static "admin/css/dark_mode.css" %}">
   <script src="{% static "admin/js/theme.js" %}"></script>
 {% endblock %}
+{# Feuille unique de QuizScan, chargee APRES celle de Django pour que #}
+{# nos jetons de couleur et nos regles l'emportent.                  #}
+<link rel="stylesheet" href="{% static 'grader/quizscan.css' %}">
 {% block extrastyle %}{% endblock %}
 {% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% block stylesheet_rtl %}{% static "admin/css/rtl.css" %}{% endblock %}">{% endif %}
 {% block extrahead %}{% endblock %}
@@ -43,25 +46,25 @@ navigation au lieu de deux.
 
   {% if not is_popup %}
   {# ---------- Barre latérale : rubriques de l'application + tables ------ #}
-  <aside class="qs-side">
-    <div class="qs-brand">
-      <span class="qs-mark" aria-hidden="true">
+  <aside class="side">
+    <div class="side__brand">
+      <span class="side__mark" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
       </span>
-      <span class="qs-wordmark">QuizScan<small>D Technology</small></span>
+      <span class="side__name">QuizScan<small>D Technology</small></span>
     </div>
 
-    <nav class="qs-nav">
-      <a class="qs-item" href="{% url 'dashboard' %}">
+    <nav class="nav">
+      <a class="nav__item" href="{% url 'dashboard' %}">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
         <span>Tableau de bord</span></a>
-      <a class="qs-item" href="{% url 'class_list' %}">
+      <a class="nav__item" href="{% url 'class_list' %}">
         <svg viewBox="0 0 24 24"><path d="M3 19.5a6.5 6.5 0 0 1 13 0"/><circle cx="9.5" cy="8" r="3.5"/><path d="M17 11.5a4.5 4.5 0 0 1 4 4.5"/><circle cx="17.5" cy="6.5" r="2.5"/></svg>
         <span>Classes</span></a>
-      <a class="qs-item" href="{% url 'concours_list' %}">
+      <a class="nav__item" href="{% url 'concours_list' %}">
         <svg viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M6 4h12v5a6 6 0 0 1-12 0z"/><path d="M6 6H4v1.5A3.5 3.5 0 0 0 6.6 11"/><path d="M18 6h2v1.5A3.5 3.5 0 0 1 17.4 11"/></svg>
         <span>Concours</span></a>
-      <a class="qs-item is-active" href="{% url 'admin:index' %}">
+      <a class="nav__item is-active" href="{% url 'admin:index' %}">
         <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6.2v5c0 4.5 3.1 8.6 7.5 9.8 4.4-1.2 7.5-5.3 7.5-9.8v-5L12 3Z"/></svg>
         <span>Administration</span></a>
     </nav>
@@ -69,11 +72,11 @@ navigation au lieu de deux.
     {# Tables administrables, fournies par Django dans « available_apps ». #}
     {% for app in available_apps %}
       {% if app.models %}
-      <div class="qs-group">{{ app.name }}</div>
-      <nav class="qs-nav">
+      <div class="nav__group">{{ app.name }}</div>
+      <nav class="nav">
         {% for model in app.models %}
           {% if model.admin_url %}
-          <a class="qs-item qs-sub {% if model.admin_url in request.path %}is-active{% endif %}"
+          <a class="nav__item nav__item--sub {% if model.admin_url in request.path %}is-active{% endif %}"
              href="{{ model.admin_url }}">{{ model.name }}</a>
           {% endif %}
         {% endfor %}
@@ -81,10 +84,10 @@ navigation au lieu de deux.
       {% endif %}
     {% endfor %}
 
-    <div class="qs-foot">
-      <a class="qs-item qs-sub" href="{{ site_url|default:'/' }}">← Retour à l'application</a>
+    <div class="side__foot">
+      <a class="nav__item nav__item--sub" href="{{ site_url|default:'/' }}">← Retour à l'application</a>
       {% if user.has_usable_password %}
-      <a class="qs-item qs-sub" href="{% url 'admin:password_change' %}">Modifier le mot de passe</a>
+      <a class="nav__item nav__item--sub" href="{% url 'admin:password_change' %}">Modifier le mot de passe</a>
       {% endif %}
       <form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}
         <button class="qs-logout" type="submit">Déconnexion</button>
