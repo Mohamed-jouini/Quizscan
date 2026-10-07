@@ -72,6 +72,9 @@
         </span>
       </a>
       <span class="spacer"></span>
+      {# Le mot de passe est une affaire de compte, pas une rubrique : il est #}
+      {# ici a cote du nom, comme dans l administration.                      #}
+      <a class="qs-moncompte" href="{% url 'password_change' %}">Mot de passe</a>
       {% include "grader/_theme_toggle.html" %}
       {% block topbar_actions %}
       {% if perms.grader.creer_epreuve %}

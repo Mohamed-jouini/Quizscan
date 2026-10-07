@@ -103,6 +103,9 @@ navigation au lieu de deux.
           </a>
           <span class="spacer"></span>
           {% block userlinks %}{% endblock %}
+          {% if user.has_usable_password %}
+          <a class="qs-moncompte" href="{% url 'admin:password_change' %}">Mot de passe</a>
+          {% endif %}
           {% include "grader/_theme_toggle.html" %}
         </div>
         {% endif %}
