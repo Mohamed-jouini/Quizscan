@@ -32,6 +32,39 @@ admin.site.site_title = "QuizScan"
 admin.site.index_title = "Comptes, classes, épreuves et copies"
 
 
+# La page d'accueil de l'administration est la seule à lister les tables (la
+# barre latérale ne les reprend plus). Pour qu'elle serve à quelque chose, on
+# y ajoute deux informations que Django ne fournit pas : le nombre de lignes
+# et de quoi choisir une icône. Dix COUNT(*) sur une page consultée de temps
+# en temps : la dépense est sans commune mesure avec l'analyse d'une copie.
+ICONES = {
+    "group": "groupe", "user": "compte",
+    "classgroup": "classe", "student": "etudiant",
+    "quiz": "quiz", "question": "question", "answer": "reponse",
+    "scanbatch": "lot", "sheetscan": "page", "answerkeysheet": "corrige",
+}
+
+_index_django = admin.site.index
+
+
+def _index_enrichi(request, extra_context=None):
+    """Complète app_list avec l'effectif et le nom d'icône de chaque table."""
+    reponse = _index_django(request, extra_context)
+    contexte = getattr(reponse, "context_data", None) or {}
+    for application in contexte.get("app_list", []):
+        for table in application["models"]:
+            modele = table.get("model")
+            # Une table sans permission de lecture n'a pas à être comptée.
+            if modele is not None and table.get("admin_url"):
+                table["effectif"] = modele._default_manager.count()
+            table["icone"] = ICONES.get(
+                table.get("object_name", "").lower(), "table")
+    return reponse
+
+
+admin.site.index = _index_enrichi
+
+
 # Les intitulés des choix (Quiz.SHEET_MODES, Quiz.ID_MODES) sont des phrases
 # explicatives, écrites pour les formulaires. Dans une liste ou un filtre
 # elles débordent et rendent le tableau illisible : on en donne ici une

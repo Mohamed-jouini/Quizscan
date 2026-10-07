@@ -49,9 +49,6 @@
     </nav>
 
     <div class="side__foot">
-      <a class="nav__item" href="{% url 'password_change' %}">
-        <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-        <span>Mon mot de passe</span></a>
       <form method="post" action="{% url 'logout' %}" style="margin-top:6px">{% csrf_token %}
         <button class="btn small secondary" type="submit" style="width:100%;justify-content:center">
           <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8"><path d="M10 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4"/><path d="M15 16l4-4-4-4"/><path d="M19 12H9"/></svg>
@@ -70,6 +67,9 @@
         <b>{{ user.get_full_name|default:user.username }}</b>
       </span>
       <span class="spacer"></span>
+      {# Le mot de passe est une affaire de compte, pas une rubrique : il est #}
+      {# ici a cote du nom, comme dans l administration.                      #}
+      <a class="qs-moncompte" href="{% url 'password_change' %}">Mot de passe</a>
       {% include "grader/_theme_toggle.html" %}
       {% block topbar_actions %}
       <a class="btn" href="{% url 'quiz_create' %}">

@@ -109,11 +109,34 @@ def main():
         print(f"  {etiquette:14} {len(urls)} pages : feuille unique, bascule "
               "de thème, aucun second système OK")
 
+    def menu(corps):
+        """Extrait la barre latérale d'une page d'administration."""
+        debut = corps.index('<aside class="side">')
+        return corps[debut:corps.index("</aside>", debut)]
+
     controle(Client(), anonyme, "connexion")
     c = Client(); c.force_login(prof)
     controle(c, enseignant, "enseignant")
     c = Client(); c.force_login(admin)
     controle(c, administration, "administration")
+
+    # Les tables administrables se listent à UN seul endroit : la page
+    # d'accueil de l'administration. Les reprendre dans la barre latérale
+    # obligeait à chercher deux fois le même lien.
+    accueil = c.get("/admin/").content.decode()
+    for table in ("Étudiants", "Questions", "Utilisateurs"):
+        assert f">{table}</a>" in accueil, \
+            f"la page d'accueil de l'administration ne propose pas « {table} »"
+    for url in administration:
+        corps = menu(c.get(url).content.decode())
+        liens = re.findall(r'href="(/admin/\w+/\w+/)"', corps)
+        assert not liens, (f"{url} : la barre latérale reliste les tables "
+                           f"({liens[:3]}) — elles vivent sur /admin/")
+        assert "Retour à l" not in corps, (
+            f"{url} : le lien de retour fait doublon avec les rubriques "
+            "de l'application, juste au-dessus dans le même menu")
+    print(f"  tables         listées sur /admin/ seulement, absentes des "
+          f"{len(administration)} barres latérales OK")
 
     # Les trois contextes partagent les mêmes jetons et la même barre latérale.
     feuille = (django.apps.apps.get_app_config("grader").path

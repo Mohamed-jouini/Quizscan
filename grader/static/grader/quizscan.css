@@ -90,7 +90,10 @@
 
   /* Mesures */
   --qs-side-w:238px;
-  --qs-max-w:1760px;
+  /* Aucune largeur maximale : sur un grand ecran, la carte doit remplir
+     l'ecran et non flotter au milieu avec des marges vides de part et
+     d'autre. Seule la gouttiere la separe des bords. */
+  --qs-max-w:none;
   --qs-gutter:clamp(12px,2.2vw,30px);
   --qs-pad:clamp(16px,2.4vw,28px);
 
@@ -213,7 +216,9 @@ body #container{
   box-shadow:0 8px 18px -9px var(--qs-blue);
 }
 .hello{line-height:1.25}
-.hello small{display:block;color:var(--qs-faint);font-size:12.5px}
+/* Meme ton que « Bienvenue, » dans l administration (--header-color) : les
+   deux barres du haut disent la meme chose au meme endroit. */
+.hello small{display:block;color:var(--qs-muted);font-size:12.5px}
 .hello b{font-size:16.5px}
 .content{padding:var(--qs-pad);flex:1}
 
@@ -472,10 +477,10 @@ html[data-theme="light"],:root{
   --body-quiet-color:var(--qs-muted);
   --body-medium-color:var(--qs-ink-soft);
   --body-loud-color:var(--qs-ink-loud);
-  --header-color:#dfe3fb;      /* pose sur le degrade : constant */
-  --header-branding-color:#fff;
-  --header-bg:transparent;      /* le dégradé est posé sur #header */
-  --header-link-color:#fff;
+  --header-color:var(--qs-muted);
+  --header-branding-color:var(--qs-ink);
+  --header-bg:transparent;
+  --header-link-color:var(--qs-blue);
   --breadcrumbs-fg:var(--qs-muted);
   --breadcrumbs-link-fg:var(--qs-blue);
   --breadcrumbs-bg:transparent;
@@ -513,15 +518,29 @@ body.popup{padding:0}
 body.popup #container{grid-template-columns:1fr;border-radius:0;min-height:100vh}
 .qs-main{display:flex;flex-direction:column;min-width:0}
 
+/* Meme barre du haut que dans l'application : le bandeau violet pleine
+   largeur ecrasait la page et ne correspondait a aucun autre ecran. Il ne
+   reste que l'identite de la personne connectee et la bascule de theme,
+   sur le fond en verre du panneau. */
 #header{
-  background:var(--qs-grad);color:#fff;
-  padding:14px 26px;align-items:center;gap:14px;
+  background:transparent;color:var(--qs-ink);
+  padding:18px var(--qs-pad);align-items:center;gap:14px;
+  border-bottom:1px solid var(--qs-sheen-edge);
 }
 #branding{display:none}        /* la marque est dans la barre latérale */
 #user-tools{
   display:flex;align-items:center;gap:12px;margin-left:auto;
   font-size:12.5px;text-transform:none;letter-spacing:0;
 }
+/* Le changement de mot de passe vivait dans le menu, entre des rubriques de
+   navigation ou il n'avait rien a faire. Il rejoint le nom de la personne
+   connectee, comme le fait l'administration de Django. */
+.qs-moncompte{
+  font-size:13px;font-weight:600;text-decoration:none;
+  padding:7px 12px;border-radius:var(--qs-r-field);
+  border:1px solid var(--qs-field-line);color:var(--qs-ink);
+}
+.qs-moncompte:hover{border-color:var(--qs-blue);color:var(--qs-blue)}
 #user-tools a{border-bottom:0;text-decoration:underline;text-underline-offset:3px}
 
 div.breadcrumbs{
@@ -622,6 +641,57 @@ ul.messagelist li{border-radius:10px;padding:11px 15px 11px 42px;font-size:14px}
 .selector-chosen-title,
 #content .selector-chosen-title label,
 #content .selector-chosen-title .helptext{color:#fff}
+
+/* --- Page d'accueil de l'administration ---------------------------------
+   Elle liste les tables administrables (la barre laterale ne les reprend
+   plus). La grille .tiles s'adapte d'elle-meme : une colonne sur telephone,
+   autant que la largeur en permet sur un grand ecran, sans valeur fixe a
+   reajuster ecran par ecran. */
+/* Django fige la page d accueil a 600 px (« .dashboard #content »), largeur
+   prevue pour ses deux colonnes flottantes. La notre n a qu une colonne qui
+   se repartit toute seule : on lui rend la largeur disponible. */
+body.dashboard #content{width:auto;max-width:none}
+#content-main{width:auto;float:none;min-width:0}
+.qs-section{margin:0 0 26px}
+/* auto-FILL et non auto-fit : une rubrique de deux tables garde des cartes
+   de taille normale, alignees sur celles de la rubrique suivante, au lieu de
+   s etirer sur toute la largeur. */
+.qs-section .tiles{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.qs-section__title{
+  font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;
+  color:var(--qs-muted);margin:0 0 12px;
+}
+.qs-table{gap:12px}
+.qs-table__top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.qs-table__icon{
+  width:38px;height:38px;border-radius:12px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--qs-grad);color:#fff;
+}
+.qs-table__icon svg{
+  width:20px;height:20px;fill:none;stroke:currentColor;
+  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;
+}
+.qs-table__n{font-size:25px;font-weight:700;line-height:1;color:var(--qs-ink)}
+/* Le titre de la carte EST le lien vers la table : il garde la couleur de
+   lien de l administration, seul le poids le distingue du reste. */
+.qs-table__name{font-size:15px;font-weight:600;text-decoration:none}
+.qs-table__name:hover{text-decoration:underline}
+.qs-table__links{
+  display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;
+  margin-top:auto;padding-top:4px;border-top:1px solid var(--qs-line);
+}
+
+.qs-journal .actionlist{margin:0;padding:0;list-style:none}
+.qs-journal .actionlist li{
+  padding:9px 0 9px 24px;border-bottom:1px solid var(--qs-line);font-size:14px;
+}
+.qs-journal .actionlist li:last-child{border-bottom:0;padding-bottom:0}
+.qs-journal .actionlist li:first-child{padding-top:0}
+.qs-journal .actionlist .mini{
+  display:block;font-size:12px;color:var(--qs-faint);margin-top:2px;
+}
+.qs-journal__vide{margin:0;color:var(--qs-muted)}
 
 /* Gestion des comptes */
 .qs-avatar{
