@@ -34,6 +34,7 @@ from django.test import Client
 from grader.models import ClassGroup, Question, Quiz
 
 FEUILLE = "grader/quizscan.css"
+SCRIPT_THEME = "grader/theme.js"
 # Au-delà de ce seuil, un bloc <style> n'est plus une variante ponctuelle mais
 # un second système de style qui commence.
 MAX_LIGNES_EN_LIGNE = 20
@@ -97,8 +98,16 @@ def main():
                 assert len(lignes) <= MAX_LIGNES_EN_LIGNE, (
                     f"{url} redéclare du style en ligne ({len(lignes)} lignes) : "
                     "tout doit vivre dans grader/static/grader/quizscan.css")
-        print(f"  {etiquette:14} {len(urls)} pages : feuille unique, "
-              "aucun second système de style OK")
+            # Un seul mécanisme de thème, partout : notre script, notre bouton.
+            assert SCRIPT_THEME in corps, f"{url} ne charge pas {SCRIPT_THEME}"
+            assert 'class="theme-toggle"' in corps, \
+                f"{url} n'offre pas la bascule clair / sombre"
+            for ecarte in ("admin/js/theme.js", "admin/css/dark_mode.css"):
+                assert ecarte not in corps, (
+                    f"{url} charge encore {ecarte} : ce serait un second "
+                    "mécanisme de thème à côté du nôtre")
+        print(f"  {etiquette:14} {len(urls)} pages : feuille unique, bascule "
+              "de thème, aucun second système OK")
 
     controle(Client(), anonyme, "connexion")
     c = Client(); c.force_login(prof)
@@ -127,6 +136,28 @@ def main():
         assert n == 1, f"{classe} est défini {n} fois hors requête média"
     print(f"  jetons         chaque couleur et chaque composant défini une "
           f"seule fois ({len(css.splitlines())} lignes) OK")
+
+    # Le thème sombre ne doit rien oublier : chaque jeton de couleur du bloc
+    # :root de base a sa valeur nocturne, sinon la page bascule à moitié.
+    # Les formes et les mesures (rayons, largeurs) n'ont pas à changer, et
+    # --qs-grad reste volontairement identique : ce dégradé de marque porte
+    # du texte blanc et se lit aussi bien sur fond sombre.
+    SANS_VARIANTE = {
+        "--qs-r-panel", "--qs-r-card", "--qs-r-field", "--qs-side-w",
+        "--qs-max-w", "--qs-gutter", "--qs-pad", "--qs-band", "--qs-grad",
+    }
+    branches = set(re.findall(r"(--[a-z0-9-]+):var\(--dk-", css))
+    oublies = [j for j in re.findall(r"(--[a-z0-9-]+):", racine)
+               if j.startswith(("--qs-", "--art-"))
+               and j not in branches and j not in SANS_VARIANTE]
+    assert not oublies, f"jetons sans valeur sombre : {oublies}"
+
+    # Les valeurs nocturnes vivent une seule fois, dans les jetons --dk-*.
+    definis = set(re.findall(r"(--dk-[a-z0-9-]+):", css))
+    employes = set(re.findall(r"var\((--dk-[a-z0-9-]+)\)", css))
+    assert not employes - definis, f"--dk-* employés sans valeur : {employes - definis}"
+    assert not definis - employes, f"--dk-* définis sans emploi : {definis - employes}"
+    print(f"  thème sombre   {len(branches)} jetons basculent, aucun oubli OK")
 
     # L'administration doit reprendre les jetons, pas redéfinir des couleurs.
     pont = css[css.index("Pont vers l'administration"):]

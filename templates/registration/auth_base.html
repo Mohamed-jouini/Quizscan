@@ -6,9 +6,9 @@ un décor « papier découpé » (couches ondulées superposées) à droite. Cha
 page fille ne redéfinit que sa palette (bloc « palette ») et le contenu du
 formulaire ; la géométrie, le décor et le comportement sont partagés.
 
-Le CSS est écrit dans la page, comme dans grader/base.html : l'application
-est interne et à faible trafic, cela évite un aller-retour de plus et garde
-la connexion lisible même si les fichiers statiques ne sont pas collectés.
+Les couleurs et la mise en page viennent de la feuille unique
+(grader/static/grader/quizscan.css), partagée avec l'espace enseignant et
+l'administration, et le thème clair / sombre de grader/theme.js.
 {% endcomment %}{% load static %}<!doctype html>
 <html lang="fr">
 <head>
@@ -16,11 +16,13 @@ la connexion lisible même si les fichiers statiques ne sont pas collectés.
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Connexion — QuizScan{% endblock %}</title>
 <link rel="stylesheet" href="{% static 'grader/quizscan.css' %}">
+<script src="{% static 'grader/theme.js' %}"></script>
 {% block palette %}{% endblock %}
 </head>
 <body class="auth-page">
 <main class="auth">
   <div class="auth__panel">
+    <div class="auth__tools">{% include "grader/_theme_toggle.html" %}</div>
     <div class="brand">
       <span class="brand__mark">
         <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>

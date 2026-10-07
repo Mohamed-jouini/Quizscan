@@ -9,6 +9,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}QuizScan{% endblock %}</title>
 <link rel="stylesheet" href="{% static 'grader/quizscan.css' %}">
+{# Avant le corps : le theme retenu est pose sans que la page clignote. #}
+<script src="{% static 'grader/theme.js' %}"></script>
 {% block head %}{% endblock %}
 </head>
 <body>
@@ -68,6 +70,7 @@
         <b>{{ user.get_full_name|default:user.username }}</b>
       </span>
       <span class="spacer"></span>
+      {% include "grader/_theme_toggle.html" %}
       {% block topbar_actions %}
       <a class="btn" href="{% url 'quiz_create' %}">
         <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M12 5v14M5 12h14"/></svg>

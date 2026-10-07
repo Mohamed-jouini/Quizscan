@@ -27,6 +27,12 @@
   /* Couleurs de marque */
   --qs-blue:#4356c9;
   --qs-blue-dark:#36469f;
+  --qs-blue-deep:#2b3a95;   /* lien survole */
+  /* Fonds de bouton : ils portent du texte blanc, donc ils restent fonces
+     dans les deux themes, la ou --qs-blue s'eclaircit pour rester lisible
+     comme couleur de texte sur fond sombre. */
+  --qs-btn-bg:#4356c9;      --qs-btn-hover:#36469f;
+  --qs-tool-bg:#36469f;     --qs-tool-hover:#2b3a95;
   --qs-violet:#8b5cf6;
   --qs-grad:linear-gradient(135deg,#4356c9,#8b5cf6);
   --qs-halo-1:#9fb0f2;
@@ -38,23 +44,49 @@
   --qs-glass:rgba(255,255,255,.78);
   --qs-glass-edge:rgba(255,255,255,.85);
   --qs-ink:#1a1f3c;
+  --qs-ink-loud:#0f1330;    /* titres de l'administration */
   --qs-ink-soft:#434a73;
   --qs-muted:#5f668c;
-  --qs-faint:#8d93b4;
+  /* Ton tertiaire : il porte quand meme du vrai texte (en-tetes de tableau,
+     « Bonjour, », aides de champ). Assombri pour rester lisible sur le fond
+     de page comme sur une carte blanche. */
+  --qs-faint:#666d91;
   --qs-line:#e2e6f3;
+  --qs-line-strong:#c4ccec;
   --qs-field-line:#d3d9ee;
+  --qs-surface-2:#fbfbff;   /* survol d'un bouton secondaire */
+  --qs-row-hover:#f7f8fd;   /* ligne de tableau survolée */
+  --qs-track:#eef0f8;       /* glissière : histogramme, anneau, pastille grise */
+  --qs-sheen-1:rgba(255,255,255,.55);  /* dégradé de la barre latérale */
+  --qs-sheen-2:rgba(255,255,255,.25);
+  --qs-sheen-edge:rgba(255,255,255,.7);
+  --qs-sheen-hover:rgba(255,255,255,.75);
+  --qs-border:#dde2f2;      /* bordure d'un module d'administration */
+  --qs-raised:#f5f6fc;      /* en-tete de tableau, zone en retrait */
+  --qs-sel-bg:#eef0fb;      /* element selectionne */
+  --qs-sel-row:#f2f0ff;     /* ligne qui vient d'etre enregistree */
+  --qs-grey:#6b7399;        /* bouton neutre (Fermer) */
+  --qs-grey-dark:#4e5577;
 
   /* États */
-  --qs-ok:#1e8e3e;      --qs-ok-bg:#e8f4ec;    --qs-ok-ink:#145c2a;
+  --qs-ok:#187733;      --qs-ok-bg:#e8f4ec;    --qs-ok-ink:#145c2a;
+  --qs-ok-line:#cfe6d8;
   --qs-bad:#c5221f;     --qs-bad-bg:#fbe9e8;   --qs-bad-ink:#8c1813;
-  --qs-warn:#e37400;    --qs-warn-bg:#fdf1dc;
+  --qs-bad-line:#f3cdca;  --qs-bad-dark:#a11b19;
+  --qs-bad-btn:#c5221f;   --qs-bad-btn-hover:#a11b19;
+  --qs-warn:#9c5500;    --qs-warn-bg:#fdf1dc;
+  --qs-violet-bg:#e8e6fb;   --qs-violet-ink:#4a45b0;   /* etiquette Admin */
 
   /* Formes */
   --qs-r-panel:26px;    /* grand panneau en verre */
   --qs-r-card:18px;     /* carte */
   --qs-r-field:10px;    /* champ, bouton */
+  --qs-shadow-soft:0 6px 16px -10px rgba(26,31,60,.5);
   --qs-shadow-card:0 18px 40px -22px rgba(26,31,60,.35);
+  --qs-shadow-mod:0 18px 40px -26px rgba(26,31,60,.5);
   --qs-shadow-panel:0 40px 90px -30px rgba(26,31,60,.45);
+  --qs-shadow-auth:0 36px 90px -24px rgba(12,28,20,.42),
+                   0 2px 8px rgba(12,28,20,.07);
 
   /* Mesures */
   --qs-side-w:238px;
@@ -129,8 +161,8 @@ body #container{
 /* --- Barre latérale ------------------------------------------------------ */
 .side{
   padding:22px 16px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;
-  background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,.25));
-  border-right:1px solid rgba(255,255,255,.7);
+  background:linear-gradient(180deg,var(--qs-sheen-1),var(--qs-sheen-2));
+  border-right:1px solid var(--qs-sheen-edge);
 }
 .side__brand{display:flex;align-items:center;gap:10px;padding:4px 10px 20px}
 .side__mark{
@@ -153,10 +185,10 @@ body #container{
 }
 .nav__item svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;
   stroke-width:1.7}
-.nav__item:hover{background:rgba(255,255,255,.75);color:var(--qs-ink)}
+.nav__item:hover{background:var(--qs-sheen-hover);color:var(--qs-ink)}
 .nav__item.is-active{
   background:var(--qs-surface);color:var(--qs-blue);font-weight:600;
-  box-shadow:0 6px 16px -10px rgba(26,31,60,.5);
+  box-shadow:var(--qs-shadow-soft);
 }
 .nav__item--sub{font-size:13.5px;padding:7px 12px 7px 20px}
 .nav__group{
@@ -171,7 +203,7 @@ body #container{
 .topbar{
   display:flex;align-items:center;gap:14px;flex-wrap:wrap;
   padding:18px var(--qs-pad);
-  border-bottom:1px solid rgba(255,255,255,.7);
+  border-bottom:1px solid var(--qs-sheen-edge);
 }
 .avatar{
   width:40px;height:40px;border-radius:50%;flex:none;
@@ -201,7 +233,7 @@ body #container{
   border-radius:var(--qs-r-card);padding:17px 18px;box-shadow:var(--qs-shadow-card);
   display:flex;flex-direction:column;gap:9px;text-decoration:none;color:inherit;
 }
-a.tile:hover{border-color:#c4ccec}
+a.tile:hover{border-color:var(--qs-line-strong)}
 .tile__label{font-size:12.5px;font-weight:600;color:var(--qs-muted)}
 .tile__row{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
 .tile__value{font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px}
@@ -214,13 +246,13 @@ a.tile:hover{border-color:#c4ccec}
 .chip.bad{background:var(--qs-bad-bg);color:var(--qs-bad)}
 
 .spark{display:flex;align-items:flex-end;gap:4px;height:36px}
-.spark i{width:7px;height:100%;border-radius:3px;background:#eef0f8;
+.spark i{width:7px;height:100%;border-radius:3px;background:var(--qs-track);
   display:flex;align-items:flex-end}
 .spark b{width:100%;border-radius:3px;background:var(--qs-grad);display:block;
   min-height:3px}
 .donut{width:54px;height:54px;flex:none}
 .donut circle{fill:none;stroke-width:7;stroke-linecap:round}
-.donut .bg{stroke:#e9ecf8}
+.donut .bg{stroke:var(--qs-track)}
 .donut .fg{stroke:url(#gradDonut);transform:rotate(-90deg);transform-origin:50% 50%}
 
 /* --- Tableaux ------------------------------------------------------------ */
@@ -232,7 +264,7 @@ a.tile:hover{border-color:#c4ccec}
 .shell th{font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;
   color:var(--qs-faint);font-weight:700}
 .shell tbody tr:last-child td,.shell table tr:last-child td{border-bottom:0}
-.shell tr:hover td{background:#f7f8fd}
+.shell tr:hover td{background:var(--qs-row-hover)}
 
 /* --- Boutons ------------------------------------------------------------- */
 .btn{
@@ -248,10 +280,11 @@ a.tile:hover{border-color:#c4ccec}
 .btn[disabled]{opacity:.5;cursor:not-allowed;box-shadow:none}
 .btn.secondary{background:var(--qs-surface);color:var(--qs-ink);
   border:1px solid var(--qs-line);box-shadow:none}
-.btn.secondary:hover{border-color:#c4ccec;background:#fbfbff;filter:none}
+.btn.secondary:hover{border-color:var(--qs-line-strong);
+  background:var(--qs-surface-2);filter:none}
 .btn.danger{background:var(--qs-surface);color:var(--qs-bad);
-  border:1px solid #f3d4d2;box-shadow:none}
-.btn.danger:hover{background:#fdf2f1;filter:none}
+  border:1px solid var(--qs-bad-line);box-shadow:none}
+.btn.danger:hover{background:var(--qs-bad-bg);filter:none}
 .btn.small{padding:5px 11px;font-size:13px;border-radius:8px}
 form.inline{display:inline}
 
@@ -296,14 +329,14 @@ input:focus,select:focus,textarea:focus{
 .badge.ok{background:var(--qs-ok-bg);color:var(--qs-ok)}
 .badge.bad{background:var(--qs-bad-bg);color:var(--qs-bad)}
 .badge.warn{background:var(--qs-warn-bg);color:var(--qs-warn)}
-.badge.grey{background:#eef0f8;color:var(--qs-muted)}
+.badge.grey{background:var(--qs-track);color:var(--qs-muted)}
 
 .messages{list-style:none;padding:0;margin:0 0 18px}
 .messages li{padding:11px 15px;border-radius:12px;margin-bottom:9px;
   background:var(--qs-ok-bg);color:var(--qs-ok-ink);font-size:14px;
-  line-height:1.55;border:1px solid #cfe6d8}
+  line-height:1.55;border:1px solid var(--qs-ok-line)}
 .messages li.error{background:var(--qs-bad-bg);color:var(--qs-bad-ink);
-  border-color:#f3cdca}
+  border-color:var(--qs-bad-line)}
 
 .bar{display:inline-block;background:var(--qs-grad);height:10px;
   border-radius:999px;vertical-align:middle;min-width:2px}
@@ -324,10 +357,10 @@ body.auth-page{
   width:min(1040px,100%);
   display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
   border-radius:28px;overflow:hidden;
-  background:rgba(255,255,255,.76);
+  background:var(--qs-glass);
   border:1px solid var(--qs-glass-edge);
   backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
-  box-shadow:0 36px 90px -24px rgba(12,28,20,.42),0 2px 8px rgba(12,28,20,.07);
+  box-shadow:var(--qs-shadow-auth);
 }
 /* Reflet de verre */
 .auth::before{
@@ -335,6 +368,7 @@ body.auth-page{
   border-radius:inherit;
   background:linear-gradient(135deg,rgba(255,255,255,.5),rgba(255,255,255,0) 42%);
 }
+.auth__tools{display:flex;justify-content:flex-end;margin:-10px -10px -14px 0}
 .auth__panel{
   padding:clamp(32px,5vw,64px);
   display:flex;flex-direction:column;justify-content:center;
@@ -363,10 +397,10 @@ body.auth-page{
 .field .wrap{position:relative;display:flex;align-items:center}
 .field input{
   width:100%;padding:13px 16px;border-radius:999px;
-  border:1px solid var(--qs-field-line);background:rgba(255,255,255,.9);
+  border:1px solid var(--qs-field-line);background:var(--qs-surface);
   font:inherit;font-size:14.5px;color:var(--qs-ink);
 }
-.field input::placeholder{color:#a7adc8}
+.field input::placeholder{color:var(--qs-faint)}
 .field input:focus{border-color:var(--qs-blue);
   box-shadow:0 0 0 4px rgba(67,86,201,.16)}
 .field input[type=password]{padding-right:48px}
@@ -397,7 +431,7 @@ body.auth-page{
 .alt{
   display:flex;align-items:center;justify-content:center;gap:9px;
   width:100%;padding:12px 18px;border-radius:999px;text-decoration:none;
-  border:1px solid var(--qs-field-line);background:rgba(255,255,255,.55);
+  border:1px solid var(--qs-field-line);background:var(--qs-sheen-1);
   color:var(--qs-ink);font-size:14px;font-weight:600;
   transition:border-color .15s,background .15s;
 }
@@ -410,7 +444,7 @@ body.auth-page{
 .alert{
   display:flex;gap:10px;align-items:flex-start;
   margin:0 0 20px;padding:12px 14px;border-radius:12px;
-  background:var(--qs-bad-bg);border:1px solid #f3c6c2;color:var(--qs-bad-ink);
+  background:var(--qs-bad-bg);border:1px solid var(--qs-bad-line);color:var(--qs-bad-ink);
   font-size:13.5px;line-height:1.5;
 }
 .alert svg{flex:none;width:18px;height:18px;margin-top:1px;fill:none;
@@ -437,8 +471,8 @@ html[data-theme="light"],:root{
   --body-bg:var(--qs-page);
   --body-quiet-color:var(--qs-muted);
   --body-medium-color:var(--qs-ink-soft);
-  --body-loud-color:#0f1330;
-  --header-color:#dfe3fb;
+  --body-loud-color:var(--qs-ink-loud);
+  --header-color:#dfe3fb;      /* pose sur le degrade : constant */
   --header-branding-color:#fff;
   --header-bg:transparent;      /* le dégradé est posé sur #header */
   --header-link-color:#fff;
@@ -446,31 +480,37 @@ html[data-theme="light"],:root{
   --breadcrumbs-link-fg:var(--qs-blue);
   --breadcrumbs-bg:transparent;
   --link-fg:var(--qs-blue);
-  --link-hover-color:#2b3a95;
-  --link-selected-fg:var(--qs-blue-dark);
+  --link-hover-color:var(--qs-blue-deep);
+  /* Le filtre actif doit trancher sur le lien ordinaire : plus fonce en
+     clair, plus clair en sombre — c est exactement --qs-blue-deep. */
+  --link-selected-fg:var(--qs-blue-deep);
   --hairline-color:var(--qs-line);
-  --border-color:#dde2f2;
+  --border-color:var(--qs-border);
   --error-fg:var(--qs-bad);
   --message-success-bg:var(--qs-ok-bg);
   --message-warning-bg:var(--qs-warn-bg);
   --message-error-bg:var(--qs-bad-bg);
-  --darkened-bg:#f5f6fc;
-  --selected-bg:#eef0fb;
-  --selected-row:#f2f0ff;
+  --darkened-bg:var(--qs-raised);
+  --selected-bg:var(--qs-sel-bg);
+  --selected-row:var(--qs-sel-row);
   --button-fg:#fff;
-  --button-bg:var(--qs-blue);
-  --button-hover-bg:var(--qs-blue-dark);
-  --default-button-bg:var(--qs-blue);
-  --default-button-hover-bg:var(--qs-blue-dark);
-  --close-button-bg:#6b7399;
-  --close-button-hover-bg:#4e5577;
-  --delete-button-bg:var(--qs-bad);
-  --delete-button-hover-bg:#a11b19;
-  --object-tools-bg:var(--qs-blue-dark);
-  --object-tools-hover-bg:#2b3a95;
+  --button-bg:var(--qs-btn-bg);
+  --button-hover-bg:var(--qs-btn-hover);
+  --default-button-bg:var(--qs-btn-bg);
+  --default-button-hover-bg:var(--qs-btn-hover);
+  --close-button-bg:var(--qs-grey);
+  --close-button-hover-bg:var(--qs-grey-dark);
+  --delete-button-bg:var(--qs-bad-btn);
+  --delete-button-hover-bg:var(--qs-bad-btn-hover);
+  --object-tools-bg:var(--qs-tool-bg);
+  --object-tools-hover-bg:var(--qs-tool-hover);
 }
 
-body.popup #container{grid-template-columns:1fr}  /* fenêtre de sélection */
+/* Même respiration que .shell dans l'application : sans cette marge, la
+   carte touchait les bords de la fenêtre et perdait ses coins arrondis. */
+body.qs-admin{padding:var(--qs-gutter)}
+body.popup{padding:0}
+body.popup #container{grid-template-columns:1fr;border-radius:0;min-height:100vh}
 .qs-main{display:flex;flex-direction:column;min-width:0}
 
 #header{
@@ -494,13 +534,22 @@ div.breadcrumbs{
 .module,.inline-group,.dashboard #content-related .module{
   border-radius:16px;overflow:hidden;border:1px solid var(--border-color);
   background:var(--qs-surface);
-  box-shadow:0 18px 40px -26px rgba(26,31,60,.5);
+  box-shadow:var(--qs-shadow-mod);
 }
 .module h2,.module caption,.inline-group h2,fieldset.module > h2,
 #changelist-filter h2,.selector-chosen h2,#content-related .module h2{
   background:var(--qs-grad);color:#fff;
   font-size:12px;letter-spacing:.7px;padding:11px 18px;
 }
+
+/* Bloc repliable : Django range le titre dans <summary><h2> et sa regle
+   « .collapse summary .fieldset-heading » efface le fond que la regle
+   ci-dessus venait de poser — il restait du texte blanc sur fond clair,
+   donc invisible. Le bandeau est peint sur le <summary>, qui est de toute
+   facon l element cliquable, et le titre n y porte plus que le texte. */
+.module.collapse summary{background:var(--qs-grad);border:0;padding:0 0 0 10px}
+.module.collapse summary .fieldset-heading{background:transparent;color:#fff}
+
 .module table{margin:0}
 .module tbody th,.module tbody td{border-bottom:1px solid var(--hairline-color)}
 .module tbody tr:last-child th,.module tbody tr:last-child td{border-bottom:0}
@@ -560,10 +609,19 @@ form .aligned .form-row p.help,
 #changelist .results{border-radius:14px;overflow:auto}
 #changelist-filter{border-radius:14px;overflow:hidden}
 #changelist table thead th{white-space:nowrap}
-.paginator a:link,.paginator a:visited{background:var(--qs-blue);border-radius:7px}
+.paginator a:link,.paginator a:visited{background:var(--qs-btn-bg);border-radius:7px}
 .paginator .this-page{border-radius:7px}
 tr.selected{background:var(--selected-row)}
 ul.messagelist li{border-radius:10px;padding:11px 15px 11px 42px;font-size:14px}
+
+/* Le bandeau « Choisis » du selecteur de permissions est peint en --secondary,
+   mais son intitule et son texte d'aide gardaient le gris du corps de page :
+   illisibles sur ce fond, dans les deux themes.
+   Le prefixe #content n'est pas decoratif : Django pose
+   « form .aligned label », plus specifique que le simple nom de classe. */
+.selector-chosen-title,
+#content .selector-chosen-title label,
+#content .selector-chosen-title .helptext{color:#fff}
 
 /* Gestion des comptes */
 .qs-avatar{
@@ -576,7 +634,7 @@ ul.messagelist li{border-radius:10px;padding:11px 15px 11px 42px;font-size:14px}
 .qs-hello b{font-size:16px}
 .qs-tag{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;
   font-weight:600;background:var(--selected-bg);color:var(--body-medium-color)}
-.qs-tag--admin{background:#e8e6fb;color:#4a45b0}
+.qs-tag--admin{background:var(--qs-violet-bg);color:var(--qs-violet-ink)}
 .qs-pw-btn{display:inline-block}
 .qs-pw-help{margin-top:6px!important}
 .qs-pw-none{color:var(--error-fg);font-weight:600;display:block;margin-bottom:8px}
@@ -587,6 +645,34 @@ ul.messagelist li{border-radius:10px;padding:11px 15px 11px 42px;font-size:14px}
   color:var(--body-fg);font:inherit;font-size:13.5px;font-weight:600;
 }
 .qs-logout:hover{border-color:var(--qs-blue);color:var(--qs-blue)}
+
+/* --- Bouton clair / sombre ------------------------------------------------
+   Même contrat que l'administration de Django (clé localStorage « theme »,
+   attribut data-theme sur <html>) : le choix vaut pour toutes les pages. */
+.theme-toggle{
+  display:inline-flex;align-items:center;justify-content:center;flex:none;
+  width:36px;height:36px;padding:0;border:0;border-radius:50%;
+  background:transparent;color:inherit;cursor:pointer;
+  transition:background .15s;
+}
+.theme-toggle:hover{background:rgba(127,127,127,.18)}
+.theme-toggle:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.theme-toggle svg{width:20px;height:20px;fill:currentColor}
+.theme-toggle .theme-icon-when-auto,
+.theme-toggle .theme-icon-when-light,
+.theme-toggle .theme-icon-when-dark{display:none}
+html:not([data-theme]) .theme-icon-when-auto,
+html[data-theme="auto"] .theme-icon-when-auto,
+html[data-theme="light"] .theme-icon-when-light,
+html[data-theme="dark"] .theme-icon-when-dark{display:block}
+.theme-label-when-auto,.theme-label-when-light,.theme-label-when-dark{display:none}
+html[data-theme="auto"] .theme-label-when-auto,
+html[data-theme="light"] .theme-label-when-light,
+html[data-theme="dark"] .theme-label-when-dark{display:inline}
+.visually-hidden{
+  position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0;
+}
 
 /* === 7. Adaptation aux écrans ============================================= */
 /* Au-delà de 1700 px, un corps de 15 px est peu lisible : tout monte d'un cran. */
@@ -617,7 +703,7 @@ ul.messagelist li{border-radius:10px;padding:11px 15px 11px 42px;font-size:14px}
   .shell,.shell__inner,body #container{grid-template-columns:1fr}
   .side{
     flex-direction:row;align-items:center;gap:6px;overflow-x:auto;
-    padding:14px;border-right:0;border-bottom:1px solid rgba(255,255,255,.7);
+    padding:14px;border-right:0;border-bottom:1px solid var(--qs-sheen-edge);
   }
   .side__brand{padding:0 12px 0 4px}
   .side__name small{display:none}
@@ -659,39 +745,135 @@ ul.messagelist li{border-radius:10px;padding:11px 15px 11px 42px;font-size:14px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
-/* === 8. Thème sombre (administration) ===================================== */
-/* Même famille de couleurs, simplement assombrie. */
+/* === 8. Theme sombre ====================================================== */
+/* Les valeurs nocturnes sont ecrites une seule fois, dans les jetons --dk-*.
+   Les deux regles qui suivent ne font que les brancher sur les jetons de la
+   section 1 : tout ce qui est construit dessus suit sans regle de plus —
+   l'application, la connexion, et l'administration dont les variables Django
+   pointent deja sur ces memes jetons (section 6).
+
+   Deux selecteurs sont necessaires et non redondants : le premier applique la
+   preference du systeme quand le reglage est « auto », le second un choix
+   explicite, qui doit pouvoir contredire le systeme dans les deux sens. */
+:root{
+  --dk-blue:#7b84e4;      --dk-blue-dark:#5b63c8;  --dk-blue-deep:#9aa2ee;
+  --dk-violet:#a78bfa;    --dk-halo-1:#2b3a95;     --dk-halo-2:#4a2f8a;
+
+  --dk-page:#101229;      --dk-surface:#1b1e38;    --dk-surface-2:#232745;
+  --dk-glass:rgba(27,30,56,.78);
+  --dk-glass-edge:rgba(255,255,255,.09);
+  --dk-ink:#e8eaf6;       --dk-ink-loud:#ffffff;   --dk-ink-soft:#c6cae3;
+  --dk-muted:#a8aecd;     --dk-faint:#8b92b5;
+  --dk-line:#2a2e4d;      --dk-line-strong:#3d4369;
+  --dk-field-line:#333858; --dk-border:#2f3457;
+  --dk-raised:#191c33;    --dk-sel-bg:#232745;     --dk-sel-row:#2a2550;
+  --dk-row-hover:#20233f; --dk-track:#272b4a;
+  --dk-sheen-1:rgba(255,255,255,.05);
+  --dk-sheen-2:rgba(255,255,255,.015);
+  --dk-sheen-edge:rgba(255,255,255,.08);
+  --dk-sheen-hover:rgba(255,255,255,.07);
+
+  --dk-ok:#5cbd77;   --dk-ok-bg:#15301f;  --dk-ok-ink:#a5dcb6;  --dk-ok-line:#245138;
+  --dk-bad:#f08a84;  --dk-bad-bg:#391816; --dk-bad-ink:#f3b8b4; --dk-bad-line:#6d2b26;
+  --dk-bad-dark:#c2544d;
+  --dk-btn-bg:#4a52bd;    --dk-btn-hover:#5a62cd;
+  --dk-tool-bg:#4a52bd;   --dk-tool-hover:#5f68d6;
+  --dk-bad-btn:#a8322c;   --dk-bad-btn-hover:#bf3a33;
+  --dk-warn:#e9a33d; --dk-warn-bg:#3a2a0e;
+  --dk-violet-bg:#2b2550; --dk-violet-ink:#c3b5fb;
+  --dk-grey:#555c7e;      --dk-grey-dark:#3f4463;
+
+  --dk-shadow-soft:0 6px 16px -10px rgba(0,0,0,.8);
+  --dk-shadow-card:0 18px 40px -22px rgba(0,0,0,.7);
+  --dk-shadow-mod:0 18px 40px -26px rgba(0,0,0,.75);
+  --dk-shadow-panel:0 40px 90px -30px rgba(0,0,0,.8);
+  --dk-shadow-auth:0 36px 90px -24px rgba(0,0,0,.7),0 2px 8px rgba(0,0,0,.4);
+
+  /* Decor « papier decoupe » : memes couches, teintes nocturnes */
+  --dk-art-1:#2f3461; --dk-art-2:#272c54; --dk-art-3:#212547;
+  --dk-art-4:#1b1f3b; --dk-art-5:#2a2f6b; --dk-art-6:#332c7a;
+  --dk-art-7:#231d5c; --dk-art-leaf:#15113b;
+}
+
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --primary:#6a71d8;
-    --body-bg:#14162b; --body-fg:#e8eaf6;
-    --body-quiet-color:#a8aecd; --body-medium-color:#c6cae3;
-    --body-loud-color:#fff;
-    --darkened-bg:#1b1e38; --selected-bg:#232745; --selected-row:#2a2550;
-    --hairline-color:#2a2e4d; --border-color:#333858;
-    --link-fg:#a9b3ee; --link-hover-color:#c6cdf7;
-    --breadcrumbs-fg:#a8aecd; --breadcrumbs-link-fg:#a9b3ee;
+  color-scheme:dark;
+  /* --qs-grad n'a pas de variante : le degrade de marque porte du texte
+     blanc et se lit aussi bien sur fond sombre. C'est voulu. */
+  --qs-blue:var(--dk-blue); --qs-blue-dark:var(--dk-blue-dark);
+  --qs-blue-deep:var(--dk-blue-deep); --qs-violet:var(--dk-violet);
+  --qs-halo-1:var(--dk-halo-1); --qs-halo-2:var(--dk-halo-2);
+  --qs-page:var(--dk-page); --qs-surface:var(--dk-surface);
+  --qs-surface-2:var(--dk-surface-2);
+  --qs-glass:var(--dk-glass); --qs-glass-edge:var(--dk-glass-edge);
+  --qs-ink:var(--dk-ink); --qs-ink-loud:var(--dk-ink-loud);
+  --qs-ink-soft:var(--dk-ink-soft); --qs-muted:var(--dk-muted);
+  --qs-faint:var(--dk-faint);
+  --qs-line:var(--dk-line); --qs-line-strong:var(--dk-line-strong);
+  --qs-field-line:var(--dk-field-line); --qs-border:var(--dk-border);
+  --qs-raised:var(--dk-raised); --qs-sel-bg:var(--dk-sel-bg);
+  --qs-sel-row:var(--dk-sel-row); --qs-row-hover:var(--dk-row-hover);
+  --qs-track:var(--dk-track);
+  --qs-sheen-1:var(--dk-sheen-1); --qs-sheen-2:var(--dk-sheen-2);
+  --qs-sheen-edge:var(--dk-sheen-edge); --qs-sheen-hover:var(--dk-sheen-hover);
+  --qs-ok:var(--dk-ok); --qs-ok-bg:var(--dk-ok-bg);
+  --qs-ok-ink:var(--dk-ok-ink); --qs-ok-line:var(--dk-ok-line);
+  --qs-bad:var(--dk-bad); --qs-bad-bg:var(--dk-bad-bg);
+  --qs-bad-ink:var(--dk-bad-ink); --qs-bad-line:var(--dk-bad-line);
+  --qs-bad-dark:var(--dk-bad-dark);
+  --qs-btn-bg:var(--dk-btn-bg); --qs-btn-hover:var(--dk-btn-hover);
+  --qs-tool-bg:var(--dk-tool-bg); --qs-tool-hover:var(--dk-tool-hover);
+  --qs-bad-btn:var(--dk-bad-btn); --qs-bad-btn-hover:var(--dk-bad-btn-hover);
+  --qs-warn:var(--dk-warn); --qs-warn-bg:var(--dk-warn-bg);
+  --qs-violet-bg:var(--dk-violet-bg); --qs-violet-ink:var(--dk-violet-ink);
+  --qs-grey:var(--dk-grey); --qs-grey-dark:var(--dk-grey-dark);
+  --qs-shadow-soft:var(--dk-shadow-soft);
+  --qs-shadow-card:var(--dk-shadow-card);
+  --qs-shadow-mod:var(--dk-shadow-mod);
+  --qs-shadow-panel:var(--dk-shadow-panel);
+  --qs-shadow-auth:var(--dk-shadow-auth);
+  --art-1:var(--dk-art-1); --art-2:var(--dk-art-2); --art-3:var(--dk-art-3);
+  --art-4:var(--dk-art-4); --art-5:var(--dk-art-5); --art-6:var(--dk-art-6);
+  --art-7:var(--dk-art-7); --art-leaf:var(--dk-art-leaf);
   }
-  :root:not([data-theme="light"]) body #container{
-    background:rgba(28,31,56,.78);border-color:rgba(255,255,255,.1);
-  }
-  :root:not([data-theme="light"]) .module{background:#1b1e38}
-  :root:not([data-theme="light"]) .nav__item.is-active,
-  :root:not([data-theme="light"]) .qs-logout{background:#1b1e38}
 }
-html[data-theme="dark"]{
-  --primary:#6a71d8;
-  --body-bg:#14162b; --body-fg:#e8eaf6;
-  --body-quiet-color:#a8aecd; --body-medium-color:#c6cae3;
-  --body-loud-color:#fff;
-  --darkened-bg:#1b1e38; --selected-bg:#232745; --selected-row:#2a2550;
-  --hairline-color:#2a2e4d; --border-color:#333858;
-  --link-fg:#a9b3ee; --link-hover-color:#c6cdf7;
-  --breadcrumbs-fg:#a8aecd; --breadcrumbs-link-fg:#a9b3ee;
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  /* --qs-grad n'a pas de variante : le degrade de marque porte du texte
+     blanc et se lit aussi bien sur fond sombre. C'est voulu. */
+  --qs-blue:var(--dk-blue); --qs-blue-dark:var(--dk-blue-dark);
+  --qs-blue-deep:var(--dk-blue-deep); --qs-violet:var(--dk-violet);
+  --qs-halo-1:var(--dk-halo-1); --qs-halo-2:var(--dk-halo-2);
+  --qs-page:var(--dk-page); --qs-surface:var(--dk-surface);
+  --qs-surface-2:var(--dk-surface-2);
+  --qs-glass:var(--dk-glass); --qs-glass-edge:var(--dk-glass-edge);
+  --qs-ink:var(--dk-ink); --qs-ink-loud:var(--dk-ink-loud);
+  --qs-ink-soft:var(--dk-ink-soft); --qs-muted:var(--dk-muted);
+  --qs-faint:var(--dk-faint);
+  --qs-line:var(--dk-line); --qs-line-strong:var(--dk-line-strong);
+  --qs-field-line:var(--dk-field-line); --qs-border:var(--dk-border);
+  --qs-raised:var(--dk-raised); --qs-sel-bg:var(--dk-sel-bg);
+  --qs-sel-row:var(--dk-sel-row); --qs-row-hover:var(--dk-row-hover);
+  --qs-track:var(--dk-track);
+  --qs-sheen-1:var(--dk-sheen-1); --qs-sheen-2:var(--dk-sheen-2);
+  --qs-sheen-edge:var(--dk-sheen-edge); --qs-sheen-hover:var(--dk-sheen-hover);
+  --qs-ok:var(--dk-ok); --qs-ok-bg:var(--dk-ok-bg);
+  --qs-ok-ink:var(--dk-ok-ink); --qs-ok-line:var(--dk-ok-line);
+  --qs-bad:var(--dk-bad); --qs-bad-bg:var(--dk-bad-bg);
+  --qs-bad-ink:var(--dk-bad-ink); --qs-bad-line:var(--dk-bad-line);
+  --qs-bad-dark:var(--dk-bad-dark);
+  --qs-btn-bg:var(--dk-btn-bg); --qs-btn-hover:var(--dk-btn-hover);
+  --qs-tool-bg:var(--dk-tool-bg); --qs-tool-hover:var(--dk-tool-hover);
+  --qs-bad-btn:var(--dk-bad-btn); --qs-bad-btn-hover:var(--dk-bad-btn-hover);
+  --qs-warn:var(--dk-warn); --qs-warn-bg:var(--dk-warn-bg);
+  --qs-violet-bg:var(--dk-violet-bg); --qs-violet-ink:var(--dk-violet-ink);
+  --qs-grey:var(--dk-grey); --qs-grey-dark:var(--dk-grey-dark);
+  --qs-shadow-soft:var(--dk-shadow-soft);
+  --qs-shadow-card:var(--dk-shadow-card);
+  --qs-shadow-mod:var(--dk-shadow-mod);
+  --qs-shadow-panel:var(--dk-shadow-panel);
+  --qs-shadow-auth:var(--dk-shadow-auth);
+  --art-1:var(--dk-art-1); --art-2:var(--dk-art-2); --art-3:var(--dk-art-3);
+  --art-4:var(--dk-art-4); --art-5:var(--dk-art-5); --art-6:var(--dk-art-6);
+  --art-7:var(--dk-art-7); --art-leaf:var(--dk-art-leaf);
 }
-html[data-theme="dark"] body #container{
-  background:rgba(28,31,56,.78);border-color:rgba(255,255,255,.1);
-}
-html[data-theme="dark"] .module{background:#1b1e38}
-html[data-theme="dark"] .nav__item.is-active,
-html[data-theme="dark"] .qs-logout{background:#1b1e38}
