@@ -1,0 +1,14 @@
+{% load i18n admin_urls %}
+{# Le bouton d'ajout reprend le titre d'ajout de l'écran (« Nouvelle page  #}
+{# scannée ») : la traduction de Django donnait « Ajouter page scannée »,   #}
+{# sans article. Voir grader/admin_titres.py.                              #}
+{% block object-tools-items %}
+  {% if has_add_permission %}
+  <li>
+    {% url cl.opts|admin_urlname:'add' as add_url %}
+    <a href="{% add_preserved_filters add_url is_popup to_field %}" class="addlink">
+      {% if titre_ajout %}{{ titre_ajout }}{% else %}{% blocktranslate with cl.opts.verbose_name as name %}Add {{ name }}{% endblocktranslate %}{% endif %}
+    </a>
+  </li>
+  {% endif %}
+{% endblock %}

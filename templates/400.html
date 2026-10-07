@@ -1,0 +1,9 @@
+{% extends "erreur.html" %}
+{% block titre %}Requête invalide{% endblock %}
+{% block code %}400{% endblock %}
+{% block titre_page %}Requête invalide{% endblock %}
+{% block texte %}
+<p>Le serveur n'a pas compris cette demande. Si vous accédez à QuizScan par
+  une adresse ou un nom de domaine nouveau, l'administrateur doit l'ajouter
+  à ALLOWED_HOSTS.</p>
+{% endblock %}

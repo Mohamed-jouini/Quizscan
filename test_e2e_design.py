@@ -106,6 +106,9 @@ def main():
             if etiquette != "connexion":
                 assert 'class="qs-identite"' in corps and 'password_change' in corps, (
                     f"{url} : plus aucun accès au changement de mot de passe")
+                assert "qs-moncompte" not in corps, (
+                    f"{url} : le bouton « Mot de passe » est de retour dans "
+                    "la barre du haut — le nom suffit")
             # Un commentaire {# … #} de gabarit ne tient QUE sur une ligne :
             # ouvert sur deux, Django n'y voit pas un commentaire et l'affiche
             # tel quel au milieu de la page. L'erreur est passée trois fois.
@@ -175,8 +178,27 @@ def main():
         n = len(re.findall(r"(?:^|[,}])\s*" + re.escape(classe), hors_media,
                            re.M))
         assert n == 1, f"{classe} est défini {n} fois hors requête média"
+
+    # Et pas seulement ces huit-là : TOUTE classe définie seule (« .x{ », sans
+    # contexte) ne doit l'être qu'une fois. « .note » a été créé une seconde
+    # fois pour l'encart d'information alors qu'il servait déjà à la mention
+    # des pages de connexion : la seconde règle écrasait la première, et les
+    # encarts de toute l'application ont perdu leur marge sans que rien ne
+    # le signale.
+    VOULUS = {".shell__inner"}   # règle partagée avec #container + ajustement
+    sans_commentaires = re.sub(r"/\*.*?\*/", "", hors_media, flags=re.S)
+    definitions = {}
+    for regle in re.finditer(r"([^{}]+)\{", sans_commentaires):
+        for selecteur in regle.group(1).split(","):
+            selecteur = " ".join(selecteur.split())
+            if re.fullmatch(r"\.[A-Za-z][\w-]*", selecteur):
+                definitions[selecteur] = definitions.get(selecteur, 0) + 1
+    doublons = {c: n for c, n in definitions.items() if n > 1 and c not in VOULUS}
+    assert not doublons, (
+        f"classes définies plusieurs fois, la dernière écrase l'autre : {doublons}")
     print(f"  jetons         chaque couleur et chaque composant défini une "
-          f"seule fois ({len(css.splitlines())} lignes) OK")
+          f"seule fois ({len(definitions)} classes, {len(css.splitlines())} "
+          "lignes) OK")
 
     # Le thème sombre ne doit rien oublier : chaque jeton de couleur du bloc
     # :root de base a sa valeur nocturne, sinon la page bascule à moitié.

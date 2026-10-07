@@ -1,0 +1,11 @@
+{% extends "erreur.html" %}
+{# Le message de l'exception est affiché : ceux de grader/droits.py sont   #}
+{# écrits pour l'enseignant et disent quoi demander à l'administrateur.    #}
+{% block titre %}Accès refusé{% endblock %}
+{% block code %}403{% endblock %}
+{% block titre_page %}Accès refusé{% endblock %}
+{% block texte %}
+{% if exception %}<p>{{ exception }}</p>
+{% else %}<p>Votre compte n'a pas l'autorisation d'ouvrir cette page.
+  Demandez-la à l'administrateur de l'établissement.</p>{% endif %}
+{% endblock %}

@@ -15,6 +15,8 @@ from django.core.management.base import BaseCommand
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
+from grader import sauvegarde
+
 OK, ATTENTION, ERREUR = "OK", "ATTENTION", "ERREUR"
 
 
@@ -32,6 +34,7 @@ class Command(BaseCommand):
         self._ocr(note)
         self._base(note)
         self._fichiers(note)
+        self._sauvegardes(note)
 
         styles = {OK: self.style.SUCCESS, ATTENTION: self.style.WARNING,
                   ERREUR: self.style.ERROR}
@@ -193,3 +196,25 @@ class Command(BaseCommand):
                  "(le conteneur le fait au démarrage).")
         else:
             note(OK, "Fichiers statiques collectés")
+
+    # ---------------------------------------------------------- sauvegardes
+    def _sauvegardes(self, note):
+        """Une sauvegarde complète de moins de 48 heures.
+
+        ATTENTION et non ERREUR : l'application fonctionne sans, mais un
+        disque qui lâche ce jour-là emporte les copies scannées."""
+        trouvee = sauvegarde.derniere()
+        conseil = ("Installez deploy/quizscan-sauvegarde.timer (voir README), "
+                   "ou lancez : python manage.py sauvegarde")
+        if trouvee is None:
+            note(ATTENTION, "Aucune sauvegarde complète", conseil)
+            return
+        archive, age = trouvee
+        heures = int(age.total_seconds() // 3600)
+        if age > sauvegarde.AGE_MAXIMAL:
+            note(ATTENTION, f"Dernière sauvegarde complète il y a {heures} h",
+                 f"{archive.name} — le minuteur nocturne ne tourne plus ?\n"
+                 + conseil)
+        else:
+            note(OK, f"Sauvegarde complète récente ({archive.name}, "
+                     f"il y a {heures} h)")

@@ -18,5 +18,6 @@ urlpatterns = [
     path("quiz/<int:pk>/resultats.xlsx", views.quiz_results_xlsx, name="quiz_results_xlsx"),
     path("quiz/<int:pk>/bulletins.pdf", views.quiz_bulletins_pdf, name="quiz_bulletins_pdf"),
     path("lots/<int:pk>/", views.batch_detail, name="batch_detail"),
+    path("lots/<int:pk>/supprimer/", views.batch_delete, name="batch_delete"),
     path("copies/<int:pk>/", views.sheet_review, name="sheet_review"),
 ]

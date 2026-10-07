@@ -5,7 +5,10 @@ After=network-online.target docker.service
 
 [Service]
 Type=oneshot
-# Adapter le chemin si le dépôt est cloné ailleurs
-ExecStart=/opt/apps/dtech/quizscan-git/quizscan/deploy/update.sh
+# Adapter le chemin si le dépôt est cloné ailleurs. Lancé par /bin/sh :
+# update.sh est enregistré dans git sans le droit d'exécution, et son propre
+# « git reset --hard » annulerait un chmod +x posé à la main sur le serveur —
+# le minuteur s'arrêterait alors après la première mise à jour.
+ExecStart=/bin/sh /opt/apps/dtech/quizscan-git/quizscan/deploy/update.sh
 StandardOutput=append:/var/log/quizscan-update.log
 StandardError=append:/var/log/quizscan-update.log

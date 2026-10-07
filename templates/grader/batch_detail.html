@@ -13,6 +13,9 @@
     <a class="btn small secondary" href="{% url 'sheet_review' first_review_id %}">Vérifier les copies une à une</a>
     {% endif %}
     <a class="btn small" href="{% url 'quiz_results' batch.quiz.pk %}?batch={{ batch.pk }}">Résultats du lot</a>
+    {% if perms.grader.corriger_copies %}
+    <a class="btn small danger" href="{% url 'batch_delete' batch.pk %}">Supprimer ce lot</a>
+    {% endif %}
   </div>
 </header>
 

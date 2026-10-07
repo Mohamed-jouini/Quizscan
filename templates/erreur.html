@@ -1,0 +1,25 @@
+{% load static %}<!doctype html>
+{# Base des pages d'erreur (400, 403, 404, 500, refus CSRF).                #}
+{# Autonome, sans barre latérale ni compte : elle doit s'afficher même pour  #}
+{# un visiteur non connecté, et la 500 est rendue sans contexte de requête.  #}
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titre %}Erreur{% endblock %} — QuizScan</title>
+<link rel="stylesheet" href="{% static 'grader/quizscan.css' %}">
+<script src="{% static 'grader/theme.js' %}"></script>
+</head>
+<body class="page-erreur">
+<main class="erreur">
+  <span class="erreur__code">{% block code %}{% endblock %}</span>
+  <h1>{% block titre_page %}{% endblock %}</h1>
+  <div class="erreur__texte">{% block texte %}{% endblock %}</div>
+  <p class="erreur__actions">
+    {% block actions %}
+    <a class="btn" href="{% url 'dashboard' %}">Retour au tableau de bord</a>
+    {% endblock %}
+  </p>
+</main>
+</body>
+</html>

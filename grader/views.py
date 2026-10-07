@@ -17,6 +17,7 @@ from django.views.static import serve as file_serve
 
 from . import bulletin as bulletin_mod
 from . import droits
+from . import journal
 from . import importers
 from . import labels_pdf as labels_mod
 from . import layout as layout_mod
@@ -140,7 +141,76 @@ def dashboard(request):
     week = [{"date": d, "count": c, "height": max(round(c / peak * 100), 4)}
             for d, c in zip(days, counts)]
 
+    # --- Ce qui empêche le travail d'avancer -----------------------------
+    # Deux situations bloquent réellement, et n'apparaissaient nulle part :
+    # une épreuve dont le corrigé est incomplet (la correction refuse de
+    # démarrer) et des copies reçues que personne n'a lancées.
+    epreuves_bloquees = list(
+        quizzes.filter(questions__qtype="qcm",
+                       questions__correct_choice__isnull=True)
+        .distinct()[:6])
+    lots_en_attente = list(
+        _my_batches(request).filter(status="pending").order_by("created_at")[:6])
+    pages_en_attente = sum(b.total_pages for b in lots_en_attente)
+
+    # --- Qualité de lecture du dernier lot -------------------------------
+    # Le pourcentage cumulé ne bouge plus au bout de quelques centaines de
+    # copies : ce qui renseigne sur la séance de scan qu'on vient de faire,
+    # c'est le taux du dernier lot.
+    dernier_lot = _my_batches(request).filter(status="done").first()
+    lot_recent = None
+    if dernier_lot:
+        pages = dernier_lot.sheets.count()
+        lues = dernier_lot.sheets.filter(status="ok").count()
+        lot_recent = {"lot": dernier_lot, "pages": pages, "lues": lues,
+                      "pct": round(lues / pages * 100) if pages else 0}
+
+    # --- Causes des copies à reprendre ------------------------------------
+    causes = [
+        {"libelle": "à identifier", "n": sheets.filter(status="no_match").count(),
+         "ton": "warn"},
+        {"libelle": "repères non détectés",
+         "n": sheets.filter(status="no_markers").count(), "ton": "bad"},
+        {"libelle": "en erreur", "n": sheets.filter(status="error").count(),
+         "ton": "bad"},
+    ]
+
+    # --- La dernière épreuve corrigée --------------------------------------
+    derniere = None
+    for quiz in quizzes.order_by("-created_at")[:5]:
+        derniere = services.resume_epreuve(quiz)
+        if derniere:
+            break
+
+    # --- Corrigés douteux, toutes épreuves confondues ----------------------
+    douteux = services.corriges_douteux(quizzes)
+    epreuves_douteuses = [
+        {"quiz": q, "questions": douteux[q.pk]}
+        for q in quizzes if q.pk in douteux
+    ]
+
+    # --- Temps de correction épargné ---------------------------------------
+    # Base : les copies que la machine a effectivement lues. Une copie dont
+    # les repères n'ont pas été trouvés n'a fait gagner aucun temps.
+    illisibles = sum(c["n"] for c in causes if c["libelle"] != "à identifier")
+    copies_lues = max(n_sheets - illisibles, 0)
+    minutes = copies_lues * services.MINUTES_PAR_COPIE_A_LA_MAIN
+    if minutes < 60:
+        temps = {"valeur": minutes, "unite": "minutes" if minutes > 1 else "minute"}
+    else:
+        temps = {"valeur": round(minutes / 60, 1), "unite": "heures"}
+
     return render(request, "grader/dashboard.html", {
+        "epreuves_bloquees": epreuves_bloquees,
+        "lots_en_attente": lots_en_attente,
+        "pages_en_attente": pages_en_attente,
+        "lot_recent": lot_recent,
+        "causes": [c for c in causes if c["n"]],
+        "derniere": derniere,
+        "epreuves_douteuses": epreuves_douteuses,
+        "temps_epargne": temps,
+        "copies_lues": copies_lues,
+        "minutes_par_copie": services.MINUTES_PAR_COPIE_A_LA_MAIN,
         "quizzes": quizzes.select_related("class_group")[:8],
         "n_quizzes": quizzes.count(),
         "classes": classes,
@@ -445,6 +515,7 @@ def quiz_detail(request, pk):
             # calculées sont mises à jour immédiatement
             q = get_object_or_404(
                 quiz.questions, pk=_int_or_none(request.POST.get("edit_question")) or 0)
+            ancien_bareme, ancienne_bonne = q.points, q.correct_choice
             try:
                 q.points = max(float(request.POST.get("points", q.points)
                                      .replace(",", ".")), 0.0)
@@ -458,6 +529,8 @@ def quiz_detail(request, pk):
                 elif raw.isdigit() and int(raw) < q.num_bubbles:
                     q.correct_choice = int(raw)
             q.save(update_fields=["points", "correct_choice"])
+            journal.question_modifiee(request.user, q, bonne_avant=ancienne_bonne,
+                                      bareme_avant=ancien_bareme)
             n = services.rescore_quiz(quiz)
             messages.success(request, f"Question {q.order} modifiée"
                              + (f" — {n} copie(s) recalculée(s)." if n else "."))
@@ -477,11 +550,17 @@ def quiz_detail(request, pk):
             return redirect("quiz_detail", pk=pk)
         elif "delete_question" in request.POST:
             question_pk = _int_or_none(request.POST.get("delete_question"))
-            if question_pk is not None:
-                quiz.questions.filter(pk=question_pk).delete()
+            question = (quiz.questions.filter(pk=question_pk).first()
+                        if question_pk is not None else None)
+            if question is not None:
+                # Supprimer une question retire ses points de toutes les
+                # copies : c'est un changement de note, il est tracé.
+                journal.question_supprimee(request.user, question)
+                question.delete()
             return redirect("quiz_detail", pk=pk)
         elif "update_settings" in request.POST:
             ok = True
+            ancienne_penalite = quiz.wrong_penalty
             try:
                 raw = (request.POST.get("wrong_penalty") or "0").replace(",", ".")
                 quiz.wrong_penalty = abs(float(raw))
@@ -503,6 +582,9 @@ def quiz_detail(request, pk):
                 quiz.grading_mode = new_grading
             quiz.save(update_fields=["wrong_penalty", "sheet_mode", "grading_mode",
                                      "id_mode", "id_digits"])
+            journal.noter(request.user, "penalite", quiz=quiz,
+                          objet="Pénalité par mauvaise réponse",
+                          avant=ancienne_penalite, apres=quiz.wrong_penalty)
             services.rescore_quiz(quiz)     # la pénalité a pu changer
             messages.success(request, "Réglages du quiz enregistrés.") if ok else \
                 messages.error(request, "Certaines valeurs étaient invalides.")
@@ -601,6 +683,8 @@ def quiz_detail(request, pk):
         "upload_form": UploadForm(),
         "choice_letters_full": [choice_letter(i, quiz.language)
                                 for i in range(len(ARABIC_LETTERS))],
+        "journal": quiz.modifications.all()[:15],
+        "n_journal": quiz.modifications.count(),
     })
 
 
@@ -651,11 +735,11 @@ def quiz_upload(request, pk):
 
 @login_required
 def quiz_answer_key(request, pk):
-    droits.exiger(request.user, droits.CREER, "renseigner le corrigé")
     """Téléversement de la fiche remplie avec les bonnes réponses.
 
     La fiche est lue comme une copie, renseigne le corrigé des questions QCM
     et reste conservée avec l'épreuve (historique du barème)."""
+    droits.exiger(request.user, droits.CREER, "renseigner le corrigé")
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if request.method != "POST":
         return redirect("quiz_detail", pk=pk)
@@ -668,6 +752,9 @@ def quiz_answer_key(request, pk):
     if not form.is_valid():
         messages.error(request, "Sélectionnez la fiche scannée du corrigé.")
         return redirect("quiz_detail", pk=pk)
+    # Instantané des bonnes réponses : la lecture du corrigé peut en
+    # changer plusieurs d'un coup, chacune doit apparaître au journal.
+    bonnes_avant = {q.pk: q.correct_choice for q in quiz.questions.all()}
     try:
         pages, n_lues, ambigues = services.read_answer_key(
             quiz, request.FILES.getlist("files"))
@@ -675,28 +762,59 @@ def quiz_answer_key(request, pk):
         messages.error(request, f"Corrigé illisible : {exc}")
         return redirect("quiz_detail", pk=pk)
 
+    for q in quiz.questions.all():
+        journal.noter(request.user, "bonne_reponse", quiz=quiz,
+                      objet=f"Question {q.order} (corrigé scanné)",
+                      avant=journal.lettre(q, bonnes_avant.get(q.pk)),
+                      apres=journal.lettre(q, q.correct_choice))
+
     echecs = [p for p in pages if p.status in ("no_markers", "error")]
     if n_lues:
         messages.success(
             request,
-            f"Corrigé lu : {n_lues} bonne(s) reponse(s) renseignee(s) sur "
-            f"{len(pages)} page(s). Les copies deja scannees ont ete "
-            "recalculees.")
+            f"Corrigé lu : {n_lues} bonne(s) réponse(s) renseignée(s) sur "
+            f"{len(pages)} page(s). Les copies déjà scannées ont été "
+            "recalculées.")
     reste = list(quiz.questions_sans_corrige.values_list("order", flat=True))
     if reste:
         nums = ", ".join(str(n) for n in reste[:15])
         messages.error(
             request,
-            f"{len(reste)} question(s) restent sans bonne reponse (n° {nums}) : "
-            "case laissee vide ou plusieurs cases noircies sur la fiche. "
-            "Renseignez-les a la main dans le tableau des questions, ou "
-            "rescannez un corrige plus net.")
+            f"{len(reste)} question(s) restent sans bonne réponse (n° {nums}) : "
+            "case laissée vide ou plusieurs cases noircies sur la fiche. "
+            "Renseignez-les à la main dans le tableau des questions, ou "
+            "rescannez un corrigé plus net.")
     for page in echecs:
         messages.error(request, f"{page.source_name} : {page.error_message}")
     if not n_lues and not echecs:
-        messages.error(request, "Aucune bonne reponse n'a pu etre lue sur "
+        messages.error(request, "Aucune bonne réponse n'a pu être lue sur "
                                 "cette fiche.")
     return redirect("quiz_detail", pk=pk)
+
+
+@login_required
+def batch_delete(request, pk):
+    """Confirmation, puis suppression d'un lot téléversé par erreur."""
+    batch = get_object_or_404(_my_batches(request), pk=pk)
+    droits.exiger(request.user, droits.CORRIGER, "supprimer un lot de copies")
+    if request.method == "POST":
+        quiz_pk = batch.quiz_id
+        nom = str(batch)
+        try:
+            n = services.supprimer_lot(batch, request.user)
+        except services.LotEnCours as exc:
+            messages.error(request, str(exc))
+            return redirect("batch_detail", pk=pk)
+        messages.success(request, f"Lot « {nom} » supprimé : {n} page(s) retirée(s) "
+                                  "des résultats. La suppression est inscrite au journal.")
+        return redirect("quiz_detail", pk=quiz_pk)
+    copies = batch.sheets
+    return render(request, "grader/batch_delete.html", {
+        "batch": batch,
+        "n_pages": copies.count(),
+        "n_attribuees": copies.exclude(student=None).count(),
+        "en_cours": batch.status == "processing" and not services.is_stalled(batch),
+    })
 
 
 @login_required
@@ -774,7 +892,9 @@ def sheet_review(request, pk):
         droits.exiger(request.user, droits.CORRIGER, "vérifier les copies")
         # ré-affectation de l'étudiant
         sid = _int_or_none(request.POST.get("student"))
+        ancien = sheet.student
         sheet.student = students.filter(pk=sid).first() if sid is not None else None
+        journal.attribution(request.user, sheet, ancien)
         sheet.student_confirmed = sheet.student is not None
         if sheet.status in ("no_match", "ok"):
             sheet.status = "ok" if sheet.student else "no_match"
@@ -796,6 +916,12 @@ def sheet_review(request, pk):
                             0 <= new_choice < a.question.num_bubbles):
                         continue
                 if new_choice != a.detected_choice or a.is_multiple:
+                    journal.noter(
+                        request.user, "case_qcm", copie=sheet,
+                        objet=f"{journal.libelle_copie(sheet)} — question {a.question.order}",
+                        avant="plusieurs cases" if a.is_multiple
+                        else journal.lettre(a.question, a.detected_choice),
+                        apres=journal.lettre(a.question, new_choice))
                     a.detected_choice = new_choice
                     a.is_multiple = False
                     a.manually_set = False   # recalcul automatique des points
@@ -809,7 +935,12 @@ def sheet_review(request, pk):
                         messages.error(request, f"Note invalide pour la question "
                                                 f"{a.question.order} : « {val} ».")
                         continue
-                    a.points_awarded = max(min(pts, a.question.points), 0.0)
+                    nouvelle = max(min(pts, a.question.points), 0.0)
+                    journal.noter(
+                        request.user, "note", copie=sheet,
+                        objet=f"{journal.libelle_copie(sheet)} — question {a.question.order}",
+                        avant=a.points_awarded, apres=nouvelle)
+                    a.points_awarded = nouvelle
                     a.manually_set = True
                     a.save()
         services.rescore_sheet(sheet)
@@ -826,6 +957,7 @@ def sheet_review(request, pk):
         "position": position + 1, "total": len(sheet_ids),
         "prev_id": prev_id, "next_id": next_id,
         "qcm_modifiable": qcm_modifiable,
+        "historique": sheet.modifications.all()[:30],
     })
 
 

@@ -19,9 +19,10 @@ import numpy as np
 import pymupdf
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.db import close_old_connections, connection
+from django.db import close_old_connections, connection, transaction
+from django.db.models import Avg, Count, Max, Min, Sum
 
-from . import omr
+from . import journal, omr
 from .models import (Answer, AnswerKeySheet, Quiz, ScanBatch, SheetScan,
                      Student)
 
@@ -236,6 +237,67 @@ def is_stalled(batch):
     if batch.status != "processing":
         return False
     return (time.time() - batch.updated_at.timestamp()) > STALLED_AFTER
+
+
+class LotEnCours(Exception):
+    """Le lot est en cours de correction : on ne le supprime pas sous le
+    travailleur qui le lit."""
+
+
+def supprimer_lot(lot, utilisateur):
+    """Supprime un lot téléversé par erreur, ses copies et leurs fichiers.
+
+    Mauvais PDF, mauvaise classe, mauvaise épreuve : des copies étrangères
+    mêlées aux résultats d'un concours sont graves, et seul l'administrateur
+    pouvait jusqu'ici les retirer. La suppression est inscrite au journal
+    avant d'avoir lieu, dans la même transaction.
+
+    Les fichiers (scans d'origine, images redressées, images de contrôle,
+    zones découpées) ne sont effacés qu'une fois la suppression validée en
+    base : si elle échoue, rien n'est perdu.
+
+    Renvoie le nombre de pages supprimées. Lève LotEnCours si le lot est en
+    cours de lecture (un lot bloqué, lui, peut être supprimé).
+    """
+    if lot.status == "processing" and not is_stalled(lot):
+        raise LotEnCours(
+            "Ce lot est en cours de correction : attendez la fin du "
+            "traitement avant de le supprimer.")
+
+    copies = list(lot.sheets.all())
+    fichiers = [getattr(c, champ).name for c in copies
+                for champ in ("image", "warped_image", "overlay_image", "name_crop")
+                if getattr(c, champ)]
+    fichiers += [a.open_crop.name for a in
+                 Answer.objects.filter(sheet__batch=lot).exclude(open_crop="")
+                 if a.open_crop]
+    fichiers += [f["path"] for f in (lot.source_files or []) if f.get("path")]
+    n_pages = len(copies)
+    n_attribuees = sum(1 for c in copies if c.student_id)
+    dossier = f"uploads/lot_{lot.pk}"
+
+    with transaction.atomic():
+        journal.noter(utilisateur, "lot_supprime", quiz=lot.quiz, objet=str(lot),
+                      avant=f"{n_pages} page(s), dont {n_attribuees} attribuée(s)",
+                      apres="supprimé")
+        lot.delete()
+        transaction.on_commit(lambda: _effacer_fichiers(fichiers, dossier))
+    return n_pages
+
+
+def _effacer_fichiers(noms, dossier=None):
+    """Efface des fichiers du stockage ; un fichier déjà absent n'est pas une
+    erreur (il a pu être supprimé à la main)."""
+    for nom in noms:
+        try:
+            default_storage.delete(nom)
+        except OSError:
+            log.warning("Fichier impossible à effacer : %s", nom)
+    if dossier:
+        try:
+            os.rmdir(default_storage.path(dossier))
+        except (OSError, NotImplementedError):
+            pass                     # dossier non vide ou stockage distant
 
 
 def process_uploaded_files(quiz: Quiz, files, label=""):
@@ -553,6 +615,192 @@ def compute_results(quiz, batch=None):
     return rows
 
 
+# Lecture de l'indice de discrimination (seuils usuels de la docimologie).
+# Le cas qui compte ici est le dernier : un indice négatif n'est presque
+# jamais une question difficile, c'est un corrigé faux.
+DISCRIMINATION = [
+    (0.40, "forte",
+     "Sépare nettement ceux qui savent de ceux qui ne savent pas."),
+    (0.20, "correcte", "Sépare convenablement."),
+    (0.00, "faible",
+     "Ne sépare presque pas : énoncé ambigu, ou réponse devinable."),
+]
+DISCRIMINATION_NEGATIVE = (
+    "suspecte",
+    "Les meilleures copies s'y trompent plus que les plus faibles : "
+    "vérifiez la bonne réponse, elle est probablement erronée.")
+
+
+def _discrimination(rows, ordre):
+    """Écart de réussite entre le tiers fort et le tiers faible du classement.
+
+    Renvoie (indice, étiquette, explication), ou None si l'effectif est trop
+    petit pour que le calcul veuille dire quoi que ce soit : sous une
+    dizaine de copies, trois bonnes réponses de plus d'un côté suffisent à
+    faire basculer l'indice. Mieux vaut ne rien afficher qu'un chiffre
+    trompeur sur lequel on refera une épreuve.
+    """
+    MINIMUM = 10
+    notes = [r for r in rows if ordre in r["answers"]]
+    if len(notes) < MINIMUM:
+        return None
+    notes.sort(key=lambda r: r["score"], reverse=True)
+    taille = max(len(notes) // 3, 1)
+    fort, faible = notes[:taille], notes[-taille:]
+
+    def reussite(groupe):
+        return sum(1 for r in groupe if r["answers"][ordre].is_correct) / len(groupe)
+
+    indice = round(reussite(fort) - reussite(faible), 2)
+    if indice < 0:
+        return (indice,) + DISCRIMINATION_NEGATIVE
+    for seuil, etiquette, explication in DISCRIMINATION:
+        if indice >= seuil:
+            return indice, etiquette, explication
+    return indice, "faible", DISCRIMINATION[-1][2]
+
+
+def _repartition(question, reponses):
+    """Combien de copies pour chaque case, et combien hors des cases.
+
+    « Multiple » (plusieurs cases noircies) et « sans réponse » sont comptés
+    à part : ce ne sont pas des choix, mais ils expliquent une partie des
+    fausses et méritent d'être visibles.
+    """
+    total = len(reponses)
+    if not total:
+        return []
+    comptes = {i: 0 for i, _ in question.letter_options}
+    multiples = vides = 0
+    for a in reponses:
+        if a.is_multiple:
+            multiples += 1
+        elif a.detected_choice is None:
+            vides += 1
+        elif a.detected_choice in comptes:
+            comptes[a.detected_choice] += 1
+
+    lignes = [{"lettre": lettre, "titre": f"Réponse {lettre}", "n": comptes[i],
+               "pct": round(comptes[i] / total * 100),
+               "bonne": i == question.correct_choice}
+              for i, lettre in question.letter_options]
+    # Colonnes étroites : le libellé court sous la barre, le long en infobulle.
+    for court, titre, n in (("✱", "Plusieurs cases cochées", multiples),
+                            ("∅", "Sans réponse", vides)):
+        if n:
+            lignes.append({"lettre": court, "titre": titre, "n": n,
+                           "pct": round(n / total * 100), "bonne": False})
+    return lignes
+
+
+# Convergence : part des copies sur une même case, au-delà de laquelle une
+# question que personne ne réussit devient suspecte. Deux tiers est prudent
+# — une question difficile étale ses erreurs sur plusieurs distracteurs.
+CONVERGENCE = 0.66
+CONVERGENCE_MINIMUM = 5
+
+
+def _convergence_suspecte(stat, repartition):
+    """Personne n'a la bonne réponse, et presque tous ont coché la même autre.
+
+    Renvoie l'explication à afficher, ou None. Ce test complète l'indice de
+    discrimination, qui vaut 0 dans ce cas précis : si aucun des deux
+    groupes ne réussit, l'écart entre eux est nul et rien ne ressort.
+    """
+    if stat["n"] < CONVERGENCE_MINIMUM or stat["correct"]:
+        return None
+    autres = [c for c in repartition if not c["bonne"] and c["n"]]
+    if not autres:
+        return None
+    majoritaire = max(autres, key=lambda c: c["n"])
+    if majoritaire["n"] / stat["n"] < CONVERGENCE:
+        return None
+    return (f"Aucune copie n'a la réponse enregistrée, et "
+            f"{majoritaire['pct']} % ont coché « {majoritaire['lettre']} » : "
+            "la bonne réponse est très probablement celle-là.")
+
+
+# ----------------------------------------------------------- tableau de bord
+
+# Durée d'une correction à la main, pour chiffrer le temps épargné. C'est
+# une hypothèse, pas une mesure : elle est affichée en clair à l'écran
+# plutôt que fondue dans le résultat.
+MINUTES_PAR_COPIE_A_LA_MAIN = 2
+
+
+def corriges_douteux(quizzes):
+    """Épreuves dont une question a toutes les copies sur une même mauvaise case.
+
+    Même règle que `_convergence_suspecte`, mais calculée par un GROUP BY :
+    le nombre de lignes rendues suit le nombre de questions, pas le nombre
+    de candidats. Seul ce détecteur-là est utilisé ici ; l'indice de
+    discrimination, qui demande le score de chaque copie, reste sur la page
+    de résultats de l'épreuve.
+
+    Renvoie {id d'épreuve: [numéros de questions douteuses]}.
+    """
+    lignes = (Answer.objects
+              .filter(question__quiz__in=quizzes, question__qtype="qcm",
+                      question__correct_choice__isnull=False,
+                      sheet__student__isnull=False)
+              .values("question__quiz_id", "question__order",
+                      "question__correct_choice", "detected_choice")
+              .annotate(n=Count("pk")))
+
+    # {(épreuve, question): {case lue: nombre, ...}}
+    par_question = {}
+    bonne_reponse = {}
+    for ligne in lignes:
+        cle = (ligne["question__quiz_id"], ligne["question__order"])
+        par_question.setdefault(cle, {})[ligne["detected_choice"]] = ligne["n"]
+        bonne_reponse[cle] = ligne["question__correct_choice"]
+
+    douteux = {}
+    for (quiz_id, ordre), comptes in par_question.items():
+        total = sum(comptes.values())
+        if total < CONVERGENCE_MINIMUM:
+            continue
+        if comptes.get(bonne_reponse[(quiz_id, ordre)]):
+            continue                      # au moins une copie a la bonne
+        autres = [n for case, n in comptes.items() if case is not None]
+        if autres and max(autres) / total >= CONVERGENCE:
+            douteux.setdefault(quiz_id, []).append(ordre)
+    return {q: sorted(ordres) for q, ordres in douteux.items()}
+
+
+def resume_epreuve(quiz):
+    """Effectif, moyenne et extrêmes d'une épreuve, sans charger les copies.
+
+    Deux requêtes : le total de points par candidat, puis la moyenne de ces
+    totaux. Renvoie None si aucune copie n'est encore notée.
+    """
+    par_candidat = (Answer.objects
+                    .filter(sheet__batch__quiz=quiz,
+                            sheet__student__isnull=False,
+                            points_awarded__isnull=False)
+                    .values("sheet__student_id")
+                    .annotate(total=Sum("points_awarded")))
+    resume = par_candidat.aggregate(n=Count("sheet__student_id", distinct=True),
+                                    moyenne=Avg("total"),
+                                    meilleure=Max("total"),
+                                    plus_basse=Min("total"))
+    if not resume["n"]:
+        return None
+    bareme = quiz.max_score or 0
+    moyenne = round(resume["moyenne"] or 0, 2)
+    return {
+        "quiz": quiz,
+        "n": resume["n"],
+        "moyenne": moyenne,
+        "meilleure": round(resume["meilleure"] or 0, 2),
+        "plus_basse": round(resume["plus_basse"] or 0, 2),
+        "bareme": bareme,
+        # Part du barème, pour la jauge : une moyenne de 8,5 ne veut rien
+        # dire sans savoir si l'épreuve est sur 14 ou sur 20.
+        "pct": round(moyenne / bareme * 100) if bareme else 0,
+    }
+
+
 def compute_stats(quiz, rows):
     """Statistiques de l'épreuve à partir des résultats par étudiant :
     résumé global, histogramme des notes et taux de réussite par question."""
@@ -563,6 +811,10 @@ def compute_stats(quiz, rows):
     mid = n // 2
     median = scores[mid] if n % 2 else (scores[mid - 1] + scores[mid]) / 2
     max_score = quiz.max_score or 1
+    moyenne = sum(scores) / n
+    # Écart-type de population : on décrit les copies que l'on a, on
+    # n'estime pas celles d'une promotion plus large.
+    ecart_type = (sum((x - moyenne) ** 2 for x in scores) / n) ** 0.5
 
     # histogramme en 5 tranches de 20 % du barème
     bins = [0] * 5
@@ -594,6 +846,18 @@ def compute_stats(quiz, rows):
                 st["points_sum"] += a.points_awarded
         if q.qtype == "qcm":
             st["success"] = round(st["correct"] / st["n"] * 100) if st["n"] else 0
+            mesure = _discrimination(rows, q.order)
+            if mesure:
+                st["discrimination"], st["discrimination_label"], \
+                    st["discrimination_aide"] = mesure
+                st["corrige_suspect"] = st["discrimination"] < 0
+            st["repartition"] = _repartition(
+                q, [r["answers"][q.order] for r in rows if q.order in r["answers"]])
+            convergence = _convergence_suspecte(st, st["repartition"])
+            if convergence:
+                st["corrige_suspect"] = True
+                st["discrimination_aide"] = convergence
+                st["discrimination_label"] = "suspecte"
         else:
             st["success"] = (round(st["points_sum"] / (st["graded"] * q.points) * 100)
                              if st["graded"] and q.points else 0)
@@ -601,11 +865,16 @@ def compute_stats(quiz, rows):
 
     return {
         "n": n,
-        "mean": round(sum(scores) / n, 2),
+        "mean": round(moyenne, 2),
         "median": round(median, 2),
+        "stdev": round(ecart_type, 2),
         "best": scores[-1],
         "worst": scores[0],
         "max_score": quiz.max_score,
         "histogram": histogram,
         "questions": questions,
+        # Les questions dont la bonne réponse est probablement fausse :
+        # remontées en tête de la page de résultats.
+        "suspectes": [st["question"].order for st in questions
+                      if st.get("corrige_suspect")],
     }

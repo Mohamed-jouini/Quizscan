@@ -60,6 +60,11 @@ def _client(compte):
 def main():
     logging.disable(logging.ERROR)
     User = get_user_model()
+    # Depuis que supprimer un compte laisse ses données sans titulaire, le
+    # passage précédent a pu laisser des classes orphelines : on vise le nom
+    # plutôt que le propriétaire, et les quiz avant les classes qu'ils
+    # protègent.
+    Quiz.objects.filter(class_group__name__startswith="DR ").delete()
     Quiz.objects.filter(owner__username__startswith="dr_").delete()
     ClassGroup.objects.filter(name__startswith="DR ").delete()
     User.objects.filter(username__startswith="dr_").delete()
@@ -238,6 +243,30 @@ def main():
     assert _client(les_deux).get(f"/quiz/{epreuve.pk}/").status_code == 200, (
         "l'auteur a perdu l'accès à son épreuve")
     print("  affectation   la classe emporte ses épreuves, et rien de plus OK")
+
+    # ---------------------------------------------------------------- 7
+    # Supprimer le compte d'un enseignant qui part : possible, et sans
+    # emporter ses classes ni ses épreuves — ce sont les archives de
+    # l'établissement. Avec on_delete=CASCADE, la suppression échouait sur
+    # la clé protégée Quiz.class_group dès qu'une épreuve existait.
+    partant = _compte("dr_partant", droits.CREER)
+    sa_classe = ClassGroup.objects.create(name="DR partant", owner=partant)
+    son_epreuve = Quiz.objects.create(title="DR épreuve conservée",
+                                      class_group=sa_classe, owner=partant)
+
+    envoi = _client(patron).post(
+        f"/admin/auth/user/{partant.pk}/delete/", {"post": "yes"})
+    assert envoi.status_code == 302, (
+        f"suppression du compte -> {envoi.status_code} "
+        "(l'administration a refusé)")
+    assert not get_user_model().objects.filter(pk=partant.pk).exists(), (
+        "le compte n'a pas été supprimé")
+
+    sa_classe.refresh_from_db()
+    son_epreuve.refresh_from_db()
+    assert sa_classe.owner_id is None and son_epreuve.owner_id is None, (
+        "la classe ou l'épreuve a gardé un enseignant supprimé")
+    print("  suppression   compte retiré, classe et épreuve conservées OK")
 
     print("\n✅ TEST DES DROITS DES ENSEIGNANTS RÉUSSI")
 

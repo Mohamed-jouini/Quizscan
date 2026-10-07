@@ -109,4 +109,12 @@
   </div>
 </div>
 </form>
+{% if historique %}
+<div class="card">
+  <h2>Historique de cette copie</h2>
+  <p class="helptext helptext--serre">Toute modification d'attribution ou de
+    note est inscrite ici, avec son auteur. Le journal ne se modifie pas.</p>
+  {% include "grader/_journal.html" with entrees=historique %}
+</div>
+{% endif %}
 {% endblock %}

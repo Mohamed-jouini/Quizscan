@@ -450,4 +450,20 @@
   </div>
   {% endif %}
 </div>
+{% if journal %}
+<div class="card">
+  <div class="card__head">
+    <h2>Journal de l'épreuve</h2>
+    <span class="spacer"></span>
+    {% if n_journal > journal|length %}
+    <span class="helptext helptext--serre">{{ journal|length }} plus récentes
+      sur {{ n_journal }}</span>
+    {% endif %}
+  </div>
+  <p class="helptext helptext--serre">Bonnes réponses, barème, notes,
+    attributions et suppressions : chaque geste qui change une note est
+    tracé ici avec son auteur.</p>
+  {% include "grader/_journal.html" with entrees=journal %}
+</div>
+{% endif %}
 {% endblock %}

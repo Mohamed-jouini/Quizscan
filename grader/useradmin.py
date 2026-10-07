@@ -20,6 +20,7 @@ from django.contrib.auth.models import Permission
 from django.utils.html import format_html
 
 from . import droits
+from .admin_titres import TitresFrancais
 from .models import ClassGroup
 
 User = get_user_model()
@@ -191,7 +192,10 @@ admin.site.unregister(User)
 
 
 @admin.register(User)
-class CompteAdmin(UserAdmin):
+class CompteAdmin(TitresFrancais, UserAdmin):
+    titre_liste = "Utilisateurs"
+    titre_ajout = "Nouveau compte"
+    titre_modification = "Modifier le compte"
     form = CompteChangeForm
     list_display = ("username", "nom_complet", "role", "ses_classes",
                     "autorisations", "actif", "mot_de_passe_lien")

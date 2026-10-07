@@ -9,15 +9,23 @@ MAX_OPEN_HEIGHT_MM = 200
 
 class ClassGroup(models.Model):
     """Une classe / un groupe d'étudiants."""
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+    # SET_NULL et non CASCADE : quand un enseignant quitte l'établissement,
+    # son compte est supprimé mais ses classes, ses épreuves et les notes de
+    # ses élèves restent — ce sont les archives de l'établissement, pas sa
+    # propriété. La classe devient sans titulaire et l'administration peut
+    # la confier à quelqu'un d'autre depuis la fiche du nouveau compte.
+    # (Avec CASCADE, Quiz.class_group étant protégé, la suppression d'un
+    # enseignant ayant la moindre épreuve échouait purement et simplement.)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL,
+                              on_delete=models.SET_NULL,
                               null=True, related_name="class_groups",
-                              verbose_name="Enseignant")
-    name = models.CharField("Nom de la classe", max_length=120)
-    created_at = models.DateTimeField(auto_now_add=True)
+                              verbose_name="enseignant")
+    name = models.CharField("nom de la classe", max_length=120)
+    created_at = models.DateTimeField("créée le", auto_now_add=True)
 
     class Meta:
-        verbose_name = "Classe"
-        verbose_name_plural = "Classes"
+        verbose_name = "classe"
+        verbose_name_plural = "classes"
         ordering = ["name"]
         unique_together = [("owner", "name")]
 
@@ -27,14 +35,14 @@ class ClassGroup(models.Model):
 
 class Student(models.Model):
     class_group = models.ForeignKey(ClassGroup, on_delete=models.CASCADE,
-                                    related_name="students", verbose_name="Classe")
-    last_name = models.CharField("Nom", max_length=80)
-    first_name = models.CharField("Prénom", max_length=80)
-    student_number = models.CharField("N° d'inscription", max_length=40, blank=True)
+                                    related_name="students", verbose_name="classe")
+    last_name = models.CharField("nom", max_length=80)
+    first_name = models.CharField("prénom", max_length=80)
+    student_number = models.CharField("n° d'inscription", max_length=40, blank=True)
 
     class Meta:
-        verbose_name = "Étudiant"
-        verbose_name_plural = "Étudiants"
+        verbose_name = "étudiant"
+        verbose_name_plural = "étudiants"
         ordering = ["last_name", "first_name"]
 
     @property
@@ -72,12 +80,15 @@ class Quiz(models.Model):
         ("split", "Sujet séparé + feuille de réponses — deux documents (questions d'un côté, grille de l'autre)"),
         ("grid", "Fiche de réponses seule — grille compacte, le sujet est distribué à part"),
     ]
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+    # SET_NULL, pour la même raison que ClassGroup.owner : une épreuve et
+    # ses copies survivent au compte qui les a créées.
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL,
+                              on_delete=models.SET_NULL,
                               null=True, related_name="quizzes",
-                              verbose_name="Enseignant")
-    title = models.CharField("Titre", max_length=200)
+                              verbose_name="enseignant")
+    title = models.CharField("titre", max_length=200)
     class_group = models.ForeignKey(ClassGroup, on_delete=models.PROTECT,
-                                    related_name="quizzes", verbose_name="Classe")
+                                    related_name="quizzes", verbose_name="classe")
     ID_MODES = [
         ("name", "OCR du nom manuscrit (fiches identiques pour toute la classe)"),
         ("grid", "Grille de n° d'inscription à noircir (fiches identiques, lecture exacte)"),
@@ -87,20 +98,20 @@ class Quiz(models.Model):
                     "à coller dans l'emplacement réservé ; lue automatiquement au scan)"),
     ]
     id_mode = models.CharField(
-        "Identification des copies", max_length=8, choices=ID_MODES, default="name")
+        "identification des copies", max_length=8, choices=ID_MODES, default="name")
     id_digits = models.PositiveSmallIntegerField(
-        "Chiffres du n° d'inscription", default=6,
+        "chiffres du n° d'inscription", default=6,
         help_text="Utilisé uniquement avec la grille : nombre de chiffres "
                   "du numéro d'inscription (ex. 6).")
     auto_enroll = models.BooleanField(
-        "Mode concours : créer automatiquement les candidats", default=False,
+        "mode concours : créer automatiquement les candidats", default=False,
         help_text="Aucune saisie préalable des étudiants : chaque copie scannée "
                   "crée son candidat à partir du numéro lu (grille de n° ou QR de "
                   "l'étiquette). La fiche concours ne demande aucune écriture au "
                   "candidat ; importez ensuite une liste « numéro;NOM;Prénom » "
                   "pour attacher les noms officiels aux numéros.")
     language = models.CharField(
-        "Langue du questionnaire", max_length=2, choices=LANGUAGES, default="fr",
+        "langue du questionnaire", max_length=2, choices=LANGUAGES, default="fr",
         help_text="Détermine la langue de la fiche de réponses (sens d'écriture, "
                   "lettres des choix) et de la lecture OCR du nom.")
     GRADING_MODES = [
@@ -109,29 +120,29 @@ class Quiz(models.Model):
                      "clique sur « Lancer la correction »"),
     ]
     grading_mode = models.CharField(
-        "Correction des copies", max_length=10, choices=GRADING_MODES,
+        "correction des copies", max_length=10, choices=GRADING_MODES,
         default="immediate")
     sheet_mode = models.CharField(
-        "Type de fiche", max_length=6, choices=SHEET_MODES, default="full")
+        "type de fiche", max_length=6, choices=SHEET_MODES, default="full")
     num_choices = models.PositiveSmallIntegerField(
-        "Nombre de choix par question QCM", default=4,
+        "nombre de choix par question QCM", default=4,
         validators=[MinValueValidator(2), MaxValueValidator(MAX_CHOICES)],
         help_text=f"Ex. 4 pour A, B, C, D (2 à {MAX_CHOICES})")
     wrong_penalty = models.FloatField(
-        "Pénalité par mauvaise réponse", default=0.0,
+        "pénalité par mauvaise réponse", default=0.0,
         help_text="Points retirés pour chaque mauvaise réponse QCM (0 = pas de pénalité)")
     # Disposition de la fiche (coordonnées en mm), figée à la génération du PDF
     layout_json = models.JSONField(null=True, blank=True, editable=False)
-    sheet_pdf = models.FileField("Fiche de réponses (PDF)", upload_to="sheets/",
+    sheet_pdf = models.FileField("fiche de réponses (PDF)", upload_to="sheets/",
                                  null=True, blank=True)
     # Sujet séparé (questions seules) — mode "split"
-    subject_pdf = models.FileField("Sujet — questions (PDF)", upload_to="sheets/",
+    subject_pdf = models.FileField("sujet — questions (PDF)", upload_to="sheets/",
                                    null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField("créée le", auto_now_add=True)
 
     class Meta:
-        verbose_name = "Quiz"
-        verbose_name_plural = "Quiz"
+        verbose_name = "quiz"
+        verbose_name_plural = "quiz"
         ordering = ["-created_at"]
         # Les deux droits que l'administration accorde compte par compte.
         # Ils sont portés par Quiz parce que c'est l'objet central, mais ils
@@ -174,30 +185,30 @@ class Question(models.Model):
     TYPE_CHOICES = [("qcm", "QCM (lecture automatique)"),
                     ("open", "Réponse manuscrite (correction manuelle)")]
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="questions")
-    order = models.PositiveSmallIntegerField("N°")
-    qtype = models.CharField("Type", max_length=4, choices=TYPE_CHOICES, default="qcm")
-    text = models.CharField("Intitulé de la question", max_length=500, blank=True)
+    order = models.PositiveSmallIntegerField("n°")
+    qtype = models.CharField("type", max_length=4, choices=TYPE_CHOICES, default="qcm")
+    text = models.CharField("intitulé de la question", max_length=500, blank=True)
     # Textes des choix de réponse (questionnaire complet) : liste de chaînes
-    choices = models.JSONField("Choix de réponse", default=list, blank=True)
-    points = models.FloatField("Barème (points)", default=1.0)
+    choices = models.JSONField("choix de réponse", default=list, blank=True)
+    points = models.FloatField("barème (points)", default=1.0)
     # Pour les QCM : index de la bonne réponse (0=A, 1=B, ...)
-    correct_choice = models.PositiveSmallIntegerField("Bonne réponse", null=True, blank=True)
+    correct_choice = models.PositiveSmallIntegerField("bonne réponse", null=True, blank=True)
     # Nombre de cases quand le texte des choix n'est pas saisi (grille seule)
     num_choices = models.PositiveSmallIntegerField(
-        "Nombre de choix", null=True, blank=True,
+        "nombre de choix", null=True, blank=True,
         validators=[MinValueValidator(2), MaxValueValidator(MAX_CHOICES)],
         help_text="Nombre de cases A, B, C… de cette question (si le texte "
                   f"des choix n'est pas saisi) ; 2 à {MAX_CHOICES}.")
     # Hauteur de la zone de réponse manuscrite sur la fiche (mm)
     open_height_mm = models.PositiveSmallIntegerField(
-        "Hauteur zone réponse (mm)", default=25,
+        "hauteur zone réponse (mm)", default=25,
         validators=[MinValueValidator(10), MaxValueValidator(MAX_OPEN_HEIGHT_MM)],
         help_text=f"10 à {MAX_OPEN_HEIGHT_MM} mm (une zone plus haute ne "
                   "tiendrait pas sur une page A4).")
 
     class Meta:
-        verbose_name = "Question"
-        verbose_name_plural = "Questions"
+        verbose_name = "question"
+        verbose_name_plural = "questions"
         ordering = ["order"]
         unique_together = [("quiz", "order")]
 
@@ -236,20 +247,21 @@ class ScanBatch(models.Model):
               ("processing", "Correction en cours"),
               ("done", "Terminé"),
               ("error", "Erreur")]
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="batches")
-    label = models.CharField("Libellé", max_length=120, blank=True)
-    status = models.CharField("État", max_length=12, choices=STATUS, default="done")
-    total_pages = models.PositiveIntegerField("Pages à traiter", default=0)
-    processed_pages = models.PositiveIntegerField("Pages traitées", default=0)
-    error_message = models.TextField(blank=True)
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE,
+                             related_name="batches", verbose_name="épreuve")
+    label = models.CharField("libellé", max_length=120, blank=True)
+    status = models.CharField("état", max_length=12, choices=STATUS, default="done")
+    total_pages = models.PositiveIntegerField("pages à traiter", default=0)
+    processed_pages = models.PositiveIntegerField("pages traitées", default=0)
+    error_message = models.TextField("message d'erreur", blank=True)
     # fichiers d'origine conservés pour la reprise d'un traitement interrompu
     source_files = models.JSONField(default=list, blank=True, editable=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField("reçu le", auto_now_add=True)
+    updated_at = models.DateTimeField("mis à jour le", auto_now=True)
 
     class Meta:
-        verbose_name = "Lot de scans"
-        verbose_name_plural = "Lots de scans"
+        verbose_name = "lot de scans"
+        verbose_name_plural = "lots de scans"
         ordering = ["-created_at"]
 
     def __str__(self):
@@ -276,30 +288,35 @@ class SheetScan(models.Model):
               ("no_markers", "Repères non détectés"),
               ("no_match", "Étudiant non identifié"),
               ("error", "Erreur")]
-    batch = models.ForeignKey(ScanBatch, on_delete=models.CASCADE, related_name="sheets")
-    page_index = models.PositiveSmallIntegerField("Page de la fiche", default=0)
-    source_name = models.CharField(max_length=200, blank=True)
-    image = models.ImageField(upload_to="scans/")
-    warped_image = models.ImageField(upload_to="warped/", null=True, blank=True)
-    overlay_image = models.ImageField(upload_to="overlays/", null=True, blank=True)
-    name_crop = models.ImageField(upload_to="crops/", null=True, blank=True)
-    status = models.CharField(max_length=12, choices=STATUS, default="pending")
-    id_read = models.CharField("N° d'inscription lu", max_length=20, blank=True)
-    ocr_name_raw = models.CharField("Nom lu (OCR)", max_length=200, blank=True)
-    match_score = models.FloatField(default=0.0)
+    batch = models.ForeignKey(ScanBatch, on_delete=models.CASCADE,
+                              related_name="sheets", verbose_name="lot")
+    page_index = models.PositiveSmallIntegerField("page de la fiche", default=0)
+    source_name = models.CharField("fichier d'origine", max_length=200, blank=True)
+    image = models.ImageField("image scannée", upload_to="scans/")
+    warped_image = models.ImageField("image redressée", upload_to="warped/",
+                                     null=True, blank=True)
+    overlay_image = models.ImageField("image de contrôle", upload_to="overlays/",
+                                      null=True, blank=True)
+    name_crop = models.ImageField("zone du nom", upload_to="crops/",
+                                  null=True, blank=True)
+    status = models.CharField("état", max_length=12, choices=STATUS,
+                              default="pending")
+    id_read = models.CharField("n° d'inscription lu", max_length=20, blank=True)
+    ocr_name_raw = models.CharField("nom lu (OCR)", max_length=200, blank=True)
+    match_score = models.FloatField("score de rapprochement", default=0.0)
     student = models.ForeignKey(Student, on_delete=models.SET_NULL, null=True, blank=True,
-                                related_name="sheets", verbose_name="Étudiant")
-    student_confirmed = models.BooleanField("Identification confirmée", default=False)
-    error_message = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+                                related_name="sheets", verbose_name="étudiant")
+    student_confirmed = models.BooleanField("identification confirmée", default=False)
+    error_message = models.TextField("message d'erreur", blank=True)
+    created_at = models.DateTimeField("reçue le", auto_now_add=True)
 
     class Meta:
-        verbose_name = "Page scannée"
-        verbose_name_plural = "Pages scannées"
+        verbose_name = "page scannée"
+        verbose_name_plural = "pages scannées"
         ordering = ["created_at"]
 
     def __str__(self):
-        return f"{self.source_name} p{self.page_index + 1}"
+        return f"{self.source_name} (page {self.page_index + 1})"
 
 
 class AnswerKeySheet(models.Model):
@@ -314,26 +331,28 @@ class AnswerKeySheet(models.Model):
               ("no_markers", "Repères non détectés"),
               ("error", "Erreur")]
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE,
-                             related_name="answer_key_sheets")
-    page_index = models.PositiveSmallIntegerField("Page de la fiche", default=0)
-    source_name = models.CharField(max_length=200, blank=True)
-    image = models.ImageField(upload_to="corriges/")
-    overlay_image = models.ImageField(upload_to="corriges/", null=True, blank=True)
-    status = models.CharField(max_length=12, choices=STATUS, default="ok")
+                             related_name="answer_key_sheets",
+                             verbose_name="épreuve")
+    page_index = models.PositiveSmallIntegerField("page de la fiche", default=0)
+    source_name = models.CharField("fichier d'origine", max_length=200, blank=True)
+    image = models.ImageField("image scannée", upload_to="corriges/")
+    overlay_image = models.ImageField("image de contrôle", upload_to="corriges/",
+                                      null=True, blank=True)
+    status = models.CharField("état", max_length=12, choices=STATUS, default="ok")
     # {numéro de question: index de la bonne réponse lue}
-    detected = models.JSONField(default=dict, blank=True)
+    detected = models.JSONField("réponses lues", default=dict, blank=True)
     # numéros des questions illisibles sur cette page (vide ou plusieurs cases)
-    unreadable = models.JSONField(default=list, blank=True)
-    error_message = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    unreadable = models.JSONField("questions illisibles", default=list, blank=True)
+    error_message = models.TextField("message d'erreur", blank=True)
+    created_at = models.DateTimeField("scanné le", auto_now_add=True)
 
     class Meta:
-        verbose_name = "Corrigé scanné"
-        verbose_name_plural = "Corrigés scannés"
+        verbose_name = "corrigé scanné"
+        verbose_name_plural = "corrigés scannés"
         ordering = ["-created_at", "page_index"]
 
     def __str__(self):
-        return f"{self.source_name} p{self.page_index + 1}"
+        return f"{self.source_name} (page {self.page_index + 1})"
 
     @property
     def nb_lues(self):
@@ -341,21 +360,25 @@ class AnswerKeySheet(models.Model):
 
 
 class Answer(models.Model):
-    sheet = models.ForeignKey(SheetScan, on_delete=models.CASCADE, related_name="answers")
-    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name="answers")
+    sheet = models.ForeignKey(SheetScan, on_delete=models.CASCADE,
+                              related_name="answers", verbose_name="copie")
+    question = models.ForeignKey(Question, on_delete=models.CASCADE,
+                                 related_name="answers", verbose_name="question")
     # QCM
-    detected_choice = models.SmallIntegerField(null=True, blank=True)  # 0=A ... ; None = vide
-    is_multiple = models.BooleanField(default=False)  # plusieurs cases cochées
-    fill_ratios = models.JSONField(null=True, blank=True)
+    detected_choice = models.SmallIntegerField(  # 0=A ... ; None = vide
+        "case lue", null=True, blank=True)
+    is_multiple = models.BooleanField("plusieurs cases cochées", default=False)
+    fill_ratios = models.JSONField("taux de remplissage", null=True, blank=True)
     # Manuscrit
-    open_crop = models.ImageField(upload_to="crops/", null=True, blank=True)
+    open_crop = models.ImageField("zone manuscrite", upload_to="crops/",
+                                  null=True, blank=True)
     # Notation
-    points_awarded = models.FloatField("Points attribués", null=True, blank=True)
-    manually_set = models.BooleanField(default=False)
+    points_awarded = models.FloatField("points attribués", null=True, blank=True)
+    manually_set = models.BooleanField("note saisie à la main", default=False)
 
     class Meta:
-        verbose_name = "Réponse"
-        verbose_name_plural = "Réponses"
+        verbose_name = "réponse"
+        verbose_name_plural = "réponses"
         unique_together = [("sheet", "question")]
         ordering = ["question__order"]
 
@@ -367,6 +390,10 @@ class Answer(models.Model):
             return "✱"
         return choice_letter(self.detected_choice, self.question.quiz.language)
 
+    def __str__(self):
+        # Sans cela, l'administration affichait « Answer object (5099) ».
+        return f"{self.sheet} — question {self.question.order}"
+
     @property
     def is_blank(self):
         return self.detected_choice is None and not self.is_multiple
@@ -377,3 +404,56 @@ class Answer(models.Model):
         if q.qtype != "qcm" or self.is_blank or self.is_multiple:
             return False
         return self.detected_choice == q.correct_choice
+
+
+class Modification(models.Model):
+    """Journal des gestes qui changent une note — en lecture seule.
+
+    Une épreuve se conteste. Pour répondre, il faut savoir qui a modifié une
+    note, l'attribution d'une copie ou une bonne réponse, quand, et de quoi
+    à quoi. Les entrées ne se modifient ni ne s'effacent, même depuis
+    l'administration (voir JournalAdmin).
+
+    Les liens vers l'épreuve, la copie et l'auteur sont facultatifs
+    (SET_NULL) et doublés d'un libellé en clair : une entrée doit survivre
+    à la suppression de ce qu'elle décrit — c'est justement le cas d'un lot
+    supprimé, ou d'un enseignant parti, qu'on voudra retrouver.
+    """
+    ACTIONS = [
+        ("note", "Note d'une réponse"),
+        ("case_qcm", "Case de QCM rectifiée"),
+        ("identification", "Attribution de la copie"),
+        ("bonne_reponse", "Bonne réponse"),
+        ("bareme", "Barème d'une question"),
+        ("penalite", "Pénalité par mauvaise réponse"),
+        ("question_supprimee", "Question supprimée"),
+        ("copie_supprimee", "Copie supprimée"),
+        ("lot_supprime", "Lot de copies supprimé"),
+    ]
+    quand = models.DateTimeField("date", auto_now_add=True, db_index=True)
+    auteur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                               null=True, blank=True, related_name="+",
+                               verbose_name="compte")
+    auteur_nom = models.CharField("auteur", max_length=150)
+    action = models.CharField("geste", max_length=20, choices=ACTIONS)
+    quiz = models.ForeignKey(Quiz, on_delete=models.SET_NULL, null=True,
+                             blank=True, related_name="modifications",
+                             verbose_name="épreuve")
+    quiz_titre = models.CharField("épreuve (titre)", max_length=200, blank=True)
+    copie = models.ForeignKey(SheetScan, on_delete=models.SET_NULL, null=True,
+                              blank=True, related_name="modifications",
+                              verbose_name="copie")
+    objet = models.CharField("objet", max_length=200)
+    avant = models.CharField("avant", max_length=200, blank=True)
+    apres = models.CharField("après", max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = "modification"
+        # « modifications » et non « journal des modifications » : Django
+        # compte avec ce mot (« 5 modifications »). Le titre « Journal des
+        # modifications » est posé par l'administration (JournalAdmin).
+        verbose_name_plural = "modifications"
+        ordering = ["-quand", "-pk"]
+
+    def __str__(self):
+        return f"{self.get_action_display()} — {self.objet}"

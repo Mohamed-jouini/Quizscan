@@ -1,0 +1,58 @@
+{% extends "grader/base.html" %}
+{% block title %}Supprimer le lot — QuizScan{% endblock %}
+{% block content %}
+<div class="form-page">
+  <header class="page-head">
+    <div class="page-head__text">
+      <h1>Supprimer le lot</h1>
+      <p class="page-head__meta">
+        <b>{{ batch }}</b> · {{ batch.quiz.title }}
+      </p>
+    </div>
+  </header>
+
+  {% if en_cours %}
+  <div class="note note--warn">
+    <span class="note__icon">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    </span>
+    <div class="note__body">
+      <b>Ce lot est en cours de correction.</b> Attendez la fin du traitement
+      avant de le supprimer : on ne retire pas des copies pendant qu'elles
+      sont lues.
+    </div>
+  </div>
+  <p><a class="btn secondary" href="{% url 'batch_detail' batch.pk %}">← Retour au lot</a></p>
+
+  {% else %}
+  <div class="note note--bad">
+    <span class="note__icon">
+      <svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
+    </span>
+    <div class="note__body">
+      <b>{{ n_pages }} page{{ n_pages|pluralize }} vont être retirée{{ n_pages|pluralize }}
+        des résultats</b>{% if n_attribuees %}, dont {{ n_attribuees }}
+        déjà attribuée{{ n_attribuees|pluralize }} à un candidat{% endif %}.
+      Leurs notes disparaissent des résultats et des bulletins, et les
+      fichiers scannés sont effacés du serveur.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Avant de confirmer</h2>
+    <ul class="liste-sobre">
+      <li>Supprimez un lot téléversé <b>par erreur</b> : mauvais fichier,
+        mauvaise classe, mauvaise épreuve.</li>
+      <li>La suppression est <b>inscrite au journal des modifications</b>,
+        avec votre nom et le nombre de pages retirées.</li>
+      <li>Elle ne peut pas être annulée depuis l'application. Seule une
+        sauvegarde antérieure permet de retrouver ces copies.</li>
+    </ul>
+    <form method="post" class="actions-confirmation">{% csrf_token %}
+      <button class="btn danger" type="submit">Supprimer définitivement</button>
+      <a class="btn secondary" href="{% url 'batch_detail' batch.pk %}">Annuler</a>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

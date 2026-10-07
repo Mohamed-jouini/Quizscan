@@ -1,0 +1,12 @@
+{% extends "erreur.html" %}
+{# On n'affiche pas le message de l'exception : il est technique et en      #}
+{# anglais (« No Quiz matches the given query »).                          #}
+{% block titre %}Page introuvable{% endblock %}
+{% block code %}404{% endblock %}
+{% block titre_page %}Page introuvable{% endblock %}
+{% block texte %}
+<p>Cette adresse ne correspond à aucune page, ou à un élément qui n'existe
+  plus — une épreuve, une classe ou un lot supprimé, par exemple.</p>
+<p>Si vous avez suivi un lien de l'application, c'est aussi ce qui s'affiche
+  quand l'élément appartient à un autre enseignant.</p>
+{% endblock %}

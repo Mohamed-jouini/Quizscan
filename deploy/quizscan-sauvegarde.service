@@ -1,0 +1,13 @@
+[Unit]
+Description=Sauvegarde nocturne de QuizScan (base et copies scannées)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# Adapter le chemin si le dépôt est cloné ailleurs. Lancé par /bin/sh : le
+# script n'a pas besoin d'être exécutable (un fichier ajouté depuis Windows
+# arrive sans ce droit).
+ExecStart=/bin/sh /opt/apps/dtech/quizscan-git/quizscan/deploy/sauvegarde.sh
+StandardOutput=append:/var/log/quizscan-sauvegarde.log
+StandardError=append:/var/log/quizscan-sauvegarde.log

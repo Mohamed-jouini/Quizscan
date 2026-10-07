@@ -176,7 +176,9 @@ docker compose up -d --build
 C'est tout : l'image installe Python, Tesseract (français + arabe) et toutes
 les dépendances. Ouvrez ensuite http://localhost:8000 (ou http://IP-du-serveur:8000).
 La base de données est conservée dans `./data/` et les fichiers (fiches PDF,
-scans, images de contrôle) dans `./media/` — sauvegardez ces deux dossiers.
+scans, images de contrôle) dans `./media/`. Installez la **sauvegarde
+nocturne** décrite plus bas (« Sauvegardes et restauration ») : c'est elle
+qui protège ces deux dossiers.
 
 Les réglages du serveur (`SECRET_KEY`, `ALLOWED_HOSTS`, `URL_PREFIX`…) se
 mettent dans un fichier **`.env`** : `cp .env.example .env`, puis adaptez-le.
@@ -185,8 +187,9 @@ Il n'est jamais versionné, donc jamais écrasé par une mise à jour.
 ### Mise à jour automatique depuis GitHub
 
 La VM vérifie toutes les 5 minutes s'il y a de nouveaux commits sur GitHub
-et, si oui, sauvegarde la base (`data/backups/`, 15 dernières), récupère le
-code, reconstruit et redémarre le conteneur (`deploy/update.sh`). Comme c'est
+et, si oui, sauvegarde la base (`data/sauvegardes/avant-mise-a-jour/`,
+15 dernières), récupère le code, reconstruit et redémarre le conteneur
+(`deploy/update.sh`). Comme c'est
 la VM qui interroge GitHub, elle n'a pas besoin d'être joignable depuis
 Internet. `.env`, `data/` et `media/` ne sont jamais touchés.
 
@@ -234,10 +237,60 @@ systemctl list-timers quizscan-update.timer         # prochaine vérification
 ```
 
 Revenir en arrière : `git reset --hard <commit>` puis
-`docker compose up -d --build` (et, si besoin, restaurer une copie de
-`data/backups/` dans `data/db.sqlite3`, conteneur arrêté). Tant que GitHub
-n'a pas de commit plus récent, la VM reste sur cette version ; sinon, elle
-reprend la dernière au prochain passage du timer.
+`docker compose up -d --build` (et, si besoin, restaurer la sauvegarde prise
+avant la mise à jour, voir ci-dessous). Tant que GitHub n'a pas de commit
+plus récent, la VM reste sur cette version ; sinon, elle reprend la dernière
+au prochain passage du timer.
+
+**Tester avant de mettre en service.** Avec `TESTS_AVANT_MISE_A_JOUR=1` dans
+`.env`, la suite de tests complète tourne dans la nouvelle image avant qu'elle
+remplace l'ancienne ; si un test échoue, la version en service continue de
+tourner et le journal le dit. La même suite se lance à la main avec
+`sh deploy/tests.sh` — c'est le seul endroit où elle passe en entier, car
+l'image embarque Tesseract.
+
+### Sauvegardes et restauration
+
+Une archive complète chaque nuit : la base **et** les fichiers — copies
+scannées, images de contrôle, corrigés scannés. Ce sont les pièces qui font
+foi quand un candidat conteste sa note.
+
+```bash
+# Installation, une seule fois
+sudo cp deploy/quizscan-sauvegarde.service deploy/quizscan-sauvegarde.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now quizscan-sauvegarde.timer
+
+# Utile
+sudo systemctl start quizscan-sauvegarde.service     # sauvegarder tout de suite
+sudo tail -f /var/log/quizscan-sauvegarde.log
+ls -lh data/sauvegardes/
+```
+
+Les archives (`data/sauvegardes/quizscan-AAAAMMJJ-HHMMSS.zip`) sont des ZIP
+ordinaires : `manifeste.json`, la base, et `medias/`. Les 7 dernières sont
+gardées (`SAUVEGARDE_GARDER`). **Renseignez `SAUVEGARDE_COPIE`** dans `.env`
+(un partage réseau ou un disque externe monté) : une sauvegarde restée sur le
+disque qu'elle protège disparaît avec lui. Prévoyez la place : chaque archive
+pèse à peu près la taille de `media/`.
+
+Restaurer :
+
+```bash
+docker compose stop quizscan
+docker compose run --rm quizscan python manage.py restaurer data/sauvegardes/quizscan-20261007-023000.zip
+#   → décrit l'archive et s'arrête sans rien toucher
+docker compose run --rm quizscan python manage.py restaurer data/sauvegardes/quizscan-20261007-023000.zip --oui
+docker compose start quizscan
+```
+
+Avant de restaurer, l'état actuel est lui-même sauvegardé
+(`data/sauvegardes/avant-restauration-….zip`) : une restauration lancée par
+erreur se défait en restaurant cette archive-là. Supprimez-la une fois la
+restauration validée. Une archive abîmée est refusée avant toute écriture.
+
+`python manage.py verifier_deploiement` signale une installation dont la
+dernière sauvegarde complète a plus de 48 heures.
 
 ### Derrière Caddy, sur un domaine ou sous-domaine dédié
 
@@ -584,22 +637,50 @@ L'écran **Administration → Utilisateurs** est réorganisé autour de ce que f
 réellement un administrateur d'établissement :
 
 - la liste montre l'identifiant, le nom, le rôle (*Enseignant* ou
-  *Administrateur*), l'état actif, et un lien **Modifier** le mot de passe ;
-- la fiche d'un compte est découpée en *Compte*, *Identité*, *Accès* ; les
-  groupes et permissions unitaires de Django sont repliés, inutiles dans la
-  plupart des établissements ;
+  *Administrateur*), les **classes** de chacun, ses **autorisations**, l'état
+  actif, et un lien **Modifier** le mot de passe ;
+- la fiche d'un compte est découpée en *Compte*, *Identité*, *Accès*,
+  *Classes* et *Autorisations* ; les permissions unitaires de Django sont
+  repliées, inutiles dans la plupart des établissements ;
 - **« Rôle »** remplace les deux cases « Statut équipe » et « Statut
   super-utilisateur » : dans QuizScan elles vont toujours ensemble, un compte
   ouvre l'administration et voit tout, ou ni l'un ni l'autre ;
-- décocher **« Actif »** ferme l'accès sans supprimer le compte : les classes,
-  épreuves et copies de l'enseignant sont conservées ;
+- **« Classes »** : l'enseignant ne voit que les classes cochées, leurs
+  étudiants et leurs épreuves. Une classe décochée n'est pas supprimée ;
+- **« Autorisations »** : *Créer des épreuves* et *Corriger les copies* se
+  donnent séparément. Aucune des deux ne permet de modifier la note d'un QCM,
+  établie par lecture optique ; seul un administrateur peut rectifier une
+  case mal lue ;
+- décocher **« Actif »** ferme l'accès sans supprimer le compte. Supprimer le
+  compte d'un enseignant qui part est possible aussi : ses classes, épreuves
+  et notes sont conservées, sans titulaire, et peuvent être confiées à un
+  autre compte ;
 - le champ mot de passe n'affiche plus l'empreinte technique
   (`pbkdf2_sha256 itérations: … salage: …`) mais un bouton **Modifier le mot
   de passe**. Un mot de passe ne se relit pas, il ne peut qu'être remplacé.
 
-Chaque enseignant peut changer **son** mot de passe depuis son espace, par
-*Mon mot de passe* en bas de la barre latérale. Cet écran est bien celui de
-l'application : un enseignant n'atterrit jamais sur une page d'administration.
+Chaque enseignant change **son** mot de passe en cliquant sur **son nom**, en
+haut de la page. Cet écran est bien celui de l'application : un enseignant
+n'atterrit jamais sur une page d'administration.
+
+### Journal des modifications
+
+Une épreuve se conteste. Chaque geste qui change une note est inscrit au
+journal, avec son auteur, sa date, l'ancienne et la nouvelle valeur :
+attribution d'une copie à un candidat, note d'une réponse manuscrite, case de
+QCM rectifiée, bonne réponse ou barème modifié (à la main ou par corrigé
+scanné), pénalité, question supprimée, lot de copies supprimé. Les gestes
+faits depuis l'administration sont inscrits de la même façon.
+
+Le journal se lit sur la page de chaque copie (*Historique de cette copie*),
+sur celle de chaque épreuve, et en entier dans **Administration → Journal des
+modifications**. Il ne se modifie ni ne s'efface, même par un administrateur.
+
+**Supprimer un lot téléversé par erreur** (mauvais fichier, mauvaise classe) :
+bouton *Supprimer ce lot* sur la page du lot, réservé aux comptes autorisés à
+corriger. Une page de confirmation dit combien de copies seront retirées des
+résultats ; les fichiers scannés sont effacés du serveur, la suppression
+reste au journal. Un lot en cours de lecture ne peut pas être supprimé.
 
 ### Créer les comptes
 

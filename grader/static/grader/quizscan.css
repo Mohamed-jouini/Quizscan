@@ -516,6 +516,83 @@ input:focus,select:focus,textarea:focus{
 .filtre:hover{border-color:var(--qs-line-strong);color:var(--qs-ink)}
 .filtre.is-active{background:var(--qs-grad);border-color:transparent;color:#fff}
 
+/* --- Repartition des reponses d une question ----------------------------
+   Une barre par case, pour voir d un coup vers quoi sont parties les
+   copies. La bonne reponse est encadree, pas coloriee : c est la hauteur
+   des barres qui doit sauter aux yeux, pas une couleur de plus. */
+.choix{display:flex;gap:10px;align-items:flex-end}
+.choix__part{
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  min-width:46px;padding:6px 5px;border-radius:10px;
+  border:1px solid transparent;
+}
+/* La bonne réponse est encadrée, pas coloriée : c'est la hauteur des
+   barres qui doit sauter aux yeux, pas une couleur de plus. */
+.choix__part.is-bonne{border-color:var(--qs-ok);background:var(--qs-ok-bg)}
+.choix__jauge{
+  display:flex;align-items:flex-end;width:16px;height:38px;
+  border-radius:5px;background:var(--qs-track);
+}
+.choix__jauge b{
+  display:block;width:100%;min-height:3px;border-radius:5px;
+  background:var(--qs-faint);
+}
+.choix__part.is-bonne .choix__jauge b{background:var(--qs-ok)}
+.choix__lettre{font-size:12.5px;font-weight:700;color:var(--qs-ink)}
+.choix__part small{font-size:11px;color:var(--qs-muted);white-space:nowrap}
+
+/* Pile d alertes du tableau de bord : un encart par chose qui bloque. */
+.alertes{display:grid;gap:12px;margin:0 0 20px}
+.alertes .note{margin:0}
+.alertes__liste{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0}
+
+/* Deux tuiles larges : resultat de la derniere epreuve et valeur produite. */
+.tiles--duo{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+a.tile{transition:border-color .15s,transform .08s}
+a.tile:active{transform:translateY(1px)}
+
+/* Alignements de cellules, a la place des attributs style en ligne. */
+.cellule--droite{text-align:right;white-space:nowrap}
+.cellule--serree{white-space:nowrap}
+
+/* Liste a puces sobre, pour un texte d'explication dans une carte. */
+.liste-sobre{margin:0 0 18px;padding-left:20px;line-height:1.7;
+  font-size:13.5px;color:var(--qs-ink-soft)}
+.liste-sobre li{margin:0 0 4px}
+/* Rangee de boutons au pied d'une confirmation. */
+.actions-confirmation{display:flex;gap:10px;flex-wrap:wrap;margin:0}
+
+/* --- Journal des modifications ------------------------------------------ */
+.journal{list-style:none;margin:0;padding:0}
+.journal li{
+  display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 14px;
+  padding:10px 0;border-bottom:1px solid var(--qs-line);font-size:13.5px;
+}
+.journal li:last-child{border-bottom:0;padding-bottom:0}
+.journal li:first-child{padding-top:0}
+.journal__quand{grid-row:span 2;font-size:12px;color:var(--qs-muted);
+  white-space:nowrap;padding-top:1px}
+.journal__geste{color:var(--qs-ink)}
+.journal__valeurs{color:var(--qs-muted);font-size:12.5px}
+.journal__valeurs del{color:var(--qs-bad);text-decoration:line-through}
+.journal__valeurs ins{color:var(--qs-ok);text-decoration:none;font-weight:600}
+
+/* --- Pages d'erreur ------------------------------------------------------ */
+body.page-erreur{display:flex;align-items:center;justify-content:center;
+  min-height:100vh;padding:var(--qs-gutter)}
+.erreur{
+  width:min(560px,100%);padding:clamp(28px,5vw,48px);
+  border-radius:var(--qs-r-panel);background:var(--qs-glass);
+  border:1px solid var(--qs-glass-edge);box-shadow:var(--qs-shadow-panel);
+  backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
+}
+.erreur__code{display:inline-block;font-size:13px;font-weight:700;
+  letter-spacing:1px;color:#fff;background:var(--qs-grad);
+  padding:4px 12px;border-radius:999px;margin:0 0 14px}
+.erreur h1{margin:0 0 12px}
+.erreur__texte p{margin:0 0 10px;line-height:1.65;color:var(--qs-ink-soft)}
+.erreur__actions{margin:20px 0 0}
+
 /* --- Marche a suivre numerotee ------------------------------------------- */
 .steps{list-style:none;counter-reset:etape;margin:0;padding:0;display:grid;
   gap:14px}
@@ -621,8 +698,11 @@ body.auth-page{
 .alt:hover{border-color:var(--qs-blue);background:var(--qs-surface)}
 .alt svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7}
 
-.note{margin:22px 0 0;font-size:12.5px;line-height:1.6;color:var(--qs-muted)}
-.note a{color:var(--qs-blue);font-weight:600}
+/* Mention en bas du formulaire de connexion. Elle s'appelait « .note », nom
+   repris ensuite par l'encart d'information : les deux règles se mélangeaient
+   (encarts sans marge basse, mention transformée en encadré). */
+.auth__note{margin:22px 0 0;font-size:12.5px;line-height:1.6;color:var(--qs-muted)}
+.auth__note a{color:var(--qs-blue);font-weight:600}
 
 .alert{
   display:flex;gap:10px;align-items:flex-start;
@@ -765,37 +845,43 @@ fieldset.module .description{
 
 /* Lignes de formulaire : Django pose le libellé dans une colonne fixe et le
    champ en flux, ce qui les éloigne sur un écran large. On repasse chaque
-   ligne en grille « libellé | champ ». */
-.aligned .form-row > div:not(.help):not(.errorlist),
-.aligned .form-row .flex-container{display:contents}
-.form-row{
+   ligne en grille « libellé | champ ».
+
+   « :not(tr) » n'est pas une précaution de style : Django met la MÊME
+   classe .form-row sur les <div> d'un formulaire ET sur les <tr> d'une
+   ligne imbriquée tabulaire (les questions d'une épreuve). Transformée en
+   grille, la ligne de tableau se dissolvait et ses champs s'empilaient. */
+.aligned .form-row:not(tr) > div:not(.help):not(.errorlist),
+.aligned .form-row:not(tr) .flex-container{display:contents}
+.form-row:not(tr){
   display:grid;grid-template-columns:230px minmax(0,1fr);gap:4px 20px;
   align-items:start;padding:14px 18px;
   border-bottom:1px solid var(--hairline-color);
 }
-.form-row:last-child{border-bottom:0}
-.form-row > label,.aligned .form-row label{
+.form-row:not(tr):last-child{border-bottom:0}
+.form-row:not(tr) > label,.aligned .form-row:not(tr) label{
   width:auto;padding:7px 0 0;font-size:13px;font-weight:600;
   color:var(--body-medium-color);text-align:left;float:none;
 }
 /* Django aligne l'aide avec « padding-left:170px » dans une règle plus
    spécifique que la nôtre : on remonte la spécificité. */
-form .aligned .form-row div.help,
-form .aligned .form-row p.help,
-.form-row .help,.form-row .helptext{
+form .aligned .form-row:not(tr) div.help,
+form .aligned .form-row:not(tr) p.help,
+.form-row:not(tr) .help,.form-row:not(tr) .helptext{
   grid-column:2;margin:3px 0 0;padding:0;font-size:12.5px;text-align:left;
   color:var(--body-quiet-color);line-height:1.5;max-width:64ch;
 }
 .form-row .help div,.form-row .help p{padding:0;margin:0}
-.form-row .errorlist{grid-column:2;margin:0 0 4px;padding:0;list-style:none}
+.form-row:not(tr) .errorlist{grid-column:2;margin:0 0 4px;padding:0;
+  list-style:none}
 /* Case et libellé restent ensemble : « display:contents » les séparerait. */
-.form-row .flex-container.checkbox-row{
+.form-row:not(tr) .flex-container.checkbox-row{
   display:flex;grid-column:2;align-items:center;gap:8px;
 }
 .form-row .checkbox-row label{padding:0;font-weight:500;font-size:14px;
   color:var(--body-fg)}
 .aligned .form-row input[type=checkbox]{margin:0}
-.form-row ul.radiolist{grid-column:2;margin:0;padding:0;list-style:none}
+.form-row:not(tr) ul.radiolist{grid-column:2;margin:0;padding:0;list-style:none}
 .form-row ul.radiolist li{margin:0 0 6px;display:flex;gap:8px;align-items:flex-start}
 .form-row ul.radiolist label{font-weight:400;font-size:14px;padding:0}
 
@@ -879,6 +965,153 @@ body.dashboard #content{width:auto;max-width:none}
   display:block;font-size:12px;color:var(--qs-faint);margin-top:2px;
 }
 .qs-journal__vide{margin:0;color:var(--qs-muted)}
+
+/* --- Listes de l'administration -----------------------------------------
+   Le tableau prend la place disponible ; les filtres passent dessous quand
+   la fenetre devient etroite, au lieu de comprimer la liste. */
+#changelist{display:flex;flex-wrap:wrap;gap:16px 18px;align-items:flex-start}
+#changelist #toolbar{margin:0;padding:0;border:0;background:none}
+/* L'element souple n'est PAS #changelist-form : Django 5 l'enveloppe dans
+   .changelist-form-container, et c'est lui qui recoit la place. Regle sur
+   le formulaire, le flex ne s'appliquait a rien et le conteneur prenait
+   toute la largeur, poussant les filtres sous le tableau.
+   La base reste petite pour que la colonne de filtres tienne a cote. */
+#changelist > .changelist-form-container{flex:1 1 320px;min-width:0;order:0}
+#changelist-form{min-width:0}
+#changelist-filter{
+  /* margin-left:30px de Django en plus du gap : 48 px perdus entre les
+     deux colonnes, au detriment du tableau. */
+  flex:0 0 210px;order:1;position:static;width:auto;margin:0;
+  border:1px solid var(--qs-line);border-radius:16px;overflow:hidden;
+  background:var(--qs-surface);box-shadow:var(--qs-shadow-mod);
+}
+/* Django reserve 400 px de haut pour loger sa colonne de filtres ; celle-ci
+   est maintenant une carte autonome, le vide n'a plus de raison d'etre. */
+.change-list .filtered{min-height:0}
+
+/* Barre de recherche : un champ, pas un bandeau gris. */
+/* Django enveloppe le champ dans un <div> : c'est lui qu'il faut etaler,
+   sinon le champ se reduit a une pastille de 28 px. */
+#toolbar #changelist-search > div{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+}
+#toolbar #searchbar{
+  flex:1 1 220px;min-width:0;max-width:420px;margin:0;
+  padding:9px 13px;border-radius:var(--qs-r-field);
+  border:1px solid var(--qs-field-line);background:var(--qs-surface);
+}
+#toolbar label{margin:0;display:flex;align-items:center}
+#changelist-search .small.quiet{color:var(--qs-muted)}
+
+/* Barre d'actions groupees. */
+#changelist .actions{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:10px 14px;margin:0 0 12px;
+  border:1px solid var(--qs-line);border-radius:var(--qs-r-field);
+  background:var(--qs-raised);color:var(--qs-muted);font-size:13px;
+}
+#changelist .actions select{width:auto;min-width:220px;margin:0}
+#changelist .actions label{margin:0;font-size:13px;font-weight:600}
+#changelist .actions .button{margin:0}
+
+/* Resultats et pagination. */
+#changelist .results{border:1px solid var(--qs-line);border-radius:16px;
+  overflow:auto;background:var(--qs-surface);box-shadow:var(--qs-shadow-mod)}
+/* Une cellule sur trois lignes (« Lu / avec / succes ») se lit plus mal
+   qu'un tableau qui defile : les valeurs restent d'un seul tenant, et le
+   cadre .results prend le defilement a sa charge. */
+#changelist .results th,#changelist .results td{white-space:nowrap}
+
+/* --- Le tableau de resultats lui-meme ------------------------------------ */
+#result_list{background:var(--qs-surface);border-collapse:collapse;width:100%}
+
+/* En-tete : le padding vit sur le lien de tri, pas sur la cellule (Django
+   enveloppe l'intitule dans <div class="text"><a>…</a></div>). */
+#result_list thead th{
+  padding:0;background:var(--qs-raised);
+  border-bottom:1px solid var(--qs-line);
+  /* Repere pour les commandes de tri, posees en absolu ci-dessous. */
+  position:relative;
+}
+/* display:block ne vaut que pour le contenu de la cellule : pose sur un
+   <th>, il le sort du modele de tableau et gonfle la ligne (62 px au lieu
+   de 40). La colonne des cases a cocher garde donc son padding a part. */
+#result_list thead th div.text a,
+#result_list thead th div.text span{
+  display:block;padding:11px 12px;
+  font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--qs-faint);text-decoration:none;
+}
+#result_list thead th.action-checkbox-column{padding:9px 10px}
+/* La case « tout selectionner » est enveloppee dans le meme div.text que
+   les intitules : sans cette exception elle heritait de leur padding et
+   imposait 61 px de haut a toute la ligne d en-tete. */
+#result_list thead th.action-checkbox-column div.text span{
+  display:inline;padding:0;
+}
+#result_list thead th div.text a:hover{color:var(--qs-ink)}
+#result_list thead th.sorted div.text a{color:var(--qs-ink)}
+
+/* Commandes de tri : a droite de la cellule, sur la ligne de l'intitule. */
+#result_list thead th .sortoptions{
+  position:absolute;top:50%;right:8px;transform:translateY(-50%);
+  display:flex;align-items:center;gap:3px;padding:0;margin:0;
+}
+#result_list thead th.sortable div.text a{padding-right:48px}
+#result_list thead th .clear{display:none}
+#result_list thead th .sortpriority{
+  font-size:10px;line-height:15px;color:var(--qs-faint);
+  background:var(--qs-surface);border:1px solid var(--qs-line);
+  border-radius:999px;padding:0 5px;
+}
+
+/* Lignes : pas de zebrage, un filet suffit — et un survol pour suivre la
+   ligne du regard sur un tableau large. */
+#result_list tbody tr,
+#result_list tbody tr.row1,
+#result_list tbody tr.row2{background:var(--qs-surface)}
+#result_list tbody tr:hover > th,
+#result_list tbody tr:hover > td{background:var(--qs-row-hover)}
+#result_list tbody tr.selected > th,
+#result_list tbody tr.selected > td{background:var(--qs-sel-row)}
+#result_list tbody th,
+#result_list tbody td{
+  padding:11px 12px;vertical-align:middle;
+  border-bottom:1px solid var(--qs-line);font-size:13.5px;
+}
+#result_list tbody tr:last-child th,
+#result_list tbody tr:last-child td{border-bottom:0}
+/* La premiere colonne ouvre la ligne : elle merite un peu plus de poids. */
+#result_list tbody th a:link,#result_list tbody th a:visited{font-weight:600}
+
+/* Colonne des cases a cocher : etroite et centree. */
+#result_list .action-checkbox-column,
+#result_list td.action-checkbox{width:34px;text-align:center;padding-right:0}
+#result_list input[type=checkbox]{margin:0;vertical-align:middle}
+
+/* Les memes regles pour les tableaux hors liste : lignes imbriquees d'un
+   formulaire (questions d'une epreuve), tableaux d'un module. */
+.module table th,.module table td{padding:10px 12px;vertical-align:middle}
+/* Django repete le libelle de l'objet (« Q1 (QCM (lecture automatique)) »)
+   en position absolue au-dessus de chaque ligne imbriquee. Il redit ce que
+   les colonnes montrent deja et chevauchait les champs : on le retire, et
+   la ligne n'a plus besoin de lui reserver de la place en haut. */
+.inline-group .tabular .original p{display:none}
+.inline-group .tabular tr.has_original td{padding-top:10px}
+#changelist .results + .paginator{
+  margin:12px 0 0;padding:0;border:0;background:none;
+  color:var(--qs-muted);font-size:13px;
+}
+#changelist-filter h2{margin:0}
+#changelist-filter h3{font-size:12.5px;font-weight:700;color:var(--qs-ink)}
+#changelist-filter li{line-height:1.7}
+#changelist-filter li.selected{border-left:3px solid var(--qs-blue)}
+
+@media (max-width:980px){
+  /* Les filtres passent sous la liste : a cette largeur, deux colonnes ne
+     laissaient plus rien au tableau. */
+  #changelist-filter{flex:1 1 100%;order:2}
+}
 
 /* Gestion des comptes */
 .qs-avatar{

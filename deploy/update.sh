@@ -30,14 +30,45 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
-# Sauvegarde de la base avant les migrations éventuelles
-if [ -f data/db.sqlite3 ]; then
-    mkdir -p data/backups
-    cp data/db.sqlite3 "data/backups/db-$(date +%Y%m%d-%H%M%S)-$LOCAL.sqlite3"
-    ls -1t data/backups/db-*.sqlite3 | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
+# Sauvegarde de la base avant les migrations éventuelles. Par la commande
+# de l'application : copie cohérente même si une correction écrit au même
+# moment (un « cp » de la base en service peut donner un fichier corrompu).
+# Base seule, pour aller vite ; la sauvegarde complète est celle de la nuit.
+if ! docker compose exec -T quizscan python manage.py sauvegarde --sans-medias \
+        --dossier data/sauvegardes/avant-mise-a-jour --garder "$KEEP_BACKUPS"; then
+    # Conteneur arrêté, ou version trop ancienne pour connaître la commande.
+    if [ -f data/db.sqlite3 ]; then
+        log "Sauvegarde par la commande impossible : simple copie de la base"
+        mkdir -p data/backups
+        cp data/db.sqlite3 "data/backups/db-$(date +%Y%m%d-%H%M%S)-$LOCAL.sqlite3"
+        ls -1t data/backups/db-*.sqlite3 | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
+    fi
 fi
 
 git reset --hard --quiet "origin/$BRANCH"
+
+# Facultatif (TESTS_AVANT_MISE_A_JOUR=1 dans .env) : la suite de tests tourne
+# dans la nouvelle image AVANT qu'elle remplace l'ancienne. En cas d'échec, le
+# code revient à la version en service, qui continue de tourner, et ce commit
+# est mis de côté : on ne relance pas les tests toutes les 5 minutes sur le
+# même échec. Le prochain commit sera essayé normalement.
+TESTS="$(sed -n 's/^TESTS_AVANT_MISE_A_JOUR=//p' .env | tail -n 1)"
+if [ "$TESTS" = "1" ]; then
+    ECHEC="data/.tests-en-echec-$REMOTE"
+    if [ -f "$ECHEC" ] && [ "${1:-}" != "--force" ]; then
+        git reset --hard --quiet "$LOCAL"
+        exit 0                               # déjà essayé, déjà refusé
+    fi
+    log "Tests de $REMOTE dans la nouvelle image…"
+    if ! sh deploy/tests.sh; then
+        touch "$ECHEC"
+        git reset --hard --quiet "$LOCAL"
+        log "ERREUR : tests en échec sur $REMOTE — mise à jour annulée, $LOCAL reste en service"
+        exit 1
+    fi
+    rm -f data/.tests-en-echec-*
+fi
+
 docker compose up -d --build --remove-orphans
 docker image prune -f >/dev/null 2>&1 || true
 

@@ -1,0 +1,10 @@
+[Unit]
+Description=Sauvegarde de QuizScan chaque nuit à 2 h 30
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+# Serveur éteint à 2 h 30 : la sauvegarde est faite au redémarrage.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

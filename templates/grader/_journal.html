@@ -1,0 +1,11 @@
+{# Liste d'entrées du journal des modifications (variable : entrees). #}
+<ul class="journal">
+  {% for m in entrees %}
+  <li>
+    <span class="journal__quand" title="{{ m.quand|date:'d/m/Y H:i:s' }}">{{ m.quand|date:"d/m/Y H:i" }}</span>
+    <span class="journal__geste"><b>{{ m.get_action_display }}</b> — {{ m.objet }}
+      <span class="helptext helptext--serre">par {{ m.auteur_nom }}</span></span>
+    <span class="journal__valeurs"><del>{{ m.avant }}</del> → <ins>{{ m.apres }}</ins></span>
+  </li>
+  {% endfor %}
+</ul>

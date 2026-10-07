@@ -82,6 +82,23 @@
   {% include "grader/_pagination.html" with page=rows_page label="Étudiants" querystring=batch_qs %}
 </div>
 
+{% if stats.suspectes %}
+<div class="note note--warn">
+  <span class="note__icon">
+    <svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
+  </span>
+  <div class="note__body">
+    <b>Bonne réponse à vérifier —
+      question{{ stats.suspectes|length|pluralize }}
+      n° {% for n in stats.suspectes %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}.</b>
+    Les meilleures copies s'y trompent plus que les plus faibles, ce qui
+    n'arrive pratiquement jamais sur une question simplement difficile.
+    Vérifiez la bonne réponse enregistrée : si elle est fausse, toute la
+    promotion est comptée fausse sur cette question.
+  </div>
+</div>
+{% endif %}
+
 {% if stats %}
 <div class="grid2">
   <div class="card">
@@ -90,10 +107,14 @@
       {{ stats.n }} étudiant(s) —
       moyenne <b>{{ stats.mean|floatformat:"-2" }}</b>,
       médiane <b>{{ stats.median|floatformat:"-2" }}</b>,
+      écart-type <b>{{ stats.stdev|floatformat:"-2" }}</b>,
       meilleure note <b>{{ stats.best|floatformat:"-2" }}</b>,
       plus basse <b>{{ stats.worst|floatformat:"-2" }}</b>
       (sur {{ stats.max_score|floatformat:"-2" }}).
     </p>
+    <p class="helptext helptext--serre">L'écart-type mesure la dispersion :
+      petit, les notes se serrent autour de la moyenne ; grand, la classe se
+      partage entre deux groupes très inégaux.</p>
     <h2 style="margin-top:16px">Répartition des notes</h2>
     <div class="table-wrap">
       <table>
@@ -111,7 +132,8 @@
     <h2>Réussite par question</h2>
     <div class="table-wrap">
       <table>
-      <tr><th>Q</th><th>Réussite</th><th>Justes</th><th>Fausses</th><th>Vides</th></tr>
+      <tr><th>Q</th><th>Réussite</th><th>Justes</th><th>Fausses</th><th>Vides</th>
+          <th>Discrimination</th></tr>
       {% for s in stats.questions %}
       <tr {% if s.success < 40 %}class="ligne--alerte"{% endif %}>
         <td><b>{{ s.question.order }}</b>
@@ -123,13 +145,53 @@
         {% else %}
         <td colspan="3"><span class="helptext">{{ s.graded }} copie(s) notée(s)</span></td>
         {% endif %}
+        <td>
+          {% if s.discrimination_label %}
+          <span class="badge {% if s.corrige_suspect %}bad{% elif s.discrimination_label == 'faible' %}warn{% else %}ok{% endif %}"
+                title="{{ s.discrimination_aide }}">
+            {{ s.discrimination|floatformat:2 }} · {{ s.discrimination_label }}</span>
+          {% else %}<span class="helptext">—</span>{% endif %}
+        </td>
       </tr>
       {% endfor %}
     </table>
     </div>
     <p class="helptext">Les lignes surlignées (&lt; 40 % de réussite) signalent
-      les questions les plus ratées.</p>
+      les questions les plus ratées. La discrimination compare la réussite du
+      tiers fort et du tiers faible du classement : elle n'est calculée qu'à
+      partir de dix copies.</p>
   </div>
+</div>
+
+<div class="card">
+  <h2>Où sont parties les réponses</h2>
+  <p class="helptext helptext--serre">Savoir qu'une question a fait huit
+    fausses ne dit pas vers quoi. Si presque toutes se portent sur la même
+    case, c'est soit un bon distracteur, soit un énoncé ambigu, soit une
+    bonne réponse erronée.</p>
+  <div class="table-wrap">
+    <table class="table--espacee">
+    <tr><th>Q</th><th>Répartition des copies par case</th></tr>
+    {% for s in stats.questions %}{% if s.repartition %}
+    <tr>
+      <td><b>{{ s.question.order }}</b></td>
+      <td>
+        <div class="choix">
+          {% for c in s.repartition %}
+          <span class="choix__part {% if c.bonne %}is-bonne{% endif %}"
+                title="{{ c.titre }} — {{ c.n }} copie(s), {{ c.pct }} %">
+            <i class="choix__jauge"><b style="height:{{ c.pct }}%"></b></i>
+            <span class="choix__lettre">{{ c.lettre }}</span>
+            <small>{{ c.pct }} %</small>
+          </span>
+          {% endfor %}
+        </div>
+      </td>
+    </tr>
+    {% endif %}{% endfor %}
+  </table>
+  </div>
+  <p class="helptext">La case encadrée est la bonne réponse enregistrée.</p>
 </div>
 {% endif %}
 {% endblock %}
