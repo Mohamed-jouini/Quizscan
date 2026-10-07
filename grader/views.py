@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.views.static import serve as file_serve
 
 from . import bulletin as bulletin_mod
+from . import droits
 from . import importers
 from . import labels_pdf as labels_mod
 from . import layout as layout_mod
@@ -64,24 +65,34 @@ def _my_classes(request):
     return qs
 
 
+# Une épreuve appartient à qui l'a écrite OU à qui tient sa classe : c'est
+# l'administration qui attribue les classes (voir grader/useradmin.py), et
+# le titulaire d'une classe doit pouvoir travailler sur ses épreuves.
+def _filtre_epreuves(utilisateur, prefixe=""):
+    """Q(...) : épreuves écrites par cette personne ou rattachées à ses classes."""
+    return (Q(**{f"{prefixe}owner": utilisateur})
+            | Q(**{f"{prefixe}class_group__owner": utilisateur}))
+
+
 def _my_quizzes(request):
     qs = Quiz.objects.select_related("class_group")
     if not request.user.is_superuser:
-        qs = qs.filter(owner=request.user)
+        qs = qs.filter(_filtre_epreuves(request.user)).distinct()
     return qs
 
 
 def _my_batches(request):
     qs = ScanBatch.objects.select_related("quiz")
     if not request.user.is_superuser:
-        qs = qs.filter(quiz__owner=request.user)
+        qs = qs.filter(_filtre_epreuves(request.user, "quiz__")).distinct()
     return qs
 
 
 def _my_sheets(request):
     qs = SheetScan.objects.select_related("batch__quiz", "student")
     if not request.user.is_superuser:
-        qs = qs.filter(batch__quiz__owner=request.user)
+        qs = qs.filter(
+            _filtre_epreuves(request.user, "batch__quiz__")).distinct()
     return qs
 
 
@@ -279,6 +290,7 @@ def class_labels_pdf(request, pk):
 
 @login_required
 def quiz_create(request):
+    droits.exiger(request.user, droits.CREER, "créer une épreuve")
     # « Nouveau concours » (menu Concours) : liste de candidats propre au
     # concours, identification par étiquette QR ou grille de n°
     is_concours = request.GET.get("concours") == "1"
@@ -354,6 +366,13 @@ def quiz_detail(request, pk):
     bank_form = QuestionBankForm(quizzes=_my_quizzes(request), exclude=quiz)
 
     if request.method == "POST":
+        # Deux droits distincts se croisent ici : modifier l'epreuve, et
+        # lancer sa correction. On n'exige que celui du geste demande.
+        if "launch_grading" in request.POST:
+            droits.exiger(request.user, droits.CORRIGER,
+                          "lancer la correction des copies")
+        else:
+            droits.exiger(request.user, droits.CREER, "modifier cette épreuve")
         next_order = (quiz.questions.order_by("-order").values_list("order", flat=True).first() or 0) + 1
         if "add_question" in request.POST:
             qform = QuestionForm(request.POST, quiz=quiz)
@@ -589,6 +608,7 @@ def quiz_detail(request, pk):
 
 @login_required
 def quiz_upload(request, pk):
+    droits.exiger(request.user, droits.CORRIGER, "téléverser des copies")
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if not quiz.layout_json:
         messages.error(request, "Générez d'abord la fiche de réponses PDF.")
@@ -631,6 +651,7 @@ def quiz_upload(request, pk):
 
 @login_required
 def quiz_answer_key(request, pk):
+    droits.exiger(request.user, droits.CREER, "renseigner le corrigé")
     """Téléversement de la fiche remplie avec les bonnes réponses.
 
     La fiche est lue comme une copie, renseigne le corrigé des questions QCM
@@ -682,6 +703,10 @@ def quiz_answer_key(request, pk):
 def batch_detail(request, pk):
     batch = get_object_or_404(_my_batches(request), pk=pk)
     stalled = services.is_stalled(batch)
+    if request.method == "POST" and ("launch_grading" in request.POST
+                                     or "resume" in request.POST):
+        droits.exiger(request.user, droits.CORRIGER,
+                      "lancer la correction des copies")
     if request.method == "POST" and "launch_grading" in request.POST:
         try:
             n_batches, n_pages = services.launch_pending(batch.quiz)
@@ -740,7 +765,13 @@ def sheet_review(request, pk):
     prev_id = sheet_ids[position - 1] if position > 0 else None
     next_id = sheet_ids[position + 1] if position + 1 < len(sheet_ids) else None
 
+    # Retoucher la case lue sur un QCM, c'est en changer la note : reserve
+    # a l'administrateur. L'enseignant garde l'affectation du candidat et la
+    # notation des reponses manuscrites, qui sont son travail.
+    qcm_modifiable = droits.peut_noter_qcm(request.user)
+
     if request.method == "POST":
+        droits.exiger(request.user, droits.CORRIGER, "vérifier les copies")
         # ré-affectation de l'étudiant
         sid = _int_or_none(request.POST.get("student"))
         sheet.student = students.filter(pk=sid).first() if sid is not None else None
@@ -751,6 +782,10 @@ def sheet_review(request, pk):
         # corrections des réponses
         for a in answers:
             if a.question.qtype == "qcm":
+                # Champ absent de l'ecran pour un enseignant ; un formulaire
+                # fabrique a la main ne doit pas davantage l'emporter.
+                if not qcm_modifiable:
+                    continue
                 val = (request.POST.get(f"choice_{a.pk}") or "").strip()
                 if val in ("", "blank"):
                     new_choice = None          # réponse vide
@@ -790,6 +825,7 @@ def sheet_review(request, pk):
         "answers": answers,
         "position": position + 1, "total": len(sheet_ids),
         "prev_id": prev_id, "next_id": next_id,
+        "qcm_modifiable": qcm_modifiable,
     })
 
 

@@ -1,16 +1,27 @@
 {% extends "grader/base.html" %}
 {% block topbar_actions %}
+{% if perms.grader.creer_epreuve %}
 <a class="btn" href="{% url 'quiz_create' %}?concours=1">
   <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M12 5v14M5 12h14"/></svg>
   Nouveau concours</a>
+{% endif %}
 {% endblock %}
 {% block content %}
-<h1>Concours</h1>
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>Concours</h1>
+    <p class="page-head__meta">
+      Épreuves anonymes : les candidats sont identifiés par le QR de leur
+      étiquette, pas par leur nom.
+    </p>
+  </div>
+</header>
 
 <div class="card">
   <h2>Mes concours ({{ quizzes|length }})</h2>
   {% if quizzes %}
-  <table>
+  <div class="table-wrap">
+    <table>
     <tr><th>Titre</th><th>Candidats</th><th>Questions</th><th></th></tr>
     {% for q in quizzes %}
     <tr>
@@ -18,23 +29,33 @@
       <td>{{ q.class_group.students.count }}</td>
       <td>{{ q.questions.count }}</td>
       <td>
-        <a class="btn small" href="{% url 'class_detail' q.class_group.pk %}">👥 Candidats & QR</a>
+        <a class="btn small" href="{% url 'class_detail' q.class_group.pk %}">Candidats &amp; QR</a>
         <a class="btn small secondary" href="{% url 'quiz_results' q.pk %}">Résultats</a>
       </td>
     </tr>
     {% endfor %}
   </table>
+  </div>
   {% else %}
-  <p>Aucun concours pour le moment.
-     <a href="{% url 'quiz_create' %}?concours=1">Créez le premier</a>.</p>
+  <div class="empty">
+    <span class="empty__icon">
+      <svg viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M6 4h12v5a6 6 0 0 1-12 0z"/><path d="M6 6H4v1.5A3.5 3.5 0 0 0 6.6 11"/><path d="M18 6h2v1.5A3.5 3.5 0 0 1 17.4 11"/></svg>
+    </span>
+    <span class="empty__title">Aucun concours pour le moment</span>
+    <p>Un concours a sa propre liste de candidats, séparée des classes :
+       aucune classe à choisir, le conteneur est créé automatiquement.</p>
+    {% if perms.grader.creer_epreuve %}
+    <a class="btn" href="{% url 'quiz_create' %}?concours=1">Créer le premier concours</a>
+    {% endif %}
+  </div>
   {% endif %}
 </div>
 
 <div class="card">
   <h2>Comment ça marche</h2>
-  <ol style="line-height:1.9;padding-left:20px">
+  <ol class="steps">
     <li>Créez un <a href="{% url 'quiz_create' %}?concours=1">concours</a> (aucune classe à choisir : un conteneur de candidats est créé automatiquement).</li>
-    <li>Sur la page du concours, cliquez sur <b>« 👥 Candidats & étiquettes QR »</b> et importez la liste des candidats (Excel : Nom, Prénom, N° d'inscription).</li>
+    <li>Sur la page du concours, cliquez sur <b>« Candidats &amp; étiquettes QR »</b> et importez la liste des candidats (Excel : Nom, Prénom, N° d'inscription).</li>
     <li>Imprimez la <b>planche d'étiquettes QR</b> sur papier autocollant, et collez une étiquette dans l'emplacement réservé de chaque copie.</li>
     <li>Générez et imprimez la <b>feuille de réponses</b> (et le sujet), faites composer, puis scannez les copies.</li>
     <li>Chaque copie est identifiée par le QR de l'étiquette, notée automatiquement.</li>

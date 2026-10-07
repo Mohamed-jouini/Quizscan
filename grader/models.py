@@ -133,6 +133,15 @@ class Quiz(models.Model):
         verbose_name = "Quiz"
         verbose_name_plural = "Quiz"
         ordering = ["-created_at"]
+        # Les deux droits que l'administration accorde compte par compte.
+        # Ils sont portés par Quiz parce que c'est l'objet central, mais ils
+        # valent pour tout ce qui en découle : questions, fiches, copies.
+        permissions = [
+            ("creer_epreuve",
+             "Créer et modifier des épreuves (quiz, concours, questions)"),
+            ("corriger_copies",
+             "Téléverser les copies, lancer la correction et la vérifier"),
+        ]
 
     def __str__(self):
         return self.title

@@ -1,28 +1,51 @@
 {% extends "grader/base.html" %}
 {% block topbar_actions %}{% endblock %}
 {% block content %}
-<h1>{% if is_concours %}Nouveau concours{% else %}Nouveau quiz{% endif %}</h1>
-{% if is_concours %}
-<ul class="messages"><li>
-  🏆 Un concours a sa propre liste de candidats, séparée des classes : après la
-  création, importez-la (Excel : Nom, Prénom, N° d'inscription) et imprimez les
-  étiquettes QR depuis la page « Candidats & étiquettes QR ».
-</li></ul>
-{% endif %}
-<div class="card" style="max-width:560px">
-  <form method="post">{% csrf_token %}
-    {{ form.non_field_errors }}
-    {% for field in form %}
-      <div id="row_{{ field.name }}"{% if field.name == "grading_mode" %} class="radios"{% endif %}>
-      {{ field.errors }}
-      <label>{{ field.label }}</label>{{ field }}
-      {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
-      </div>
-    {% endfor %}
-    <span class="helptext">Le nombre de choix (A, B, C…) se règle pour chaque question.</span>
-    <p><button class="btn" type="submit">
-      {% if is_concours %}Créer le concours{% else %}Créer le quiz{% endif %}</button></p>
-  </form>
+{# Page d'un seul formulaire : une colonne centree. Etale sur toute la  #}
+{# largeur, le formulaire se perdait a gauche d'un grand vide.          #}
+<div class="form-page">
+  <header class="page-head">
+    <div class="page-head__text">
+      <h1>{% if is_concours %}Nouveau concours{% else %}Nouveau quiz{% endif %}</h1>
+      <p class="page-head__meta">
+        {% if is_concours %}
+        Épreuve anonyme, avec sa propre liste de candidats.
+        {% else %}
+        Épreuve rattachée à une classe déjà saisie.
+        {% endif %}
+        Les questions se saisissent juste après.
+      </p>
+    </div>
+  </header>
+
+  {% if is_concours %}
+  <div class="note">
+    <span class="note__icon">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+    </span>
+    <div class="note__body">
+      Un concours a sa propre liste de candidats, séparée des classes : après la
+      création, importez-la (Excel : Nom, Prénom, N° d'inscription) et imprimez les
+      étiquettes QR depuis la page « Candidats &amp; étiquettes QR ».
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <form method="post">{% csrf_token %}
+      {{ form.non_field_errors }}
+      {% for field in form %}
+        <div id="row_{{ field.name }}"{% if field.name == "grading_mode" %} class="radios"{% endif %}>
+        {{ field.errors }}
+        <label>{{ field.label }}</label>{{ field }}
+        {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
+        </div>
+      {% endfor %}
+      <span class="helptext">Le nombre de choix (A, B, C…) se règle pour chaque question.</span>
+      <p><button class="btn" type="submit">
+        {% if is_concours %}Créer le concours{% else %}Créer le quiz{% endif %}</button></p>
+    </form>
+  </div>
 </div>
 <script>
 // « Nombre de chiffres du n° » ne concerne que la grille de n° d'inscription

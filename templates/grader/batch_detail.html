@@ -1,58 +1,80 @@
 {% extends "grader/base.html" %}
 {% block content %}
-<h1>{{ batch }} <span class="badge grey">{{ batch.quiz.title }}</span></h1>
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>{{ batch }}</h1>
+    <p class="page-head__meta">
+      <b>{{ batch.quiz.title }}</b> · {{ batch.total_pages }} page(s)
+    </p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn small secondary" href="{% url 'quiz_detail' batch.quiz.pk %}">← Retour au quiz</a>
+    {% if first_review_id %}
+    <a class="btn small secondary" href="{% url 'sheet_review' first_review_id %}">Vérifier les copies une à une</a>
+    {% endif %}
+    <a class="btn small" href="{% url 'quiz_results' batch.quiz.pk %}?batch={{ batch.pk }}">Résultats du lot</a>
+  </div>
+</header>
 
 {% if batch.status == "pending" %}
-<ul class="messages"><li style="background:#f3f7fc;color:#1f4e79">
-  📥 <b>{{ batch.total_pages }} page(s) reçue(s), en attente de correction</b>
-  (concours corrigé après scan).
-  <form class="inline" method="post">{% csrf_token %}
-    <button class="btn small" name="launch_grading" value="1" type="submit">▶ Lancer la correction</button>
-  </form>
-  <span class="helptext">Le bouton lance la correction de tous les lots en attente de ce concours.</span>
-</li></ul>
-{% elif batch.is_processing and not stalled %}
-<ul class="messages"><li style="background:#e8f0fe;color:#174ea6">
-  ⏳ <b>Correction automatique en cours : {{ batch.processed_pages }} / {{ batch.total_pages }}
-  copie(s) notée(s)</b> ({{ batch.progress_pct }} %) — cette page se met à jour toute seule ;
-  les notes déjà calculées sont disponibles dans les résultats.
-  <div style="background:#c6d7f5;border-radius:4px;height:8px;margin-top:8px">
-    <div style="background:#1f4e79;height:8px;border-radius:4px;width:{{ batch.progress_pct }}%"></div>
+<div class="note">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg></span>
+  <div class="note__body">
+    <b>{{ batch.total_pages }} page(s) reçue(s), en attente de correction</b>
+    (concours corrigé après scan).
+    {% if perms.grader.corriger_copies %}
+    <form class="inline" method="post">{% csrf_token %}
+      <button class="btn small" name="launch_grading" value="1" type="submit">Lancer la correction</button>
+    </form>
+    {% endif %}
+    <span class="helptext">Le bouton lance la correction de tous les lots en attente de ce concours.</span>
   </div>
-</li></ul>
+</div>
+{% elif batch.is_processing and not stalled %}
+<div class="note">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+  <div class="note__body">
+    <b>Correction automatique en cours : {{ batch.processed_pages }} / {{ batch.total_pages }}
+    copie(s) notée(s)</b> ({{ batch.progress_pct }} %) — cette page se met à jour toute seule ;
+    les notes déjà calculées sont disponibles dans les résultats.
+    <div class="progress"><i style="width:{{ batch.progress_pct }}%"></i></div>
+  </div>
+</div>
 <script>setTimeout(function () { location.reload(); }, 3000);</script>
 {% elif stalled or batch.status == "error" %}
-<ul class="messages"><li class="error">
-  ⚠️ Le traitement de ce lot s'est interrompu à {{ batch.processed_pages }} / {{ batch.total_pages }}
-  page(s){% if batch.error_message %} ({{ batch.error_message }}){% endif %}.
-  <form class="inline" method="post">{% csrf_token %}
-    <button class="btn small" name="resume" value="1" type="submit">Reprendre la correction</button>
-  </form>
-  <span class="helptext">Les pages déjà notées ne sont pas relues.</span>
-</li></ul>
+<div class="note note--bad">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
+  <div class="note__body">
+    Le traitement de ce lot s'est interrompu à {{ batch.processed_pages }} / {{ batch.total_pages }}
+    page(s){% if batch.error_message %} ({{ batch.error_message }}){% endif %}.
+    {% if perms.grader.corriger_copies %}
+    <form class="inline" method="post">{% csrf_token %}
+      <button class="btn small" name="resume" value="1" type="submit">Reprendre la correction</button>
+    </form>
+    {% endif %}
+    <span class="helptext">Les pages déjà notées ne sont pas relues.</span>
+  </div>
+</div>
 {% endif %}
 {% if batch.status != "pending" and not batch.is_processing or stalled %}
-<ul class="messages"><li>
-  ✅ <b>{{ n_auto }}/{{ n_total }} copie(s) corrigée(s) automatiquement</b> —
-  les notes sont déjà disponibles dans les résultats.
-  {% if n_attention %}⚠️ {{ n_attention }} copie(s) demandent votre attention
-    (non identifiées ou illisibles).{% endif %}
-  {% if n_open_pending %}✍️ {{ n_open_pending }} réponse(s) manuscrite(s)
-    restent à noter à l'écran.{% endif %}
-  {% if not n_attention and not n_open_pending %}
-    La vérification copie par copie est facultative.{% endif %}
-</li></ul>
+<div class="note note--ok">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.6 2.6L16 9.5"/></svg></span>
+  <div class="note__body">
+    <b>{{ n_auto }}/{{ n_total }} copie(s) corrigée(s) automatiquement</b> —
+    les notes sont déjà disponibles dans les résultats.
+    {% if n_attention %}{{ n_attention }} copie(s) demandent votre attention
+      (non identifiées ou illisibles).{% endif %}
+    {% if n_open_pending %}{{ n_open_pending }} réponse(s) manuscrite(s)
+      restent à noter à l'écran.{% endif %}
+    {% if not n_attention and not n_open_pending %}
+      La vérification copie par copie est facultative.{% endif %}
+  </div>
+</div>
 {% endif %}
-<p>
-  <a class="btn small secondary" href="{% url 'quiz_detail' batch.quiz.pk %}">← Retour au quiz</a>
-  <a class="btn small" href="{% url 'quiz_results' batch.quiz.pk %}?batch={{ batch.pk }}">Résultats du lot</a>
-  {% if first_review_id %}
-    <a class="btn small" href="{% url 'sheet_review' first_review_id %}">✓ Vérifier toutes les copies une à une</a>
-  {% endif %}
-</p>
 <div class="card">
   {% include "grader/_pagination.html" with page=sheets_page label="Pages" %}
-  <table>
+  <div class="table-wrap">
+    <table>
     <tr><th>Page</th><th>Aperçu</th><th>Nom lu (OCR)</th><th>Étudiant</th><th>Statut</th><th></th></tr>
     {% for s in sheets_page %}
     <tr>
@@ -76,6 +98,7 @@
     <tr><td colspan="6">Aucune page dans ce lot.</td></tr>
     {% endfor %}
   </table>
+  </div>
   {% include "grader/_pagination.html" with page=sheets_page label="Pages" %}
 </div>
 {% endblock %}

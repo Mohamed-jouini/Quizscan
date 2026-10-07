@@ -1,19 +1,26 @@
 {% extends "grader/base.html" %}
 {% block content %}
-<h1>Classe : {{ group.name }}</h1>
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>{{ group.name }}</h1>
+    <p class="page-head__meta"><b>{{ students_total }}</b> candidat(s) inscrit(s)</p>
+  </div>
+  {% if students_total %}
+  <div class="page-head__actions">
+    <a class="btn small" href="{% url 'class_labels_pdf' group.pk %}"
+       target="_blank">Planche d'étiquettes (PDF)</a>
+  </div>
+  {% endif %}
+</header>
 <div class="grid2">
   <div class="card">
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <h2 style="margin:0">Candidats ({{ students_total }})</h2>
-      <span class="spacer"></span>
-      {% if students_total %}
-      <a class="btn small" href="{% url 'class_labels_pdf' group.pk %}"
-         target="_blank">🏷️ Planche d'étiquettes (PDF)</a>
-      {% endif %}
+    <div class="card__head">
+      <h2>Candidats ({{ students_total }})</h2>
     </div>
     {% if students_page.object_list %}
     {% include "grader/_pagination.html" with page=students_page label="Candidats" %}
-    <table>
+    <div class="table-wrap">
+      <table>
       <tr><th>Nom</th><th>Prénom</th><th>N°</th><th>QR</th><th></th></tr>
       {% for s in students_page %}
       <tr>
@@ -28,6 +35,7 @@
       </tr>
       {% endfor %}
     </table>
+    </div>
     {% include "grader/_pagination.html" with page=students_page label="Candidats" %}
     {% else %}<p>Aucun candidat : importez la liste ci-contre.</p>{% endif %}
   </div>

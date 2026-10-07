@@ -1,0 +1,107 @@
+{% extends "admin/base_site.html" %}
+{% load i18n log %}
+
+{# Page d'accueil de l'administration.                                        #}
+{# C'est le SEUL endroit qui liste les tables : la barre latérale ne les      #}
+{# reprend plus (templates/admin/base.html). La grille se réorganise toute    #}
+{# seule — autant de colonnes que la largeur en permet — pour remplir aussi   #}
+{# bien un écran large qu'un téléphone.                                       #}
+
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+{% block coltype %}colM{% endblock %}
+
+{% block content %}
+<div id="content-main">
+
+  {% for app in app_list %}
+  <section class="qs-section">
+    <h2 class="qs-section__title">{{ app.name }}</h2>
+    <div class="tiles">
+      {% for table in app.models %}
+      <div class="tile qs-table">
+        <span class="qs-table__top">
+          <span class="qs-table__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><use href="#ic-{{ table.icone }}"/></svg>
+          </span>
+          {# grader/admin.py ne compte que les tables consultables ;       #}
+          {# « admin_url » est donc le bon garde-fou — et il laisse passer  #}
+          {# un effectif de zero, que « if table.effectif » masquerait.     #}
+          {% if table.admin_url %}
+          <b class="qs-table__n">{{ table.effectif }}</b>
+          {% endif %}
+        </span>
+
+        {% if table.admin_url %}
+          <a class="qs-table__name" href="{{ table.admin_url }}">{{ table.name }}</a>
+        {% else %}
+          <span class="qs-table__name">{{ table.name }}</span>
+        {% endif %}
+
+        <span class="qs-table__links">
+          {% if table.add_url %}
+          <a class="addlink" href="{{ table.add_url }}">{% translate 'Add' %}</a>
+          {% endif %}
+          {% if table.admin_url %}
+            {% if table.view_only %}
+            <a class="viewlink" href="{{ table.admin_url }}">{% translate 'View' %}</a>
+            {% else %}
+            <a class="changelink" href="{{ table.admin_url }}">{% translate 'Change' %}</a>
+            {% endif %}
+          {% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% empty %}
+  <p>{% translate 'You don’t have permission to view or edit anything.' %}</p>
+  {% endfor %}
+
+  <section class="qs-section">
+    <h2 class="qs-section__title">{% translate 'Recent actions' %}</h2>
+    <div class="tile qs-journal">
+      {% get_admin_log 10 as admin_log for_user user %}
+      {% if not admin_log %}
+        <p class="qs-journal__vide">{% translate 'None available' %}</p>
+      {% else %}
+        <ul class="actionlist">
+          {% for entree in admin_log %}
+          <li class="{% if entree.is_addition %}addlink{% endif %}{% if entree.is_change %}changelink{% endif %}{% if entree.is_deletion %}deletelink{% endif %}">
+            <span class="visually-hidden">{% if entree.is_addition %}{% translate 'Added:' %}{% elif entree.is_change %}{% translate 'Changed:' %}{% elif entree.is_deletion %}{% translate 'Deleted:' %}{% endif %}</span>
+            {% if entree.is_deletion or not entree.get_admin_url %}
+              {{ entree.object_repr }}
+            {% else %}
+              <a href="{{ entree.get_admin_url }}">{{ entree.object_repr }}</a>
+            {% endif %}
+            <span class="mini quiet">{% if entree.content_type %}{% filter capfirst %}{{ entree.content_type.name }}{% endfilter %}{% else %}{% translate 'Unknown content' %}{% endif %}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+{# Icônes des tables. Le nom vient de grader/admin.py (ICONES), qui garantit #}
+{# un repli sur « table » pour tout modèle qu'il ne connaît pas.             #}
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true"
+     style="position:absolute">
+  <symbol id="ic-compte" viewBox="0 0 24 24"><path d="M4 20a8 8 0 0 1 16 0"/><circle cx="12" cy="8" r="4"/></symbol>
+  <symbol id="ic-groupe" viewBox="0 0 24 24"><path d="M2 19a6 6 0 0 1 12 0"/><circle cx="8" cy="8" r="3.4"/><path d="M16 11a5 5 0 0 1 6 5"/><circle cx="17" cy="6" r="2.6"/></symbol>
+  <symbol id="ic-classe" viewBox="0 0 24 24"><path d="M3 7.5 12 4l9 3.5-9 3.5z"/><path d="M7 10v5c0 1.7 2.2 3 5 3s5-1.3 5-3v-5"/><path d="M21 8v6"/></symbol>
+  <symbol id="ic-etudiant" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2.5"/><circle cx="12" cy="10" r="2.8"/><path d="M8 17.5a4 4 0 0 1 8 0"/></symbol>
+  <symbol id="ic-quiz" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9.5 12h6M9.5 16h4"/></symbol>
+  <symbol id="ic-question" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.5"/><path d="M12 17h.01"/></symbol>
+  <symbol id="ic-reponse" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7.5 12.2l2.6 2.6 5.4-5.6"/></symbol>
+  <symbol id="ic-lot" viewBox="0 0 24 24"><path d="M4 8.5 12 4l8 4.5-8 4.5z"/><path d="M4 13l8 4.5 8-4.5"/><path d="M4 17.5 12 22l8-4.5"/></symbol>
+  <symbol id="ic-page" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h3"/></symbol>
+  <symbol id="ic-corrige" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-3-6 3z"/><path d="M9 10l2 2 4-4"/></symbol>
+  <symbol id="ic-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M9 9.5V20"/></symbol>
+</svg>
+{% endblock %}
+
+{# La colonne de droite de Django : son contenu est repris ci-dessus, dans la #}
+{# même grille, pour que la page occupe toute la largeur disponible.          #}
+{% block sidebar %}{% endblock %}

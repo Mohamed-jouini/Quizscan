@@ -37,6 +37,7 @@ from django.test import Client
 from grader import services
 from grader.models import (AnswerKeySheet, ClassGroup, Question, Quiz, ScanBatch,
                            Student)
+from test_commun import enseignant_complet
 from test_e2e import fill_sheet, render_page, simulate_scan
 
 CORRIGE = {1: 0, 2: 1, 3: 2, 4: 3, 5: 0, 6: 1}      # A B C D A B
@@ -53,6 +54,7 @@ def main():
     ClassGroup.objects.filter(owner__username="prof_cor").delete()
     User.objects.filter(username="prof_cor").delete()
     teacher = User.objects.create_user("prof_cor", password="x-pass-123")
+    teacher = enseignant_complet(teacher)
     c = Client()
     c.force_login(teacher)
 

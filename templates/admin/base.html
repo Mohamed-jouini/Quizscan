@@ -47,7 +47,10 @@ navigation au lieu de deux.
 <div id="container">
 
   {% if not is_popup %}
-  {# ---------- Barre latérale : rubriques de l'application + tables ------ #}
+  {# ---------- Barre latérale : les mêmes rubriques que l'application --- #}
+  {# Les tables administrables ne sont PAS reprises ici : elles vivent sur  #}
+  {# la page d'accueil de l'administration (templates/admin/index.html).    #}
+  {# Les lister aux deux endroits obligeait à chercher deux fois.           #}
   <aside class="side">
     <div class="side__brand">
       <span class="side__mark" aria-hidden="true">
@@ -71,26 +74,7 @@ navigation au lieu de deux.
         <span>Administration</span></a>
     </nav>
 
-    {# Tables administrables, fournies par Django dans « available_apps ». #}
-    {% for app in available_apps %}
-      {% if app.models %}
-      <div class="nav__group">{{ app.name }}</div>
-      <nav class="nav">
-        {% for model in app.models %}
-          {% if model.admin_url %}
-          <a class="nav__item nav__item--sub {% if model.admin_url in request.path %}is-active{% endif %}"
-             href="{{ model.admin_url }}">{{ model.name }}</a>
-          {% endif %}
-        {% endfor %}
-      </nav>
-      {% endif %}
-    {% endfor %}
-
     <div class="side__foot">
-      <a class="nav__item nav__item--sub" href="{{ site_url|default:'/' }}">← Retour à l'application</a>
-      {% if user.has_usable_password %}
-      <a class="nav__item nav__item--sub" href="{% url 'admin:password_change' %}">Modifier le mot de passe</a>
-      {% endif %}
       <form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}
         <button class="qs-logout" type="submit">Déconnexion</button>
       </form>
@@ -106,11 +90,18 @@ navigation au lieu de deux.
         {% block usertools %}
         {% if has_permission %}
         <div id="user-tools">
-          <span class="qs-avatar">{% firstof user.get_short_name user.get_username as qui %}{{ qui|slice:":2"|upper }}</span>
-          <span class="qs-hello">
-            <small>{% block welcome-msg %}{% translate 'Welcome,' %}{% endblock %}</small>
-            <b>{% firstof user.get_short_name user.get_username %}</b>
-          </span>
+          {# Comme dans l'application : l'identite a gauche, et c'est elle   #}
+          {# qui mene au changement de mot de passe.                        #}
+          {% firstof user.get_short_name user.get_username as qui %}
+          <a class="qs-identite" href="{% url 'admin:password_change' %}"
+             title="{% translate 'Change password' %}">
+            <span class="qs-avatar">{{ qui|slice:":2"|upper }}</span>
+            <span class="qs-hello">
+              <small>{% block welcome-msg %}{% translate 'Welcome,' %}{% endblock %}</small>
+              <b>{{ qui }}</b>
+            </span>
+          </a>
+          <span class="spacer"></span>
           {% block userlinks %}{% endblock %}
           {% include "grader/_theme_toggle.html" %}
         </div>

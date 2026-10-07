@@ -31,6 +31,7 @@ from django.test.utils import setup_test_environment
 from grader import layout as L
 from grader import qr as qrmod
 from grader.models import ClassGroup, Question, Quiz, ScanBatch, Student
+from test_commun import enseignant_complet
 from test_e2e import fill_sheet, mm2px, render_page, simulate_scan
 
 KEY = "ABCDAB"
@@ -71,7 +72,9 @@ def main():
     Quiz.objects.filter(owner__username__in=["prof_web", "prof_autre"]).delete()
     User.objects.filter(username__in=["prof_web", "prof_autre"]).delete()
     teacher = User.objects.create_user("prof_web", password="x-pass-123")
+    teacher = enseignant_complet(teacher)
     other = User.objects.create_user("prof_autre", password="x-pass-123")
+    other = enseignant_complet(other)
     group = ClassGroup.objects.create(name="WEB-3B", owner=teacher)
     s1 = Student.objects.create(class_group=group, last_name="BEN SALAH",
                                 first_name="Ahmed", student_number="104523")

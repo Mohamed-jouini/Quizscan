@@ -35,6 +35,7 @@ import pymupdf
 from grader import labels_pdf, layout as L
 from grader import services, sheet_pdf
 from grader.models import ClassGroup, Question, Quiz, Student
+from test_commun import enseignant_complet
 from test_e2e import fill_sheet, render_page, simulate_scan
 
 KEY = "ABCDAB"
@@ -232,6 +233,7 @@ def main():
     ClassGroup.objects.filter(owner__username="prof_rob").delete()
     User.objects.filter(username="prof_rob").delete()
     teacher = User.objects.create_user("prof_rob", password="x-pass-123")
+    teacher = enseignant_complet(teacher)
 
     print("Secours OCR :")
     test_panne_ocr(teacher)

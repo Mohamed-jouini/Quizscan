@@ -74,7 +74,8 @@
   --qs-bad:#c5221f;     --qs-bad-bg:#fbe9e8;   --qs-bad-ink:#8c1813;
   --qs-bad-line:#f3cdca;  --qs-bad-dark:#a11b19;
   --qs-bad-btn:#c5221f;   --qs-bad-btn-hover:#a11b19;
-  --qs-warn:#9c5500;    --qs-warn-bg:#fdf1dc;
+  --qs-warn:#9c5500;    --qs-warn-bg:#fdf1dc;  --qs-warn-line:#f0dcb4;
+  --qs-info:#1f4e79;    --qs-info-bg:#eef3fb;  --qs-info-line:#cfddf2;
   --qs-violet-bg:#e8e6fb;   --qs-violet-ink:#4a45b0;   /* etiquette Admin */
 
   /* Formes */
@@ -90,7 +91,10 @@
 
   /* Mesures */
   --qs-side-w:238px;
-  --qs-max-w:1760px;
+  /* Aucune largeur maximale : sur un grand ecran, la carte doit remplir
+     l'ecran et non flotter au milieu avec des marges vides de part et
+     d'autre. Seule la gouttiere la separe des bords. */
+  --qs-max-w:none;
   --qs-gutter:clamp(12px,2.2vw,30px);
   --qs-pad:clamp(16px,2.4vw,28px);
 
@@ -127,7 +131,7 @@ body::before{width:38rem;height:38rem;background:var(--qs-halo-1);top:-12rem;lef
 body::after{width:42rem;height:42rem;background:var(--qs-halo-2);bottom:-16rem;right:-10rem}
 
 a{color:var(--qs-blue)}
-h1{font-size:23px;margin:0 0 16px;letter-spacing:-.3px}
+h1{font-size:25px;margin:0;letter-spacing:-.4px;line-height:1.2}
 h2{font-size:15.5px;margin:0 0 14px;letter-spacing:-.1px}
 .spacer{flex:1}
 
@@ -213,7 +217,9 @@ body #container{
   box-shadow:0 8px 18px -9px var(--qs-blue);
 }
 .hello{line-height:1.25}
-.hello small{display:block;color:var(--qs-faint);font-size:12.5px}
+/* Meme ton que « Bienvenue, » dans l administration (--header-color) : les
+   deux barres du haut disent la meme chose au meme endroit. */
+.hello small{display:block;color:var(--qs-muted);font-size:12.5px}
 .hello b{font-size:16.5px}
 .content{padding:var(--qs-pad);flex:1}
 
@@ -266,6 +272,13 @@ a.tile:hover{border-color:var(--qs-line-strong)}
 .shell tbody tr:last-child td,.shell table tr:last-child td{border-bottom:0}
 .shell tr:hover td{background:var(--qs-row-hover)}
 
+/* Un tableau plus large que sa carte defile DANS la carte : sans cela ses
+   dernieres colonnes etaient simplement inatteignables sur un telephone,
+   le document ne defilant pas lateralement pour autant. */
+.table-wrap{overflow-x:auto}
+.table-wrap table{min-width:100%;width:max-content}
+.table--espacee{margin-top:14px}
+
 /* --- Boutons ------------------------------------------------------------- */
 .btn{
   display:inline-flex;align-items:center;gap:7px;
@@ -314,7 +327,10 @@ input:focus,select:focus,textarea:focus{
   border:1px solid var(--border-color);border-radius:9px;padding:7px 9px;
   height:auto;line-height:1.4;
 }
-.helptext{color:var(--qs-faint);font-size:12.5px;display:block;margin-top:4px;
+/* Ton secondaire et non tertiaire : une aide de champ est du texte qu on
+   lit vraiment, et elle se pose souvent sur un fond teinte (carte verte,
+   ligne en alerte) ou le ton le plus pale passait sous le seuil. */
+.helptext{color:var(--qs-muted);font-size:12.5px;display:block;margin-top:4px;
   line-height:1.5}
 .radios label{font-weight:400;font-size:14px;display:flex;gap:8px;
   align-items:flex-start;margin:6px 0;color:var(--qs-ink)}
@@ -346,6 +362,173 @@ input:focus,select:focus,textarea:focus{
 .errorlist{color:var(--qs-bad);font-size:13px;font-weight:600;margin:4px 0;
   padding-left:18px}
 .userbox{font-size:13.5px;color:var(--qs-muted)}
+
+/* --- En-tete de page ----------------------------------------------------
+   Chaque page en avait un different : titre nu, puis un paragraphe ou se
+   melangeaient du texte et des boutons de trois tailles. Un seul objet
+   desormais : le titre et son contexte a gauche, les actions a droite. */
+.page-head{
+  display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;
+  margin:0 0 22px;padding-bottom:16px;
+  border-bottom:1px solid var(--qs-line);
+}
+.page-head__text{flex:1;min-width:min(260px,100%)}
+.page-head__meta{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin:7px 0 0;font-size:13px;color:var(--qs-muted);
+}
+.page-head__meta b{color:var(--qs-ink)}
+.page-head__actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* En-tete de carte portant une action a droite (plusieurs gabarits le
+   bricolaient avec un style="display:flex" en ligne). */
+.card__head{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;
+}
+.card__head h2{margin:0}
+
+/* --- Encart d'information ------------------------------------------------
+   Remplace les <ul class="messages"> detournes, dont les couleurs etaient
+   ecrites en dur dans l'attribut style et restaient donc claires en theme
+   sombre. .messages reste reserve aux messages de Django. */
+.note{
+  display:flex;gap:12px;align-items:flex-start;
+  margin:0 0 18px;padding:14px 16px;
+  border-radius:var(--qs-r-card);border:1px solid var(--qs-info-line);
+  background:var(--qs-info-bg);color:var(--qs-ink);
+  font-size:13.5px;line-height:1.6;
+}
+.note__icon{
+  flex:none;width:26px;height:26px;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--qs-surface);color:var(--qs-info);
+}
+.note__icon svg{width:16px;height:16px;fill:none;stroke:currentColor;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.note__body{min-width:0;flex:1}
+.note__body > :first-child{margin-top:0}
+.note__body > :last-child{margin-bottom:0}
+.note--ok{background:var(--qs-ok-bg);border-color:var(--qs-ok-line)}
+.note--ok .note__icon{color:var(--qs-ok)}
+.note--warn{background:var(--qs-warn-bg);border-color:var(--qs-warn-line)}
+.note--warn .note__icon{color:var(--qs-warn)}
+.note--bad{background:var(--qs-bad-bg);border-color:var(--qs-bad-line)}
+.note--bad .note__icon{color:var(--qs-bad)}
+.note .btn{margin-top:4px}
+
+/* --- Barre de progression ------------------------------------------------ */
+.progress{
+  height:8px;border-radius:999px;background:var(--qs-track);
+  overflow:hidden;margin-top:10px;
+}
+.progress i{display:block;height:100%;border-radius:999px;background:var(--qs-grad)}
+
+/* --- Etat vide -----------------------------------------------------------
+   « Aucun concours pour le moment. » etait une simple phrase perdue dans une
+   carte vide. Un etat vide doit dire ce qui manque ET ce qu'on peut faire. */
+.empty{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:32px 20px;text-align:center;
+}
+.empty__icon{
+  width:46px;height:46px;border-radius:15px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--qs-track);color:var(--qs-faint);
+}
+.empty__icon svg{width:23px;height:23px;fill:none;stroke:currentColor;
+  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.empty__title{font-size:15px;font-weight:600;color:var(--qs-ink)}
+.empty p{margin:0;max-width:52ch;font-size:13.5px;color:var(--qs-muted);
+  line-height:1.6}
+.empty .btn{margin-top:4px}
+
+/* Page d un seul formulaire : centree et bornee, pour ne pas laisser le
+   champ s etirer sur 1500 px ni le formulaire flotter contre le bord. */
+.form-page{max-width:640px;margin:0 auto}
+
+/* --- Variantes de carte --------------------------------------------------
+   Les gabarits ecrivaient ces fonds et ces bordures dans un attribut style,
+   avec des couleurs figees : ils restaient clairs en theme sombre. */
+.card--vedette{border:2px solid var(--qs-blue);background:var(--qs-info-bg)}
+.card--alerte{border:2px solid var(--qs-warn);background:var(--qs-warn-bg)}
+.card--valide{border-color:var(--qs-ok-line);background:var(--qs-ok-bg)}
+
+/* Une carte en deux parts : un texte qui s'etire, une action a cote. */
+.card__duo{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.card__duo--haut{align-items:flex-start}
+.card__duo-texte{flex:1;min-width:min(280px,100%)}
+.card__duo-texte h2{margin:0 0 5px}
+.card__duo-action{flex:1;min-width:min(300px,100%)}
+.helptext--serre{margin:0}
+.label--haut{margin-top:0}
+
+/* Bandeau de reglages de l'epreuve : une carte comme les autres, dont les
+   champs s'alignent sur une ou plusieurs lignes selon la largeur. */
+.reglages{display:flex;gap:16px 18px;align-items:end;flex-wrap:wrap;
+  padding:16px 18px}
+.reglages label{margin:0 0 3px}
+/* Les deux listes decisives prennent la ligne ; les petits champs se rangent
+   ensuite cote a cote. */
+.reglages__large{flex-basis:100%}
+.reglages__large select{max-width:560px}
+.reglages__aide{flex-basis:100%;margin:0}
+.champ--court{width:90px}
+.champ--note{width:70px}
+
+/* Valeur etablie par la machine, que l'ecran montre sans permettre de la
+   changer (note de QCM pour un enseignant). */
+.verrou{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:12.5px;color:var(--qs-muted);white-space:nowrap;
+}
+.verrou svg{
+  width:14px;height:14px;flex:none;fill:none;stroke:currentColor;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
+.champ--auto{width:auto}
+
+/* Un champ dont la valeur manque encore (bonne reponse « a definir »). */
+.champ--manquant{border-color:var(--qs-warn);background:var(--qs-warn-bg)}
+.ligne--alerte td{background:var(--qs-bad-bg)}
+
+/* Teintes de texte nommees : la legende des couleurs de la copie relue les
+   ecrivait en dur (#00a, #0a0, #c00), invisibles sur fond sombre. */
+.t-info{color:var(--qs-info)}
+.t-ok{color:var(--qs-ok)}
+.t-bad{color:var(--qs-bad)}
+.t-warn{color:var(--qs-warn)}
+
+.btn--grand{font-size:16px;padding:11px 22px}
+
+/* --- Filtres en pastilles ------------------------------------------------
+   « Filtrer par lot : Tous | lot 1 | lot 2 », ou l'actif se signalait par un
+   style="font-weight:700" a peine visible. */
+.filtres{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.filtres__label{
+  font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--qs-faint);
+}
+.filtre{
+  padding:5px 13px;border-radius:999px;font-size:13px;font-weight:600;
+  text-decoration:none;color:var(--qs-muted);
+  border:1px solid var(--qs-line);background:var(--qs-surface);
+}
+.filtre:hover{border-color:var(--qs-line-strong);color:var(--qs-ink)}
+.filtre.is-active{background:var(--qs-grad);border-color:transparent;color:#fff}
+
+/* --- Marche a suivre numerotee ------------------------------------------- */
+.steps{list-style:none;counter-reset:etape;margin:0;padding:0;display:grid;
+  gap:14px}
+.steps li{
+  counter-increment:etape;position:relative;padding-left:40px;
+  font-size:13.5px;line-height:1.65;color:var(--qs-ink-soft);
+}
+.steps li::before{
+  content:counter(etape);position:absolute;left:0;top:-1px;
+  width:26px;height:26px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--qs-grad);color:#fff;font-size:12.5px;font-weight:700;
+}
 
 /* === 5. Connexion ========================================================= */
 body.auth-page{
@@ -472,10 +655,10 @@ html[data-theme="light"],:root{
   --body-quiet-color:var(--qs-muted);
   --body-medium-color:var(--qs-ink-soft);
   --body-loud-color:var(--qs-ink-loud);
-  --header-color:#dfe3fb;      /* pose sur le degrade : constant */
-  --header-branding-color:#fff;
-  --header-bg:transparent;      /* le dégradé est posé sur #header */
-  --header-link-color:#fff;
+  --header-color:var(--qs-muted);
+  --header-branding-color:var(--qs-ink);
+  --header-bg:transparent;
+  --header-link-color:var(--qs-blue);
   --breadcrumbs-fg:var(--qs-muted);
   --breadcrumbs-link-fg:var(--qs-blue);
   --breadcrumbs-bg:transparent;
@@ -513,16 +696,39 @@ body.popup{padding:0}
 body.popup #container{grid-template-columns:1fr;border-radius:0;min-height:100vh}
 .qs-main{display:flex;flex-direction:column;min-width:0}
 
+/* Meme barre du haut que dans l'application : le bandeau violet pleine
+   largeur ecrasait la page et ne correspondait a aucun autre ecran. Il ne
+   reste que l'identite de la personne connectee et la bascule de theme,
+   sur le fond en verre du panneau. */
 #header{
-  background:var(--qs-grad);color:#fff;
-  padding:14px 26px;align-items:center;gap:14px;
+  background:transparent;color:var(--qs-ink);
+  padding:18px var(--qs-pad);align-items:center;gap:14px;
+  border-bottom:1px solid var(--qs-sheen-edge);
 }
 #branding{display:none}        /* la marque est dans la barre latérale */
+/* Pas de margin-left:auto : l'identite commence a GAUCHE de la barre, comme
+   dans l'application. C'est la cale .spacer qui repousse la bascule de theme
+   a l'autre bout. */
 #user-tools{
-  display:flex;align-items:center;gap:12px;margin-left:auto;
+  display:flex;align-items:center;gap:12px;flex:1;min-width:0;
   font-size:12.5px;text-transform:none;letter-spacing:0;
 }
-#user-tools a{border-bottom:0;text-decoration:underline;text-underline-offset:3px}
+
+/* L'identite est un lien vers son propre mot de passe : rien ne le signale
+   au repos, le survol suffit. Un bouton de plus aurait charge la barre. */
+.qs-identite{
+  display:flex;align-items:center;gap:12px;min-width:0;
+  text-decoration:none;color:inherit;
+  padding:4px 10px 4px 4px;margin-left:-4px;
+  border-radius:999px;transition:background .15s;
+}
+.qs-identite:hover{background:var(--qs-sheen-hover)}
+.qs-identite:hover .hello b,.qs-identite:hover .qs-hello b{color:var(--qs-blue)}
+/* Django souligne et colore tout lien ; l identite n en est pas un au sens
+   visuel : elle doit se lire comme le nom de la personne connectee. Le
+   prefixe #user-tools passe devant la regle « a:link » de Django. */
+#user-tools a.qs-identite{color:var(--qs-ink);text-decoration:none;border-bottom:0}
+#user-tools a.qs-identite:hover b{color:var(--qs-blue)}
 
 div.breadcrumbs{
   background:transparent;color:var(--breadcrumbs-fg);
@@ -622,6 +828,57 @@ ul.messagelist li{border-radius:10px;padding:11px 15px 11px 42px;font-size:14px}
 .selector-chosen-title,
 #content .selector-chosen-title label,
 #content .selector-chosen-title .helptext{color:#fff}
+
+/* --- Page d'accueil de l'administration ---------------------------------
+   Elle liste les tables administrables (la barre laterale ne les reprend
+   plus). La grille .tiles s'adapte d'elle-meme : une colonne sur telephone,
+   autant que la largeur en permet sur un grand ecran, sans valeur fixe a
+   reajuster ecran par ecran. */
+/* Django fige la page d accueil a 600 px (« .dashboard #content »), largeur
+   prevue pour ses deux colonnes flottantes. La notre n a qu une colonne qui
+   se repartit toute seule : on lui rend la largeur disponible. */
+body.dashboard #content{width:auto;max-width:none}
+#content-main{width:auto;float:none;min-width:0}
+.qs-section{margin:0 0 26px}
+/* auto-FILL et non auto-fit : une rubrique de deux tables garde des cartes
+   de taille normale, alignees sur celles de la rubrique suivante, au lieu de
+   s etirer sur toute la largeur. */
+.qs-section .tiles{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.qs-section__title{
+  font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;
+  color:var(--qs-muted);margin:0 0 12px;
+}
+.qs-table{gap:12px}
+.qs-table__top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.qs-table__icon{
+  width:38px;height:38px;border-radius:12px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--qs-grad);color:#fff;
+}
+.qs-table__icon svg{
+  width:20px;height:20px;fill:none;stroke:currentColor;
+  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;
+}
+.qs-table__n{font-size:25px;font-weight:700;line-height:1;color:var(--qs-ink)}
+/* Le titre de la carte EST le lien vers la table : il garde la couleur de
+   lien de l administration, seul le poids le distingue du reste. */
+.qs-table__name{font-size:15px;font-weight:600;text-decoration:none}
+.qs-table__name:hover{text-decoration:underline}
+.qs-table__links{
+  display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;
+  margin-top:auto;padding-top:4px;border-top:1px solid var(--qs-line);
+}
+
+.qs-journal .actionlist{margin:0;padding:0;list-style:none}
+.qs-journal .actionlist li{
+  padding:9px 0 9px 24px;border-bottom:1px solid var(--qs-line);font-size:14px;
+}
+.qs-journal .actionlist li:last-child{border-bottom:0;padding-bottom:0}
+.qs-journal .actionlist li:first-child{padding-top:0}
+.qs-journal .actionlist .mini{
+  display:block;font-size:12px;color:var(--qs-faint);margin-top:2px;
+}
+.qs-journal__vide{margin:0;color:var(--qs-muted)}
 
 /* Gestion des comptes */
 .qs-avatar{
@@ -779,7 +1036,8 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   --dk-btn-bg:#4a52bd;    --dk-btn-hover:#5a62cd;
   --dk-tool-bg:#4a52bd;   --dk-tool-hover:#5f68d6;
   --dk-bad-btn:#a8322c;   --dk-bad-btn-hover:#bf3a33;
-  --dk-warn:#e9a33d; --dk-warn-bg:#3a2a0e;
+  --dk-warn:#e9a33d; --dk-warn-bg:#3a2a0e; --dk-warn-line:#5e4517;
+  --dk-info:#9ec2f0; --dk-info-bg:#15233a; --dk-info-line:#28405f;
   --dk-violet-bg:#2b2550; --dk-violet-ink:#c3b5fb;
   --dk-grey:#555c7e;      --dk-grey-dark:#3f4463;
 
@@ -825,6 +1083,9 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   --qs-tool-bg:var(--dk-tool-bg); --qs-tool-hover:var(--dk-tool-hover);
   --qs-bad-btn:var(--dk-bad-btn); --qs-bad-btn-hover:var(--dk-bad-btn-hover);
   --qs-warn:var(--dk-warn); --qs-warn-bg:var(--dk-warn-bg);
+  --qs-warn-line:var(--dk-warn-line);
+  --qs-info:var(--dk-info); --qs-info-bg:var(--dk-info-bg);
+  --qs-info-line:var(--dk-info-line);
   --qs-violet-bg:var(--dk-violet-bg); --qs-violet-ink:var(--dk-violet-ink);
   --qs-grey:var(--dk-grey); --qs-grey-dark:var(--dk-grey-dark);
   --qs-shadow-soft:var(--dk-shadow-soft);
@@ -866,6 +1127,9 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   --qs-tool-bg:var(--dk-tool-bg); --qs-tool-hover:var(--dk-tool-hover);
   --qs-bad-btn:var(--dk-bad-btn); --qs-bad-btn-hover:var(--dk-bad-btn-hover);
   --qs-warn:var(--dk-warn); --qs-warn-bg:var(--dk-warn-bg);
+  --qs-warn-line:var(--dk-warn-line);
+  --qs-info:var(--dk-info); --qs-info-bg:var(--dk-info-bg);
+  --qs-info-line:var(--dk-info-line);
   --qs-violet-bg:var(--dk-violet-bg); --qs-violet-ink:var(--dk-violet-ink);
   --qs-grey:var(--dk-grey); --qs-grey-dark:var(--dk-grey-dark);
   --qs-shadow-soft:var(--dk-shadow-soft);

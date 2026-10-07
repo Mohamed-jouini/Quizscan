@@ -31,6 +31,7 @@ from reportlab.pdfgen import canvas
 
 from grader import importers
 from grader.models import ClassGroup, Question, Quiz
+from test_commun import enseignant_complet
 
 QUESTIONNAIRE = """Contrôle de géographie — 2e année
 Consigne : une seule bonne réponse par question.
@@ -162,8 +163,14 @@ def main():
     print("  Excel, Word (tableau), PDF, CSV ✔")
 
     # ---- par l'interface web : import + banque de questions
+    # Quiz protège ClassGroup : sans retirer les quiz d'abord, la suppression
+    # du compte échoue sur la clé protégée si un passage précédent s'est
+    # interrompu avant la fin.
+    Quiz.objects.filter(owner__username="prof_import").delete()
+    ClassGroup.objects.filter(owner__username="prof_import").delete()
     User.objects.filter(username="prof_import").delete()
     teacher = User.objects.create_user("prof_import", password="x-pass-123")
+    teacher = enseignant_complet(teacher)
     group = ClassGroup.objects.create(name="IMPORT-2A", owner=teacher)
     q_src = Quiz.objects.create(title="Géographie T1", class_group=group, owner=teacher)
     q_new = Quiz.objects.create(title="Géographie T2", class_group=group, owner=teacher)

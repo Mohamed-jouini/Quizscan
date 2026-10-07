@@ -1,11 +1,19 @@
 {% extends "grader/base.html" %}
 {% block content %}
-<h1>Classes</h1>
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>Classes</h1>
+    <p class="page-head__meta">
+      <b>{{ classes|length }}</b> classe(s) · <b>{{ quizzes|length }}</b> quiz
+    </p>
+  </div>
+</header>
 
 <div class="card">
   <h2>Quiz de classe ({{ quizzes|length }})</h2>
   {% if quizzes %}
-  <table>
+  <div class="table-wrap">
+    <table>
     <tr><th>Titre</th><th>Classe</th><th>Questions</th><th></th></tr>
     {% for q in quizzes %}
     <tr>
@@ -16,27 +24,51 @@
     </tr>
     {% endfor %}
   </table>
-  {% else %}<p>Aucun quiz de classe. <a href="{% url 'quiz_create' %}">Créez le premier</a>.</p>{% endif %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <span class="empty__icon">
+      <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9.5 12h6M9.5 16h4"/></svg>
+    </span>
+    <span class="empty__title">Aucun quiz de classe</span>
+    <p>Un quiz se rattache à une classe : ses étudiants sont déjà connus, et
+       chaque copie est identifiée par le nom manuscrit ou le QR de l'étiquette.</p>
+    {% if perms.grader.creer_epreuve %}
+    <a class="btn" href="{% url 'quiz_create' %}">Créer le premier quiz</a>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 
 <div class="grid2">
   <div class="card">
     <h2>Mes classes ({{ classes|length }})</h2>
     {% if classes %}
-    <table>
+    <div class="table-wrap">
+      <table>
       <tr><th>Classe</th><th>Étudiants</th></tr>
       {% for c in classes %}
       <tr><td><a href="{% url 'class_detail' c.pk %}">{{ c.name }}</a></td>
           <td>{{ c.students.count }}</td></tr>
       {% endfor %}
     </table>
-    {% else %}<p>Aucune classe pour le moment.</p>{% endif %}
+    </div>
+    {% else %}
+    <div class="empty">
+      <span class="empty__icon">
+        <svg viewBox="0 0 24 24"><path d="M3 19.5a6.5 6.5 0 0 1 13 0"/><circle cx="9.5" cy="8" r="3.5"/><path d="M17 11.5a4.5 4.5 0 0 1 4 4.5"/><circle cx="17.5" cy="6.5" r="2.5"/></svg>
+      </span>
+      <span class="empty__title">Aucune classe pour le moment</span>
+      <p>Créez-en une ci-contre, puis importez ses étudiants.</p>
+    </div>
+    {% endif %}
   </div>
   <div class="card">
     <h2>Nouvelle classe</h2>
     <form method="post">{% csrf_token %}
       {{ form.name.errors }}
       <label>Nom de la classe</label>{{ form.name }}
+      <span class="helptext">Par exemple « 3ème A — Sciences ».</span>
       <p><button class="btn" type="submit">Créer</button></p>
     </form>
   </div>

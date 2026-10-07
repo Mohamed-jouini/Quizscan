@@ -1,6 +1,14 @@
 {% extends "grader/base.html" %}
 {% block title %}Tableau de bord — QuizScan{% endblock %}
 {% block content %}
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>Tableau de bord</h1>
+    <p class="page-head__meta">
+      Vos épreuves, vos copies scannées et ce qui reste à faire.
+    </p>
+  </div>
+</header>
 
 {# ---- Rangée de tuiles : les chiffres que l'enseignant regarde en premier #}
 <div class="tiles">
@@ -65,13 +73,14 @@
 <div class="grid2">
   {# ---- Épreuves récentes ---- #}
   <div class="card">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-      <h2 style="margin:0">Mes épreuves</h2>
+    <div class="card__head">
+      <h2>Mes épreuves</h2>
       <span class="spacer"></span>
       <a class="btn small secondary" href="{% url 'class_list' %}">Tout voir</a>
     </div>
     {% if quizzes %}
-    <table>
+    <div class="table-wrap">
+      <table>
       {% for q in quizzes %}
       <tr>
         <td><a href="{% url 'quiz_detail' q.pk %}"><b>{{ q.title }}</b></a>
@@ -82,6 +91,7 @@
       </tr>
       {% endfor %}
     </table>
+    </div>
     {% else %}
     <p class="helptext">Aucune épreuve pour le moment.
       <a href="{% url 'quiz_create' %}">Créez la première</a>.</p>
@@ -93,7 +103,8 @@
     <div class="card">
       <h2>Derniers lots de copies</h2>
       {% if batches %}
-      <table>
+      <div class="table-wrap">
+        <table>
         {% for b in batches %}
         <tr>
           <td><a href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
@@ -113,6 +124,7 @@
         </tr>
         {% endfor %}
       </table>
+      </div>
       {% else %}
       <p class="helptext">Aucun lot scanné. Générez la fiche d'une épreuve,
         imprimez-la, puis téléversez les copies.</p>
@@ -123,7 +135,8 @@
     {% if to_review %}
     <div class="card">
       <h2>Copies à vérifier</h2>
-      <table>
+      <div class="table-wrap">
+        <table>
         {% for s in to_review %}
         <tr>
           <td><a href="{% url 'sheet_review' s.pk %}">{{ s.source_name|truncatechars:36 }}</a></td>
@@ -135,6 +148,7 @@
         </tr>
         {% endfor %}
       </table>
+      </div>
     </div>
     {% endif %}
 

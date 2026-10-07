@@ -49,9 +49,6 @@
     </nav>
 
     <div class="side__foot">
-      <a class="nav__item" href="{% url 'password_change' %}">
-        <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-        <span>Mon mot de passe</span></a>
       <form method="post" action="{% url 'logout' %}" style="margin-top:6px">{% csrf_token %}
         <button class="btn small secondary" type="submit" style="width:100%;justify-content:center">
           <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8"><path d="M10 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4"/><path d="M15 16l4-4-4-4"/><path d="M19 12H9"/></svg>
@@ -64,17 +61,24 @@
   <div class="main">
     {% if user.is_authenticated %}
     <header class="topbar">
-      <span class="avatar">{{ user.get_full_name|default:user.username|slice:":2"|upper }}</span>
-      <span class="hello">
-        <small>Bonjour,</small>
-        <b>{{ user.get_full_name|default:user.username }}</b>
-      </span>
+      {# Le nom EST le lien vers son propre mot de passe : pas de bouton de #}
+      {# plus dans la barre, et le reglage reste a un clic.                 #}
+      <a class="qs-identite" href="{% url 'password_change' %}"
+         title="Modifier mon mot de passe">
+        <span class="avatar">{{ user.get_full_name|default:user.username|slice:":2"|upper }}</span>
+        <span class="hello">
+          <small>Bonjour,</small>
+          <b>{{ user.get_full_name|default:user.username }}</b>
+        </span>
+      </a>
       <span class="spacer"></span>
       {% include "grader/_theme_toggle.html" %}
       {% block topbar_actions %}
+      {% if perms.grader.creer_epreuve %}
       <a class="btn" href="{% url 'quiz_create' %}">
         <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M12 5v14M5 12h14"/></svg>
         Nouveau quiz</a>
+      {% endif %}
       {% endblock %}
     </header>
     {% endif %}

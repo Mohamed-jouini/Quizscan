@@ -32,6 +32,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client
 
 from grader.models import ClassGroup, Question, Quiz
+from test_commun import enseignant_complet
 
 FEUILLE = "grader/quizscan.css"
 SCRIPT_THEME = "grader/theme.js"
@@ -71,6 +72,7 @@ def main():
     ClassGroup.objects.filter(name="DSG").delete()
     User.objects.filter(username__startswith="dsg_").delete()
     prof = User.objects.create_user("dsg_prof", password="Mdp-Design-123")
+    prof = enseignant_complet(prof)
     admin = User.objects.create_superuser("dsg_admin", email="",
                                           password="Mdp-Design-123")
     groupe = ClassGroup.objects.create(name="DSG", owner=prof)
@@ -98,6 +100,18 @@ def main():
                 assert len(lignes) <= MAX_LIGNES_EN_LIGNE, (
                     f"{url} redéclare du style en ligne ({len(lignes)} lignes) : "
                     "tout doit vivre dans grader/static/grader/quizscan.css")
+            # Le bouton « Mot de passe » a quitté la barre du haut : c'est
+            # désormais le nom de la personne qui y mène. Sans ce contrôle,
+            # le réglage pourrait disparaître de l'interface sans bruit.
+            if etiquette != "connexion":
+                assert 'class="qs-identite"' in corps and 'password_change' in corps, (
+                    f"{url} : plus aucun accès au changement de mot de passe")
+            # Un commentaire {# … #} de gabarit ne tient QUE sur une ligne :
+            # ouvert sur deux, Django n'y voit pas un commentaire et l'affiche
+            # tel quel au milieu de la page. L'erreur est passée trois fois.
+            assert "{#" not in corps, (
+                f"{url} affiche un commentaire de gabarit : un {{# … #}} "
+                "ouvert sur plusieurs lignes n'est pas un commentaire")
             # Un seul mécanisme de thème, partout : notre script, notre bouton.
             assert SCRIPT_THEME in corps, f"{url} ne charge pas {SCRIPT_THEME}"
             assert 'class="theme-toggle"' in corps, \
@@ -109,11 +123,34 @@ def main():
         print(f"  {etiquette:14} {len(urls)} pages : feuille unique, bascule "
               "de thème, aucun second système OK")
 
+    def menu(corps):
+        """Extrait la barre latérale d'une page d'administration."""
+        debut = corps.index('<aside class="side">')
+        return corps[debut:corps.index("</aside>", debut)]
+
     controle(Client(), anonyme, "connexion")
     c = Client(); c.force_login(prof)
     controle(c, enseignant, "enseignant")
     c = Client(); c.force_login(admin)
     controle(c, administration, "administration")
+
+    # Les tables administrables se listent à UN seul endroit : la page
+    # d'accueil de l'administration. Les reprendre dans la barre latérale
+    # obligeait à chercher deux fois le même lien.
+    accueil = c.get("/admin/").content.decode()
+    for table in ("Étudiants", "Questions", "Utilisateurs"):
+        assert f">{table}</a>" in accueil, \
+            f"la page d'accueil de l'administration ne propose pas « {table} »"
+    for url in administration:
+        corps = menu(c.get(url).content.decode())
+        liens = re.findall(r'href="(/admin/\w+/\w+/)"', corps)
+        assert not liens, (f"{url} : la barre latérale reliste les tables "
+                           f"({liens[:3]}) — elles vivent sur /admin/")
+        assert "Retour à l" not in corps, (
+            f"{url} : le lien de retour fait doublon avec les rubriques "
+            "de l'application, juste au-dessus dans le même menu")
+    print(f"  tables         listées sur /admin/ seulement, absentes des "
+          f"{len(administration)} barres latérales OK")
 
     # Les trois contextes partagent les mêmes jetons et la même barre latérale.
     feuille = (django.apps.apps.get_app_config("grader").path
@@ -132,7 +169,11 @@ def main():
     hors_media = _sans_media(css)
     for classe in (".side{", ".nav__item{", ".card{", ".btn{", ".tile{",
                    ".badge{", ".auth{", ".topbar{"):
-        n = hors_media.count(classe)
+        # Le sélecteur doit COMMENCER par cette classe : « .note .btn{ » est un
+        # ajustement dans un contexte précis, pas une seconde définition du
+        # bouton. Seul « .btn{ » en tête de sélecteur en serait une.
+        n = len(re.findall(r"(?:^|[,}])\s*" + re.escape(classe), hors_media,
+                           re.M))
         assert n == 1, f"{classe} est défini {n} fois hors requête média"
     print(f"  jetons         chaque couleur et chaque composant défini une "
           f"seule fois ({len(css.splitlines())} lignes) OK")

@@ -25,6 +25,7 @@ from django.test import Client
 from django.test.utils import setup_test_environment
 
 from grader.models import Question, Quiz, ScanBatch, SheetScan, Student
+from test_commun import enseignant_complet
 from test_e2e import fill_sheet, render_page, simulate_scan
 from test_e2e_web import jpg, stick_label
 
@@ -43,6 +44,7 @@ def main():
     Quiz.objects.filter(owner__username="prof_def").delete()
     User.objects.filter(username="prof_def").delete()
     teacher = User.objects.create_user("prof_def", password="x-pass-123")
+    teacher = enseignant_complet(teacher)
     c = Client()
     c.force_login(teacher)
 
