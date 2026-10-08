@@ -22,7 +22,8 @@ from django.core.files.storage import default_storage
 from django.db import close_old_connections, connection, transaction
 from django.db.models import Avg, Count, Max, Min, Sum
 
-from . import journal, omr
+from . import journal, omr, sheet_pdf
+from . import layout as layout_mod
 from .models import (Answer, AnswerKeySheet, Quiz, ScanBatch, SheetScan,
                      Student)
 
@@ -418,6 +419,57 @@ def _has_name_zone(page_layout, quiz):
         return False
     sticker = (page_layout.get("qr") or {}).get("sticker")
     return not (quiz.auto_enroll and sticker)
+
+
+# Ce que le scan lit sur une page : si ces positions sont identiques, une
+# copie imprimée avec l'ancienne fiche se lit avec la nouvelle disposition.
+_ZONES_LUES = ("id_grid", "qcm", "open")
+
+
+def fiche_grille_perimee(quiz):
+    """La fiche « grille de n° » de ce quiz date-t-elle d'avant le cadre QR ?
+    (Elle porte encore les cases NOM/PRÉNOM.)
+
+    L'empreinte de la fiche n'entre pas en compte : les fiches générées par
+    les premières versions n'en ont pas, et c'étaient justement celles qui
+    restaient avec NOM/PRÉNOM. Le critère de sûreté est ailleurs : la
+    comparaison des zones lues, dans moderniser_fiche_grille."""
+    disposition = quiz.layout_json
+    if quiz.id_mode != "grid" or not quiz.sheet_pdf or not disposition:
+        return False
+    return any(page.get("name_boxes") for page in disposition.get("pages", []))
+
+
+def moderniser_fiche_grille(quiz):
+    """Régénère la fiche d'un quiz en mode grille dont le PDF porte encore les
+    cases NOM/PRÉNOM : l'emplacement de l'étiquette QR les remplace.
+
+    Sans risque pour les copies déjà imprimées : on ne remplace la fiche que
+    si tout ce que le scan lit (grille de n°, cases QCM, zones manuscrites)
+    est au millimètre à la même place dans la nouvelle disposition. Sinon on
+    ne touche à rien — la page du quiz signale déjà qu'une fiche modifiée
+    est à régénérer. Retourne True si la fiche a été remplacée."""
+    if not fiche_grille_perimee(quiz):
+        return False
+    ancienne = quiz.layout_json
+    try:
+        nouvelle = layout_mod.build_layout(quiz)
+    except layout_mod.TooManyPages:
+        return False
+    if len(nouvelle["pages"]) != len(ancienne["pages"]):
+        return False
+    for page, avant in zip(nouvelle["pages"], ancienne["pages"]):
+        if any(page.get(cle) != avant.get(cle) for cle in _ZONES_LUES):
+            return False
+    pdf = sheet_pdf.generate_sheet_pdf(quiz, nouvelle)
+    # Le PDF est celui du quiz tel qu'il est : son empreinte est l'actuelle.
+    nouvelle["signature"] = layout_mod.layout_signature(quiz)
+    quiz.layout_json = nouvelle
+    quiz.sheet_pdf.save(f"fiche_quiz_{quiz.pk}.pdf", ContentFile(pdf), save=False)
+    quiz.save(update_fields=["layout_json", "sheet_pdf"])
+    log.info("Fiche du quiz %s mise à jour : cadre QR à la place de NOM/PRÉNOM",
+             quiz.pk)
+    return True
 
 
 def _process_sheet(sheet, img, layout, students, questions, quiz):

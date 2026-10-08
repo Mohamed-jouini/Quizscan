@@ -190,6 +190,78 @@ def verifier_lecture(teacher):
           "1 ancienne fiche — toutes identifiées, réponses lues")
 
 
+def _fiche_ancienne(quiz):
+    """Fiche générée avant le cadre QR : PDF et disposition avec NOM/PRÉNOM."""
+    from django.core.files.base import ContentFile
+    disposition = _ancienne_disposition(quiz)
+    disposition["signature"] = L.layout_signature(quiz)
+    quiz.layout_json = disposition
+    quiz.sheet_pdf.save(f"ancienne_{quiz.pk}.pdf", ContentFile(
+        sheet_pdf.generate_sheet_pdf(quiz, disposition)), save=False)
+    quiz.save()
+    return disposition
+
+
+def verifier_mise_a_jour(teacher):
+    """Une fiche déjà générée ne changeait qu'au clic sur « Régénérer » :
+    l'enseignant téléchargeait encore NOM/PRÉNOM. Elle se met maintenant à
+    jour seule à l'ouverture de la page du quiz."""
+    from django.test import Client
+    from test_commun import enseignant_complet
+    enseignant_complet(teacher)
+    _, quiz = _quiz(teacher, "GQR-MAJ")
+    ancienne = _fiche_ancienne(quiz)
+    ancien_pdf = quiz.sheet_pdf.name
+    assert services.fiche_grille_perimee(quiz)
+
+    client = Client()
+    client.force_login(teacher)
+    page = client.get(f"/quiz/{quiz.pk}/").content.decode()
+    assert "Fiche de réponses mise à jour" in page, "aucun message de mise à jour"
+    quiz.refresh_from_db()
+    assert quiz.sheet_pdf.name != ancien_pdf, "le PDF n'a pas été remplacé"
+    texte = pymupdf.open(stream=quiz.sheet_pdf.read(), filetype="pdf")[0].get_text()
+    assert "PRÉNOM" not in texte.split() and "CODE QR" in texte, texte[:300]
+    for page_neuve, avant in zip(quiz.layout_json["pages"], ancienne["pages"]):
+        assert not page_neuve["name_boxes"] and page_neuve["qr"]["sticker"]
+        for cle in ("id_grid", "qcm", "open"):
+            assert page_neuve[cle] == avant[cle], f"{cle} a bougé"
+    assert quiz.layout_json["signature"] == L.layout_signature(quiz)
+    # Une seule fois : la page suivante ne refait rien.
+    assert "Fiche de réponses mise à jour" not in client.get(
+        f"/quiz/{quiz.pk}/").content.decode()
+
+    # Fiche modifiée depuis son impression (question ajoutée) : on ne touche
+    # à rien, c'est l'alerte « fiche à régénérer » qui prend le relais.
+    _, quiz2 = _quiz(teacher, "GQR-MAJ2")
+    _fiche_ancienne(quiz2)
+    Question.objects.create(quiz=quiz2, order=99, qtype="qcm", points=1.0,
+                            correct_choice=0)
+    nom = quiz2.sheet_pdf.name
+    assert not services.moderniser_fiche_grille(quiz2)
+    quiz2.refresh_from_db()
+    assert quiz2.sheet_pdf.name == nom and quiz2.layout_json["pages"][0]["name_boxes"]
+
+    # La commande lancée au démarrage du conteneur fait de même pour toutes —
+    # y compris une fiche des premières versions, sans empreinte : c'était
+    # le cas de « Contrôle n°1 », que la première version de cette mise à
+    # jour laissait de côté.
+    from io import StringIO
+    from django.core.management import call_command
+    _, quiz3 = _quiz(teacher, "GQR-MAJ3")
+    _fiche_ancienne(quiz3)
+    sans_empreinte = dict(quiz3.layout_json)
+    del sans_empreinte["signature"]
+    quiz3.layout_json = sans_empreinte
+    quiz3.save()
+    sortie = StringIO()
+    call_command("moderniser_fiches", stdout=sortie)
+    quiz3.refresh_from_db()
+    assert not quiz3.layout_json["pages"][0]["name_boxes"], sortie.getvalue()
+    print("  mise à jour    ancienne fiche remplacée à l'ouverture du quiz et par "
+          "la commande ; fiche modifiée laissée intacte")
+
+
 def main():
     logging.disable(logging.WARNING)
     User.objects.filter(username="prof_gqr").delete()
@@ -197,6 +269,7 @@ def main():
     verifier_disposition(teacher)
     verifier_impression(teacher)
     verifier_lecture(teacher)
+    verifier_mise_a_jour(teacher)
     print("\n✅ TEST GRILLE + ÉTIQUETTE QR RÉUSSI")
 
 

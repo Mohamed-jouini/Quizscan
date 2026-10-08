@@ -435,6 +435,17 @@ def quiz_detail(request, pk):
     import_form = QuestionImportForm()
     bank_form = QuestionBankForm(quizzes=_my_quizzes(request), exclude=quiz)
 
+    # Fiche « grille » générée avant le cadre QR : elle portait encore les
+    # cases NOM/PRÉNOM, et le bouton « Télécharger la fiche » rendait ce PDF
+    # tant que personne ne cliquait sur « Régénérer ». Mise à jour ici, à
+    # l'ouverture de la page, seulement si rien de ce qui est lu au scan ne
+    # bouge (voir services.moderniser_fiche_grille).
+    if request.method == "GET" and services.moderniser_fiche_grille(quiz):
+        messages.info(request, "Fiche de réponses mise à jour : les cases NOM et "
+                               "PRÉNOM sont remplacées par l'emplacement de "
+                               "l'étiquette QR. Les copies déjà imprimées "
+                               "restent lisibles.")
+
     if request.method == "POST":
         # Deux droits distincts se croisent ici : modifier l'epreuve, et
         # lancer sa correction. On n'exige que celui du geste demande.
