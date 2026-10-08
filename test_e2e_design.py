@@ -209,6 +209,10 @@ def main():
         "--qs-r-panel", "--qs-r-card", "--qs-r-field", "--qs-side-w",
         "--qs-max-w", "--qs-gutter", "--qs-pad", "--qs-band", "--qs-grad",
         "--qs-font",
+        # Charte verte : l'accent anis et la colonne du menu (texte clair sur
+        # vert profond) sont les mêmes de jour comme de nuit.
+        "--qs-accent", "--qs-accent-ink", "--qs-grad-chart", "--qs-side-ink",
+        "--qs-side-hover", "--qs-side-active", "--qs-side-line",
     }
     branches = set(re.findall(r"(--[a-z0-9-]+):var\(--dk-", css))
     oublies = [j for j in re.findall(r"(--[a-z0-9-]+):", racine)

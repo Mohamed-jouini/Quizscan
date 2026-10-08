@@ -1,5 +1,5 @@
 {# Squelette de l'application : barre latérale de navigation, barre du haut,  #}
-{# et panneaux « verre dépoli » sur un fond dégradé bleu -> violet.          #}
+{# colonne de menu vert profond, accent anis, cartes blanches bordées.       #}
 {# Les noms de classes historiques (card, btn, badge, grid2, helptext…) sont #}
 {# conservés : les pages existantes gardent leur balisage.                   #}
 {% load static %}<!doctype html>
@@ -16,7 +16,7 @@
 <body>
 <svg width="0" height="0" aria-hidden="true" style="position:absolute">
   <defs><linearGradient id="gradDonut" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#4356c9"/><stop offset="1" stop-color="#8b5cf6"/>
+    <stop offset="0" stop-color="#1f6b45"/><stop offset="1" stop-color="#8fc742"/>
   </linearGradient></defs>
 </svg>
 
@@ -31,6 +31,7 @@
     </div>
 
     {% if user.is_authenticated %}
+    <div class="nav__group">Menu</div>
     <nav class="nav">
       <a class="nav__item {% if un == 'dashboard' %}is-active{% endif %}" href="{% url 'dashboard' %}">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>

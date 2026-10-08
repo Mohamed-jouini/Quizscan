@@ -48,53 +48,69 @@
 /* === 1. Jetons ============================================================ */
 :root{
   --qs-font:"Inter","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
-  /* Couleurs de marque */
-  --qs-blue:#4356c9;
-  --qs-blue-dark:#36469f;
-  --qs-blue-deep:#2b3a95;   /* lien survole */
+  /* Couleurs de marque. Les noms --qs-blue… sont historiques (la première
+     palette était bleue) : des dizaines de règles et de gabarits s'en
+     servent. Ce qui compte est le rôle — couleur de marque, de lien, de
+     bouton —, la teinte suit la charte : vert profond et vert anis. */
+  --qs-blue:#1d6b43;
+  --qs-blue-dark:#165535;
+  --qs-blue-deep:#0f4128;   /* lien survole */
   /* Fonds de bouton : ils portent du texte blanc, donc ils restent fonces
      dans les deux themes, la ou --qs-blue s'eclaircit pour rester lisible
      comme couleur de texte sur fond sombre. */
-  --qs-btn-bg:#4356c9;      --qs-btn-hover:#36469f;
-  --qs-tool-bg:#36469f;     --qs-tool-hover:#2b3a95;
-  --qs-violet:#8b5cf6;
-  --qs-grad:linear-gradient(135deg,#4356c9,#8b5cf6);
-  --qs-halo-1:#9fb0f2;
-  --qs-halo-2:#c9b4ee;
+  --qs-btn-bg:#1d5c3b;      --qs-btn-hover:#154a2f;
+  --qs-tool-bg:#154a2f;     --qs-tool-hover:#0f3b25;
+  --qs-violet:#9fd043;
+  --qs-grad:linear-gradient(135deg,#1f6b45,#134a2e);
+  --qs-halo-1:#d9ecc4;
+  --qs-halo-2:#c8e3b0;
+  /* Accent anis : repère du menu actif, pastilles mises en avant, fin des
+     dégradés de graphiques. Il porte du texte foncé, jamais blanc. */
+  --qs-accent:#a8d94c;      --qs-accent-ink:#173a1f;
+  --qs-grad-chart:linear-gradient(90deg,#1f6b45,#8fc742);
 
-  /* Surfaces et texte */
-  --qs-page:#eceef7;
+  /* Colonne du menu : vert profond, texte clair, dans les deux thèmes. */
+  --qs-side-bg:#0f3b25;
+  --qs-side-ink:#ffffff;
+  --qs-side-muted:#a7c0b0;
+  --qs-side-hover:rgba(255,255,255,.07);
+  --qs-side-active:rgba(255,255,255,.11);
+  --qs-side-line:rgba(255,255,255,.12);
+
+  /* Surfaces et texte : fond gris vert très clair, panneau presque blanc,
+     cartes blanches bordées d'un filet — peu d'ombres. */
+  --qs-page:#eceee9;
   --qs-surface:#fff;
-  --qs-glass:rgba(255,255,255,.78);
-  --qs-glass-edge:rgba(255,255,255,.85);
-  --qs-ink:#1a1f3c;
-  --qs-ink-loud:#0f1330;    /* titres de l'administration */
-  --qs-ink-soft:#434a73;
-  --qs-muted:#5f668c;
+  --qs-glass:#f7f8f5;
+  --qs-glass-edge:#e2e6de;
+  --qs-ink:#16211a;
+  --qs-ink-loud:#0b140e;    /* titres de l'administration */
+  --qs-ink-soft:#3a4a40;
+  --qs-muted:#5a6a60;
   /* Ton tertiaire : il porte quand meme du vrai texte (en-tetes de tableau,
-     « Bonjour, », aides de champ). Assombri pour rester lisible sur le fond
-     de page comme sur une carte blanche. */
-  --qs-faint:#666d91;
-  --qs-line:#e2e6f3;
-  --qs-line-strong:#c4ccec;
-  --qs-field-line:#d3d9ee;
-  --qs-surface-2:#fbfbff;   /* survol d'un bouton secondaire */
-  --qs-row-hover:#f7f8fd;   /* ligne de tableau survolée */
-  --qs-track:#eef0f8;       /* glissière : histogramme, anneau, pastille grise */
-  --qs-sheen-1:rgba(255,255,255,.55);  /* dégradé de la barre latérale */
-  --qs-sheen-2:rgba(255,255,255,.25);
-  --qs-sheen-edge:rgba(255,255,255,.7);
-  --qs-sheen-hover:rgba(255,255,255,.75);
-  --qs-border:#dde2f2;      /* bordure d'un module d'administration */
-  --qs-raised:#f5f6fc;      /* zone en retrait */
+     « Bonjour, », aides de champ). Assez fonce pour rester lisible sur le
+     fond du panneau comme sur une carte blanche. */
+  --qs-faint:#647268;
+  --qs-line:#e6e9e2;
+  --qs-line-strong:#c8d0c2;
+  --qs-field-line:#d5dbd0;
+  --qs-surface-2:#f7f9f4;   /* survol d'un bouton secondaire */
+  --qs-row-hover:#f6f8f2;   /* ligne de tableau survolée */
+  --qs-track:#edf0e9;       /* glissière : histogramme, anneau, pastille grise */
+  --qs-sheen-1:#ffffff;     /* bouton clair de la connexion */
+  --qs-sheen-2:#ffffff;
+  --qs-sheen-edge:#e6e9e2;  /* filet sous la barre du haut */
+  --qs-sheen-hover:#eef2ea; /* survol de l'identité */
+  --qs-border:#e2e6de;      /* bordure d'un module d'administration */
+  --qs-raised:#f3f5f0;      /* zone en retrait */
   /* Bandeau d'intitulés des tableaux : en retrait sur fond clair, mais un
      cran PLUS clair que la carte en thème sombre — --qs-raised y est plus
-     foncé que la carte d'à peine 2 %, et le bandeau disparaissait. */
-  --qs-th-bg:#f3f5fc;
-  --qs-sel-bg:#eef0fb;      /* element selectionne */
-  --qs-sel-row:#f2f0ff;     /* ligne qui vient d'etre enregistree */
-  --qs-grey:#6b7399;        /* bouton neutre (Fermer) */
-  --qs-grey-dark:#4e5577;
+     foncé que la carte, et le bandeau disparaissait. */
+  --qs-th-bg:#f2f5ee;
+  --qs-sel-bg:#ebf3e1;      /* element selectionne */
+  --qs-sel-row:#eff6e5;     /* ligne qui vient d'etre enregistree */
+  --qs-grey:#5f6a63;        /* bouton neutre (Fermer) */
+  --qs-grey-dark:#47514a;
 
   /* États */
   --qs-ok:#187733;      --qs-ok-bg:#e8f4ec;    --qs-ok-ink:#145c2a;
@@ -104,18 +120,18 @@
   --qs-bad-btn:#c5221f;   --qs-bad-btn-hover:#a11b19;
   --qs-warn:#9c5500;    --qs-warn-bg:#fdf1dc;  --qs-warn-line:#f0dcb4;
   --qs-info:#1f4e79;    --qs-info-bg:#eef3fb;  --qs-info-line:#cfddf2;
-  --qs-violet-bg:#e8e6fb;   --qs-violet-ink:#4a45b0;   /* etiquette Admin */
+  --qs-violet-bg:#e9f4d6;   --qs-violet-ink:#3d5c10;   /* etiquette Admin */
 
-  /* Formes */
-  --qs-r-panel:26px;    /* grand panneau en verre */
-  --qs-r-card:18px;     /* carte */
+  /* Formes : cartes nettes, ombres à peine marquées. */
+  --qs-r-panel:22px;    /* grand panneau */
+  --qs-r-card:16px;     /* carte */
   --qs-r-field:10px;    /* champ, bouton */
-  --qs-shadow-soft:0 6px 16px -10px rgba(26,31,60,.5);
-  --qs-shadow-card:0 18px 40px -22px rgba(26,31,60,.35);
-  --qs-shadow-mod:0 18px 40px -26px rgba(26,31,60,.5);
-  --qs-shadow-panel:0 40px 90px -30px rgba(26,31,60,.45);
-  --qs-shadow-auth:0 36px 90px -24px rgba(12,28,20,.42),
-                   0 2px 8px rgba(12,28,20,.07);
+  --qs-shadow-soft:0 1px 3px rgba(16,32,22,.10);
+  --qs-shadow-card:0 1px 2px rgba(16,32,22,.04);
+  --qs-shadow-mod:0 1px 2px rgba(16,32,22,.04);
+  --qs-shadow-panel:0 24px 60px -36px rgba(16,32,22,.35);
+  --qs-shadow-auth:0 30px 80px -30px rgba(12,28,20,.35),
+                   0 2px 8px rgba(12,28,20,.06);
 
   /* Mesures */
   --qs-side-w:238px;
@@ -128,8 +144,8 @@
 
   /* Décor « papier découpé » des pages de connexion : couches de la plus
      claire à la plus sombre. login_admin.html les assombrit d'un cran. */
-  --art-1:#ffffff; --art-2:#eef1fc; --art-3:#d3d9f6; --art-4:#a9b3ee;
-  --art-5:#7c83e0; --art-6:#5a55bd; --art-7:#3a3488; --art-leaf:#241f63;
+  --art-1:#ffffff; --art-2:#eef5e6; --art-3:#d3e7bd; --art-4:#a9d27c;
+  --art-5:#6fae4f; --art-6:#2f7a4a; --art-7:#17543a; --art-leaf:#0d3a24;
   --qs-band:150px;   /* hauteur du bandeau décoratif sur mobile */
 
   /* Alias historiques, conservés : des gabarits les utilisent encore */
@@ -152,13 +168,8 @@ body{
 }
 /* Les champs n'héritent pas de la police par défaut. */
 button,input,select,textarea{font-family:inherit}
-/* Halos diffus du fond : ils donnent la profondeur des maquettes. */
-body::before,body::after{
-  content:"";position:fixed;border-radius:50%;filter:blur(100px);
-  opacity:.45;pointer-events:none;z-index:0;
-}
-body::before{width:38rem;height:38rem;background:var(--qs-halo-1);top:-12rem;left:-8rem}
-body::after{width:42rem;height:42rem;background:var(--qs-halo-2);bottom:-16rem;right:-10rem}
+/* Fond uni : la charte n'a plus les halos colorés de la première palette.
+   Les couleurs --qs-halo-* restent, l'administration s'en sert (--accent). */
 
 a{color:var(--qs-blue)}
 h1{font-size:25px;margin:0;letter-spacing:-.4px;line-height:1.2}
@@ -185,10 +196,8 @@ body #container{
      sur toute sa hauteur : la barre latérale, fixe, ne fait que la hauteur
      de l'écran — peinte sur elle, la colonne s'arrêtait sous le menu. */
   background:
-    linear-gradient(180deg,var(--qs-sheen-1),var(--qs-sheen-2))
+    linear-gradient(var(--qs-side-bg),var(--qs-side-bg))
       0 0 / var(--qs-side-w) 100% no-repeat,
-    linear-gradient(var(--qs-sheen-edge),var(--qs-sheen-edge))
-      calc(var(--qs-side-w) - 1px) 0 / 1px 100% no-repeat,
     var(--qs-glass);
   border:1px solid var(--qs-glass-edge);
   backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
@@ -218,51 +227,71 @@ body #container{
 }
 .side__brand{display:flex;align-items:center;gap:10px;padding:4px 10px 20px}
 .side__mark{
-  width:34px;height:34px;border-radius:10px;flex:none;background:var(--qs-grad);
+  width:34px;height:34px;border-radius:10px;flex:none;background:var(--qs-accent);
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 8px 18px -8px var(--qs-blue);
 }
-.side__mark svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:1.9}
-.side__name{font-weight:700;font-size:16px;letter-spacing:.2px;line-height:1.1;
-  color:var(--qs-ink)}
+.side__mark svg{width:19px;height:19px;fill:none;stroke:var(--qs-accent-ink);
+  stroke-width:2}
+.side__name{font-weight:700;font-size:17px;letter-spacing:.1px;line-height:1.1;
+  color:var(--qs-side-ink)}
 .side__name small{display:block;font-size:9.5px;font-weight:600;letter-spacing:1.3px;
-  color:var(--qs-faint);text-transform:uppercase;margin-top:2px}
+  color:var(--qs-side-muted);text-transform:uppercase;margin-top:3px}
 
 .nav{display:flex;flex-direction:column;gap:3px}
 .nav__item{
+  position:relative;
   display:flex;align-items:center;gap:11px;
-  padding:10px 12px;border-radius:11px;text-decoration:none;
-  color:var(--qs-muted);font-size:14px;font-weight:500;
+  padding:10px 12px;border-radius:10px;text-decoration:none;
+  color:var(--qs-side-muted);font-size:14px;font-weight:500;
   transition:background .15s,color .15s;
 }
 .nav__item svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;
   stroke-width:1.7}
-.nav__item:hover{background:var(--qs-sheen-hover);color:var(--qs-ink)}
+.nav__item:hover{background:var(--qs-side-hover);color:var(--qs-side-ink)}
+/* Dans l'administration, « a:link, a:visited » de Django (plus spécifique)
+   peignait les rubriques en couleur de lien : vert foncé sur le vert du
+   menu. */
+.side a.nav__item:link,.side a.nav__item:visited{color:var(--qs-side-muted)}
+.side a.nav__item:hover,.side a.nav__item.is-active{color:var(--qs-side-ink)}
+/* Rubrique active : fond éclairci, texte blanc, icône anis, et un trait
+   anis contre le bord gauche du menu (16 px = marge de .side). */
 .nav__item.is-active{
-  background:var(--qs-surface);color:var(--qs-blue);font-weight:600;
-  box-shadow:var(--qs-shadow-soft);
+  background:var(--qs-side-active);color:var(--qs-side-ink);font-weight:600;
+}
+.nav__item.is-active svg{stroke:var(--qs-accent)}
+.nav__item.is-active::before{
+  content:"";position:absolute;left:-16px;top:7px;bottom:7px;width:4px;
+  border-radius:0 4px 4px 0;background:var(--qs-accent);
 }
 .nav__item--sub{font-size:13.5px;padding:7px 12px 7px 20px}
 .nav__group{
-  font-size:10px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;
-  color:var(--qs-faint);margin:18px 0 6px;padding:0 12px;
+  font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--qs-side-muted);margin:6px 0 8px;padding:0 12px;
 }
-.side__foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--qs-line);
+.side__foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--qs-side-line);
   display:flex;flex-direction:column;gap:2px}
+/* Bouton « Déconnexion » sur le fond vert : contour clair, texte blanc. */
+.side .btn.secondary,.side .qs-logout{
+  background:transparent;color:var(--qs-side-ink);
+  border:1px solid var(--qs-side-line);
+}
+.side .btn.secondary:hover,.side .qs-logout:hover{
+  background:var(--qs-side-hover);border-color:var(--qs-side-muted);
+  color:var(--qs-side-ink);
+}
 
 /* --- Barre du haut ------------------------------------------------------- */
 .main{display:flex;flex-direction:column;min-width:0}
 .topbar{
   display:flex;align-items:center;gap:14px;flex-wrap:wrap;
-  padding:18px var(--qs-pad);
+  padding:16px var(--qs-pad);background:var(--qs-surface);
   border-bottom:1px solid var(--qs-sheen-edge);
 }
 .avatar{
   width:40px;height:40px;border-radius:50%;flex:none;
-  background:var(--qs-grad);color:#fff;
+  background:var(--qs-accent);color:var(--qs-accent-ink);
   display:flex;align-items:center;justify-content:center;
   font-weight:700;font-size:14px;letter-spacing:.5px;text-transform:uppercase;
-  box-shadow:0 8px 18px -9px var(--qs-blue);
 }
 .hello{line-height:1.25}
 /* Meme ton que « Bienvenue, » dans l administration (--header-color) : les
@@ -293,6 +322,14 @@ a.tile:hover{border-color:var(--qs-line-strong)}
 .tile__value{font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px}
 .tile__unit{font-size:14px;font-weight:600;color:var(--qs-faint);margin-left:3px}
 .tile__note{font-size:12px;color:var(--qs-faint)}
+/* Tuile mise en avant (la première du tableau de bord), comme la carte
+   pleine de la charte : fond vert profond, chiffres blancs, accent anis. */
+.tile--accent{background:var(--qs-side-bg);border-color:var(--qs-side-bg);
+  color:var(--qs-side-ink)}
+.tile--accent .tile__label,.tile--accent .tile__note{color:var(--qs-side-muted)}
+.tile--accent .chip{background:var(--qs-accent);color:var(--qs-accent-ink)}
+.tile--accent .spark i{background:var(--qs-side-hover)}
+.tile--accent .spark b{background:var(--qs-accent)}
 
 .chip{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;
   background:var(--qs-ok-bg);color:var(--qs-ok);white-space:nowrap}
@@ -302,7 +339,7 @@ a.tile:hover{border-color:var(--qs-line-strong)}
 .spark{display:flex;align-items:flex-end;gap:4px;height:36px}
 .spark i{width:7px;height:100%;border-radius:3px;background:var(--qs-track);
   display:flex;align-items:flex-end}
-.spark b{width:100%;border-radius:3px;background:var(--qs-grad);display:block;
+.spark b{width:100%;border-radius:3px;background:var(--qs-grad-chart);display:block;
   min-height:3px}
 .donut{width:54px;height:54px;flex:none}
 .donut circle{fill:none;stroke-width:7;stroke-linecap:round}
@@ -347,10 +384,9 @@ a.tile:hover{border-color:var(--qs-line-strong)}
   background:var(--qs-grad);color:#fff;border:0;border-radius:var(--qs-r-field);
   padding:9px 16px;font:inherit;font-size:14px;font-weight:600;
   cursor:pointer;text-decoration:none;
-  box-shadow:0 10px 22px -12px var(--qs-blue);
   transition:filter .15s,transform .08s;
 }
-.btn:hover{filter:brightness(1.08)}
+.btn:hover{filter:brightness(1.12)}
 .btn:active{transform:translateY(1px)}
 .btn[disabled]{opacity:.5;cursor:not-allowed;box-shadow:none}
 .btn.secondary{background:var(--qs-surface);color:var(--qs-ink);
@@ -377,7 +413,7 @@ form.inline{display:inline}
 }
 input:focus,select:focus,textarea:focus{
   outline:none;border-color:var(--qs-blue);
-  box-shadow:0 0 0 3px rgba(67,86,201,.14);
+  box-shadow:0 0 0 3px rgba(29,107,67,.16);
 }
 /* Champs de l'administration : meme trait, sans largeur imposee. */
 #container input[type=text],#container input[type=password],
@@ -417,7 +453,7 @@ input:focus,select:focus,textarea:focus{
 .messages li.error{background:var(--qs-bad-bg);color:var(--qs-bad-ink);
   border-color:var(--qs-bad-line)}
 
-.bar{display:inline-block;background:var(--qs-grad);height:10px;
+.bar{display:inline-block;background:var(--qs-grad-chart);height:10px;
   border-radius:999px;vertical-align:middle;min-width:2px}
 .thumb{max-height:70px;border:1px solid var(--qs-line);border-radius:7px}
 .score{font-weight:700;font-size:15px}
@@ -484,7 +520,7 @@ input:focus,select:focus,textarea:focus{
   height:8px;border-radius:999px;background:var(--qs-track);
   overflow:hidden;margin-top:10px;
 }
-.progress i{display:block;height:100%;border-radius:999px;background:var(--qs-grad)}
+.progress i{display:block;height:100%;border-radius:999px;background:var(--qs-grad-chart)}
 
 /* --- Etat vide -----------------------------------------------------------
    « Aucun concours pour le moment. » etait une simple phrase perdue dans une
@@ -679,17 +715,11 @@ body.auth-page{
   position:relative;z-index:1;
   width:min(1040px,100%);
   display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-  border-radius:28px;overflow:hidden;
-  background:var(--qs-glass);
+  border-radius:24px;overflow:hidden;
+  background:var(--qs-surface);
   border:1px solid var(--qs-glass-edge);
   backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
   box-shadow:var(--qs-shadow-auth);
-}
-/* Reflet de verre */
-.auth::before{
-  content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
-  border-radius:inherit;
-  background:linear-gradient(135deg,rgba(255,255,255,.5),rgba(255,255,255,0) 42%);
 }
 .auth__tools{display:flex;justify-content:flex-end;margin:-10px -10px -14px 0}
 .auth__panel{
@@ -700,16 +730,15 @@ body.auth-page{
 .brand{display:flex;align-items:center;gap:10px;font-weight:700;
   letter-spacing:.3px;font-size:15px;color:var(--qs-ink);margin-bottom:auto}
 .brand__mark{
-  width:30px;height:30px;border-radius:9px;flex:none;background:var(--qs-grad);
+  width:30px;height:30px;border-radius:9px;flex:none;background:var(--qs-accent);
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 8px 16px -8px var(--qs-blue);
 }
-.brand__mark svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:1.9}
+.brand__mark svg{width:17px;height:17px;fill:none;stroke:var(--qs-accent-ink);
+  stroke-width:2}
 .brand__suffix{opacity:.5;font-weight:600}
 .auth h1{
-  font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif;
-  font-size:clamp(30px,4vw,40px);font-weight:600;letter-spacing:-.4px;
-  margin:28px 0 6px;
+  font-size:clamp(28px,3.6vw,36px);font-weight:700;letter-spacing:-.8px;
+  margin:28px 0 6px;color:var(--qs-ink-loud);
 }
 .lede{color:var(--qs-muted);font-size:14px;line-height:1.55;margin:0 0 26px;
   max-width:38ch}
@@ -725,7 +754,7 @@ body.auth-page{
 }
 .field input::placeholder{color:var(--qs-faint)}
 .field input:focus{border-color:var(--qs-blue);
-  box-shadow:0 0 0 4px rgba(67,86,201,.16)}
+  box-shadow:0 0 0 4px rgba(29,107,67,.16)}
 .field input[type=password]{padding-right:48px}
 .reveal{
   position:absolute;right:6px;width:36px;height:36px;border:0;border-radius:50%;
@@ -738,10 +767,9 @@ body.auth-page{
 
 .submit{
   width:100%;margin-top:10px;padding:14px 20px;border:0;border-radius:999px;
-  background:var(--qs-grad);color:#fff;
+  background:var(--qs-btn-bg);color:#fff;
   font:inherit;font-size:15px;font-weight:600;letter-spacing:.2px;cursor:pointer;
   transition:filter .15s,transform .08s;
-  box-shadow:0 10px 24px -10px rgba(67,86,201,.75);
 }
 .submit:hover{filter:brightness(1.08)}
 .submit:active{transform:translateY(1px)}
@@ -846,8 +874,8 @@ body.popup #container{grid-template-columns:1fr;border-radius:0;min-height:100vh
    reste que l'identite de la personne connectee et la bascule de theme,
    sur le fond en verre du panneau. */
 #header{
-  background:transparent;color:var(--qs-ink);
-  padding:18px var(--qs-pad);align-items:center;gap:14px;
+  background:var(--qs-surface);color:var(--qs-ink);
+  padding:16px var(--qs-pad);align-items:center;gap:14px;
   border-bottom:1px solid var(--qs-sheen-edge);
 }
 #branding{display:none}        /* la marque est dans la barre latérale */
@@ -887,10 +915,13 @@ div.breadcrumbs{
   background:var(--qs-surface);
   box-shadow:var(--qs-shadow-mod);
 }
+/* Titres de carte sobres, comme la charte : texte foncé sur la carte
+   blanche, un filet dessous — plus de bandeau de couleur. */
 .module h2,.module caption,.inline-group h2,fieldset.module > h2,
 #changelist-filter h2,.selector-chosen h2,#content-related .module h2{
-  background:var(--qs-grad);color:#fff;
-  font-size:12px;letter-spacing:.7px;padding:11px 18px;
+  background:var(--qs-surface);color:var(--qs-ink);
+  font-size:14px;font-weight:700;letter-spacing:0;text-transform:none;
+  padding:13px 18px;border-bottom:1px solid var(--qs-line);
 }
 
 /* Bloc repliable : Django range le titre dans <summary><h2> et sa regle
@@ -898,8 +929,10 @@ div.breadcrumbs{
    ci-dessus venait de poser — il restait du texte blanc sur fond clair,
    donc invisible. Le bandeau est peint sur le <summary>, qui est de toute
    facon l element cliquable, et le titre n y porte plus que le texte. */
-.module.collapse summary{background:var(--qs-grad);border:0;padding:0 0 0 10px}
-.module.collapse summary .fieldset-heading{background:transparent;color:#fff}
+.module.collapse summary{background:var(--qs-surface);border:0;padding:0 0 0 10px;
+  color:var(--qs-ink)}
+.module.collapse summary .fieldset-heading{background:transparent;color:var(--qs-ink);
+  border-bottom:0}
 
 .module table{margin:0;font-variant-numeric:tabular-nums}
 /* En-têtes des autres tableaux de l'administration (lignes imbriquées d'un
@@ -1013,7 +1046,10 @@ ul.messagelist li{border-radius:10px;padding:11px 15px 11px 42px;font-size:14px}
    illisibles sur ce fond, dans les deux themes.
    Le prefixe #content n'est pas decoratif : Django pose
    « form .aligned label », plus specifique que le simple nom de classe. */
-.selector-chosen-title,
+/* Fond de bouton (vert foncé dans les deux thèmes) et non --secondary : en
+   thème sombre, --secondary est un vert clair, et le texte blanc y tombait
+   à 2,5:1. */
+.selector-chosen-title{color:#fff;background:var(--qs-btn-bg)}
 #content .selector-chosen-title label,
 #content .selector-chosen-title .helptext{color:#fff}
 
@@ -1321,10 +1357,13 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   .shell__inner,body #container{background:var(--qs-glass);min-height:0}
   .side{
     flex-direction:row;align-items:center;gap:6px;overflow-x:auto;
-    padding:14px;border-bottom:1px solid var(--qs-sheen-edge);
-    position:static;height:auto;
-    background:linear-gradient(180deg,var(--qs-sheen-1),var(--qs-sheen-2));
+    padding:14px;border-bottom:0;
+    position:static;height:auto;background:var(--qs-side-bg);
   }
+  /* Le trait anis passe sous la rubrique active : à gauche, il tomberait
+     sur la rubrique voisine. */
+  .nav__item.is-active::before{left:12px;right:12px;top:auto;bottom:2px;
+    width:auto;height:3px;border-radius:3px}
   .side__brand{padding:0 12px 0 4px}
   .side__name small{display:none}
   .nav{flex-direction:row;gap:4px}
@@ -1332,7 +1371,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   .nav__group{display:none}
   .side__foot{
     margin:0 0 0 auto;padding:0 0 0 12px;border-top:0;
-    border-left:1px solid var(--qs-line);flex-direction:row;align-items:center;
+    border-left:1px solid var(--qs-side-line);flex-direction:row;align-items:center;
   }
   .grid2{grid-template-columns:1fr}
   #header{padding:12px 16px}
@@ -1382,34 +1421,35 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
    preference du systeme quand le reglage est « auto », le second un choix
    explicite, qui doit pouvoir contredire le systeme dans les deux sens. */
 :root{
-  --dk-blue:#7b84e4;      --dk-blue-dark:#5b63c8;  --dk-blue-deep:#9aa2ee;
-  --dk-violet:#a78bfa;    --dk-halo-1:#2b3a95;     --dk-halo-2:#4a2f8a;
+  --dk-blue:#8fd06c;      --dk-blue-dark:#6db552;  --dk-blue-deep:#b4e597;
+  --dk-violet:#b5e06a;    --dk-halo-1:#123d27;     --dk-halo-2:#1d4a22;
+  --dk-side-bg:#0b2216;   --dk-side-muted:#97b3a2;
 
-  --dk-page:#101229;      --dk-surface:#1b1e38;    --dk-surface-2:#232745;
-  --dk-glass:rgba(27,30,56,.78);
-  --dk-glass-edge:rgba(255,255,255,.09);
-  --dk-ink:#e8eaf6;       --dk-ink-loud:#ffffff;   --dk-ink-soft:#c6cae3;
-  --dk-muted:#a8aecd;     --dk-faint:#8b92b5;
-  --dk-line:#2a2e4d;      --dk-line-strong:#3d4369;
-  --dk-field-line:#333858; --dk-border:#2f3457;
-  --dk-th-bg:#262b4d;
-  --dk-raised:#191c33;    --dk-sel-bg:#232745;     --dk-sel-row:#2a2550;
-  --dk-row-hover:#20233f; --dk-track:#272b4a;
-  --dk-sheen-1:rgba(255,255,255,.05);
-  --dk-sheen-2:rgba(255,255,255,.015);
-  --dk-sheen-edge:rgba(255,255,255,.08);
-  --dk-sheen-hover:rgba(255,255,255,.07);
+  --dk-page:#0a100c;      --dk-surface:#131b16;    --dk-surface-2:#1a241d;
+  --dk-glass:#0f1612;
+  --dk-glass-edge:rgba(255,255,255,.07);
+  --dk-ink:#e6eee8;       --dk-ink-loud:#ffffff;   --dk-ink-soft:#c2d1c7;
+  --dk-muted:#a2b4a8;     --dk-faint:#8c9e92;
+  --dk-line:#233029;      --dk-line-strong:#34443a;
+  --dk-field-line:#2d3a32; --dk-border:#25322a;
+  --dk-th-bg:#1e2a23;
+  --dk-raised:#101813;    --dk-sel-bg:#1c2a21;     --dk-sel-row:#1f3020;
+  --dk-row-hover:#18221c; --dk-track:#202d25;
+  --dk-sheen-1:#131b16;
+  --dk-sheen-2:#131b16;
+  --dk-sheen-edge:#233029;
+  --dk-sheen-hover:#1b2620;
 
   --dk-ok:#5cbd77;   --dk-ok-bg:#15301f;  --dk-ok-ink:#a5dcb6;  --dk-ok-line:#245138;
   --dk-bad:#f08a84;  --dk-bad-bg:#391816; --dk-bad-ink:#f3b8b4; --dk-bad-line:#6d2b26;
   --dk-bad-dark:#c2544d;
-  --dk-btn-bg:#4a52bd;    --dk-btn-hover:#5a62cd;
-  --dk-tool-bg:#4a52bd;   --dk-tool-hover:#5f68d6;
+  --dk-btn-bg:#2a7a4c;    --dk-btn-hover:#33905a;
+  --dk-tool-bg:#2a7a4c;   --dk-tool-hover:#33905a;
   --dk-bad-btn:#a8322c;   --dk-bad-btn-hover:#bf3a33;
   --dk-warn:#e9a33d; --dk-warn-bg:#3a2a0e; --dk-warn-line:#5e4517;
   --dk-info:#9ec2f0; --dk-info-bg:#15233a; --dk-info-line:#28405f;
-  --dk-violet-bg:#2b2550; --dk-violet-ink:#c3b5fb;
-  --dk-grey:#555c7e;      --dk-grey-dark:#3f4463;
+  --dk-violet-bg:#24331a; --dk-violet-ink:#c9e89c;
+  --dk-grey:#4d5a52;      --dk-grey-dark:#3b463f;
 
   --dk-shadow-soft:0 6px 16px -10px rgba(0,0,0,.8);
   --dk-shadow-card:0 18px 40px -22px rgba(0,0,0,.7);
@@ -1418,9 +1458,9 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   --dk-shadow-auth:0 36px 90px -24px rgba(0,0,0,.7),0 2px 8px rgba(0,0,0,.4);
 
   /* Decor « papier decoupe » : memes couches, teintes nocturnes */
-  --dk-art-1:#2f3461; --dk-art-2:#272c54; --dk-art-3:#212547;
-  --dk-art-4:#1b1f3b; --dk-art-5:#2a2f6b; --dk-art-6:#332c7a;
-  --dk-art-7:#231d5c; --dk-art-leaf:#15113b;
+  --dk-art-1:#1a2a20; --dk-art-2:#16241b; --dk-art-3:#132018;
+  --dk-art-4:#101b14; --dk-art-5:#1d4a2c; --dk-art-6:#1a5a33;
+  --dk-art-7:#124228; --dk-art-leaf:#0a2416;
 }
 
 @media (prefers-color-scheme:dark){
@@ -1431,6 +1471,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   --qs-blue:var(--dk-blue); --qs-blue-dark:var(--dk-blue-dark);
   --qs-blue-deep:var(--dk-blue-deep); --qs-violet:var(--dk-violet);
   --qs-halo-1:var(--dk-halo-1); --qs-halo-2:var(--dk-halo-2);
+  --qs-side-bg:var(--dk-side-bg); --qs-side-muted:var(--dk-side-muted);
   --qs-page:var(--dk-page); --qs-surface:var(--dk-surface);
   --qs-surface-2:var(--dk-surface-2);
   --qs-glass:var(--dk-glass); --qs-glass-edge:var(--dk-glass-edge);
@@ -1476,6 +1517,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   --qs-blue:var(--dk-blue); --qs-blue-dark:var(--dk-blue-dark);
   --qs-blue-deep:var(--dk-blue-deep); --qs-violet:var(--dk-violet);
   --qs-halo-1:var(--dk-halo-1); --qs-halo-2:var(--dk-halo-2);
+  --qs-side-bg:var(--dk-side-bg); --qs-side-muted:var(--dk-side-muted);
   --qs-page:var(--dk-page); --qs-surface:var(--dk-surface);
   --qs-surface-2:var(--dk-surface-2);
   --qs-glass:var(--dk-glass); --qs-glass-edge:var(--dk-glass-edge);
