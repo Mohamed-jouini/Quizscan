@@ -208,6 +208,7 @@ def main():
     SANS_VARIANTE = {
         "--qs-r-panel", "--qs-r-card", "--qs-r-field", "--qs-side-w",
         "--qs-max-w", "--qs-gutter", "--qs-pad", "--qs-band", "--qs-grad",
+        "--qs-font",
     }
     branches = set(re.findall(r"(--[a-z0-9-]+):var\(--dk-", css))
     oublies = [j for j in re.findall(r"(--[a-z0-9-]+):", racine)
@@ -227,6 +228,74 @@ def main():
     assert "--primary:var(--qs-blue)" in pont, \
         "l'administration doit pointer sur les jetons communs"
     print("  administration les couleurs de Django pointent sur nos jetons OK")
+
+    # Liens dessinés en boutons : Django leur fixe « height:0.9375rem » plus
+    # 10 px de marge, ce qui, avec box-sizing:border-box, ne laisse aucune
+    # place au texte — « Supprimer » s'affichait coupé sur toutes les fiches.
+    sans_com = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    for lien in (".submit-row a.deletelink", ".submit-row a.closelink",
+                 ".delete-confirmation form .cancel-link"):
+        regles = [m.group(2) for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", sans_com)
+                  if lien in [" ".join(s.split()) for s in m.group(1).split(",")]]
+        assert any("height:2.1875rem" in r for r in regles), (
+            f"{lien} : hauteur fixe de Django non remplacée, le texte déborde")
+
+    # Sur téléphone, les lignes de formulaire passent sur une colonne. La
+    # règle doit être AUSSI spécifique que celle de l'écran large
+    # (« .form-row:not(tr) ») : sinon la colonne de libellé de 230 px reste
+    # et le champ n'a plus que 0 px — l'aide s'écrivait une lettre par ligne.
+    mobile = sans_com[sans_com.index("@media (max-width:860px)"):]
+    assert re.search(r"\.form-row:not\(tr\)\{grid-template-columns:minmax\(0,1fr\)",
+                     mobile), "formulaires d'administration à deux colonnes sur téléphone"
+    print("  boutons        « Supprimer », « Fermer », « Non, revenir » à leur "
+          "hauteur ; formulaires sur une colonne au téléphone OK")
+
+    # La police est servie par l'application : le serveur de l'établissement
+    # peut être coupé d'Internet. Fichiers présents, licence OFL jointe, aucun
+    # appel à un service de polices extérieur.
+    dossier = os.path.dirname(feuille)
+    polices = re.findall(r"url\((fonts/[^)]+\.woff2)\)", css)
+    assert polices, "aucune police déclarée"
+    for chemin in set(polices):
+        assert os.path.isfile(os.path.join(dossier, chemin)), f"{chemin} absent"
+    assert os.path.isfile(os.path.join(dossier, "fonts", "LICENSE-Inter.txt")), \
+        "licence de la police Inter absente (exigée par la licence OFL)"
+    for gabarit_racine in (os.path.join(django.conf.settings.BASE_DIR, "templates"),):
+        for racine, _, fichiers in os.walk(gabarit_racine):
+            for nom in fichiers:
+                with open(os.path.join(racine, nom), encoding="utf-8") as fh:
+                    assert "fonts.googleapis" not in fh.read(), \
+                        f"{nom} : police chargée depuis Internet"
+    assert "fonts.googleapis" not in css
+
+    # Tableaux : intitulés en casse normale partout (application ET
+    # administration), et les flèches de tri à côté de l'intitulé.
+    regle_th = re.search(r"\n\.shell th\{([^}]*)\}", sans_com).group(1)
+    assert "uppercase" not in regle_th, "intitulés de tableau en capitales"
+    regle_admin = re.search(r"#result_list thead th div\.text span\{([^}]*)\}",
+                            sans_com).group(1)
+    assert "text-transform:none" in regle_admin
+    with open(os.path.join(django.conf.settings.BASE_DIR, "templates", "admin",
+                           "change_list_results.html"), encoding="utf-8") as fh:
+        resultats = fh.read()
+    assert resultats.index('class="text"') < resultats.index('class="sortoptions"'), \
+        "les commandes de tri doivent suivre l'intitulé"
+    # Sous 980 px, la liste d'administration passe en colonne ET s'étire à
+    # la largeur de l'écran (sinon elle prenait celle de son contenu).
+    assert re.search(r"@media \(max-width:980px\)\{\s*#changelist\{"
+                     r"flex-direction:column;align-items:stretch\}", sans_com), \
+        "liste d'administration plus large que le téléphone"
+    # Menu latéral fixe pendant que la page défile. Il ne tient que si la
+    # carte qui le contient coupe ses bords par « clip » : avec « hidden »
+    # seul, la carte devient un conteneur de défilement et le menu y reste
+    # collé au lieu de suivre l'écran.
+    regle_side = re.search(r"\n\.side\{([^}]*)\}", sans_com).group(1)
+    assert "position:sticky" in regle_side, "le menu latéral ne reste plus en place"
+    carte = re.search(r"\.shell__inner,\s*body #container\{([^}]*)\}", sans_com).group(1)
+    assert "overflow:clip" in carte, "overflow:clip manquant : le menu défilerait"
+    print("  menu latéral   reste en place pendant le défilement OK")
+    print("  tableaux       police Inter locale, intitulés en casse normale, "
+          "tri à côté du titre, liste à la largeur du téléphone OK")
 
     print("\n✅ TEST DU SYSTÈME DE STYLE UNIQUE RÉUSSI")
 

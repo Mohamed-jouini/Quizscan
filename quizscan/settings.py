@@ -203,6 +203,11 @@ if URL_PREFIX:
 STATIC_URL = f"{URL_PREFIX}/static/"
 MEDIA_URL = f"{URL_PREFIX}/media/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# La police de l'interface (grader/static/grader/fonts) est servie par
+# Django en production : la table de types de Python ne connaît pas .woff2,
+# le fichier partirait en application/octet-stream.
+import mimetypes  # noqa: E402
+mimetypes.add_type("font/woff2", ".woff2")
 
 # Derrière Caddy en HTTPS
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

@@ -9,6 +9,7 @@ Couvre ce que fait réellement l'administrateur d'établissement :
      espace — sur un écran de l'application, PAS d'administration.
 """
 import os
+import re
 import sys
 
 # Les tests affichent des caractères accentués et des symboles : on force la
@@ -80,6 +81,21 @@ def main():
     print("  compte désactivé puis réactivé, connexion refusée entre-temps OK")
 
     # ---- 3) l'administrateur réinitialise un mot de passe oublié ----------
+    # Le bouton « Modifier le mot de passe » doit mener au bon écran depuis la
+    # liste ET depuis la fiche du compte. Un lien relatif (« 3/password/ »)
+    # marchait depuis la liste mais menait, depuis la fiche, à
+    # « …/3/change/3/password/ » : « l'utilisateur n'existe pas ».
+    from urllib.parse import urljoin
+    attendu = f"/admin/auth/user/{prof.pk}/password/"
+    for page_url, classe in (("/admin/auth/user/", "qs-pw-link"),
+                             (f"/admin/auth/user/{prof.pk}/change/", "qs-pw-btn")):
+        html = c.get(page_url).content.decode()
+        liens = [urljoin(page_url, h) for h in re.findall(
+            rf'<a class="[^"]*\b{classe}\b[^"]*" href="([^"]+)"', html)]
+        assert attendu in liens, f"{page_url} : bouton mot de passe -> {liens}"
+        assert c.get(attendu).status_code == 200
+    print("  bouton « Modifier le mot de passe » juste depuis la liste et la fiche OK")
+
     r = c.post(f"/admin/auth/user/{prof.pk}/password/",
                {"password1": NOUVEAU, "password2": NOUVEAU})
     assert r.status_code == 302, r.status_code

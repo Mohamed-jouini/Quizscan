@@ -154,7 +154,7 @@ def build_layout(quiz):
       "pages": [
         {
           "page_index": 0,
-          "name_boxes": {"last": [x,y,w,h], "first": [x,y,w,h]},
+          "name_boxes": {"last": [x,y,w,h], "first": [x,y,w,h]},   # {} en mode grille
           "qcm": [{"order": 1, "bubbles": [[cx,cy], ...]}],
           "open": [{"order": 5, "rect": [x,y,w,h]}]
         }, ...
@@ -178,7 +178,7 @@ def build_layout(quiz):
         idx = len(pages)
         page = {
             "page_index": idx,
-            "name_boxes": _name_boxes(),
+            "name_boxes": _name_boxes(id_mode),
             "qcm": [],
             "open": [],
         }
@@ -187,6 +187,7 @@ def build_layout(quiz):
         y0 = 58.0 if idx == 0 else 46.0
         if id_mode == "grid":
             y0 = _add_id_grid(page, y0 - (10.0 if idx == 0 else 0.0), id_digits)
+            y0 = _add_qr_corner(page, y0)
         elif id_mode in ("qr", "sticker"):
             y0 = _add_qr_zone(page, idx, sticker=_uses_sticker(quiz))
         return page, y0
@@ -273,11 +274,12 @@ def _build_full_layout(quiz):
 
     def new_page():
         idx = len(pages)
-        pages.append({"page_index": idx, "name_boxes": _name_boxes(),
+        pages.append({"page_index": idx, "name_boxes": _name_boxes(id_mode),
                       "qcm": [], "open": [], "texts": []})
         y0 = 58.0 if idx == 0 else 46.0
         if id_mode == "grid":
             y0 = _add_id_grid(pages[-1], y0 - (10.0 if idx == 0 else 0.0), id_digits)
+            y0 = _add_qr_corner(pages[-1], y0)
         elif id_mode in ("qr", "sticker"):
             y0 = _add_qr_zone(pages[-1], idx, sticker=_uses_sticker(quiz))
         return pages[-1], y0
@@ -403,9 +405,35 @@ def _add_qr_zone(page, page_index, sticker=False):
     return y0 + 23.0
 
 
-def _name_boxes():
+def _add_qr_corner(page, y_after_grid):
+    """Mode grille : emplacement de l'étiquette QR, à la place des cases
+    NOM/PRÉNOM, en haut à droite à côté de la grille de n° d'inscription.
+
+    L'élève colle le QR de sa planche d'étiquettes (labels_pdf, disponible
+    pour toute classe) ; s'il n'en a pas, il noircit son n° dans la grille.
+    Le scan lit d'abord le QR, puis la grille (services._process_sheet).
+
+    La grille et les questions gardent exactement leur place d'avant : une
+    fiche imprimée avec les cases NOM/PRÉNOM se lit toujours, même après
+    régénération de la fiche. Le cadre se loge dans la bande laissée libre
+    par ces cases et à droite de la grille, qui s'arrête vers x = 118 mm."""
+    w, h = STICKER_ZONE_W, STICKER_ZONE_H
+    x, y = CONTENT_X1 - w, NAME_BOXES_Y
+    page["qr"] = {"rect": [x, y, w, h], "band": [x, y, w, h], "sticker": True}
+    # libellé imprimé sous le cadre (sheet_pdf) avant la première question
+    return max(y_after_grid, round(y + h + 8.0, 2))
+
+
+NAME_BOXES_Y = 32.0
+
+
+def _name_boxes(id_mode="name"):
+    """Cases NOM/PRÉNOM manuscrites (lues par OCR en secours). Aucune en
+    mode grille : l'emplacement de l'étiquette QR les remplace."""
+    if id_mode == "grid":
+        return {}
     w = (CONTENT_X1 - CONTENT_X0 - 8.0) / 2
-    y = 32.0
+    y = NAME_BOXES_Y
     return {
         "last": [CONTENT_X0 + 14.0, y, w - 14.0, NAME_BOX_H],
         "first": [CONTENT_X0 + w + 8.0 + 18.0, y, w - 18.0, NAME_BOX_H],

@@ -74,6 +74,12 @@ LABELS = {
         "writename": "Écrivez votre nom et votre prénom dans les cases ci-dessus.",
         "fiche": "Fiche",
         "sticker": "Emplacement réservé — collez ici le QR code qui vous a été remis",
+        "qrcorner": "CODE QR",
+        "qrstick": "Collez ici votre étiquette QR",
+        "ident": "IDENTIFICATION",
+        "identhelp": "Collez votre étiquette QR dans le cadre ci-contre. "
+                     "Sans étiquette, remplissez la grille du n° d'inscription "
+                     "ci-dessous.",
     },
     "ar": {
         "last": "اللقب", "first": "الاسم",
@@ -84,6 +90,11 @@ LABELS = {
         "writename": "اكتب لقبك واسمك بخط واضح في الخانات أعلاه.",
         "fiche": "بطاقة",
         "sticker": "مكان مخصّص — ألصق هنا رمز QR الذي سُلّم إليك",
+        "qrcorner": "رمز QR",
+        "qrstick": "ألصق هنا ملصق رمز QR",
+        "ident": "التعريف",
+        "identhelp": "ألصق ملصق رمز QR في الإطار المقابل. "
+                     "إن لم يكن لديك ملصق، املأ شبكة رقم التسجيل أدناه.",
     },
 }
 
@@ -165,18 +176,20 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
 
         # Zone nom / prénom  (ou emplacement réservé à une étiquette autocollante)
         nb = page["name_boxes"]
-        lx, ly, lw, lh = nb["last"]
-        fx, fy, fw, fh = nb["first"]
         qr_zone = page.get("qr")
-        # Fiche à étiquette autocollante (concours, ou mode « étiquette ») :
-        # aucune case nom/prénom, l'identification est portée par l'étiquette
-        # apposée dessous — le candidat n'écrit rien (fiche technique p. 6).
+        # Pas de cases nom/prénom :
+        # - fiche de concours à étiquette : l'identification est portée par
+        #   l'étiquette apposée dessous, le candidat n'écrit rien (fiche
+        #   technique p. 6) ;
+        # - mode grille : la disposition n'en prévoit pas, l'emplacement de
+        #   l'étiquette QR (en haut à droite) les remplace.
         # Partout ailleurs, les cases sont imprimées : l'OCR du nom y sert de
-        # secours d'identification, y compris pour un concours identifié par
-        # grille de n° d'inscription.
-        if concours and (qr_zone or {}).get("sticker"):
-            pass  # rien ici : voir la zone étiquette (ancien emplacement QR)
+        # secours d'identification.
+        if not nb or (concours and (qr_zone or {}).get("sticker")):
+            pass  # rien ici : voir la zone étiquette
         else:
+            lx, ly, lw, lh = nb["last"]
+            fx, fy, fw, fh = nb["first"]
             if lang == "ar":
                 # sens de lecture droite -> gauche : la case de droite = اللقب (nom)
                 draw(T["last"], fx - 3.0, _y(fy + fh / 2 + 1.5), 11, bold=True, align="right")
@@ -195,7 +208,29 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
                      bold=True, align="center", gray=0.25)
 
         # Emplacement QR / étiquette
-        if qr_zone and qr_zone.get("sticker"):
+        if qr_zone and qr_zone.get("sticker") and not nb:
+            # Mode grille : cadre en haut à droite, à la place des cases
+            # NOM/PRÉNOM, libellé court centré dessous ; à gauche, dans la
+            # bande libérée par ces cases, la consigne d'identification.
+            qx, qy, qw, qh = qr_zone["rect"]
+            c.setLineWidth(0.9)
+            c.setDash(3, 2)
+            c.rect(qx * mm, _y(qy, qh), qw * mm, qh * mm)
+            c.setDash()
+            # gris clair : recouvert par l'étiquette, et effacé par la
+            # binarisation de la lecture du QR s'il en dépasse
+            draw(T["qrcorner"], qx + qw / 2, _y(qy + qh / 2 + 1.2), 9,
+                 bold=True, align="center", gray=0.72)
+            draw(T["qrstick"], qx + qw / 2, _y(qy + qh + 3.6), 7.5,
+                 align="center", gray=0.45)
+            largeur = qx - 6.0 - L.CONTENT_X0
+            x_txt, sens = ((qx - 4.0, "right") if lang == "ar"
+                           else (L.CONTENT_X0, "left"))
+            draw(T["ident"], x_txt, _y(qy + 4.0), 10, bold=True, align=sens)
+            for i, ligne in enumerate(wrap(T["identhelp"], 8, largeur)):
+                draw(ligne, x_txt, _y(qy + 8.5 + i * 3.6), 8, align=sens,
+                     gray=0.3)
+        elif qr_zone and qr_zone.get("sticker"):
             # Étiquette / concours : pas de QR imprimé ni de n° de série. Tout l'emplacement
             # est un cadre réservé à l'étiquette (n° d'inscription + QR) que le
             # scan lira pour identifier le candidat.
@@ -250,11 +285,20 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
         # Grille de numéro d'inscription
         grid = page.get("id_grid")
         if grid:
-            if lang == "ar":
-                draw(T["idnum"], L.CONTENT_X1, _y(grid["label_y"]), 8, bold=True,
-                     align="right")
-            else:
-                draw(T["idnum"], L.CONTENT_X0, _y(grid["label_y"]), 8, bold=True)
+            # La consigne s'arrête avant l'emplacement de l'étiquette QR qui
+            # occupe le coin haut droit en mode grille : elle passe alors sur
+            # deux lignes, la dernière restant à sa place au-dessus des cases.
+            right = L.CONTENT_X1
+            zy, zh = (qr_zone or {}).get("rect", [0, -1, 0, 0])[1::2]
+            if zy <= grid["label_y"] <= zy + zh:
+                right = qr_zone["rect"][0] - 4.0
+            lignes = wrap(T["idnum"], 8, right - L.CONTENT_X0, bold=True)
+            for i, ligne in enumerate(reversed(lignes)):
+                y_ligne = _y(grid["label_y"] - i * 3.6)
+                if lang == "ar":
+                    draw(ligne, right, y_ligne, 8, bold=True, align="right")
+                else:
+                    draw(ligne, L.CONTENT_X0, y_ligne, 8, bold=True)
             # en-tête 0..9 au-dessus des colonnes
             for k in range(10):
                 cx = grid["rows"][0][k][0]

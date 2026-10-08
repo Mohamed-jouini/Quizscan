@@ -1,5 +1,6 @@
 from django.contrib import admin, messages
 from django.contrib.auth.models import Group
+from django.utils.html import format_html
 
 from . import journal, services, useradmin
 from .admin_titres import TitresFrancais
@@ -81,6 +82,27 @@ ID_MODE_COURT = {"name": "OCR du nom",
                  "grid": "Grille de n°",
                  "qr": "QR nominatif",
                  "sticker": "Étiquette QR"}
+
+
+# État d'un lot, d'une copie ou d'un corrigé : une pastille de couleur se
+# repère d'un coup d'œil dans une longue liste, un texte gris non.
+TON_ETAT = {"done": "ok", "ok": "ok",
+            "partial": "warn", "no_match": "warn",
+            "pending": "grey", "processing": "info",
+            "no_markers": "bad", "error": "bad"}
+
+
+def pastille_etat(obj):
+    return format_html('<span class="badge {}">{}</span>',
+                       TON_ETAT.get(obj.status, "grey"), obj.get_status_display())
+
+
+class AvecPastilleEtat:
+    """Colonne « État » en pastille, triable comme le champ."""
+
+    @admin.display(description="État", ordering="status")
+    def etat(self, obj):
+        return pastille_etat(obj)
 
 
 def _filtre_court(champ, titre, libelles):
@@ -245,11 +267,11 @@ class QuestionAdmin(TitresFrancais, admin.ModelAdmin):
 
 
 @admin.register(ScanBatch)
-class ScanBatchAdmin(TitresFrancais, admin.ModelAdmin):
+class ScanBatchAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
     titre_liste = "Lots de scans"
     titre_ajout = "Nouveau lot de scans"
     titre_modification = "Modifier le lot de scans"
-    list_display = ("__str__", "quiz", "status", "avancement", "le_jour")
+    list_display = ("__str__", "quiz", "etat", "avancement", "le_jour")
     list_filter = ("status", "quiz__owner")
     list_select_related = ("quiz",)
     raw_id_fields = ("quiz",)
@@ -284,11 +306,11 @@ class ScanBatchAdmin(TitresFrancais, admin.ModelAdmin):
 
 
 @admin.register(SheetScan)
-class SheetScanAdmin(TitresFrancais, admin.ModelAdmin):
+class SheetScanAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
     titre_liste = "Pages scannées"
     titre_ajout = "Nouvelle page scannée"
     titre_modification = "Modifier la page scannée"
-    list_display = ("__str__", "batch", "student", "status", "numero_lu")
+    list_display = ("__str__", "batch", "student", "etat", "numero_lu")
     list_filter = ("status", "batch__quiz__owner")
     search_fields = ("source_name", "ocr_name_raw", "id_read")
     list_select_related = ("batch", "student")
@@ -317,7 +339,7 @@ class SheetScanAdmin(TitresFrancais, admin.ModelAdmin):
 
 
 @admin.register(AnswerKeySheet)
-class AnswerKeySheetAdmin(TitresFrancais, admin.ModelAdmin):
+class AnswerKeySheetAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
     """Corrigés scannés — conservés en lecture seule : ce sont des pièces
     justificatives de l'origine du barème, pas des données à retoucher."""
     titre_liste = "Corrigés scannés"
@@ -325,7 +347,7 @@ class AnswerKeySheetAdmin(TitresFrancais, admin.ModelAdmin):
     titre_consultation = "Corrigé scanné"
     # Le lien ouvrait la fiche du corrige mais affichait le nom de
     # l'epreuve : on nomme le corrige, l'epreuve suit dans sa colonne.
-    list_display = ("fichier", "quiz", "page", "nb_lues", "status", "le_jour")
+    list_display = ("fichier", "quiz", "page", "nb_lues", "etat", "le_jour")
     list_display_links = ("fichier",)
     list_filter = ("status", "quiz__owner")
     search_fields = ("source_name", "quiz__title")

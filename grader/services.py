@@ -407,11 +407,13 @@ def _lire_page_corrige(feuille, img, layout, questions, appliquees, ambigues):
 def _has_name_zone(page_layout, quiz):
     """La fiche porte-t-elle des cases NOM/PRÉNOM manuscrites à lire ?
 
-    L'OCR du nom reste le secours d'identification de tous les modes — sauf
-    sur une fiche de concours à étiquette autocollante, où l'emplacement
-    réservé remplace les cases nom/prénom : le candidat n'y écrit rien, il
-    n'y a donc rien à lire. Cette condition reproduit exactement ce que
-    sheet_pdf.generate_sheet_pdf imprime."""
+    L'OCR du nom reste le secours d'identification des fiches qui en ont —
+    pas des fiches où l'emplacement de l'étiquette QR remplace les cases
+    nom/prénom : concours à étiquette autocollante, et mode grille (la
+    disposition n'a alors pas de « name_boxes » ; une fiche grille générée
+    avant ce changement en a, et son nom manuscrit reste lu). Le candidat
+    n'y écrit rien, il n'y a donc rien à lire. Cette condition reproduit
+    exactement ce que sheet_pdf.generate_sheet_pdf imprime."""
     if not page_layout.get("name_boxes"):
         return False
     sticker = (page_layout.get("qr") or {}).get("sticker")

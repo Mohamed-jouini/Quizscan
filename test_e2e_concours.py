@@ -1,6 +1,6 @@
 """Test du mode concours : aucun étudiant saisi à l'avance — les candidats
-sont créés automatiquement au scan (QR de fiche anonyme, ou grille de n°),
-avec le nom lu par OCR, puis les noms peuvent être complétés par import."""
+sont créés automatiquement au scan (QR de l'étiquette, ou grille de n°),
+puis les noms sont complétés par import de la liste des candidats."""
 import os
 import sys
 
@@ -55,15 +55,6 @@ def render(pdf, idx=0):
         dpi=DPI, colorspace=pymupdf.csRGB)
     img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
     return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-
-
-def write_name(img, layout, last, first):
-    nb = layout["pages"][0]["name_boxes"]
-    for key, txt in (("last", last), ("first", first)):
-        x, y, w, h = nb[key]
-        cv2.putText(img, txt, (mm2px(x + 4), mm2px(y + h - 3.5)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.3, (30, 30, 30), 3, cv2.LINE_AA)
-    return img
 
 
 def stick_label(img, layout, quizpk, serial, page_idx=0):
@@ -153,8 +144,11 @@ def main():
     quiz2.layout_json = layout2
     quiz2.sheet_pdf.save("fiche_conc_grid.pdf", ContentFile(pdf2), save=True)
 
+    # Mode grille : plus de cases NOM/PRÉNOM, l'emplacement de l'étiquette
+    # QR les remplace — le candidat n'écrit pas son nom, il noircit son n°.
+    page2 = layout2["pages"][0]
+    assert not page2["name_boxes"] and page2["qr"]["sticker"], page2.get("qr")
     img2 = render(pdf2, 0)
-    img2 = write_name(img2, layout2, "TOUATI", "NIZAR")
     grid = layout2["pages"][0]["id_grid"]
     for row, digit in zip(grid["rows"], "7315"):
         cx, cy = row[int(digit)]
@@ -168,7 +162,10 @@ def main():
           "| OCR:", sheet2.ocr_name_raw)
     assert sheet2.status == "ok" and sheet2.student is not None
     assert sheet2.student.student_number == "7315"
-    assert "TOUATI" in sheet2.student.last_name
+    # sans nom manuscrit à lire, le candidat est créé sous son numéro ; son
+    # nom vient ensuite de l'import de la liste (comme pour la variante QR)
+    assert sheet2.student.last_name == "CANDIDAT 7315", sheet2.student
+    assert not sheet2.ocr_name_raw
     r2 = services.compute_results(quiz2, batch2)[0]
     assert r2["score"] == 5.0, r2
     print("candidat créé depuis la grille, note", r2["score"], "/", r2["max_score"])

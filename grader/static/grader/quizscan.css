@@ -12,6 +12,7 @@
    écrasait l'autre. Tout est désormais défini une fois.
 
    Sommaire
+     0. Police
      1. Jetons
      2. Base
      3. Ossature (barre latérale, barre du haut)
@@ -22,8 +23,31 @@
      8. Thème sombre
    =========================================================================== */
 
+/* === 0. Police =========================================================== */
+/* Inter (licence SIL OFL, fonts/LICENSE-Inter.txt), servie par l'application
+   elle-même : aucune dépendance à Internet, le serveur de l'établissement
+   peut être isolé. Police variable : un seul fichier par jeu de caractères
+   couvre toutes les graisses. L'arabe n'y est pas : il retombe sur la police
+   du système (unicode-range). */
+@font-face{
+  font-family:"Inter";font-style:normal;font-weight:100 900;font-display:swap;
+  src:url(fonts/inter-latin-wght-normal.woff2) format("woff2-variations"),
+      url(fonts/inter-latin-wght-normal.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,
+    U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,
+    U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:"Inter";font-style:normal;font-weight:100 900;font-display:swap;
+  src:url(fonts/inter-latin-ext-wght-normal.woff2) format("woff2-variations"),
+      url(fonts/inter-latin-ext-wght-normal.woff2) format("woff2");
+  unicode-range:U+0100-02AF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,
+    U+2020,U+20A0-20AB,U+20AD-20CF,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
 /* === 1. Jetons ============================================================ */
 :root{
+  --qs-font:"Inter","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
   /* Couleurs de marque */
   --qs-blue:#4356c9;
   --qs-blue-dark:#36469f;
@@ -62,7 +86,11 @@
   --qs-sheen-edge:rgba(255,255,255,.7);
   --qs-sheen-hover:rgba(255,255,255,.75);
   --qs-border:#dde2f2;      /* bordure d'un module d'administration */
-  --qs-raised:#f5f6fc;      /* en-tete de tableau, zone en retrait */
+  --qs-raised:#f5f6fc;      /* zone en retrait */
+  /* Bandeau d'intitulés des tableaux : en retrait sur fond clair, mais un
+     cran PLUS clair que la carte en thème sombre — --qs-raised y est plus
+     foncé que la carte d'à peine 2 %, et le bandeau disparaissait. */
+  --qs-th-bg:#f3f5fc;
   --qs-sel-bg:#eef0fb;      /* element selectionne */
   --qs-sel-row:#f2f0ff;     /* ligne qui vient d'etre enregistree */
   --qs-grey:#6b7399;        /* bouton neutre (Fermer) */
@@ -118,10 +146,12 @@
 html,body{height:100%}
 body{
   margin:0;min-height:100%;
-  font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  font-family:var(--qs-font);
   font-size:15px;line-height:1.5;color:var(--qs-ink);background:var(--qs-page);
   -webkit-font-smoothing:antialiased;
 }
+/* Les champs n'héritent pas de la police par défaut. */
+button,input,select,textarea{font-family:inherit}
 /* Halos diffus du fond : ils donnent la profondeur des maquettes. */
 body::before,body::after{
   content:"";position:fixed;border-radius:50%;filter:blur(100px);
@@ -146,14 +176,26 @@ h2{font-size:15.5px;margin:0 0 14px;letter-spacing:-.1px}
 .shell__inner,
 body #container{
   display:grid;grid-template-columns:var(--qs-side-w) minmax(0,1fr);
-  border-radius:var(--qs-r-panel);overflow:hidden;
-  background:var(--qs-glass);
+  /* « clip » et non « hidden » : hidden ferait de la carte un conteneur de
+     défilement, et la barre latérale (position:sticky) resterait collée à
+     la carte au lieu de l'écran. Les deux valeurs arrondissent les coins ;
+     un navigateur trop ancien pour « clip » garde hidden (menu non fixe). */
+  border-radius:var(--qs-r-panel);overflow:hidden;overflow:clip;
+  /* Le fond et le filet de la colonne du menu sont peints sur la carte,
+     sur toute sa hauteur : la barre latérale, fixe, ne fait que la hauteur
+     de l'écran — peinte sur elle, la colonne s'arrêtait sous le menu. */
+  background:
+    linear-gradient(180deg,var(--qs-sheen-1),var(--qs-sheen-2))
+      0 0 / var(--qs-side-w) 100% no-repeat,
+    linear-gradient(var(--qs-sheen-edge),var(--qs-sheen-edge))
+      calc(var(--qs-side-w) - 1px) 0 / 1px 100% no-repeat,
+    var(--qs-glass);
   border:1px solid var(--qs-glass-edge);
   backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
   box-shadow:var(--qs-shadow-panel);
-  /* La carte épouse son contenu : forcée à 100vh, elle laissait une grande
-     zone vide sous le contenu sur un écran haut. Un plancher suffit. */
-  min-height:min(620px,calc(100vh - 2 * var(--qs-gutter)));
+  /* La carte occupe au moins la hauteur de l'écran : le menu, fixe, en
+     prend toute la hauteur et « Déconnexion » reste en bas. */
+  min-height:calc(100vh - 2 * var(--qs-gutter));
 }
 .shell__inner{grid-column:1/-1}
 body #container{
@@ -163,10 +205,16 @@ body #container{
 }
 
 /* --- Barre latérale ------------------------------------------------------ */
+/* Le menu reste en place pendant que la page défile (défilement normal de
+   la page : molette, clavier et ancres marchent comme partout). Il fait la
+   hauteur de l'écran moins les marges, et défile lui-même s'il ne tient pas
+   (écran très bas). Son fond est peint par la carte (voir plus haut). */
 .side{
   padding:22px 16px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;
-  background:linear-gradient(180deg,var(--qs-sheen-1),var(--qs-sheen-2));
-  border-right:1px solid var(--qs-sheen-edge);
+  /* + 1 px : le filet de la carte. Sans lui, le menu sautait de 2 px au
+     premier tour de molette. */
+  position:sticky;top:calc(var(--qs-gutter) + 1px);align-self:start;
+  height:calc(100vh - 2 * var(--qs-gutter) - 2px);
 }
 .side__brand{display:flex;align-items:center;gap:10px;padding:4px 10px 20px}
 .side__mark{
@@ -264,11 +312,25 @@ a.tile:hover{border-color:var(--qs-line-strong)}
 /* --- Tableaux ------------------------------------------------------------ */
 /* Portee limitee a .shell : l'administration Django a ses propres tableaux,
    et une regle globale sur th les affichait en MAJUSCULES. */
-.shell table{border-collapse:collapse;width:100%}
-.shell th,.shell td{padding:9px 10px;border-bottom:1px solid var(--qs-line);
+/* Même dessin que les listes de l'administration (#result_list) : intitulés
+   en casse normale sur un bandeau teinté aux coins arrondis, lignes aérées
+   séparées d'un filet, chiffres de même largeur pour que les colonnes de
+   notes et de décomptes s'alignent. « separate » et non « collapse » : les
+   coins arrondis du bandeau en dépendent. */
+.shell table{border-collapse:separate;border-spacing:0;width:100%;
+  font-variant-numeric:tabular-nums}
+.shell th,.shell td{padding:12px 11px;border-bottom:1px solid var(--qs-line);
   text-align:left;vertical-align:middle}
-.shell th{font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;
-  color:var(--qs-faint);font-weight:700}
+.shell td{font-size:14px}
+.shell th{font-size:12.5px;font-weight:600;letter-spacing:0;
+  color:var(--qs-ink-soft);white-space:nowrap}
+/* Ligne d'intitulés : les gabarits n'ont pas de <thead>, c'est la première
+   ligne qui porte les <th>. */
+.shell table tr:first-child > th{background:var(--qs-th-bg);border-bottom:0;
+  padding-top:10px;padding-bottom:10px}
+.shell table tr:first-child > th:first-child{border-radius:10px 0 0 10px}
+.shell table tr:first-child > th:last-child{border-radius:0 10px 10px 0}
+.shell table tr:first-child > th:only-child{border-radius:10px}
 .shell tbody tr:last-child td,.shell table tr:last-child td{border-bottom:0}
 .shell tr:hover td{background:var(--qs-row-hover)}
 
@@ -346,6 +408,7 @@ input:focus,select:focus,textarea:focus{
 .badge.bad{background:var(--qs-bad-bg);color:var(--qs-bad)}
 .badge.warn{background:var(--qs-warn-bg);color:var(--qs-warn)}
 .badge.grey{background:var(--qs-track);color:var(--qs-muted)}
+.badge.info{background:var(--qs-info-bg);color:var(--qs-info)}
 
 .messages{list-style:none;padding:0;margin:0 0 18px}
 .messages li{padding:11px 15px;border-radius:12px;margin-bottom:9px;
@@ -727,6 +790,7 @@ body.auth-page{
    APRÈS admin/css/base.css, donc ces valeurs l'emportent. */
 html[data-theme="light"],:root{
   --primary:var(--qs-blue);
+  --font-family-primary:var(--qs-font);
   --secondary:var(--qs-blue-dark);
   --accent:var(--qs-halo-2);
   --primary-fg:#fff;
@@ -773,7 +837,8 @@ html[data-theme="light"],:root{
    carte touchait les bords de la fenêtre et perdait ses coins arrondis. */
 body.qs-admin{padding:var(--qs-gutter)}
 body.popup{padding:0}
-body.popup #container{grid-template-columns:1fr;border-radius:0;min-height:100vh}
+body.popup #container{grid-template-columns:1fr;border-radius:0;min-height:100vh;
+  background:var(--qs-glass)}
 .qs-main{display:flex;flex-direction:column;min-width:0}
 
 /* Meme barre du haut que dans l'application : le bandeau violet pleine
@@ -836,7 +901,23 @@ div.breadcrumbs{
 .module.collapse summary{background:var(--qs-grad);border:0;padding:0 0 0 10px}
 .module.collapse summary .fieldset-heading{background:transparent;color:#fff}
 
-.module table{margin:0}
+.module table{margin:0;font-variant-numeric:tabular-nums}
+/* En-têtes des autres tableaux de l'administration (lignes imbriquées d'un
+   formulaire, actions récentes…) : même dessin que les listes. */
+.module table thead th,.inline-group .tabular thead th{
+  background:var(--qs-th-bg);color:var(--qs-ink-soft);
+  font-size:12.5px;font-weight:600;letter-spacing:0;text-transform:none;
+  padding:10px 12px;border-bottom:1px solid var(--qs-line);white-space:nowrap;
+}
+.module table tbody td,.module table tbody th{font-size:14px}
+/* Pas de zébrage, comme les listes : un filet sépare les lignes. */
+.inline-group .tabular tbody tr{background:var(--qs-surface)}
+/* Titre de page : Django l'écrit en graisse 300, très pâle à côté des
+   titres de l'application. */
+#content > h1,#content-main > h1{
+  font-size:25px;font-weight:700;letter-spacing:-.4px;line-height:1.2;
+  color:var(--qs-ink-loud);margin:0 0 6px;
+}
 .module tbody th,.module tbody td{border-bottom:1px solid var(--hairline-color)}
 .module tbody tr:last-child th,.module tbody tr:last-child td{border-bottom:0}
 fieldset.module .description{
@@ -894,8 +975,29 @@ form .aligned .form-row:not(tr) p.help,
   background:var(--darkened-bg);border:1px solid var(--border-color);
   display:flex;gap:10px;align-items:center;flex-wrap:wrap;
 }
-.submit-row input.default{background:var(--qs-grad);border:0}
+.submit-row input.default{background:var(--qs-grad);border:0;text-transform:none}
 .submit-row a.deletelink{margin-left:auto}
+/* Liens dessinés en boutons (« Supprimer », « Fermer », « Non, revenir en
+   arrière ») : Django leur donne une hauteur fixe de 15 px plus 10 px de
+   marge ; avec box-sizing:border-box, la marge mange toute la hauteur et le
+   texte déborde, coupé. Même boîte que les boutons voisins. */
+.submit-row a.deletelink,.submit-row a.closelink,
+.delete-confirmation form .cancel-link{
+  display:inline-flex;align-items:center;justify-content:center;
+  box-sizing:border-box;height:2.1875rem;padding:0 16px;line-height:1;
+  border-radius:var(--qs-r-field);font-size:13px;font-weight:600;
+  text-decoration:none;white-space:nowrap;color:#fff;
+}
+.submit-row a.deletelink{background:var(--qs-bad-btn);
+  box-shadow:0 10px 22px -14px var(--qs-bad-btn)}
+.submit-row a.deletelink:hover,.submit-row a.deletelink:focus{
+  background:var(--qs-bad-btn-hover);color:#fff}
+.delete-confirmation form input[type=submit]{background:var(--qs-bad-btn);
+  box-shadow:0 10px 22px -14px var(--qs-bad-btn);
+  box-sizing:border-box;height:2.1875rem;padding:0 16px;vertical-align:middle}
+.delete-confirmation form input[type=submit]:hover,
+.delete-confirmation form input[type=submit]:focus{background:var(--qs-bad-btn-hover)}
+.delete-confirmation form .cancel-link{vertical-align:middle;margin:0 0 0 10px}
 .object-tools a{border-radius:999px;font-weight:600;letter-spacing:.2px}
 
 #changelist .results{border-radius:14px;overflow:auto}
@@ -1002,6 +1104,18 @@ body.dashboard #content{width:auto;max-width:none}
 }
 #toolbar label{margin:0;display:flex;align-items:center}
 #changelist-search .small.quiet{color:var(--qs-muted)}
+/* « Rechercher » et « Envoyer » : Django les peint en gris, hauteur libre.
+   Même bouton que le reste de l'application, à la hauteur des champs. */
+#toolbar #searchbar,#changelist .actions select{height:38px}
+#toolbar #changelist-search input[type=submit],
+#changelist .actions .button{
+  height:38px;padding:0 16px;margin:0;border:0;
+  border-radius:var(--qs-r-field);background:var(--qs-btn-bg);color:#fff;
+  font-size:13px;font-weight:600;cursor:pointer;
+  box-shadow:0 10px 22px -14px var(--qs-blue);
+}
+#toolbar #changelist-search input[type=submit]:hover,
+#changelist .actions .button:hover{background:var(--qs-btn-hover)}
 
 /* Barre d'actions groupees. */
 #changelist .actions{
@@ -1023,46 +1137,49 @@ body.dashboard #content{width:auto;max-width:none}
 #changelist .results th,#changelist .results td{white-space:nowrap}
 
 /* --- Le tableau de resultats lui-meme ------------------------------------ */
-#result_list{background:var(--qs-surface);border-collapse:collapse;width:100%}
+/* Meme dessin que les tableaux de l'application (.shell table) : intitules
+   en casse normale, bandeau teinte, lignes aerees, chiffres alignes. */
+#result_list{background:var(--qs-surface);border-collapse:collapse;width:100%;
+  font-variant-numeric:tabular-nums}
 
-/* En-tete : le padding vit sur le lien de tri, pas sur la cellule (Django
-   enveloppe l'intitule dans <div class="text"><a>…</a></div>). */
 #result_list thead th{
-  padding:0;background:var(--qs-raised);
+  padding:0;background:var(--qs-th-bg);
   border-bottom:1px solid var(--qs-line);
-  /* Repere pour les commandes de tri, posees en absolu ci-dessous. */
-  position:relative;
 }
-/* display:block ne vaut que pour le contenu de la cellule : pose sur un
-   <th>, il le sort du modele de tableau et gonfle la ligne (62 px au lieu
-   de 40). La colonne des cases a cocher garde donc son padding a part. */
+/* Intitule puis commandes de tri, cote a cote (gabarit
+   admin/change_list_results.html). Le padding vit sur ce conteneur et non
+   sur la cellule : display:flex pose sur un <th> le sortirait du modele de
+   tableau. */
+#result_list thead th .qs-th{display:flex;align-items:center;gap:7px;
+  padding:11px 14px}
+#result_list thead th div.text,
 #result_list thead th div.text a,
 #result_list thead th div.text span{
-  display:block;padding:11px 12px;
-  font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
-  color:var(--qs-faint);text-decoration:none;
+  display:block;padding:0;float:none;
+  font-size:12.5px;font-weight:600;letter-spacing:0;text-transform:none;
+  color:var(--qs-ink-soft);text-decoration:none;white-space:nowrap;
 }
-#result_list thead th.action-checkbox-column{padding:9px 10px}
-/* La case « tout selectionner » est enveloppee dans le meme div.text que
-   les intitules : sans cette exception elle heritait de leur padding et
-   imposait 61 px de haut a toute la ligne d en-tete. */
-#result_list thead th.action-checkbox-column div.text span{
-  display:inline;padding:0;
-}
-#result_list thead th div.text a:hover{color:var(--qs-ink)}
-#result_list thead th.sorted div.text a{color:var(--qs-ink)}
+#result_list thead th div.text a:hover{color:var(--qs-blue)}
+#result_list thead th.sorted div.text a{color:var(--qs-blue)}
+/* Django reserve 42 px a droite de l'intitule trie pour ses fleches
+   flottantes : elles suivent maintenant le texte. */
+#result_list thead th.sorted .text{padding-right:0}
+#result_list thead th.action-checkbox-column .qs-th{padding:11px 10px;
+  justify-content:center}
+#result_list thead th.action-checkbox-column div.text span{display:inline}
 
-/* Commandes de tri : a droite de la cellule, sur la ligne de l'intitule. */
 #result_list thead th .sortoptions{
-  position:absolute;top:50%;right:8px;transform:translateY(-50%);
-  display:flex;align-items:center;gap:3px;padding:0;margin:0;
+  position:static;float:none;transform:none;
+  display:inline-flex;align-items:center;gap:4px;padding:0;margin:0;
 }
-#result_list thead th.sortable div.text a{padding-right:48px}
-#result_list thead th .clear{display:none}
+#result_list thead th .sortoptions a{width:12px;height:12px;opacity:.7}
+#result_list thead th .sortoptions a:hover{opacity:1}
+/* La croix « retirer du tri » n'apparait qu'au survol de la colonne. */
+#result_list thead th .sortoptions a.sortremove{visibility:hidden}
+#result_list thead th:hover .sortoptions a.sortremove{visibility:visible}
 #result_list thead th .sortpriority{
-  font-size:10px;line-height:15px;color:var(--qs-faint);
-  background:var(--qs-surface);border:1px solid var(--qs-line);
-  border-radius:999px;padding:0 5px;
+  font-size:10.5px;line-height:16px;font-weight:600;color:var(--qs-blue);
+  background:var(--qs-sel-bg);border-radius:999px;padding:0 6px;margin:0;
 }
 
 /* Lignes : pas de zebrage, un filet suffit — et un survol pour suivre la
@@ -1076,8 +1193,8 @@ body.dashboard #content{width:auto;max-width:none}
 #result_list tbody tr.selected > td{background:var(--qs-sel-row)}
 #result_list tbody th,
 #result_list tbody td{
-  padding:11px 12px;vertical-align:middle;
-  border-bottom:1px solid var(--qs-line);font-size:13.5px;
+  padding:13px 14px;vertical-align:middle;
+  border-bottom:1px solid var(--qs-line);font-size:14px;color:var(--qs-ink);
 }
 #result_list tbody tr:last-child th,
 #result_list tbody tr:last-child td{border-bottom:0}
@@ -1110,7 +1227,15 @@ body.dashboard #content{width:auto;max-width:none}
 @media (max-width:980px){
   /* Les filtres passent sous la liste : a cette largeur, deux colonnes ne
      laissaient plus rien au tableau. */
-  #changelist-filter{flex:1 1 100%;order:2}
+  /* En colonne, et non par retour à la ligne : sous 767 px Django passe
+     #changelist en « column-reverse », et avec align-items:flex-start la
+     liste prenait alors la largeur de son contenu (900 px et plus) au lieu
+     de celle de l'écran — champ de recherche, bouton « Envoyer » et
+     colonnes sortaient de la carte au lieu de défiler dans le tableau. */
+  #changelist{flex-direction:column;align-items:stretch}
+  #changelist > .changelist-form-container,#changelist-filter{
+    flex:none;width:100%;max-width:100%}
+  #changelist-filter{order:2}
 }
 
 /* Gestion des comptes */
@@ -1191,9 +1316,14 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 /* Tablette : la barre latérale devient une barre d'icônes horizontale. */
 @media (max-width:980px){
   .shell,.shell__inner,body #container{grid-template-columns:1fr}
+  /* Plus de colonne de menu : la carte reprend un fond uni, et la barre
+     d'icônes défile avec la page. */
+  .shell__inner,body #container{background:var(--qs-glass);min-height:0}
   .side{
     flex-direction:row;align-items:center;gap:6px;overflow-x:auto;
-    padding:14px;border-right:0;border-bottom:1px solid var(--qs-sheen-edge);
+    padding:14px;border-bottom:1px solid var(--qs-sheen-edge);
+    position:static;height:auto;
+    background:linear-gradient(180deg,var(--qs-sheen-1),var(--qs-sheen-2));
   }
   .side__brand{padding:0 12px 0 4px}
   .side__name small{display:none}
@@ -1223,10 +1353,16 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   .auth__panel{min-height:0;padding:30px clamp(22px,6vw,38px) 36px}
   .brand{margin-bottom:0}
   .auth h1{margin-top:18px}
-  .form-row{grid-template-columns:1fr;padding:12px 14px}
-  .form-row .help,.form-row .helptext,
-  .form-row .errorlist,.form-row ul.radiolist,
-  .form-row .flex-container.checkbox-row{grid-column:1}
+  /* Mêmes sélecteurs que les règles d'écran large (« :not(tr) », « form
+     .aligned … p.help ») : moins spécifique, la colonne de libellé de 230 px
+     restait, et le champ n'avait plus que 0 px — l'aide s'écrivait une
+     lettre par ligne. */
+  .form-row:not(tr){grid-template-columns:minmax(0,1fr);padding:12px 14px}
+  form .aligned .form-row:not(tr) div.help,
+  form .aligned .form-row:not(tr) p.help,
+  .form-row:not(tr) .help,.form-row:not(tr) .helptext,
+  .form-row:not(tr) .errorlist,.form-row:not(tr) ul.radiolist,
+  .form-row:not(tr) .flex-container.checkbox-row{grid-column:1}
 }
 @media (max-width:620px){
   .nav__item span{display:none}
@@ -1256,6 +1392,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   --dk-muted:#a8aecd;     --dk-faint:#8b92b5;
   --dk-line:#2a2e4d;      --dk-line-strong:#3d4369;
   --dk-field-line:#333858; --dk-border:#2f3457;
+  --dk-th-bg:#262b4d;
   --dk-raised:#191c33;    --dk-sel-bg:#232745;     --dk-sel-row:#2a2550;
   --dk-row-hover:#20233f; --dk-track:#272b4a;
   --dk-sheen-1:rgba(255,255,255,.05);
@@ -1303,6 +1440,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   --qs-line:var(--dk-line); --qs-line-strong:var(--dk-line-strong);
   --qs-field-line:var(--dk-field-line); --qs-border:var(--dk-border);
   --qs-raised:var(--dk-raised); --qs-sel-bg:var(--dk-sel-bg);
+  --qs-th-bg:var(--dk-th-bg);
   --qs-sel-row:var(--dk-sel-row); --qs-row-hover:var(--dk-row-hover);
   --qs-track:var(--dk-track);
   --qs-sheen-1:var(--dk-sheen-1); --qs-sheen-2:var(--dk-sheen-2);
@@ -1347,6 +1485,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   --qs-line:var(--dk-line); --qs-line-strong:var(--dk-line-strong);
   --qs-field-line:var(--dk-field-line); --qs-border:var(--dk-border);
   --qs-raised:var(--dk-raised); --qs-sel-bg:var(--dk-sel-bg);
+  --qs-th-bg:var(--dk-th-bg);
   --qs-sel-row:var(--dk-sel-row); --qs-row-hover:var(--dk-row-hover);
   --qs-track:var(--dk-track);
   --qs-sheen-1:var(--dk-sheen-1); --qs-sheen-2:var(--dk-sheen-2);

@@ -17,6 +17,7 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import Permission
+from django.urls import reverse
 from django.utils.html import format_html
 
 from . import droits
@@ -266,10 +267,22 @@ class CompteAdmin(TitresFrancais, UserAdmin):
     def actif(self, obj):
         return obj.is_active
 
+    def _url_mot_de_passe(self, obj):
+        """Adresse absolue de l'écran de changement du mot de passe.
+
+        Pas de lien relatif (« 3/password/ ») : juste depuis la liste
+        (/admin/auth/user/), il devient « /admin/auth/user/3/change/3/password/ »
+        depuis la fiche du compte — « l'utilisateur n'existe pas »."""
+        meta = obj._meta
+        return reverse(
+            f"{self.admin_site.name}:{meta.app_label}_{meta.model_name}"
+            "_password_change", args=[obj.pk])
+
     @admin.display(description="Mot de passe")
     def mot_de_passe_lien(self, obj):
         return format_html(
-            '<a class="qs-pw-link" href="{}/password/">Modifier</a>', obj.pk)
+            '<a class="qs-pw-link" href="{}">Modifier</a>',
+            self._url_mot_de_passe(obj))
 
     @admin.display(description="Mot de passe")
     def mot_de_passe(self, obj):
@@ -283,9 +296,10 @@ class CompteAdmin(TitresFrancais, UserAdmin):
             return format_html(
                 '<span class="qs-pw-none">Aucun mot de passe utilisable — '
                 'ce compte ne peut pas se connecter.</span> '
-                '<a class="button qs-pw-btn" href="{}/password/">Définir un '
-                'mot de passe</a>', obj.pk)
+                '<a class="button qs-pw-btn" href="{}">Définir un '
+                'mot de passe</a>', self._url_mot_de_passe(obj))
         return format_html(
-            '<a class="button qs-pw-btn" href="{}/password/">Modifier le mot '
+            '<a class="button qs-pw-btn" href="{}">Modifier le mot '
             'de passe</a><p class="help qs-pw-help">Un mot de passe ne se '
-            'relit pas : il ne peut être que remplacé.</p>', obj.pk)
+            'relit pas : il ne peut être que remplacé.</p>',
+            self._url_mot_de_passe(obj))

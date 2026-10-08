@@ -99,8 +99,9 @@ def fill_sheet(img, layout, student_answers, name_text=("BEN SALAH", "AHMED"),
         cx, cy = item["bubbles"][ans]
         cv2.circle(img, (mm2px(cx), mm2px(cy)), mm2px(L.BUBBLE_R * 0.9), (20, 20, 20), -1)
     # écrire le nom (simulé en texte imprimé pour le test)
+    # (mode grille : pas de cases NOM/PRÉNOM, l'étiquette QR les remplace)
     nb = page["name_boxes"]
-    for key, txt in zip(("last", "first"), name_text):
+    for key, txt in zip(("last", "first"), name_text if nb else ()):
         x, y, w, h = nb[key]
         cv2.putText(img, txt, (mm2px(x + 4), mm2px(y + h - 3.5)),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.4, (30, 30, 30), 3, cv2.LINE_AA)

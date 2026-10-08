@@ -628,6 +628,11 @@ def quiz_detail(request, pk):
                     pdf_bytes = sheet_pdf.generate_sheet_pdf(quiz, layout)
                     filename = f"fiche_quiz_{quiz.pk}.pdf"
                     msg = "Fiche de réponses générée. Imprimez-la pour vos étudiants."
+                    if quiz.id_mode == "grid":
+                        msg += (" Chaque élève colle son étiquette QR dans le cadre "
+                                "en haut à droite (planche d'étiquettes : page "
+                                "« Candidats & étiquettes QR »), ou à défaut "
+                                "noircit son n° d'inscription dans la grille.")
                     if quiz.id_mode == "sticker" or (quiz.auto_enroll and quiz.id_mode == "qr"):
                         msg += (" Imprimez aussi la planche d'étiquettes QR des candidats "
                                 "(page « Candidats & étiquettes QR ») à coller sur les copies.")

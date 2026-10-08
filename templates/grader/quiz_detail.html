@@ -260,6 +260,11 @@
       {% elif quiz.id_mode == "qr" %}
         Mode QR : le PDF contient une fiche <b>nominative</b> par étudiant (nom
         pré-imprimé + QR code). Imprimez en A4 à 100 % et distribuez à chacun la sienne.
+      {% elif quiz.id_mode == "grid" %}
+        Imprimez cette fiche en A4 (100 %, sans mise à l'échelle) : une copie par étudiant.
+        Chacun colle son étiquette QR dans le cadre en haut à droite
+        (<a href="{% url 'class_detail' quiz.class_group.pk %}">planche d'étiquettes</a>),
+        ou à défaut noircit son n° d'inscription.
       {% else %}
         Imprimez cette fiche en A4 (100 %, sans mise à l'échelle) : une copie par étudiant.
       {% endif %}
