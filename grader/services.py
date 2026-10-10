@@ -464,11 +464,34 @@ def moderniser_fiche_grille(quiz):
     pdf = sheet_pdf.generate_sheet_pdf(quiz, nouvelle)
     # Le PDF est celui du quiz tel qu'il est : son empreinte est l'actuelle.
     nouvelle["signature"] = layout_mod.layout_signature(quiz)
+    if "sujet_version" in ancienne:
+        nouvelle["sujet_version"] = ancienne["sujet_version"]
     quiz.layout_json = nouvelle
     quiz.sheet_pdf.save(f"fiche_quiz_{quiz.pk}.pdf", ContentFile(pdf), save=False)
     quiz.save(update_fields=["layout_json", "sheet_pdf"])
     log.info("Fiche du quiz %s mise à jour : cadre QR à la place de NOM/PRÉNOM",
              quiz.pk)
+    return True
+
+
+def actualiser_sujet(quiz, forcer=False):
+    """Refait le SUJET (document des questions, mode « sujet séparé ») s'il a
+    été dessiné par une version antérieure — par exemple un sujet de concours
+    sans les choix des QCM. Le sujet n'est jamais scanné : le refaire ne
+    touche ni à la feuille de réponses ni à la lecture des copies.
+    forcer : refaire même à jour (en-tête ou durée modifiés).
+    Retourne True si le sujet a été remplacé."""
+    disposition = quiz.layout_json
+    if quiz.sheet_mode != "split" or not quiz.subject_pdf or not disposition:
+        return False
+    if not forcer and disposition.get("sujet_version") == sheet_pdf.SUJET_VERSION:
+        return False
+    pdf = sheet_pdf.generate_subject_pdf(quiz)
+    quiz.subject_pdf.save(f"sujet_quiz_{quiz.pk}.pdf", ContentFile(pdf), save=False)
+    quiz.layout_json = {**disposition, "sujet_version": sheet_pdf.SUJET_VERSION}
+    quiz.save(update_fields=["layout_json", "subject_pdf"])
+    log.info("Sujet du quiz %s mis à jour (version %s)", quiz.pk,
+             sheet_pdf.SUJET_VERSION)
     return True
 
 

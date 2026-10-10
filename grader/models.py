@@ -138,6 +138,15 @@ class Quiz(models.Model):
     # Sujet séparé (questions seules) — mode "split"
     subject_pdf = models.FileField("sujet — questions (PDF)", upload_to="sheets/",
                                    null=True, blank=True)
+    # Cartouche du sujet, à la manière des sujets de concours : institutions
+    # dans une case, intitulé et durée au centre. Facultatifs.
+    entete = models.TextField(
+        "en-tête du sujet", blank=True,
+        help_text="Une ligne par ligne : ministère, établissement… "
+                  "Imprimé dans le cartouche du sujet.")
+    duree = models.CharField(
+        "durée de l'épreuve", max_length=60, blank=True,
+        help_text="Ex. « 1 h 30 » ou « ساعة ونصف ».")
     created_at = models.DateTimeField("créée le", auto_now_add=True)
 
     class Meta:

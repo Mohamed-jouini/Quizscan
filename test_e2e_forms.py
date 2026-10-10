@@ -43,8 +43,9 @@ def main():
     # ---- nouveau concours : seuls les champs utiles sont proposés
     r = c.get("/quiz/nouveau/?concours=1")
     fields = set(r.context["form"].fields)
-    assert fields == {"title", "language", "sheet_mode", "id_mode", "id_digits",
-                      "grading_mode", "wrong_penalty"}, fields
+    # entete / duree : cartouche du sujet (affichés en mode « sujet séparé »)
+    assert fields == {"title", "language", "sheet_mode", "entete", "duree",
+                      "id_mode", "id_digits", "grading_mode", "wrong_penalty"}, fields
     modes = [m for m, _ in r.context["form"].fields["id_mode"].choices]
     assert modes == ["grid", "sticker"], modes
     html = r.content.decode()

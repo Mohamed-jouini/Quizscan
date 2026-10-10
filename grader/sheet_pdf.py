@@ -19,7 +19,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas as rl_canvas
 
 from . import layout as L
-from .fonts import (font_for, has_arabic, load_fonts, runs, shape, wrap)
+from .fonts import (font_for, has_arabic, load_fonts, runs, shape,
+                    text_width_pt, wrap)
 from .models import choice_letter
 
 ARUCO_DICT = cv2.aruco.getPredefinedDictionary(L.ARUCO_DICT_ID)
@@ -379,21 +380,121 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
     return buf.getvalue()
 
 
+# Version du dessin du SUJET. À augmenter à chaque changement de ce qu'il
+# imprime : les sujets déjà générés sont alors refaits à l'ouverture du quiz
+# (services.actualiser_sujet). Sans risque, le sujet n'est jamais scanné.
+#   2 — concours : les choix des QCM sont imprimés (avant : intitulés seuls).
+#   3 — présentation des sujets de concours tunisiens : cartouche à trois
+#       cases, page de garde « Remarques / Consignes », pagination n/N.
+SUJET_VERSION = 3
+
+# Textes du sujet. Les consignes sont écrites d'après ce que QuizScan lit
+# réellement : cases à noircir (pas de croix), étiquette QR ou grille de n°.
+SUJET_TEXTES = {
+    "fr": {
+        "epreuve": "Épreuve à choix multiples",
+        "epreuve_mixte": "Questions à choix multiples et rédigées",
+        "duree": "Durée : {d}",
+        "etiquette": "Collez ici l'étiquette portant votre nom",
+        "nom": "Nom et prénom :",
+        "classe": "Classe : {c}",
+        "titre_main": "Intitulé de l'épreuve :",
+        "remarques": "Remarques :",
+        "consignes": "Consignes :",
+        "r_pages": "Le sujet comporte {p} page(s) de questions, numérotées de 1 "
+                   "à {n}, et une feuille de réponses séparée.",
+        "r_nombre": "Nombre de questions : {n}.",
+        "r_unique": "Chaque question n'admet qu'une seule bonne réponse.",
+        "r_unique_qcm": "Chaque question à choix multiples n'admet qu'une seule "
+                        "bonne réponse.",
+        "r_penalite": "Chaque réponse fausse retire {x} point(s) ; une question "
+                      "sans réponse ne retire rien.",
+        "c_etiquette": "Collez l'étiquette QR qui vous a été remise dans "
+                       "l'emplacement réservé de la feuille de réponses.",
+        "c_grille": "Écrivez votre numéro d'inscription sur la feuille de "
+                    "réponses et noircissez les chiffres correspondants dans "
+                    "la grille.",
+        "c_noircir": "Pour chaque question, noircissez complètement une seule "
+                     "case sur la feuille de réponses.",
+        "c_brouillon": "Une seule feuille de réponses est remise par candidat : "
+                       "préparez vos réponses sur ce sujet avant de les reporter.",
+        "c_stylo": "Utilisez un stylo à bille noir ou bleu, à l'exclusion de "
+                   "toute autre couleur.",
+        "c_blanco": "N'utilisez pas de correcteur (blanco) et ne raturez pas la "
+                    "feuille de réponses.",
+        "c_plier": "Ne pliez pas la feuille de réponses.",
+        "c_rendre": "À la fin de l'épreuve, rendez la feuille de réponses et le "
+                    "sujet.",
+        "page": "{i}/{n}",
+    },
+    "ar": {
+        "epreuve": "اختبار في الأسئلة متعددة الاختيارات",
+        "epreuve_mixte": "أسئلة متعددة الاختيارات وأسئلة تحريرية",
+        "duree": "المدة : {d}",
+        "etiquette": "ألصق هنا اللاصقة الحاملة للاسم واللقب",
+        "nom": "الاسم واللقب :",
+        "classe": "القسم : {c}",
+        "titre_main": "عنوان الاختبار :",
+        "remarques": "ملاحظات :",
+        "consignes": "تعليمات :",
+        "r_pages": "يتضمن الاختبار {p} من الأسئلة المرقمة من 1 إلى {n} "
+                   "وورقة إجابة منفصلة.",
+        "r_nombre": "عدد الأسئلة : {n}",
+        "r_unique": "كل سؤال يحتمل إجابة واحدة صحيحة لا غير.",
+        "r_unique_qcm": "كل سؤال متعدد الاختيارات يحتمل إجابة واحدة صحيحة لا غير.",
+        "r_penalite": "تُطرح {x} نقطة عن كل إجابة خاطئة، ولا يُطرح شيء عن "
+                      "السؤال الذي لم تتم الإجابة عنه.",
+        "c_etiquette": "تُثبَّت لاصقة رمز QR المسلَّمة إليك في المكان المخصص لها "
+                       "على ورقة الإجابة.",
+        "c_grille": "يُكتب رقم التسجيل على ورقة الإجابة وتُملأ الأرقام المطابقة "
+                    "له في الشبكة.",
+        "c_noircir": "تُملأ كليًا خانة واحدة لكل سؤال على ورقة الإجابة.",
+        "c_brouillon": "لا تُسلَّم إلا ورقة إجابة واحدة لكل مترشح، ويُستحسن "
+                       "تحضير الإجابة على ورقة الأسئلة قبل نقلها إلى ورقة الإجابة.",
+        "c_stylo": "يُستعمل القلم الجاف الأسود أو الأزرق دون سواهما.",
+        "c_blanco": "يُمنع استعمال الماحي (Blanco) والتشطيب على ورقة الإجابة.",
+        "c_plier": "عدم طيّ ورقة الإجابة.",
+        "c_rendre": "تُرجَع ورقة الإجابة وأوراق الأسئلة في نهاية الاختبار.",
+        "page": "{i}/{n}",
+    },
+}
+
+
+def _nb_pages(p, lang):
+    """« 3 page(s) » en français ; en arabe, l'accord du nom avec le nombre
+    (صفحة واحدة، صفحتين، 3 صفحات، 11 صفحة)."""
+    if lang != "ar":
+        return p
+    if p == 1:
+        return "صفحة واحدة"
+    if p == 2:
+        return "صفحتين"
+    if 3 <= p <= 10:
+        return f"{p} صفحات"
+    return f"{p} صفحة"
+
+
 def generate_subject_pdf(quiz, questions=None):
     """PDF du SUJET (questions seules, sans cases à noircir) — à distribuer
     aux étudiants ; la grille de réponses est un document séparé (sheet_pdf).
-    Aucun repère ArUco : ce document n'est pas scanné."""
+    Aucun repère ArUco : ce document n'est pas scanné.
+
+    Présentation des sujets de concours : cartouche à trois cases en tête de
+    la première page (institutions | intitulé et durée | identification),
+    puis, pour un concours, une page de garde « Remarques / Consignes » ; les
+    questions suivent, chaque choix sur sa ligne, pages numérotées n/N."""
     load_fonts()
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
     lang = getattr(quiz, "language", "fr")
     rtl = lang == "ar"
     T = LABELS.get(lang, LABELS["fr"])
+    S = SUJET_TEXTES.get(lang, SUJET_TEXTES["fr"])
     qs = list(questions if questions is not None
               else quiz.questions.order_by("order"))
     X0, X1 = L.CONTENT_X0, L.CONTENT_X1
     W = X1 - X0
-    BOTTOM = L.PAGE_H - 18.0
+    HAUT, BAS = 22.0, L.PAGE_H - 20.0
 
     def draw(text, x_mm_, y_mm_, size, bold=False, align="left", gray=None):
         y_pt = (L.PAGE_H - y_mm_) * mm
@@ -412,108 +513,205 @@ def generate_subject_pdf(quiz, questions=None):
         if gray is not None:
             c.setFillGray(0.0)
 
-    page_no = [0]
+    def ligne(text, y, size, bold=False, retrait=0.0, gray=None):
+        """Ligne alignée sur le début du sens de lecture (droite en arabe)."""
+        if rtl:
+            draw(text, X1 - retrait, y, size, bold, align="right", gray=gray)
+        else:
+            draw(text, X0 + retrait, y, size, bold, gray=gray)
 
     sticker = getattr(quiz, "id_mode", "name") == "sticker"
     concours = getattr(quiz, "auto_enroll", False)
-    subj_txt = ("السؤال — أجب على ورقة الإجابة المنفصلة" if rtl
-                else "SUJET — répondez sur la feuille de réponses séparée")
-
-    def header():
-        page_no[0] += 1
-        if concours:
-            # Concours : titre une seule fois (sans nom de classe), pas de champ
-            # nom/prénom, et un emplacement réservé à l'étiquette autocollante.
-            draw(quiz.title, L.PAGE_W / 2, 18.0, 14, bold=True, align="center")
-            rw = X1 - X0
-            box_top, rh = 23.5, 10.0
-            draw(T["sticker"], L.PAGE_W / 2, box_top - 1.5, 7.5,
-                 align="center", gray=0.45)
-            c.setStrokeGray(0.45)
-            c.setLineWidth(0.9)
-            c.setDash(3, 2)          # cadre en pointillés = zone à coller
-            c.rect(X0 * mm, (L.PAGE_H - (box_top + rh)) * mm, rw * mm, rh * mm)
-            c.setDash()
-            draw(subj_txt, L.PAGE_W / 2, box_top + rh + 4.0, 8.5,
-                 align="center", gray=0.4)
-        elif sticker:
-            # Titre à écrire à la main : une ligne vide (pas de nom de quiz/classe,
-            # pas de champ NOM/PRÉNOM — l'identification passe par l'étiquette).
-            c.setStrokeGray(0.45)
-            c.setLineWidth(0.7)
-            c.line(40 * mm, (L.PAGE_H - 22.0) * mm, (L.PAGE_W - 40) * mm,
-                   (L.PAGE_H - 22.0) * mm)
-            draw(subj_txt, L.PAGE_W / 2, 31.0, 8.5, align="center", gray=0.4)
-        else:
-            draw(f"{quiz.title} — {quiz.class_group.name}", L.PAGE_W / 2, 20.0,
-                 14, bold=True, align="center")
-            if rtl:
-                draw("الاسم واللقب: .............................................",
-                     X1, 30.0, 10, align="right")
-            else:
-                draw("NOM et PRÉNOM : ...........................................",
-                     X0, 30.0, 10)
-            draw(subj_txt, L.PAGE_W / 2, 36.0, 8.5, align="center", gray=0.4)
-        c.setStrokeGray(0.75)
-        c.setLineWidth(0.5)
-        c.line(X0 * mm, (L.PAGE_H - 39.0) * mm, X1 * mm, (L.PAGE_H - 39.0) * mm)
-        return 46.0
-
-    def footer():
-        foot = (f"page {page_no[0]}" if sticker
-                else f"{quiz.title} — page {page_no[0]}")
-        draw(foot, L.PAGE_W / 2, L.PAGE_H - 8.0, 6.5, align="center", gray=0.5)
+    # Titre écrit à la main (mode étiquette hors concours) : le même sujet
+    # peut servir à plusieurs épreuves, il ne porte ni titre ni classe.
+    titre_a_la_main = sticker and not concours
 
     def fmt_pts(points):
         unit = (T["pt"] if points <= 1 else T["pts"])
         return f"({points:g} {unit})"
 
-    y = header()
+    # ---------------------------------------------------------------- blocs
+    # Chaque question est un bloc insécable : on calcule d'abord sa hauteur
+    # pour paginer, puis on dessine — la pagination « n/N » a besoin du total.
+    blocs = []
     for q in qs:
-        # intitulé de la question (avec numéro et barème)
-        head = f"{q.order}. {q.text}".strip() + f" {fmt_pts(q.points)}"
-        head_lines = wrap(head, 11, W, bold=True)
-        # lignes de choix (QCM) ou espace de réponse (manuscrite)
-        # Concours : on n'imprime QUE les intitulés de questions (pas les choix,
-        # pas de cadre de réponse) — les réponses vont sur la feuille séparée.
-        choice_blocks = []
-        if concours:
-            block_h = len(head_lines) * 5.4 + 3.0
-        elif q.qtype == "qcm":
+        tete = wrap(f"{q.order}. {q.text}".strip() + f" {fmt_pts(q.points)}",
+                    11.5, W, bold=True)
+        choix = []
+        if q.qtype == "qcm":
             for k, ch in enumerate(q.choices or []):
-                letter = choice_letter(k, lang)
-                prefix = f"{letter}. "
-                choice_blocks.append(wrap(f"{prefix}{ch}", 10.5, W - 8.0))
-            block_h = (len(head_lines) * 5.4 + 1.5
-                       + sum(len(b) * 5.0 for b in choice_blocks) + 5.0)
+                choix.append(wrap(f"{choice_letter(k, lang)}. {ch}", 10.5, W - 8.0))
+        cadre = 0.0 if (q.qtype == "qcm" or concours) else float(q.open_height_mm)
+        h = (len(tete) * 6.0 + 1.5 + sum(len(b) * 5.6 for b in choix)
+             + (cadre + 3.0 if cadre else 0.0) + 6.0)
+        blocs.append((q, tete, choix, cadre, h))
+
+    CARTOUCHE_H = 36.0
+    debut_questions_p1 = HAUT + CARTOUCHE_H + 10.0
+    pages = [[]]                       # blocs de chaque page de questions
+    y = HAUT if concours else debut_questions_p1
+    for bloc in blocs:
+        if y + bloc[4] > BAS and pages[-1]:
+            pages.append([])
+            y = HAUT
+        pages[-1].append(bloc)
+        y += bloc[4]
+    total = len(pages) + (1 if concours else 0)
+    page_no = [0]
+
+    def entete_page():
+        page_no[0] += 1
+        draw(S["page"].format(i=page_no[0], n=total), L.PAGE_W / 2, 12.0, 9,
+             align="center", gray=0.35)
+
+    def pied_page():
+        if not titre_a_la_main:
+            draw(quiz.title, L.PAGE_W / 2, L.PAGE_H - 9.0, 6.5, align="center",
+                 gray=0.5)
+
+    # ------------------------------------------------------------ cartouche
+    def cartouche():
+        y0, h = HAUT, CARTOUCHE_H
+        wcol = W / 3
+        c.setStrokeGray(0.0)
+        c.setLineWidth(0.8)
+        c.rect(X0 * mm, (L.PAGE_H - (y0 + h)) * mm, W * mm, h * mm)
+        for k in (1, 2):
+            x = X0 + k * wcol
+            c.line(x * mm, (L.PAGE_H - y0) * mm, x * mm, (L.PAGE_H - (y0 + h)) * mm)
+        # Ordre de lecture : institutions | épreuve | identification,
+        # de droite à gauche en arabe.
+        cases = [X0 + 2 * wcol, X0 + wcol, X0] if rtl else [X0, X0 + wcol, X0 + 2 * wcol]
+        x_inst, x_epr, x_id = cases
+
+        def bloc_centre(lignes, x, y_haut, h_case, size=9.5, gras_premiere=False):
+            textes = []
+            for i, t in enumerate(lignes):
+                for morceau in wrap(t, size, wcol - 6.0, bold=gras_premiere and i == 0):
+                    textes.append((morceau, gras_premiere and i == 0))
+            pas = size * 0.47
+            yy = y_haut + (h_case - len(textes) * pas) / 2 + pas - 0.8
+            for t, gras in textes:
+                draw(t, x + wcol / 2, yy, size, bold=gras, align="center")
+                yy += pas
+
+        # 1. institutions (en-tête saisi ; à défaut, le nom du groupe)
+        inst = [t.strip() for t in (quiz.entete or "").splitlines() if t.strip()]
+        if not inst and not concours and not titre_a_la_main:
+            inst = [quiz.class_group.name]
+        if inst:
+            bloc_centre(inst, x_inst, y0, h, size=9, gras_premiere=True)
+
+        # 2. épreuve : titre en haut, nature et durée en bas
+        moitie = h / 2
+        c.setLineWidth(0.6)
+        c.line(x_epr * mm, (L.PAGE_H - (y0 + moitie)) * mm,
+               (x_epr + wcol) * mm, (L.PAGE_H - (y0 + moitie)) * mm)
+        if titre_a_la_main:
+            draw(S["titre_main"], x_epr + wcol / 2, y0 + 7.0, 8.5, align="center",
+                 gray=0.35)
+            c.setLineWidth(0.5)
+            c.line((x_epr + 5) * mm, (L.PAGE_H - (y0 + 13.5)) * mm,
+                   (x_epr + wcol - 5) * mm, (L.PAGE_H - (y0 + 13.5)) * mm)
         else:
-            block_h = len(head_lines) * 5.4 + float(q.open_height_mm) + 8.0
+            bloc_centre([quiz.title], x_epr, y0, moitie, size=11, gras_premiere=True)
+        bas = [S["epreuve"] if all(q.qtype == "qcm" for q in qs)
+               else S["epreuve_mixte"]]
+        if quiz.duree:
+            bas.append(S["duree"].format(d=quiz.duree))
+        bloc_centre(bas, x_epr, y0 + moitie, moitie, size=9, gras_premiere=True)
 
-        if y + block_h > BOTTOM and (q is not qs[0]):
-            footer(); c.showPage(); y = header()
-
-        for line in head_lines:
-            y += 5.4
-            draw(line, X1 if rtl else X0, y, 11, bold=True,
-                 align="right" if rtl else "left")
-        y += 1.5
-        if concours:
-            pass  # aucun choix ni cadre de réponse sur le sujet concours
-        elif q.qtype == "qcm":
-            for block in choice_blocks:
-                for j, line in enumerate(block):
-                    y += 5.0
-                    x = (X1 - 6.0) if rtl else (X0 + 6.0)
-                    draw(line, x, y, 10.5, align="right" if rtl else "left")
+        # 3. identification
+        if concours or sticker:
+            bloc_centre([S["etiquette"]], x_id, y0, h, size=9.5, gras_premiere=True)
         else:
-            # cadre de réponse libre
-            y += 2.0
-            c.setStrokeGray(0.4); c.setLineWidth(0.5)
-            c.rect(X0 * mm, (L.PAGE_H - (y + float(q.open_height_mm))) * mm,
-                   W * mm, float(q.open_height_mm) * mm, stroke=1, fill=0)
-            y += float(q.open_height_mm)
-        y += 5.0
+            draw(S["nom"], (x_id + wcol - 3) if rtl else (x_id + 3), y0 + 7.5, 9,
+                 bold=True, align="right" if rtl else "left")
+            c.setDash(1, 2)
+            c.setLineWidth(0.6)
+            for yy in (y0 + 17.0, y0 + 25.0):
+                c.line((x_id + 4) * mm, (L.PAGE_H - yy) * mm,
+                       (x_id + wcol - 4) * mm, (L.PAGE_H - yy) * mm)
+            c.setDash()
+            draw(S["classe"].format(c=quiz.class_group.name), x_id + wcol / 2,
+                 y0 + 32.0, 8, align="center", gray=0.35)
 
-    footer()
+    # ---------------------------------------------- page de garde (concours)
+    def liste_numerotee(titre, items, y):
+        y += 7.0
+        ligne(titre, y, 12, bold=True)
+        larg = text_width_pt(titre, 12, True) / mm
+        c.setLineWidth(0.6)
+        xa = (X1 - larg) if rtl else X0
+        c.line(xa * mm, (L.PAGE_H - (y + 1.3)) * mm, (xa + larg) * mm,
+               (L.PAGE_H - (y + 1.3)) * mm)
+        y += 3.0
+        for i, item in enumerate(items, start=1):
+            morceaux = wrap(item, 10.5, W - 14.0)
+            for j, m in enumerate(morceaux):
+                y += 6.2
+                if j == 0:
+                    ligne(f"{i}.", y, 10.5, bold=True, retrait=2.0)
+                ligne(m, y, 10.5, retrait=9.0)
+            y += 1.2
+        return y
+
+    def page_de_garde():
+        n_q = len(qs)
+        tous_qcm = all(q.qtype == "qcm" for q in qs)
+        remarques = [S["r_pages"].format(p=_nb_pages(len(pages), lang), n=n_q),
+                     S["r_nombre"].format(n=n_q),
+                     S["r_unique"] if tous_qcm else S["r_unique_qcm"]]
+        if quiz.wrong_penalty:
+            remarques.append(S["r_penalite"].format(x=f"{quiz.wrong_penalty:g}"))
+        consignes = []
+        if quiz.id_mode == "grid":
+            consignes.append(S["c_grille"])
+        else:
+            consignes.append(S["c_etiquette"])
+        consignes += [S["c_noircir"], S["c_brouillon"], S["c_stylo"],
+                      S["c_blanco"], S["c_plier"], S["c_rendre"]]
+        y = debut_questions_p1 - 4.0
+        y = liste_numerotee(S["remarques"], remarques, y)
+        y = liste_numerotee(S["consignes"], consignes, y + 6.0)
+
+    # --------------------------------------------------------------- dessin
+    entete_page()
+    cartouche()
+    if concours:
+        page_de_garde()
+        pied_page()
+        c.showPage()
+        entete_page()
+        y = HAUT
+    else:
+        y = debut_questions_p1
+
+    for n, page in enumerate(pages):
+        if n:
+            pied_page()
+            c.showPage()
+            entete_page()
+            y = HAUT
+        for q, tete, choix, cadre, h in page:
+            for t in tete:
+                y += 6.0
+                ligne(t, y, 11.5, bold=True)
+            y += 1.5
+            for bloc in choix:
+                for t in bloc:
+                    y += 5.6
+                    ligne(t, y, 10.5, retrait=6.0)
+            if cadre:
+                y += 3.0
+                c.setStrokeGray(0.4)
+                c.setLineWidth(0.5)
+                c.rect(X0 * mm, (L.PAGE_H - (y + cadre)) * mm, W * mm, cadre * mm,
+                       stroke=1, fill=0)
+                c.setStrokeGray(0.0)
+                y += cadre
+            y += 6.0
+
+    pied_page()
     c.save()
     return buf.getvalue()

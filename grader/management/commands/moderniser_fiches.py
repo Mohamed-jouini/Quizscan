@@ -1,4 +1,5 @@
-"""Met à jour les fiches « grille de n° » générées avant le cadre QR.
+"""Met à jour les fiches « grille de n° » générées avant le cadre QR, et les
+sujets dessinés par une version antérieure (concours sans les choix).
 
 Ces fiches portaient des cases NOM/PRÉNOM, remplacées depuis par
 l'emplacement de l'étiquette QR. Le PDF enregistré ne change pas tout seul :
@@ -20,10 +21,13 @@ class Command(BaseCommand):
             "générées par l'emplacement de l'étiquette QR.")
 
     def handle(self, *args, **options):
-        faites = 0
-        for quiz in Quiz.objects.filter(id_mode="grid").exclude(sheet_pdf=""):
+        faites = sujets = 0
+        for quiz in Quiz.objects.exclude(sheet_pdf=""):
             try:
                 faites += services.moderniser_fiche_grille(quiz)
+                # Sujets (mode « sujet séparé ») dessinés par une version
+                # antérieure, ex. concours sans les choix des QCM.
+                sujets += services.actualiser_sujet(quiz)
             except Exception as exc:  # noqa: BLE001 — une fiche ne bloque pas les autres
                 self.stderr.write(f"quiz {quiz.pk} : {type(exc).__name__}: {exc}")
-        self.stdout.write(f"{faites} fiche(s) mise(s) à jour.")
+        self.stdout.write(f"{faites} fiche(s) et {sujets} sujet(s) mis à jour.")

@@ -138,8 +138,10 @@ class QuizForm(forms.ModelForm):
     class Meta:
         model = Quiz
         fields = ["title", "class_group", "language", "sheet_mode",
+                  "entete", "duree",
                   "id_mode", "id_digits", "grading_mode", "wrong_penalty"]
-        widgets = {"grading_mode": forms.RadioSelect}
+        widgets = {"grading_mode": forms.RadioSelect,
+                   "entete": forms.Textarea(attrs={"rows": 3})}
         field_classes = {"wrong_penalty": DecimalField}
         labels = {"id_digits": "Nombre de chiffres du n° d'inscription"}
         help_texts = {"id_digits": "Taille de la grille à noircir sur la fiche "

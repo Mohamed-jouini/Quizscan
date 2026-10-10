@@ -64,6 +64,18 @@
     </select>
   </div>
   {% endif %}
+  {% if quiz.sheet_mode == "split" %}
+  <div class="reglages__large">
+    <label for="id_entete">En-tête du sujet</label>
+    <textarea id="id_entete" class="champ--entete" name="entete" rows="3"
+              placeholder="Une ligne par ligne : ministère, établissement…">{{ quiz.entete }}</textarea>
+  </div>
+  <div>
+    <label for="id_duree">Durée de l'épreuve</label>
+    <input id="id_duree" class="champ--duree" type="text" name="duree" maxlength="60"
+           value="{{ quiz.duree }}" placeholder="1 h 30">
+  </div>
+  {% endif %}
   <button class="btn small" name="update_settings" value="1" type="submit">Enregistrer les réglages</button>
   <span class="helptext reglages__aide">
     Choisissez « Sujet séparé + feuille de réponses » pour obtenir deux PDF (questions d'un

@@ -56,5 +56,14 @@
   function sync() { row.hidden = mode.value !== "grid"; }
   mode.addEventListener("change", sync); sync();
 })();
+// En-tête et durée ne s'impriment que sur le sujet (« sujet séparé »)
+(function () {
+  var mode = document.getElementById("id_sheet_mode");
+  var rows = ["row_entete", "row_duree"].map(function (id) {
+    return document.getElementById(id); }).filter(Boolean);
+  if (!mode || !rows.length) return;
+  function sync() { rows.forEach(function (r) { r.hidden = mode.value !== "split"; }); }
+  mode.addEventListener("change", sync); sync();
+})();
 </script>
 {% endblock %}

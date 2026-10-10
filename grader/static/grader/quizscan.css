@@ -572,6 +572,8 @@ input:focus,select:focus,textarea:focus{
 .reglages__large select{max-width:560px}
 .reglages__aide{flex-basis:100%;margin:0}
 .champ--court{width:90px}
+.champ--duree{width:170px}
+.shell textarea.champ--entete{max-width:560px}
 .champ--note{width:70px}
 
 /* Valeur etablie par la machine, que l'ecran montre sans permettre de la
