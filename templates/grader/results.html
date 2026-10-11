@@ -69,13 +69,21 @@
 {# Recherche : filtre la liste des admis ET le tableau des notes. #}
 <form class="recherche-etudiant" method="get" role="search">
   {% if batch %}<input type="hidden" name="batch" value="{{ batch.pk }}">{% endif %}
-  <label for="id_q" class="visually-hidden">Rechercher un étudiant</label>
-  <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
-         placeholder="Rechercher un {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} : nom, prénom ou n° d'inscription">
-  <button class="btn small" type="submit">Rechercher</button>
+  <div class="recherche-etudiant__champ">
+    <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+    <label for="id_q" class="visually-hidden">Rechercher un {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %}</label>
+    <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
+           placeholder="Rechercher un {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} — nom, prénom ou n° d'inscription">
+    {% if recherche %}
+    <a class="recherche-etudiant__effacer" href="?{% if batch %}batch={{ batch.pk }}{% endif %}"
+       title="Effacer la recherche" aria-label="Effacer la recherche">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+    {% endif %}
+  </div>
+  <button class="btn" type="submit">Rechercher</button>
   {% if recherche %}
-  <a class="btn small secondary" href="?{% if batch %}batch={{ batch.pk }}{% endif %}">Effacer</a>
-  <span class="recherche-etudiant__bilan">{{ n_trouves }} résultat{{ n_trouves|pluralize }} pour « {{ recherche }} »</span>
+  <span class="recherche-etudiant__bilan {% if not n_trouves %}is-vide{% endif %}">
+    {{ n_trouves }} résultat{{ n_trouves|pluralize }} pour « {{ recherche }} »</span>
   {% endif %}
 </form>
 {% endif %}

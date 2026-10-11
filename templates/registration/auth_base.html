@@ -9,14 +9,14 @@ formulaire ; la géométrie, le décor et le comportement sont partagés.
 Les couleurs et la mise en page viennent de la feuille unique
 (grader/static/grader/quizscan.css), partagée avec l'espace enseignant et
 l'administration, et le thème clair / sombre de grader/theme.js.
-{% endcomment %}{% load static %}<!doctype html>
+{% endcomment %}{% load static qs_statique %}<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Connexion — QuizScan{% endblock %}</title>
-<link rel="stylesheet" href="{% static 'grader/quizscan.css' %}">
-<script src="{% static 'grader/theme.js' %}"></script>
+<link rel="stylesheet" href="{% statique 'grader/quizscan.css' %}">
+<script src="{% statique 'grader/theme.js' %}"></script>
 {% block palette %}{% endblock %}
 </head>
 <body class="auth-page">

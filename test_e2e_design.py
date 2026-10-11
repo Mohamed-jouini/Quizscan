@@ -95,6 +95,11 @@ def main():
             assert reponse.status_code == 200, f"{url} -> {reponse.status_code}"
             corps = reponse.content.decode()
             assert FEUILLE in corps, f"{url} n'utilise pas la feuille unique"
+            # Adresse versionnée : sans empreinte, les navigateurs gardaient
+            # l'ancienne feuille en cache après une mise à jour (écrans à
+            # moitié stylés jusqu'à un Ctrl+F5).
+            assert re.search(re.escape(FEUILLE) + r"\?v=[0-9a-f]{10}", corps), \
+                f"{url} : feuille de style sans empreinte de version"
             for bloc in re.findall(r"<style[^>]*>(.*?)</style>", corps, re.S):
                 lignes = [l for l in bloc.splitlines() if l.strip()]
                 assert len(lignes) <= MAX_LIGNES_EN_LIGNE, (

@@ -1,4 +1,4 @@
-{% load i18n static %}<!DOCTYPE html>
+{% load i18n static qs_statique %}<!DOCTYPE html>
 {% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}
 {% comment %}
 Gabarit de base de l'interface d'administration, remplacé pour que
@@ -23,13 +23,13 @@ navigation au lieu de deux.
 {% block dark-mode-vars %}
   {# Ni dark_mode.css ni admin/js/theme.js : le theme sombre et la bascule #}
   {# viennent de la feuille unique et de grader/theme.js, comme ailleurs.  #}
-  <script src="{% static 'grader/theme.js' %}"></script>
+  <script src="{% statique 'grader/theme.js' %}"></script>
 {% endblock %}
 {% block extrastyle %}{% endblock %}
 {# Feuille unique de QuizScan. Elle vient en DERNIER, apres base.css et   #}
 {# apres extrastyle (ou Django injecte forms.css et le CSS des widgets) : #}
 {# a specificite egale, c est la derniere chargee qui l emporte.          #}
-<link rel="stylesheet" href="{% static 'grader/quizscan.css' %}">
+<link rel="stylesheet" href="{% statique 'grader/quizscan.css' %}">
 {% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% block stylesheet_rtl %}{% static "admin/css/rtl.css" %}{% endblock %}">{% endif %}
 {% block extrahead %}{% endblock %}
 {% block responsive %}

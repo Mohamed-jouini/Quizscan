@@ -576,14 +576,37 @@ input:focus,select:focus,textarea:focus{
 .tiles--admission{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
   margin-bottom:6px}
 .admission__titre{font-size:14px;margin:14px 0 8px}
-/* Recherche d'un étudiant sur la page des résultats. */
-.recherche-etudiant{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  margin:0 0 16px}
-.shell .recherche-etudiant input[type=search]{flex:1 1 320px;max-width:520px;
-  width:auto;border:1px solid var(--qs-field-line);border-radius:var(--qs-r-field);
-  padding:9px 12px;font:inherit;font-size:14px;background:var(--qs-surface);
-  color:var(--qs-ink)}
-.recherche-etudiant__bilan{font-size:13px;color:var(--qs-muted)}
+/* Recherche d'un étudiant sur la page des résultats : grand champ arrondi,
+   loupe à gauche, croix pour effacer à droite, bilan en pastille. */
+.recherche-etudiant{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:0 0 18px}
+.recherche-etudiant__champ{position:relative;flex:1 1 360px;max-width:620px}
+.recherche-etudiant__loupe{position:absolute;left:15px;top:50%;width:19px;height:19px;
+  transform:translateY(-50%);fill:none;stroke:var(--qs-faint);stroke-width:2;
+  stroke-linecap:round;pointer-events:none}
+.shell .recherche-etudiant input[type=search]{
+  width:100%;height:46px;padding:0 44px 0 44px;margin:0;
+  border:1px solid var(--qs-field-line);border-radius:12px;
+  background:var(--qs-surface);color:var(--qs-ink);font:inherit;font-size:14.5px;
+  box-shadow:var(--qs-shadow-soft);transition:border-color .15s,box-shadow .15s;
+}
+.shell .recherche-etudiant input[type=search]::placeholder{color:var(--qs-faint)}
+.shell .recherche-etudiant input[type=search]:focus{border-color:var(--qs-blue);
+  box-shadow:0 0 0 4px rgba(29,107,67,.14)}
+.recherche-etudiant__champ:focus-within .recherche-etudiant__loupe{stroke:var(--qs-blue)}
+/* Croix maison : celle du navigateur (type=search) n'efface que le champ,
+   la nôtre recharge la liste complète. */
+.recherche-etudiant input[type=search]::-webkit-search-cancel-button{display:none}
+.recherche-etudiant__effacer{position:absolute;right:9px;top:50%;
+  transform:translateY(-50%);width:28px;height:28px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;color:var(--qs-muted)}
+.recherche-etudiant__effacer:hover{background:var(--qs-track);color:var(--qs-ink)}
+.recherche-etudiant__effacer svg{width:15px;height:15px;fill:none;stroke:currentColor;
+  stroke-width:2.2;stroke-linecap:round}
+.recherche-etudiant .btn{height:46px;padding:0 20px;border-radius:12px}
+.recherche-etudiant__bilan{font-size:12.5px;font-weight:600;padding:5px 11px;
+  border-radius:999px;background:var(--qs-ok-bg);color:var(--qs-ok)}
+.recherche-etudiant__bilan.is-vide{background:var(--qs-warn-bg);color:var(--qs-warn)}
 .admission__entete-liste{display:flex;align-items:center;justify-content:space-between;
   gap:10px;flex-wrap:wrap}
 /* Réglage de la note minimale sur la page des résultats. */

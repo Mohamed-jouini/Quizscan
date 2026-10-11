@@ -2,15 +2,15 @@
 {# colonne de menu vert profond, accent anis, cartes blanches bordées.       #}
 {# Les noms de classes historiques (card, btn, badge, grid2, helptext…) sont #}
 {# conservés : les pages existantes gardent leur balisage.                   #}
-{% load static %}<!doctype html>
+{% load static qs_statique %}<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}QuizScan{% endblock %}</title>
-<link rel="stylesheet" href="{% static 'grader/quizscan.css' %}">
+<link rel="stylesheet" href="{% statique 'grader/quizscan.css' %}">
 {# Avant le corps : le theme retenu est pose sans que la page clignote. #}
-<script src="{% static 'grader/theme.js' %}"></script>
+<script src="{% statique 'grader/theme.js' %}"></script>
 {% block head %}{% endblock %}
 </head>
 <body>
