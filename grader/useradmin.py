@@ -62,10 +62,10 @@ class CompteChangeForm(forms.ModelForm):
         queryset=ClassGroup.objects.none(),
         widget=forms.CheckboxSelectMultiple,
         help_text="Il ne voit que les classes cochées, leurs étudiants et les "
-                  "épreuves qui s'y rattachent — y compris celles écrites par "
-                  "un collègue, qui en garde l'accès. Une classe décochée "
-                  "n'est pas supprimée : elle n'appartient plus à personne "
-                  "tant qu'elle n'est pas attribuée à quelqu'un d'autre.")
+                  "épreuves qui s'y rattachent. Une classe peut être confiée à "
+                  "plusieurs enseignants : la cocher ici n'en retire pas les "
+                  "collègues qui l'ont déjà. Une classe décochée n'est pas "
+                  "supprimée.")
 
     peut_creer = forms.BooleanField(
         label="Créer des épreuves", required=False,
@@ -84,22 +84,16 @@ class CompteChangeForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         instance = kwargs.get("instance") or self.instance
 
-        # Les classes proposées : celles de ce compte, plus celles qui
-        # n'appartiennent à personne. Celles d'un collègue ne sont pas
-        # reprises ici — on ne déshabille pas un enseignant par mégarde
-        # depuis la fiche d'un autre.
-        libres = ClassGroup.objects.filter(owner__isnull=True)
+        # Toutes les classes sont proposées : une classe peut avoir plusieurs
+        # enseignants, en cocher une ici n'en retire personne.
+        self.fields["classes"].queryset = ClassGroup.objects.all()
         if instance and instance.pk:
-            self.fields["classes"].queryset = (
-                ClassGroup.objects.filter(owner=instance) | libres).distinct()
-            self.fields["classes"].initial = ClassGroup.objects.filter(
-                owner=instance)
+            self.fields["classes"].initial = instance.classes_attribuees.all()
             self.fields["role"].initial = (
                 ROLE_ADMIN if instance.is_superuser else ROLE_ENSEIGNANT)
             self.fields["peut_creer"].initial = droits.peut_creer(instance)
             self.fields["peut_corriger"].initial = droits.peut_corriger(instance)
         else:
-            self.fields["classes"].queryset = libres
             # Un nouvel enseignant sait faire son métier : les deux droits
             # sont cochés d'office, à décocher si l'établissement le veut.
             self.fields["peut_creer"].initial = True
@@ -110,25 +104,19 @@ class CompteChangeForm(forms.ModelForm):
             "classes, épreuves et copies de cet enseignant sont conservées.")
 
     def clean_classes(self):
-        """Refuse un transfert qui créerait deux classes de même nom.
+        """Refuse deux classes de même nom pour un même enseignant.
 
-        ClassGroup impose (enseignant, nom) unique : reprendre une classe
-        libre nommée « 3ème A » alors que l'enseignant en a déjà une
-        échouerait au moment d'enregistrer, sans explication.
+        Il ne saurait plus laquelle est laquelle dans ses listes (deux
+        « 3ème A » de deux établissements ou de deux collègues).
         """
         choisies = self.cleaned_data["classes"]
-        compte = self.instance
-        if not (compte and compte.pk):
-            return choisies
-        deja = set(ClassGroup.objects.filter(owner=compte)
-                   .exclude(pk__in=[c.pk for c in choisies])
-                   .values_list("name", flat=True))
-        collisions = sorted({c.name for c in choisies if c.name in deja})
+        noms = [c.name for c in choisies]
+        collisions = sorted({n for n in noms if noms.count(n) > 1})
         if collisions:
             raise forms.ValidationError(
-                "Cet enseignant a déjà une classe nommée : "
+                "Plusieurs des classes cochées s'appellent : "
                 + ", ".join(collisions)
-                + ". Renommez-la avant de lui attribuer celle-ci.")
+                + ". Renommez l'une d'elles avant de les attribuer ensemble.")
         return choisies
 
     def save(self, commit=True):
@@ -157,18 +145,12 @@ class CompteChangeForm(forms.ModelForm):
         return compte
 
     def _enregistrer_classes(self, compte):
-        """Une classe appartient à un enseignant : c'est ClassGroup.owner.
-
-        On ne crée pas de seconde liste d'affectations à côté : la relation
-        existe déjà et c'est elle que lisent toutes les vues.
-        """
+        """Les classes de l'enseignant : ClassGroup.enseignants, que lisent
+        toutes les vues. Les autres enseignants de ces classes restent."""
         choisies = self.cleaned_data.get("classes")
         if choisies is None:
             return
-        gardees = [c.pk for c in choisies]
-        ClassGroup.objects.filter(owner=compte).exclude(
-            pk__in=gardees).update(owner=None)
-        ClassGroup.objects.filter(pk__in=gardees).update(owner=compte)
+        compte.classes_attribuees.set(choisies)
 
     def _enregistrer_droits(self, compte):
         """Les deux cases deviennent des permissions Django.
@@ -246,7 +228,7 @@ class CompteAdmin(TitresFrancais, UserAdmin):
 
     @admin.display(description="Classes")
     def ses_classes(self, obj):
-        noms = list(obj.class_groups.values_list("name", flat=True))
+        noms = list(obj.classes_attribuees.values_list("name", flat=True))
         return ", ".join(noms) if noms else "—"
 
     @admin.display(description="Autorisations")

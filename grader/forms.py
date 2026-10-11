@@ -161,7 +161,7 @@ class QuizForm(forms.ModelForm):
             del self.fields["grading_mode"]
             qs = self.fields["class_group"].queryset
             if user is not None and not user.is_superuser:
-                qs = qs.filter(owner=user)
+                qs = qs.filter(enseignants=user).distinct()
             self.fields["class_group"].queryset = qs
             self.fields["class_group"].empty_label = "— choisir une classe —"
             self.fields["class_group"].required = True
@@ -183,21 +183,14 @@ class QuestionForm(forms.ModelForm):
                   "Laissez vide pour n'imprimer qu'une rangée de cases "
                   "(fiche de réponses seule, sujet distribué à part).")
 
-    # Ce champ ne sert QUE lorsque le texte des choix n'est pas saisi — cas
-    # de la « fiche de réponses seule », où la fiche ne porte qu'une rangée
-    # de cases et où le sujet est distribué à part. Dès qu'on tape des choix,
-    # le nombre de cases suit ce qui est tapé et le champ est masqué par le
-    # formulaire (voir quiz_detail.html). C'est le seul réglage du nombre de
-    # cases : Quiz.num_choices n'est exposé nulle part.
-    num_choices = forms.IntegerField(
-        label="Nombre de cases à imprimer", initial=4, min_value=2,
-        max_value=MAX_CHOICES, required=False,
-        help_text="Combien de cases A, B, C… imprimer devant cette question, "
-                  "puisque vous ne saisissez pas le texte des choix.")
+    # Pas de champ « Nombre de cases à imprimer » (retiré à la demande de
+    # l'utilisateur, 11 octobre 2026) : le nombre de cases suit les choix
+    # saisis ; sans texte de choix, c'est celui du quiz (Quiz.num_choices,
+    # 4 par défaut). L'« Ajout rapide » garde son propre nombre de choix.
 
     class Meta:
         model = Question
-        fields = ["qtype", "text", "choices_text", "num_choices", "correct_letter",
+        fields = ["qtype", "text", "choices_text", "correct_letter",
                   "points", "open_height_mm"]
         field_classes = {"points": DecimalField}
         widgets = {"open_height_mm": forms.NumberInput(
@@ -208,15 +201,11 @@ class QuestionForm(forms.ModelForm):
         self.quiz = quiz
         lang = quiz.language if quiz else "fr"
         # Le nombre de réponses possibles suit le nombre de choix saisis,
-        # sinon le « Nombre de choix » de la question.
-        n = 4
+        # sinon celui du quiz.
+        n = self._cases_par_defaut()
         if self.is_bound:
             raw = self.data.get(self.add_prefix("choices_text"), "")
             typed = [l for l in raw.splitlines() if l.strip()]
-            try:
-                n = int(self.data.get(self.add_prefix("num_choices")) or 4)
-            except ValueError:
-                n = 4
             if typed:
                 n = len(typed)
             n = min(max(n, 2), MAX_CHOICES)
@@ -230,6 +219,11 @@ class QuestionForm(forms.ModelForm):
             self.fields["choices_text"].widget.attrs["placeholder"] = \
                 "مثال:\nتونس\nصفاقس\nسوسة\nبنزرت"
 
+    def _cases_par_defaut(self):
+        """Nombre de cases d'une QCM dont le texte des choix n'est pas saisi."""
+        n = getattr(self.quiz, "num_choices", None) or 4
+        return min(max(n, 2), MAX_CHOICES)
+
     def clean(self):
         data = super().clean()
         if data.get("qtype") == "qcm":
@@ -241,7 +235,7 @@ class QuestionForm(forms.ModelForm):
             choices = [l.strip() for l in data.get("choices_text", "").splitlines()
                        if l.strip()]
             data["choices_list"] = choices
-            data["num_choices"] = len(choices) or data.get("num_choices") or 4
+            data["num_choices"] = len(choices) or self._cases_par_defaut()
             if sans_corrige:
                 return data
             if not choices and int(data["correct_letter"]) >= data["num_choices"]:

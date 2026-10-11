@@ -55,6 +55,13 @@
     <input class="champ--court" type="text" name="wrong_penalty"
            value="{{ quiz.wrong_penalty|floatformat:'-2' }}">
   </div>
+  <div>
+    <label for="id_note_admission">{% if quiz.auto_enroll %}Note minimale d'admission{% else %}Note minimale de réussite{% endif %}</label>
+    <input id="id_note_admission" class="champ--court" type="text" inputmode="decimal"
+           name="note_admission" value="{{ quiz.note_admission|default_if_none:''|floatformat:'-2' }}"
+           placeholder="—">
+    <span class="helptext helptext--serre">sur {{ quiz.max_score|floatformat:"-2" }} pts</span>
+  </div>
   {% if quiz.auto_enroll %}
   <div>
     <label>Correction des copies</label>
@@ -340,15 +347,6 @@
             {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
           </div>
         {% endfor %}
-        {# Remplace la ligne « Nombre de cases » quand les choix sont saisis :  #}
-        {# le nombre de cases suit alors ce qui est tapé, le champ ne sert plus #}
-        <div id="row_cases_auto" hidden>
-          <label>Nombre de cases à imprimer</label>
-          <p class="helptext" style="margin:0">
-            <b id="cases_auto_n"></b> — d'après les choix saisis
-            (<span id="cases_auto_lettres"></span>).
-          </p>
-        </div>
         <p><button class="btn" name="add_question" value="1" type="submit">Ajouter</button></p>
       </form>
     </div>
@@ -361,7 +359,8 @@
   var letters = [{% for l in choice_letters_full %}"{{ l }}"{% if not forloop.last %},{% endif %}{% endfor %}];
   var ta = document.getElementById("id_choices_text");
   var sel = document.getElementById("id_correct_letter");
-  var num = document.getElementById("id_num_choices");
+  // Sans texte de choix : le nombre de cases du quiz.
+  var defN = {{ quiz.num_choices|default:4 }};
   var digitsRow = document.getElementById("row_id_digits");
   var idMode = document.querySelector("select[name=id_mode]");
   if (idMode && digitsRow) {
@@ -370,39 +369,21 @@
   }
   if (!ta || !sel) return;
   var qtype = document.getElementById("id_qtype");
-  var rowNum = document.getElementById("row_num_choices");
-  var rowAuto = document.getElementById("row_cases_auto");
-  var autoN = document.getElementById("cases_auto_n");
-  var autoL = document.getElementById("cases_auto_lettres");
   var rows = {};
-  ["choices_text", "num_choices", "correct_letter", "open_height_mm"]
+  ["choices_text", "correct_letter", "open_height_mm"]
     .forEach(function (n) { rows[n] = document.getElementById("row_" + n); });
 
   function rebuild() {
     var lines = ta.value.split("\n").filter(function (l) { return l.trim() !== ""; });
-    var defN = parseInt(num && num.value, 10) || 4;
+    // les choix saisis décident du nombre de cases
     var n = Math.min(Math.max(lines.length || defN, 2), letters.length);
-    var auto = lines.length > 0;   // les choix saisis décident du nombre de cases
-
-    // « Nombre de cases » n'a d'effet que sans texte de choix : on le masque
-    // dans le cas contraire, et on affiche à la place ce qui s'applique.
-    if (rowNum) rowNum.hidden = auto;
-    if (num) num.disabled = auto;
-    if (rowAuto) {
-      rowAuto.hidden = !auto;
-      if (auto) {
-        autoN.textContent = n + (n > 1 ? " cases" : " case");
-        autoL.textContent = letters.slice(0, n).join(", ");
-      }
-    }
 
     // Une question manuscrite n'a ni choix ni bonne réponse ; une QCM n'a pas
     // de hauteur de zone de réponse.
     var open = qtype && qtype.value === "open";
-    ["choices_text", "num_choices", "correct_letter"].forEach(function (name) {
-      if (rows[name]) rows[name].hidden = open || (name === "num_choices" && auto);
+    ["choices_text", "correct_letter"].forEach(function (name) {
+      if (rows[name]) rows[name].hidden = open;
     });
-    if (rowAuto) rowAuto.hidden = open || !auto;
     if (rows.open_height_mm) rows.open_height_mm.hidden = !open;
 
     var cur = sel.value;
@@ -415,7 +396,6 @@
     }
   }
   ta.addEventListener("input", rebuild);
-  if (num) num.addEventListener("input", rebuild);
   if (qtype) qtype.addEventListener("change", rebuild);
   rebuild();
 })();

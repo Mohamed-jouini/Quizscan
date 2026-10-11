@@ -428,9 +428,15 @@ NAME_BOXES_Y = 32.0
 
 
 def _name_boxes(id_mode="name"):
-    """Cases NOM/PRÉNOM manuscrites (lues par OCR en secours). Aucune en
-    mode grille : l'emplacement de l'étiquette QR les remplace."""
-    if id_mode == "grid":
+    """Cases NOM/PRÉNOM manuscrites (lues par OCR en secours).
+
+    Seulement en mode « nom manuscrit », où elles sont le seul moyen
+    d'identifier la copie. Partout où il y a un code QR (étiquette collée,
+    fiche nominative) ou une grille de n°, la feuille de réponses ne porte
+    que lui : demande de l'utilisateur, 11 octobre 2026. Grille, QCM et
+    emplacement du QR ne bougent pas : les fiches déjà imprimées, avec leurs
+    cases, se lisent toujours."""
+    if id_mode in ("grid", "sticker", "qr"):
         return {}
     w = (CONTENT_X1 - CONTENT_X0 - 8.0) / 2
     y = NAME_BOXES_Y

@@ -55,8 +55,25 @@ def _draw(c, text, x_mm_, y_mm_, size, bold=False, align="left", gray=None):
         c.setFillGray(0.0)
 
 
-def generate_bulletins_pdf(quiz, rows, batch=None):
-    """Un PDF avec une page de relevé par étudiant (rows = compute_results)."""
+def _ligne_resultat(quiz, r, admission):
+    """« ADMIS — rang 2 sur 6 », ou None sans note minimale réglée."""
+    if not admission or not r.get("resultat"):
+        return None, None
+    concours = quiz.auto_enroll
+    libelle = {"admis": "ADMIS" if concours else "RÉUSSI",
+               "refuse": "NON ADMIS" if concours else "NON RÉUSSI",
+               "en_attente": "EN ATTENTE — réponses manuscrites à noter"}[r["resultat"]]
+    texte = f"{libelle} — rang {r['rang']} sur {admission['n']}"
+    couleur = {"admis": (0.1, 0.5, 0.2), "refuse": (0.75, 0.15, 0.1),
+               "en_attente": (0.6, 0.35, 0.0)}[r["resultat"]]
+    return texte, couleur
+
+
+def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
+    """Un PDF avec une page de relevé par étudiant (rows = compute_results).
+
+    admission (services.admissions) : avec une note minimale réglée, chaque
+    relevé porte le résultat et le rang du candidat."""
     load_fonts()
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
@@ -84,6 +101,13 @@ def generate_bulletins_pdf(quiz, rows, batch=None):
         if r["pending_open"]:
             resume += f" — {r['pending_open']} manuscrite(s) non corrigée(s)"
         _draw(c, resume, X1, 62.0, 9.5, align="right", gray=0.25)
+        texte, couleur = _ligne_resultat(quiz, r, admission)
+        if texte:
+            c.setFillColorRGB(*couleur)
+            _draw(c, texte, X1, 68.0, 10.5, bold=True, align="right")
+            c.setFillGray(0.0)
+            _draw(c, f"note minimale {admission['seuil']:g} / {r['max_score']:g}",
+                  X1, 72.5, 8, align="right", gray=0.45)
 
         # Tableau du détail
         y = 78.0

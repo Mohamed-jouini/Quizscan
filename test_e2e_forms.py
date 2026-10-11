@@ -89,11 +89,21 @@ def main():
     c.post(url, {"bulk_add": "1", "answer_key": "ABC", "num_choices": 3, "points": 1})
     r = c.post(url, {"bulk_add": "1", "answer_key": "D", "num_choices": 3, "points": 1})
     assert "answer_key" in r.context["bulk_form"].errors, "D refusé avec 3 choix"
+    # Plus de champ « Nombre de cases à imprimer » : 5 choix saisis, 5 cases.
+    assert "num_choices" not in c.get(url).context["qform"].fields
     c.post(url, {"add_question": "1", "qtype": "qcm", "text": "Q à 5 cases",
-                 "choices_text": "", "num_choices": 5, "correct_letter": "4",
+                 "choices_text": "a\nb\nc\nd\ne", "correct_letter": "4",
                  "points": 2, "open_height_mm": 25})
+    # Sans texte de choix : le nombre de cases du quiz (4), même si un
+    # formulaire envoie encore l'ancien champ.
+    c.post(url, {"add_question": "1", "qtype": "qcm", "text": "Sans choix",
+                 "choices_text": "", "num_choices": 7, "correct_letter": "",
+                 "points": 1, "open_height_mm": 25})
+    q_def = quiz.questions.order_by("-order").first()
+    assert q_def.num_bubbles == quiz.num_choices == 4, q_def.num_bubbles
+    q_def.delete()
     c.post(url, {"add_question": "1", "qtype": "qcm", "text": "Vrai ou faux ?",
-                 "choices_text": "Vrai\nFaux", "num_choices": 5,
+                 "choices_text": "Vrai\nFaux",
                  "correct_letter": "1", "points": 1, "open_height_mm": 25})
     # Bonne réponse FACULTATIVE : la question est acceptée et le quiz est
     # signalé « corrigé incomplet » (le corrigé viendra à la main ou par scan).

@@ -35,16 +35,43 @@
   <div>
     <div class="card">
       <h2>Étudiant</h2>
-      <p>Nom lu par OCR : <b>{{ sheet.ocr_name_raw|default:"(rien)" }}</b>
-        {% if sheet.match_score %}<span class="helptext">confiance {{ sheet.match_score|floatformat:0 }} %</span>{% endif %}</p>
-      {% if sheet.name_crop %}<p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}"></p>{% endif %}
-      <label>Affecter à</label>
-      <select name="student">
+      {% if sheet.student %}
+      {# Copie identifiée : le nom, et comment il a été trouvé. La liste ne  #}
+      {# sert qu'à corriger une erreur : repliée, ouverte à la demande.     #}
+      <div class="identite-copie">
+        <span class="avatar">{{ sheet.student.last_name|slice:":1" }}{{ sheet.student.first_name|slice:":1" }}</span>
+        <div>
+          <div class="identite-copie__nom">{{ sheet.student.full_name }}</div>
+          <div class="identite-copie__meta">
+            {% if sheet.student.student_number %}N° {{ sheet.student.student_number }} · {% endif %}
+            <span class="badge {% if identification.methode == 'qr' or identification.methode == 'grille' %}ok{% else %}grey{% endif %}">{{ identification.texte }}</span>
+          </div>
+        </div>
+      </div>
+      {% if sheet.name_crop and identification.methode == "ocr" %}
+      <p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}" alt="Nom écrit sur la copie"></p>
+      {% endif %}
+      <details class="reaffecter">
+        <summary>Changer d'étudiant</summary>
+        <select name="student" aria-label="Étudiant de cette copie">
+          <option value="">— non identifié —</option>
+          {% for s in students %}
+          <option value="{{ s.pk }}" {% if sheet.student_id == s.pk %}selected{% endif %}>{{ s.full_name }}</option>
+          {% endfor %}
+        </select>
+      </details>
+      {% else %}
+      <p class="helptext helptext--serre">Copie non identifiée{% if sheet.id_read %} — identifiant lu : <b>{{ sheet.id_read }}</b>, inconnu dans la liste{% elif sheet.ocr_name_raw %} — nom lu : <b>{{ sheet.ocr_name_raw }}</b>{% endif %}.
+        Choisissez l'étudiant :</p>
+      {% if sheet.name_crop %}<p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}" alt="Nom écrit sur la copie"></p>{% endif %}
+      <label for="id_student">Affecter à</label>
+      <select id="id_student" name="student">
         <option value="">— non identifié —</option>
         {% for s in students %}
-        <option value="{{ s.pk }}" {% if sheet.student_id == s.pk %}selected{% endif %}>{{ s.full_name }}</option>
+        <option value="{{ s.pk }}">{{ s.full_name }}</option>
         {% endfor %}
       </select>
+      {% endif %}
     </div>
 
     <div class="card">

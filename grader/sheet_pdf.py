@@ -182,10 +182,11 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
         # - fiche de concours à étiquette : l'identification est portée par
         #   l'étiquette apposée dessous, le candidat n'écrit rien (fiche
         #   technique p. 6) ;
-        # - mode grille : la disposition n'en prévoit pas, l'emplacement de
-        #   l'étiquette QR (en haut à droite) les remplace.
-        # Partout ailleurs, les cases sont imprimées : l'OCR du nom y sert de
-        # secours d'identification.
+        # - modes grille, étiquette et QR nominatif : la disposition n'en
+        #   prévoit pas, le code QR (ou la grille de n°) identifie la copie.
+        # Seul le mode « nom manuscrit » imprime les cases : l'OCR du nom y
+        # est le moyen d'identification. Une disposition ancienne peut encore
+        # en porter : elles sont alors imprimées, à l'identique.
         if not nb or (concours and (qr_zone or {}).get("sticker")):
             pass  # rien ici : voir la zone étiquette
         else:
@@ -209,7 +210,11 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
                      bold=True, align="center", gray=0.25)
 
         # Emplacement QR / étiquette
-        if qr_zone and qr_zone.get("sticker") and not nb:
+        # Cadre « coin » du mode grille : reconnu à la grille de n° de la
+        # page, et non à l'absence de cases NOM/PRÉNOM — le mode étiquette
+        # n'en a plus non plus, et son cadre est à gauche, sans place pour
+        # la consigne d'identification.
+        if qr_zone and qr_zone.get("sticker") and page.get("id_grid"):
             # Mode grille : cadre en haut à droite, à la place des cases
             # NOM/PRÉNOM, libellé court centré dessous ; à gauche, dans la
             # bande libérée par ces cases, la consigne d'identification.
@@ -239,17 +244,15 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
             qx, qy, qw, qh = qr_zone["rect"]
             zx0 = min(bx_, qx)
             zw = max(bx_ + bw_, qx + qw) - zx0
-            # hors concours, les cases NOM/PRÉNOM sont juste au-dessus :
-            # le libellé passe à l'intérieur du cadre
-            label_y = by_ - 1.5 if concours else by_ + 4.0
-            # Aligné sur le bord du cadre et non centré : le cadre ne fait
-            # que la taille du QR découpé, un texte centré dessus déborderait
-            # hors de la zone imprimable.
-            if lang == "ar":
-                draw(T["sticker"], zx0 + zw, _y(label_y), 8,
-                     align="right", gray=0.45)
-            else:
-                draw(T["sticker"], zx0, _y(label_y), 8, gray=0.45)
+            # au-dessus du cadre ; à l'intérieur seulement sur une disposition
+            # ancienne qui a encore les cases NOM/PRÉNOM juste au-dessus
+            label_y = by_ - 1.5 if (concours or not nb) else by_ + 4.0
+            # Libellé court, centré sur le cadre : le cadre ne fait que la
+            # taille du QR découpé (44 mm). La phrase longue (T["sticker"],
+            # 95 mm) en débordait ; en arabe, alignée sur le bord droit, elle
+            # filait vers la gauche jusqu'au bord de la feuille.
+            draw(T["qrstick"], zx0 + zw / 2, _y(label_y), 8,
+                 align="center", gray=0.45)
             c.setLineWidth(0.9)
             c.setDash(3, 2)
             c.rect(zx0 * mm, _y(by_, bh_), zw * mm, bh_ * mm)

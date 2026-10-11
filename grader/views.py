@@ -60,19 +60,21 @@ def _page(request, items, per_page=PAGE_SIZE):
 
 
 def _my_classes(request):
+    """Classes de l'enseignant connecté : celles dont il est l'un des
+    enseignants (une classe peut en avoir plusieurs)."""
     qs = ClassGroup.objects.all()
     if not request.user.is_superuser:
-        qs = qs.filter(owner=request.user)
+        qs = qs.filter(enseignants=request.user).distinct()
     return qs
 
 
-# Une épreuve appartient à qui l'a écrite OU à qui tient sa classe : c'est
-# l'administration qui attribue les classes (voir grader/useradmin.py), et
-# le titulaire d'une classe doit pouvoir travailler sur ses épreuves.
+# Une épreuve appartient à qui l'a écrite OU à ceux qui tiennent sa classe :
+# c'est l'administration qui attribue les classes (voir grader/useradmin.py),
+# et chacun des enseignants d'une classe travaille sur ses épreuves.
 def _filtre_epreuves(utilisateur, prefixe=""):
     """Q(...) : épreuves écrites par cette personne ou rattachées à ses classes."""
     return (Q(**{f"{prefixe}owner": utilisateur})
-            | Q(**{f"{prefixe}class_group__owner": utilisateur}))
+            | Q(**{f"{prefixe}class_group__enseignants": utilisateur}))
 
 
 def _my_quizzes(request):
@@ -242,7 +244,7 @@ def class_list(request):
     if request.method == "POST" and form.is_valid():
         group = form.save(commit=False)
         group.owner = request.user
-        group.save()
+        group.save()          # devient aussi l'un de ses enseignants (modèle)
         return redirect("class_list")
     conc = _concours_group_pks(request)
     return render(request, "grader/class_list.html", {
@@ -441,10 +443,9 @@ def quiz_detail(request, pk):
     # l'ouverture de la page, seulement si rien de ce qui est lu au scan ne
     # bouge (voir services.moderniser_fiche_grille).
     if request.method == "GET" and services.moderniser_fiche_grille(quiz):
-        messages.info(request, "Fiche de réponses mise à jour : les cases NOM et "
-                               "PRÉNOM sont remplacées par l'emplacement de "
-                               "l'étiquette QR. Les copies déjà imprimées "
-                               "restent lisibles.")
+        messages.info(request, "Fiche de réponses mise à jour : plus de cases NOM "
+                               "et PRÉNOM, la copie est identifiée par le code QR. "
+                               "Les copies déjà imprimées restent lisibles.")
     if request.method == "GET" and services.actualiser_sujet(quiz):
         messages.info(request, "Sujet mis à jour : chaque question QCM affiche "
                                "maintenant ses choix de réponse.")
@@ -596,11 +597,24 @@ def quiz_detail(request, pk):
                     "id_digits", quiz.id_digits)), 10))
             except (ValueError, TypeError):
                 pass
+            if "note_admission" in request.POST:
+                brut = request.POST["note_admission"].strip().replace(",", ".")
+                if not brut:
+                    quiz.note_admission = None
+                else:
+                    try:
+                        valeur = float(brut)
+                        if valeur < 0:
+                            raise ValueError
+                        quiz.note_admission = valeur
+                    except ValueError:
+                        ok = False
             new_grading = request.POST.get("grading_mode")
             if quiz.auto_enroll and new_grading in dict(Quiz.GRADING_MODES):
                 quiz.grading_mode = new_grading
             quiz.save(update_fields=["wrong_penalty", "sheet_mode", "grading_mode",
-                                     "id_mode", "id_digits", "entete", "duree"])
+                                     "id_mode", "id_digits", "entete", "duree",
+                                     "note_admission"])
             # Le cartouche n'est imprimé que sur le sujet, jamais scanné : on
             # le refait tout de suite, sans toucher à la feuille de réponses.
             if (quiz.entete, quiz.duree) != ancien_cartouche:
@@ -894,6 +908,27 @@ def batch_detail(request, pk):
                    "n_open_pending": n_open_pending})
 
 
+def _identification(sheet):
+    """Comment la copie a été rattachée à son étudiant, en clair.
+
+    L'écran affichait « Nom lu par OCR : (rien) — confiance 100 % » pour une
+    copie reconnue par son code QR : l'OCR n'avait rien lu parce qu'il
+    n'avait rien à lire, et les 100 % étaient ceux du QR."""
+    if sheet.student is None:
+        return None
+    lu = sheet.id_read or ""
+    if lu.startswith(("QR", "Fiche")):
+        return {"methode": "qr", "texte": "Reconnu par son code QR"}
+    if lu and not sheet.ocr_name_raw:
+        return {"methode": "grille",
+                "texte": f"Reconnu par son n° d'inscription ({lu})"}
+    if sheet.ocr_name_raw:
+        return {"methode": "ocr",
+                "texte": f"Reconnu par le nom écrit, lu « {sheet.ocr_name_raw} » "
+                         f"(ressemblance {sheet.match_score:.0f} %)"}
+    return {"methode": "main", "texte": "Affecté à la main"}
+
+
 @login_required
 def sheet_review(request, pk):
     sheet = get_object_or_404(_my_sheets(request), pk=pk)
@@ -919,15 +954,19 @@ def sheet_review(request, pk):
 
     if request.method == "POST":
         droits.exiger(request.user, droits.CORRIGER, "vérifier les copies")
-        # ré-affectation de l'étudiant
-        sid = _int_or_none(request.POST.get("student"))
-        ancien = sheet.student
-        sheet.student = students.filter(pk=sid).first() if sid is not None else None
-        journal.attribution(request.user, sheet, ancien)
-        sheet.student_confirmed = sheet.student is not None
-        if sheet.status in ("no_match", "ok"):
-            sheet.status = "ok" if sheet.student else "no_match"
-        sheet.save()
+        # ré-affectation de l'étudiant — seulement si le champ est envoyé :
+        # un formulaire sans liste (copie déjà identifiée) ne doit pas
+        # désaffecter la copie.
+        if "student" in request.POST:
+            sid = _int_or_none(request.POST.get("student"))
+            ancien = sheet.student
+            sheet.student = (students.filter(pk=sid).first()
+                             if sid is not None else None)
+            journal.attribution(request.user, sheet, ancien)
+            sheet.student_confirmed = sheet.student is not None
+            if sheet.status in ("no_match", "ok"):
+                sheet.status = "ok" if sheet.student else "no_match"
+            sheet.save()
         # corrections des réponses
         for a in answers:
             if a.question.qtype == "qcm":
@@ -982,6 +1021,7 @@ def sheet_review(request, pk):
 
     return render(request, "grader/sheet_review.html", {
         "sheet": sheet, "quiz": quiz, "students": students,
+        "identification": _identification(sheet),
         "answers": answers,
         "position": position + 1, "total": len(sheet_ids),
         "prev_id": prev_id, "next_id": next_id,
@@ -1000,6 +1040,7 @@ def quiz_results(request, pk):
     if batch_pk is not None:
         batch = quiz.batches.filter(pk=batch_pk).first()
     rows = services.compute_results(quiz, batch)
+    admission = services.admissions(quiz, rows)   # pose aussi row["resultat"]
     unmatched = SheetScan.objects.filter(batch__quiz=quiz, student=None)
     if batch:
         unmatched = unmatched.filter(batch=batch)
@@ -1015,6 +1056,7 @@ def quiz_results(request, pk):
         "unmatched_total": unmatched.count(),
         "pending_pages": sum(b.total_pages for b in quiz.batches.filter(status="pending")),
         "stats": services.compute_stats(quiz, rows),
+        "admission": admission,
     })
 
 
@@ -1026,7 +1068,9 @@ def quiz_results_xlsx(request, pk):
     if batch_pk is not None:
         batch = quiz.batches.filter(pk=batch_pk).first()
     rows = services.compute_results(quiz, batch)
-    data = results_workbook(quiz, rows, services.compute_stats(quiz, rows))
+    admission = services.admissions(quiz, rows)
+    data = results_workbook(quiz, rows, services.compute_stats(quiz, rows),
+                            admission)
     resp = HttpResponse(
         data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     resp["Content-Disposition"] = f'attachment; filename="resultats_{quiz.pk}.xlsx"'
@@ -1041,48 +1085,63 @@ def quiz_bulletins_pdf(request, pk):
     if batch_pk is not None:
         batch = quiz.batches.filter(pk=batch_pk).first()
     rows = services.compute_results(quiz, batch)
+    admission = services.admissions(quiz, rows)   # résultat et rang par ligne
+    nom = f"bulletins_{quiz.pk}.pdf"
+    if request.GET.get("admis"):
+        # Bulletins des seuls admis, par ordre de mérite.
+        if admission is None:
+            messages.error(request, "Indiquez d'abord la note minimale "
+                                    "d'admission dans les réglages de l'épreuve.")
+            return redirect("quiz_results", pk=pk)
+        rows = admission["admis"]
+        nom = f"bulletins_admis_{quiz.pk}.pdf"
     student_pk = _int_or_none(request.GET.get("student"))
     if student_pk is not None:
         rows = [r for r in rows if r["student"].pk == student_pk]
-    data = bulletin_mod.generate_bulletins_pdf(quiz, rows, batch)
+    data = bulletin_mod.generate_bulletins_pdf(quiz, rows, batch, admission)
     resp = HttpResponse(data, content_type="application/pdf")
-    resp["Content-Disposition"] = f'attachment; filename="bulletins_{quiz.pk}.pdf"'
+    resp["Content-Disposition"] = f'attachment; filename="{nom}"'
     return resp
 
 
 # ------------------------------------------------------------ documents
 
-def _media_owner(path):
-    """Enseignant propriétaire d'un document de /media/ (fiche PDF, scan,
+def _media_quiz(path):
+    """Quiz auquel se rattache un document de /media/ (fiche PDF, scan,
     image redressée, image de contrôle, recadrage, fichier téléversé),
     ou None si le document n'est rattaché à aucun quiz."""
     quiz = Quiz.objects.filter(Q(sheet_pdf=path) | Q(subject_pdf=path)).first()
     if quiz is not None:
-        return quiz.owner_id
-    sheet = (SheetScan.objects.select_related("batch__quiz")
+        return quiz.pk
+    sheet = (SheetScan.objects.select_related("batch")
              .filter(Q(image=path) | Q(warped_image=path) | Q(overlay_image=path)
                      | Q(name_crop=path)).first())
     if sheet is not None:
-        return sheet.batch.quiz.owner_id
-    answer = (Answer.objects.select_related("sheet__batch__quiz")
+        return sheet.batch.quiz_id
+    answer = (Answer.objects.select_related("sheet__batch")
               .filter(open_crop=path).first())
     if answer is not None:
-        return answer.sheet.batch.quiz.owner_id
+        return answer.sheet.batch.quiz_id
     if path.startswith("uploads/lot_"):
         pk = path[len("uploads/lot_"):].split("/", 1)[0]
         if pk.isdigit():
-            batch = ScanBatch.objects.select_related("quiz").filter(pk=pk).first()
+            batch = ScanBatch.objects.filter(pk=pk).first()
             if batch is not None:
-                return batch.quiz.owner_id
+                return batch.quiz_id
     return None
 
 
 @login_required
 def protected_media(request, path):
-    """Sert un document de /media/ uniquement à l'enseignant propriétaire
-    du quiz concerné (et à l'administrateur). Les autres reçoivent 404."""
+    """Sert un document de /media/ à qui a accès au quiz concerné — son
+    auteur et chacun des enseignants de sa classe — et à l'administrateur.
+    Les autres reçoivent 404.
+
+    Même règle que les pages (_filtre_epreuves) : un second enseignant de la
+    classe voyait l'épreuve, mais ni sa fiche PDF ni les scans."""
     if not request.user.is_superuser:
-        owner = _media_owner(path)
-        if owner is None or owner != request.user.pk:
+        quiz_pk = _media_quiz(path)
+        if quiz_pk is None or not Quiz.objects.filter(pk=quiz_pk).filter(
+                _filtre_epreuves(request.user)).exists():
             raise Http404("Document introuvable")
     return file_serve(request, path, document_root=settings.MEDIA_ROOT)

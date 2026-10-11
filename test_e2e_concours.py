@@ -124,6 +124,21 @@ def main():
     assert r["score"] == 5.0 and r["correct"] == 5 and r["wrong"] == 1, r
     print("candidat créé automatiquement, note", r["score"], "/", r["max_score"])
 
+    # Image de contrôle : pas de cadres bleus « NOM / PRÉNOM ». La fiche de
+    # concours n'imprime pas ces cases et rien n'y est lu ; l'image de
+    # contrôle les dessinait quand même, et l'enseignant se demandait à quoi
+    # servaient ces deux champs vides.
+    controle = cv2.imdecode(np.frombuffer(sheet.overlay_image.read(), np.uint8),
+                            cv2.IMREAD_COLOR)
+    # (coordonnées à l'échelle de l'image redressée, pas du scan simulé)
+    px = lambda v: int(round(v * L.PX_PER_MM))  # noqa: E731
+    for x, y, w, h in layout["pages"][0]["name_boxes"].values():
+        zone = controle[px(y) - 4:px(y + h) + 4, px(x) - 4:px(x + w) + 4]
+        bleu = ((zone[:, :, 0] > 150) & (zone[:, :, 1] < 130)
+                & (zone[:, :, 2] < 60)).sum()
+        assert bleu < 50, f"cadre NOM/PRÉNOM dessiné sur l'image de contrôle ({bleu} px)"
+    print("image de contrôle sans cadre NOM/PRÉNOM (non imprimé sur un concours)")
+
     # import ultérieur des noms officiels par numéro
     teacher.set_password("x")
     teacher.save()

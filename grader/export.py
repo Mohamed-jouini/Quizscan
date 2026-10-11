@@ -6,7 +6,10 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 
-def results_workbook(quiz, rows, stats=None):
+RESULTAT = {"admis": "Admis", "en_attente": "En attente", "refuse": "Non admis"}
+
+
+def results_workbook(quiz, rows, stats=None, admission=None):
     wb = Workbook()
     ws = wb.active
     ws.title = "Résultats"
@@ -14,6 +17,8 @@ def results_workbook(quiz, rows, stats=None):
     headers = ["Nom", "Prénom", "N° inscription", "Note", "Sur",
                "Répondues", "Correctes", "Fausses", "Sans réponse",
                "Manuscrites à corriger"]
+    if admission:
+        headers.append("Résultat")
     ws.append([f"{quiz.title} — {quiz.class_group.name}"])
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
     ws["A1"].font = Font(bold=True, size=13)
@@ -27,14 +32,38 @@ def results_workbook(quiz, rows, stats=None):
 
     for r in rows:
         s = r["student"]
-        ws.append([s.last_name, s.first_name, s.student_number,
-                   r["score"], r["max_score"], r["answered"], r["correct"],
-                   r["wrong"], r["blank"], r["pending_open"]])
+        ligne = [s.last_name, s.first_name, s.student_number,
+                 r["score"], r["max_score"], r["answered"], r["correct"],
+                 r["wrong"], r["blank"], r["pending_open"]]
+        if admission:
+            ligne.append(RESULTAT.get(r.get("resultat"), ""))
+        ws.append(ligne)
 
-    widths = [22, 18, 14, 8, 6, 11, 10, 8, 13, 20]
+    widths = [22, 18, 14, 8, 6, 11, 10, 8, 13, 20, 12]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A3"
+
+    if admission:
+        # Liste des admis, par ordre de mérite : ce qui s'affiche ou se publie.
+        wa = wb.create_sheet("Admis")
+        wa.append([f"{quiz.title} — admis (note minimale "
+                   f"{admission['seuil']:g} / {admission['max_score'] or 0:g}) : "
+                   f"{admission['n_admis']} sur {admission['n']}"])
+        wa["A1"].font = Font(bold=True, size=12)
+        entetes = ["Rang", "Nom", "Prénom", "N° inscription", "Note", "Sur"]
+        wa.append(entetes)
+        for col in range(1, len(entetes) + 1):
+            cell = wa.cell(row=2, column=col)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = head_fill
+        for r in admission["admis"]:
+            s = r["student"]
+            wa.append([r["rang"], s.last_name, s.first_name, s.student_number,
+                       r["score"], r["max_score"]])
+        for i, w in enumerate([7, 22, 18, 14, 8, 6], start=1):
+            wa.column_dimensions[get_column_letter(i)].width = w
+        wa.freeze_panes = "A3"
 
     if stats:
         ws2 = wb.create_sheet("Statistiques")

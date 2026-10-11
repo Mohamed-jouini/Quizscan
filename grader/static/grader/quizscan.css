@@ -572,6 +572,18 @@ input:focus,select:focus,textarea:focus{
 .reglages__large select{max-width:560px}
 .reglages__aide{flex-basis:100%;margin:0}
 .champ--court{width:90px}
+/* Admission / réussite : chiffres clés, puis la liste par ordre de mérite. */
+.tiles--admission{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  margin-bottom:6px}
+.admission__titre{font-size:14px;margin:14px 0 8px}
+/* Étudiant d'une copie vérifiée : son nom tel quel, la liste repliée. */
+.identite-copie{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+.identite-copie__nom{font-size:17px;font-weight:700;color:var(--qs-ink)}
+.identite-copie__meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  margin-top:3px;font-size:12.5px;color:var(--qs-muted)}
+.reaffecter summary{cursor:pointer;font-size:13px;font-weight:600;
+  color:var(--qs-blue);width:max-content}
+.reaffecter[open] summary{margin-bottom:8px}
 .champ--duree{width:170px}
 .shell textarea.champ--entete{max-width:560px}
 .champ--note{width:70px}

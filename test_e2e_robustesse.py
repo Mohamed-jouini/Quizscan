@@ -227,6 +227,40 @@ def test_parametres_bricoles(teacher):
     print("  identifiants d'URL et de formulaire invalides : aucune 500 OK")
 
 
+def test_gros_lot(teacher):
+    """« Nombre de copies illimité » (fiche technique) : un lot de 250 scans
+    envoyés d'un coup doit être reçu en entier.
+
+    Régression : Django refuse par défaut tout envoi de plus de 100 fichiers
+    (DATA_UPLOAD_MAX_NUMBER_FILES) — le 101e scan faisait échouer tout le lot
+    en erreur 400, alors que le formulaire promet « sans limite de nombre »."""
+    from unittest import mock
+    from django.conf import settings
+    from django.test import Client
+    from grader.models import ScanBatch
+    group, quiz = _quiz("ROB-LOT", teacher, id_mode="sticker")
+    quiz.layout_json = L.build_layout(quiz)
+    quiz.save()
+    client = Client()
+    client.force_login(teacher)
+    fichiers = [SimpleUploadedFile(f"scan{i}.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")
+                for i in range(250)]
+    # Seule la réception compte ici : la lecture des copies est remplacée.
+    with mock.patch.object(services, "create_batch",
+                           side_effect=lambda q, files, label="", **k:
+                           ScanBatch.objects.create(quiz=q, label=label,
+                                                    total_pages=len(files))), \
+            mock.patch.object(services, "start_batch", create=True):
+        r = client.post(f"/quiz/{quiz.pk}/upload/", {"label": "gros lot",
+                                                     "files": fichiers})
+    assert r.status_code == 302, f"lot de 250 scans refusé ({r.status_code})"
+    lot = ScanBatch.objects.filter(quiz=quiz).latest("pk")
+    assert lot.total_pages == 250, lot.total_pages
+    # Les gros fichiers passent par le disque, pas par la mémoire.
+    assert settings.FILE_UPLOAD_MAX_MEMORY_SIZE <= 10 * 1024 * 1024
+    print("  250 scans envoyés d'un coup : tous reçus (plus de plafond à 100)")
+
+
 def main():
     logging.disable(logging.WARNING)   # les pannes d'OCR simulées sont journalisées
     Quiz.objects.filter(owner__username="prof_rob").delete()
@@ -243,6 +277,8 @@ def main():
     test_etiquette_qr(teacher)
     print("Paramètres bricolés :")
     test_parametres_bricoles(teacher)
+    print("Gros lot :")
+    test_gros_lot(teacher)
     print("\n✅ TESTS DE ROBUSTESSE RÉUSSIS")
 
 

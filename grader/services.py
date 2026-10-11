@@ -396,7 +396,8 @@ def _lire_page_corrige(feuille, img, layout, questions, appliquees, ambigues):
 
     _save_jpg(feuille.overlay_image,
               omr.draw_overlay(warped, page_layout, resultats,
-                               {o: _Attendu(c) for o, c in lues.items()}),
+                               {o: _Attendu(c) for o, c in lues.items()},
+                               zone_nom=False),     # un corrigé n'a pas de nom
               "corrige_controle.jpg", quality=70)
     feuille.detected = {str(o): c for o, c in lues.items()}
     feuille.unreadable = sorted(
@@ -427,15 +428,19 @@ _ZONES_LUES = ("id_grid", "qcm", "open")
 
 
 def fiche_grille_perimee(quiz):
-    """La fiche « grille de n° » de ce quiz date-t-elle d'avant le cadre QR ?
-    (Elle porte encore les cases NOM/PRÉNOM.)
+    """La feuille de réponses de ce quiz porte-t-elle encore les cases
+    NOM/PRÉNOM, retirées depuis là où un code QR identifie la copie ?
+    Modes « grille » et « étiquette » ; pas le mode « QR nominatif », dont le
+    PDF contient une fiche par étudiant (ou N fiches anonymes) : il se
+    régénère par le bouton, qui sait pour qui et combien.
 
     L'empreinte de la fiche n'entre pas en compte : les fiches générées par
     les premières versions n'en ont pas, et c'étaient justement celles qui
     restaient avec NOM/PRÉNOM. Le critère de sûreté est ailleurs : la
     comparaison des zones lues, dans moderniser_fiche_grille."""
     disposition = quiz.layout_json
-    if quiz.id_mode != "grid" or not quiz.sheet_pdf or not disposition:
+    if (quiz.id_mode not in ("grid", "sticker") or not quiz.sheet_pdf
+            or not disposition):
         return False
     return any(page.get("name_boxes") for page in disposition.get("pages", []))
 
@@ -566,7 +571,8 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
 
     # Lecture des cases QCM
     results = omr.read_bubbles(warped, page_layout)
-    overlay = omr.draw_overlay(warped, page_layout, results, questions)
+    overlay = omr.draw_overlay(warped, page_layout, results, questions,
+                               zone_nom=_has_name_zone(page_layout, quiz))
     _save_jpg(sheet.warped_image, warped, "warped.jpg", quality=70)
     _save_jpg(sheet.overlay_image, overlay, "overlay.jpg", quality=70)
 
@@ -690,6 +696,53 @@ def compute_results(quiz, batch=None):
         rows.append(entry)
     rows.sort(key=lambda r: (r["student"].last_name.lower(), r["student"].first_name.lower()))
     return rows
+
+
+def admissions(quiz, rows):
+    """Réussite au regard de la note minimale (concours : d'admission).
+
+    Retourne None si aucun seuil n'est réglé. Sinon le classement par note
+    décroissante (rang partagé en cas d'égalité : 1, 2, 2, 4) et, pour chaque
+    candidat, son résultat :
+      - « admis »      : note ≥ seuil ;
+      - « en_attente » : sous le seuil, mais des réponses manuscrites restent
+                         à noter — elles peuvent encore le faire passer ;
+      - « refuse »     : sous le seuil, copie entièrement notée.
+    Pose aussi row["resultat"] sur chaque ligne, pour le tableau principal.
+    Les pages non identifiées n'y figurent pas (elles n'ont pas de candidat)."""
+    seuil = quiz.note_admission
+    if seuil is None:
+        for r in rows:
+            r["resultat"] = None
+        return None
+    for r in rows:
+        if r["score"] >= seuil:
+            r["resultat"] = "admis"
+        elif r["pending_open"]:
+            r["resultat"] = "en_attente"
+        else:
+            r["resultat"] = "refuse"
+    classement = sorted(rows, key=lambda r: (-r["score"],
+                                             r["student"].last_name.lower(),
+                                             r["student"].first_name.lower()))
+    rang, precedente = 0, None
+    for i, r in enumerate(classement, start=1):
+        if r["score"] != precedente:
+            rang, precedente = i, r["score"]
+        r["rang"] = rang
+    admis = [r for r in classement if r["resultat"] == "admis"]
+    n = len(rows)
+    return {
+        "seuil": seuil,
+        "max_score": rows[0]["max_score"] if rows else None,
+        "n": n,
+        "n_admis": len(admis),
+        "n_attente": sum(1 for r in rows if r["resultat"] == "en_attente"),
+        "n_refuses": sum(1 for r in rows if r["resultat"] == "refuse"),
+        "pct": round(len(admis) / n * 100) if n else 0,
+        "admis": admis,
+        "classement": classement,
+    }
 
 
 # Lecture de l'indice de discrimination (seuils usuels de la docimologie).

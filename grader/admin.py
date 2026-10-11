@@ -134,10 +134,21 @@ class ClassGroupAdmin(TitresFrancais, admin.ModelAdmin):
     titre_liste = "Classes"
     titre_ajout = "Nouvelle classe"
     titre_modification = "Modifier la classe"
-    list_display = ("name", "owner", "nb_etudiants", "le_jour")
-    list_filter = ("owner",)
+    list_display = ("name", "ses_enseignants", "nb_etudiants", "le_jour")
+    list_filter = ("enseignants",)
     search_fields = ("name",)
-    list_select_related = ("owner",)
+    # Plusieurs enseignants par classe : sélecteur à deux listes, comme les
+    # permissions — on peut en ajouter sans retirer ceux qui y sont.
+    filter_horizontal = ("enseignants",)
+    readonly_fields = ("owner",)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related("enseignants")
+
+    @admin.display(description="Enseignants")
+    def ses_enseignants(self, obj):
+        noms = [u.get_full_name() or u.username for u in obj.enseignants.all()]
+        return ", ".join(noms) if noms else "—"
 
     @admin.display(description="Étudiants")
     def nb_etudiants(self, obj):

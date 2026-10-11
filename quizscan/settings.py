@@ -132,7 +132,15 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DATA_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024
-FILE_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024
+# Volume de copies sans limite (fiche technique) : Django refuse par défaut
+# tout envoi de plus de 100 fichiers (DATA_UPLOAD_MAX_NUMBER_FILES), et un
+# lot de 150 scans JPEG finissait en erreur 400 sans rien recevoir.
+DATA_UPLOAD_MAX_NUMBER_FILES = None
+# Au-delà de 5 Mo, un fichier reçu passe par un fichier temporaire au lieu de
+# rester en mémoire : sans limite de nombre, un gros lot ne doit pas tenir
+# tout entier dans la RAM d'un serveur à 1 Go (services.create_batch le
+# recopie aussitôt, fichier par fichier, dans le stockage).
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"

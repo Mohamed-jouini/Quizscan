@@ -132,7 +132,24 @@ def verifier_impression(teacher):
         for mot in absent:
             assert mot not in mots, f"« {mot} » encore imprimé ({langue})"
         assert attendu in texte, f"emplacement QR non signalé ({langue})"
-    print("  impression     plus de NOM / PRÉNOM, emplacement « CODE QR » (fr, ar)")
+
+    # Partout où un code QR identifie la copie, il est seul : plus de cases
+    # NOM/PRÉNOM (étiquette, QR nominatif). Elles ne restent qu'en mode
+    # « nom manuscrit », où elles sont le seul moyen d'identifier la copie.
+    for mode, cases in (("sticker", False), ("qr", False), ("name", True)):
+        groupe, quiz = _quiz(teacher, f"GQR-MODE-{mode}", id_mode=mode)
+        eleve = Student.objects.create(class_group=groupe, last_name="DUPONT",
+                                       first_name="Amel", student_number="1")
+        layout = L.build_layout(quiz)
+        assert bool(layout["pages"][0]["name_boxes"]) == cases, mode
+        pdf = sheet_pdf.generate_sheet_pdf(
+            quiz, layout, students=[eleve] if mode == "qr" else None)
+        mots = pymupdf.open(stream=pdf, filetype="pdf")[0].get_text().split()
+        assert ("PRÉNOM" in mots) == cases, f"{mode} : NOM/PRÉNOM {mots[:12]}"
+        # la consigne « IDENTIFICATION » est celle du coin du mode grille
+        assert "IDENTIFICATION" not in mots, f"{mode} : consigne de la grille"
+    print("  impression     plus de NOM / PRÉNOM, emplacement « CODE QR » (fr, ar) ; "
+          "QR seul en modes étiquette et QR nominatif, cases en mode nom")
 
 
 def verifier_lecture(teacher):
@@ -254,10 +271,18 @@ def verifier_mise_a_jour(teacher):
     del sans_empreinte["signature"]
     quiz3.layout_json = sans_empreinte
     quiz3.save()
+    # … et une feuille du mode étiquette, qui portait aussi NOM/PRÉNOM.
+    _, quiz4 = _quiz(teacher, "GQR-MAJ4", id_mode="sticker")
+    ancienne4 = _fiche_ancienne(quiz4)
     sortie = StringIO()
     call_command("moderniser_fiches", stdout=sortie)
     quiz3.refresh_from_db()
+    quiz4.refresh_from_db()
     assert not quiz3.layout_json["pages"][0]["name_boxes"], sortie.getvalue()
+    page4 = quiz4.layout_json["pages"][0]
+    assert not page4["name_boxes"], sortie.getvalue()
+    for cle in ("qr", "qcm", "open"):
+        assert page4[cle] == ancienne4["pages"][0][cle], f"étiquette : {cle} a bougé"
     print("  mise à jour    ancienne fiche remplacée à l'ouverture du quiz et par "
           "la commande ; fiche modifiée laissée intacte")
 

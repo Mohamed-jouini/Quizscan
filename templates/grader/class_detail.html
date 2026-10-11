@@ -3,7 +3,11 @@
 <header class="page-head">
   <div class="page-head__text">
     <h1>{{ group.name }}</h1>
-    <p class="page-head__meta"><b>{{ students_total }}</b> candidat(s) inscrit(s)</p>
+    <p class="page-head__meta"><b>{{ students_total }}</b> candidat(s) inscrit(s)
+      {% with profs=group.enseignants.all %}{% if profs %}
+      · enseignant{{ profs|length|pluralize }} :
+      {% for p in profs %}<b>{{ p.get_full_name|default:p.username }}</b>{% if not forloop.last %}, {% endif %}{% endfor %}
+      {% endif %}{% endwith %}</p>
   </div>
   {% if students_total %}
   <div class="page-head__actions">

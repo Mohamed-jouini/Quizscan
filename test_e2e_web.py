@@ -78,7 +78,7 @@ def main():
     group = ClassGroup.objects.create(name="WEB-3B", owner=teacher)
     s1 = Student.objects.create(class_group=group, last_name="BEN SALAH",
                                 first_name="Ahmed", student_number="104523")
-    Student.objects.create(class_group=group, last_name="TRABELSI",
+    s2 = Student.objects.create(class_group=group, last_name="TRABELSI",
                            first_name="Mariem", student_number="104524")
     quiz = Quiz.objects.create(title="Contrôle étiquettes", class_group=group,
                                owner=teacher, sheet_mode="grid", id_mode="sticker")
@@ -92,16 +92,19 @@ def main():
     assert r.status_code == 302
     quiz.refresh_from_db()
     page = quiz.layout_json["pages"][0]
-    assert page["qr"]["sticker"] and page["name_boxes"], "zone étiquette absente"
+    assert page["qr"]["sticker"], "zone étiquette absente"
+    # Le code QR seul identifie la copie : plus de cases NOM/PRÉNOM.
+    assert not page["name_boxes"], "cases NOM/PRÉNOM sur une fiche à étiquette"
     pdf = quiz.sheet_pdf.read()
 
-    # copie 1 : étiquette QR collée ; copie 2 : pas d'étiquette, nom écrit
+    # copie 1 : étiquette QR collée ; copie 2 : étiquette oubliée — plus de
+    # nom manuscrit à lire, elle attend d'être affectée à la main
     ans = {1: 0, 2: 1, 3: 2, 4: 3, 5: 0, 6: 3}           # 5/6
     img1 = simulate_scan(stick_label(fill_sheet(render_page(pdf), quiz.layout_json,
                                                 ans, name_text=("", "")), page, s1))
     img2 = simulate_scan(fill_sheet(render_page(pdf), quiz.layout_json,
                                     {1: 0, 2: 1, 3: 2, 4: 3, 5: 0, 6: 1},
-                                    name_text=("TRABELSI", "MARIEM")))
+                                    name_text=("", "")))
 
     t0 = time.time()
     r = c.post(f"/quiz/{quiz.pk}/upload/", {
@@ -126,14 +129,39 @@ def main():
     assert batch.status == "done" and batch.processed_pages == 2
     assert "Correction automatique en cours" in page_html or batch.status == "done"
     page_html = c.get(f"/lots/{batch.pk}/").content.decode()
-    assert "2/2 copie(s) corrigée(s)" in page_html, page_html[:2000]
+    # la copie sans étiquette est lue et notée, mais attend son étudiant
+    assert "1/2 copie(s) corrigée(s)" in page_html, page_html[:2000]
+    assert "1 copie(s) demandent votre attention" in page_html
 
     sheets = {sh.source_name: sh for sh in batch.sheets.all()}
     sh1, sh2 = sheets["copie1.jpg"], sheets["copie2.jpg"]
     print("copie 1 :", sh1.status, sh1.id_read, sh1.student)
     print("copie 2 :", sh2.status, repr(sh2.ocr_name_raw), sh2.student)
     assert sh1.student_id == s1.pk and sh1.id_read.startswith("QR"), "étiquette non lue"
-    assert sh2.student and sh2.student.last_name == "TRABELSI", "secours OCR du nom"
+    assert sh2.student is None and sh2.status == "no_match", \
+        "sans étiquette, la copie doit rester à identifier"
+    assert not sh2.ocr_name_raw, "aucun nom à lire sur cette fiche"
+    # L'enseignant l'affecte depuis l'écran de vérification ; ses réponses
+    # restent celles lues par la machine.
+    revue = c.get(f"/copies/{sh2.pk}/").content.decode()
+    assert "Nom lu par OCR" not in revue, "ligne OCR affichée sans zone de nom"
+    r = c.post(f"/copies/{sh2.pk}/", {"student": s2.pk})
+    assert r.status_code == 302, r.status_code
+    sh2.refresh_from_db()
+    assert sh2.student_id == s2.pk and sh2.status == "ok"
+
+    # Copie reconnue par son QR : le nom s'affiche directement, avec la façon
+    # dont il a été trouvé ; la liste ne sert qu'à corriger, repliée. Avant :
+    # « Nom lu par OCR : (rien) — confiance 100 % » et une liste ouverte.
+    revue = c.get(f"/copies/{sh1.pk}/").content.decode()
+    assert 'class="identite-copie__nom">BEN SALAH Ahmed<' in revue
+    assert "Reconnu par son code QR" in revue and "Nom lu par OCR" not in revue
+    assert '<details class="reaffecter">' in revue, "liste des étudiants non repliée"
+    # Enregistrer sans toucher à la liste (ni même l'envoyer) ne désaffecte pas.
+    c.post(f"/copies/{sh1.pk}/", {})
+    sh1.refresh_from_db()
+    assert sh1.student_id == s1.pk, "copie désaffectée par un formulaire sans liste"
+    print("vérification : nom de l'étudiant affiché directement, liste repliée ✔")
 
     r = c.get(f"/quiz/{quiz.pk}/resultats/")
     rows = {row["student"].last_name: row for row in r.context["rows"]}

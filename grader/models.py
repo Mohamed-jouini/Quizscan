@@ -16,10 +16,19 @@ class ClassGroup(models.Model):
     # la confier à quelqu'un d'autre depuis la fiche du nouveau compte.
     # (Avec CASCADE, Quiz.class_group étant protégé, la suppression d'un
     # enseignant ayant la moindre épreuve échouait purement et simplement.)
+    # Qui a créé la classe : un repère, plus un droit d'accès. L'accès suit
+    # « enseignants » ci-dessous — l'administration peut retirer une classe
+    # à son créateur.
     owner = models.ForeignKey(settings.AUTH_USER_MODEL,
                               on_delete=models.SET_NULL,
                               null=True, related_name="class_groups",
-                              verbose_name="enseignant")
+                              verbose_name="créée par")
+    # Une classe peut être tenue par plusieurs enseignants, et un enseignant
+    # tenir plusieurs classes. Ce sont eux qui la voient, ainsi que ses
+    # épreuves, copies et résultats.
+    enseignants = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, related_name="classes_attribuees", blank=True,
+        verbose_name="enseignants")
     name = models.CharField("nom de la classe", max_length=120)
     created_at = models.DateTimeField("créée le", auto_now_add=True)
 
@@ -31,6 +40,16 @@ class ClassGroup(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        # Qui crée une classe en est d'emblée l'un des enseignants, quel que
+        # soit le chemin (application, administration, import) ; ensuite
+        # seule la liste « enseignants » compte, l'administration peut l'en
+        # retirer.
+        nouvelle = self._state.adding
+        super().save(*args, **kwargs)
+        if nouvelle and self.owner_id:
+            self.enseignants.add(self.owner_id)
 
 
 class Student(models.Model):
@@ -131,6 +150,13 @@ class Quiz(models.Model):
     wrong_penalty = models.FloatField(
         "pénalité par mauvaise réponse", default=0.0,
         help_text="Points retirés pour chaque mauvaise réponse QCM (0 = pas de pénalité)")
+    # Seuil de réussite (concours : note d'admission), sur le barème de
+    # l'épreuve. Sans lui, QuizScan ne peut pas dire qui a réussi.
+    note_admission = models.FloatField(
+        "note minimale de réussite", null=True, blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Sur le barème de l'épreuve (ex. 10 pour 10 / 20). Concours : "
+                  "note d'admission. Vide : pas de liste des admis.")
     # Disposition de la fiche (coordonnées en mm), figée à la génération du PDF
     layout_json = models.JSONField(null=True, blank=True, editable=False)
     sheet_pdf = models.FileField("fiche de réponses (PDF)", upload_to="sheets/",

@@ -332,8 +332,14 @@ def crop_open_zone(warped_bgr, rect):
     return _crop_rect(warped_bgr, rect, inset_mm=0.8)
 
 
-def draw_overlay(warped_bgr, page_layout, bubble_results, questions_by_order):
-    """Image de contrôle : cases détectées entourées en couleur."""
+def draw_overlay(warped_bgr, page_layout, bubble_results, questions_by_order,
+                 zone_nom=True):
+    """Image de contrôle : cases détectées entourées en couleur.
+
+    zone_nom : encadrer aussi la zone NOM/PRÉNOM lue par OCR. Faux quand la
+    fiche n'en imprime pas (concours à étiquette, corrigé) : la disposition
+    garde ces coordonnées, et l'image montrait deux cadres bleus sur une
+    zone vide, sans rôle — voir services._has_name_zone."""
     img = warped_bgr.copy()
     r = _mm(L.BUBBLE_R) + 4
     for item in page_layout["qcm"]:
@@ -351,7 +357,8 @@ def draw_overlay(warped_bgr, page_layout, bubble_results, questions_by_order):
                 if res["multiple"]:
                     color = (0, 140, 255)
                 cv2.circle(img, (x, y), r, color, 3)
-    for key, rect in (page_layout.get("name_boxes") or {}).items():
+    for key, rect in ((page_layout.get("name_boxes") or {}) if zone_nom
+                      else {}).items():
         if key not in ("last", "first"):
             continue
         x, y, w, h = rect

@@ -188,8 +188,7 @@ def main():
         f"enregistrement du compte -> {envoi.status_code} "
         f"(le formulaire a été refusé)")
 
-    libre.refresh_from_db()
-    assert libre.owner_id == enseignant.pk, (
+    assert libre.enseignants.filter(pk=enseignant.pk).exists(), (
         "la classe cochée n'a pas été affectée à l'enseignant")
 
     enseignant = get_user_model().objects.get(pk=enseignant.pk)
@@ -209,8 +208,7 @@ def main():
             "date_joined_0": "2026-01-01", "date_joined_1": "00:00:00",
         })
     assert envoi.status_code == 302, f"retrait -> {envoi.status_code}"
-    libre.refresh_from_db()
-    assert libre.owner_id is None, (
+    assert not libre.enseignants.filter(pk=enseignant.pk).exists(), (
         "la classe décochée appartient toujours à l'enseignant")
     enseignant = get_user_model().objects.get(pk=enseignant.pk)
     assert not droits.peut_corriger(enseignant), (
@@ -230,8 +228,7 @@ def main():
     assert avant_affectation.status_code == 404, (
         "l'épreuve est visible avant toute affectation de la classe")
 
-    classe.owner = titulaire
-    classe.save(update_fields=["owner"])
+    classe.enseignants.add(titulaire)
     client_titulaire = _client(titulaire)
     assert client_titulaire.get(f"/quiz/{epreuve.pk}/").status_code == 200, (
         "la classe est affectée mais son épreuve reste invisible")
@@ -243,6 +240,56 @@ def main():
     assert _client(les_deux).get(f"/quiz/{epreuve.pk}/").status_code == 200, (
         "l'auteur a perdu l'accès à son épreuve")
     print("  affectation   la classe emporte ses épreuves, et rien de plus OK")
+
+    # ---------------------------------------------------------------- 6 bis
+    # Une classe, plusieurs enseignants ; un enseignant, plusieurs classes.
+    from django.core.files.base import ContentFile
+    from grader import layout as L
+    from grader import sheet_pdf
+    collegue = _compte("dr_collegue", droits.CREER, droits.CORRIGER)
+    classe.enseignants.add(collegue)             # deux enseignants (+ créateur)
+    autre = ClassGroup.objects.create(name="DR seconde classe", owner=None)
+    autre.enseignants.add(collegue)              # le collègue en tient deux
+    tenants = set(classe.enseignants.values_list("username", flat=True))
+    assert tenants >= {"dr_titulaire", "dr_collegue"}, tenants
+    client_collegue = _client(collegue)
+    for c in (client_titulaire, client_collegue):
+        assert c.get(f"/quiz/{epreuve.pk}/").status_code == 200, (
+            "un des enseignants de la classe ne voit pas l'épreuve")
+    noms = client_collegue.get("/classes/").content.decode()
+    assert "DR titulaire" in noms and "DR seconde classe" in noms, (
+        "le collègue ne voit pas ses deux classes")
+    # Les documents suivent la même règle que les pages : la fiche PDF de
+    # l'épreuve s'ouvre pour chacun des enseignants de la classe (avant :
+    # 404 pour tout autre que l'auteur de l'épreuve).
+    epreuve.layout_json = L.build_layout(epreuve)
+    epreuve.sheet_pdf.save("dr.pdf", ContentFile(
+        sheet_pdf.generate_sheet_pdf(epreuve, epreuve.layout_json)), save=True)
+    for c in (client_titulaire, client_collegue):
+        assert c.get(epreuve.sheet_pdf.url).status_code == 200, (
+            "fiche PDF refusée à un enseignant de la classe")
+    assert _client(enseignant).get(epreuve.sheet_pdf.url).status_code == 404, (
+        "fiche PDF visible d'un enseignant étranger à la classe")
+    # Confier la classe à un nouveau venu depuis l'administration n'en
+    # retire pas ceux qui l'ont déjà.
+    envoi = patron_client.post(
+        f"/admin/auth/user/{enseignant.pk}/change/", {
+            "username": enseignant.username,
+            "first_name": "", "last_name": "", "email": "",
+            "role": "enseignant", "is_active": "on",
+            "classes": [str(classe.pk)],
+            "date_joined_0": "2026-01-01", "date_joined_1": "00:00:00",
+        })
+    assert envoi.status_code == 302, f"affectation -> {envoi.status_code}"
+    tenants = set(classe.enseignants.values_list("username", flat=True))
+    assert tenants >= {"dr_titulaire", "dr_collegue", enseignant.username}, (
+        f"affecter la classe à un collègue l'a retirée aux autres : {tenants}")
+    # La liste des classes de l'administration montre leurs enseignants.
+    page = patron_client.get("/admin/grader/classgroup/").content.decode()
+    assert "dr_collegue" in page and "dr_titulaire" in page, (
+        "colonne des enseignants absente de la liste des classes")
+    print("  co-enseignement une classe à plusieurs enseignants, un enseignant "
+          "à plusieurs classes ; pages et documents pour chacun OK")
 
     # ---------------------------------------------------------------- 7
     # Supprimer le compte d'un enseignant qui part : possible, et sans
