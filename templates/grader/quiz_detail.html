@@ -30,6 +30,11 @@
 <form class="card reglages" method="post">
   {% csrf_token %}
   <div class="reglages__large">
+    <label for="id_title_reglages">{% if quiz.auto_enroll %}Titre du concours{% else %}Titre de l'épreuve{% endif %}</label>
+    <input id="id_title_reglages" class="champ--titre" type="text" name="title"
+           maxlength="200" required value="{{ quiz.title }}">
+  </div>
+  <div class="reglages__large">
     <label>Type de fiche</label>
     <select name="sheet_mode">
       {% for val, label in quiz.SHEET_MODES %}
@@ -171,8 +176,14 @@
           {% else %}<span class="badge bad">{{ k.get_status_display }}</span>{% endif %}
           {% if k.error_message %}<span class="helptext">{{ k.error_message }}</span>{% endif %}</td>
       <td class="helptext" style="white-space:nowrap">{{ k.created_at|date:"d/m/Y H:i" }}</td>
-      <td style="text-align:right">{% if k.overlay_image %}
+      <td class="cellule--droite">{% if k.overlay_image %}
         <a class="btn small secondary" href="{{ k.overlay_image.url }}" target="_blank">Voir</a>
+        {% endif %}
+        {% if perms.grader.creer_epreuve %}
+        <form class="inline" method="post">{% csrf_token %}
+          <button class="btn small danger" type="submit" name="delete_answer_key" value="{{ k.pk }}"
+                  onclick="return confirm('Supprimer ce corrigé scanné ? Les bonnes réponses déjà enregistrées restent en place.')">Supprimer</button>
+        </form>
         {% endif %}</td>
     </tr>
     {% endfor %}
@@ -187,8 +198,8 @@
 
 {% if layout_stale %}
 <ul class="messages"><li class="error">
-  ⚠️ Les questions ont changé depuis la génération de la fiche PDF.
-  Régénérez la fiche avant d'imprimer et de scanner.
+  ⚠️ Ce qui est imprimé sur la fiche (titre, questions ou réglages) a changé
+  depuis la génération du PDF. Régénérez la fiche avant d'imprimer et de scanner.
 </li></ul>
 {% endif %}
 

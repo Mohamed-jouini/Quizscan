@@ -186,6 +186,17 @@ def main():
         group.students.get(student_number="0002").last_name == "KACEM OFFICIEL"
     print("nom mis à jour par numéro via l'import")
 
+    # Bouton de retour sur la page des candidats : vers le concours pour sa
+    # liste de candidats, vers la liste des classes pour une classe ordinaire.
+    page = c.get(f"/classes/{group.pk}/").content.decode()
+    assert f'href="/quiz/{quiz.pk}/">← Retour au concours' in page, \
+        "pas de retour vers le concours"
+    classe = ClassGroup.objects.create(name="TEST-CONC-CLASSE", owner=teacher)
+    page = c.get(f"/classes/{classe.pk}/").content.decode()
+    assert 'href="/classes/">← Retour aux classes' in page, "pas de retour aux classes"
+    classe.delete()
+    print("bouton de retour : vers le concours, ou vers la liste des classes")
+
     # ---------- variante 2 : grille de n° d'inscription ----------
     group2, quiz2, layout2, _ = make_quiz("TEST-CONC-GRID", id_mode="grid",
                                           id_digits=4)

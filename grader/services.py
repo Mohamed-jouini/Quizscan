@@ -24,8 +24,8 @@ from django.db.models import Avg, Count, Max, Min, Sum
 
 from . import journal, omr, sheet_pdf
 from . import layout as layout_mod
-from .models import (Answer, AnswerKeySheet, Quiz, ScanBatch, SheetScan,
-                     Student)
+from .models import (Answer, AnswerKeySheet, ClassGroup, Quiz, ScanBatch,
+                     SheetScan, Student)
 
 log = logging.getLogger(__name__)
 
@@ -456,12 +456,30 @@ def moderniser_fiche_grille(quiz):
     est à régénérer. Retourne True si la fiche a été remplacée."""
     if not fiche_grille_perimee(quiz):
         return False
+    if not regenerer_fiche_compatible(quiz):
+        return False
+    log.info("Fiche du quiz %s mise à jour : cadre QR à la place de NOM/PRÉNOM",
+             quiz.pk)
+    return True
+
+
+def regenerer_fiche_compatible(quiz):
+    """Refait la feuille de réponses enregistrée, à condition que rien de ce
+    que le scan lit (grille de n°, cases QCM, zones manuscrites) ne bouge
+    d'un millimètre : les copies déjà imprimées restent lisibles. Sert quand
+    seul l'habillage change (titre, cases NOM/PRÉNOM retirées).
+
+    Pas en mode « QR nominatif » : son PDF contient une fiche par étudiant
+    (ou N fiches anonymes), il se refait par le bouton, qui sait pour qui et
+    combien. Retourne True si la feuille a été remplacée."""
     ancienne = quiz.layout_json
+    if quiz.id_mode == "qr" or not quiz.sheet_pdf or not ancienne:
+        return False
     try:
         nouvelle = layout_mod.build_layout(quiz)
     except layout_mod.TooManyPages:
         return False
-    if len(nouvelle["pages"]) != len(ancienne["pages"]):
+    if len(nouvelle["pages"]) != len(ancienne.get("pages", [])):
         return False
     for page, avant in zip(nouvelle["pages"], ancienne["pages"]):
         if any(page.get(cle) != avant.get(cle) for cle in _ZONES_LUES):
@@ -474,9 +492,49 @@ def moderniser_fiche_grille(quiz):
     quiz.layout_json = nouvelle
     quiz.sheet_pdf.save(f"fiche_quiz_{quiz.pk}.pdf", ContentFile(pdf), save=False)
     quiz.save(update_fields=["layout_json", "sheet_pdf"])
-    log.info("Fiche du quiz %s mise à jour : cadre QR à la place de NOM/PRÉNOM",
-             quiz.pk)
     return True
+
+
+def renommer_epreuve(quiz, titre, utilisateur):
+    """Change le titre d'une épreuve et en tire les conséquences.
+
+    - Concours : sa liste de candidats (« Concours — ancien titre ») suit.
+    - Le titre est imprimé : le sujet est refait aussitôt (jamais scanné), la
+      feuille de réponses aussi si rien de ce qui est lu ne bouge ; sinon
+      l'alerte « fiche à régénérer » de la page prend le relais.
+    - Le changement est inscrit au journal.
+    Retourne (feuille_refaite, sujet_refait)."""
+    titre = " ".join(titre.split())[:200]
+    ancien = quiz.title
+    if not titre or titre == ancien:
+        return False, False
+    quiz.title = titre
+    quiz.save(update_fields=["title"])
+    journal.noter(utilisateur, "titre", quiz=quiz, objet="Titre de l'épreuve",
+                  avant=ancien, apres=titre)
+    # Liste de candidats d'un concours : nommée d'après le titre à la
+    # création (views.quiz_create, éventuellement suffixée « (2) »). On la
+    # renomme si elle porte encore ce nom-là ; un nom choisi à la main reste.
+    groupe = quiz.class_group
+    anciens_noms = (_nom_liste_concours(ancien), f"Concours — {ancien}"[:110])
+    if quiz.auto_enroll and groupe.name.startswith(anciens_noms):
+        base = _nom_liste_concours(titre)
+        nom, i = base, 2
+        while (ClassGroup.objects.filter(owner=groupe.owner, name=nom)
+               .exclude(pk=groupe.pk).exists()):
+            nom = f"{base} ({i})"
+            i += 1
+        groupe.name = nom
+        groupe.save(update_fields=["name"])
+    feuille = regenerer_fiche_compatible(quiz)
+    sujet = actualiser_sujet(quiz, forcer=True)
+    return feuille, sujet
+
+
+def _nom_liste_concours(titre):
+    """Nom de la liste de candidats d'un concours, tiré de son titre (même
+    règle que views.quiz_create)."""
+    return (titre if "concours" in titre.lower() else f"Concours — {titre}")[:110]
 
 
 # Marque des images de contrôle nettoyées (nom du fichier) : le nettoyage

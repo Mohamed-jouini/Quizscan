@@ -97,7 +97,10 @@
     {% endif %}
   </div>
   {% if admission.admis %}
-  <h3 class="admission__titre">{% if quiz.auto_enroll %}Liste des admis{% else %}Liste des étudiants ayant réussi{% endif %}, par ordre de mérite</h3>
+  <div class="admission__entete-liste">
+    <h3 class="admission__titre">{% if quiz.auto_enroll %}Liste des admis{% else %}Liste des étudiants ayant réussi{% endif %}, par ordre de mérite</h3>
+    <a class="btn small secondary" href="{% url 'quiz_admis_pdf' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">Exporter la liste (PDF)</a>
+  </div>
   <div class="table-wrap">
     <table>
     <tr><th>Rang</th><th>Nom et prénom</th><th>N° d'inscription</th><th>Note</th></tr>

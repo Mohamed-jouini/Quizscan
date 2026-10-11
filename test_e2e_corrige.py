@@ -52,7 +52,7 @@ def main():
     logging.disable(logging.WARNING)
     Quiz.objects.filter(owner__username="prof_cor").delete()
     ClassGroup.objects.filter(owner__username="prof_cor").delete()
-    User.objects.filter(username="prof_cor").delete()
+    User.objects.filter(username__in=["prof_cor", "prof_cor_lecteur"]).delete()
     teacher = User.objects.create_user("prof_cor", password="x-pass-123")
     teacher = enseignant_complet(teacher)
     c = Client()
@@ -158,6 +158,36 @@ def main():
     quiz2.refresh_from_db()
     assert quiz2.corrige_complet and quiz2.questions.get(order=3).correct_choice == 2
     print("  complétée à la main : corrigé complet OK")
+
+    # Supprimer un corrigé scanné : la pièce disparaît (ligne et images),
+    # pas les bonnes réponses qu'il a renseignées ; le geste est journalisé.
+    from django.core.files.storage import default_storage
+    from grader.models import Modification
+    page_html = c.get(f"/quiz/{quiz2.pk}/").content.decode()
+    assert f'name="delete_answer_key" value="{page2.pk}"' in page_html, \
+        "bouton « Supprimer » absent de la liste des corrigés scannés"
+    fichiers = [f.name for f in (page2.image, page2.overlay_image) if f]
+    assert fichiers and all(default_storage.exists(n) for n in fichiers)
+    corrige_avant = list(quiz2.questions.order_by("order")
+                         .values_list("correct_choice", flat=True))
+    # sans le droit « créer des épreuves » : refusé
+    lecteur = User.objects.create_user("prof_cor_lecteur", password="x")
+    quiz2.class_group.enseignants.add(lecteur)
+    c_lecteur = Client()
+    c_lecteur.force_login(lecteur)
+    assert c_lecteur.post(f"/quiz/{quiz2.pk}/",
+                          {"delete_answer_key": page2.pk}).status_code == 403
+    assert AnswerKeySheet.objects.filter(pk=page2.pk).exists()
+    lecteur.delete()
+    r = c.post(f"/quiz/{quiz2.pk}/", {"delete_answer_key": page2.pk})
+    assert r.status_code == 302
+    assert not AnswerKeySheet.objects.filter(pk=page2.pk).exists()
+    assert not any(default_storage.exists(n) for n in fichiers), "images restées"
+    assert list(quiz2.questions.order_by("order").values_list(
+        "correct_choice", flat=True)) == corrige_avant, "le corrigé a été défait"
+    assert Modification.objects.filter(quiz=quiz2, action="corrige_supprime").exists()
+    print("  suppression d'un corrigé scanné : pièce effacée, bonnes réponses "
+          "conservées, geste journalisé OK")
 
     print("\n✅ TEST DU CORRIGÉ SCANNÉ RÉUSSI")
 

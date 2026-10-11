@@ -169,3 +169,110 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
 
     c.save()
     return buf.getvalue()
+
+
+def generate_liste_admis_pdf(quiz, admission, batch=None):
+    """Liste des admis par ordre de mérite, prête à afficher ou à signer.
+
+    admission : services.admissions(quiz, rows), avec une note minimale
+    réglée. En tête : l'en-tête du sujet s'il est saisi, l'intitulé, la note
+    minimale et le décompte ; puis rang, nom, n° d'inscription et note, sur
+    autant de pages qu'il faut (intitulés de colonnes répétés), et la mention
+    « Liste arrêtée à N admis ». Rangs ex aequo identiques (1, 2, 2, 4)."""
+    from django.utils import timezone
+
+    load_fonts()
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=A4)
+    X0, X1 = 22.0, 188.0
+    concours = quiz.auto_enroll
+    titre = ("Liste des admis" if concours
+             else "Liste des étudiants ayant réussi")
+    qui = "admis" if concours else "réussite(s)"
+    admis = admission["admis"]
+    edite = timezone.localtime().strftime("%d/%m/%Y")
+
+    LIGNE, BAS = 7.2, 272.0
+    cols = [X0 + 2, X0 + 20, X0 + 112]          # rang, nom, n° ; note à droite
+
+    def entete_tableau(y):
+        c.setFillGray(0.93)
+        c.rect(X0 * mm, _y(y + 2.4), (X1 - X0) * mm, 7.6 * mm, stroke=0, fill=1)
+        c.setFillGray(0.0)
+        for texte, x in zip(("Rang", "Nom et prénom", "N° d'inscription"), cols):
+            _draw(c, texte, x, y, 9, bold=True, gray=0.25)
+        _draw(c, "Note", X1 - 2, y, 9, bold=True, align="right", gray=0.25)
+        return y + 8.5
+
+    # En-tête de la première page : quelques lignes de plus que les suivantes.
+    lignes_entete = [t.strip() for t in (quiz.entete or "").splitlines() if t.strip()]
+    debut_p1 = 62.0 + 4.2 * len(lignes_entete)
+    par_page_1 = max(int((BAS - debut_p1 - 8.5) // LIGNE), 1)
+    par_page = int((BAS - 30.0 - 8.5) // LIGNE)
+    reste = max(len(admis) - par_page_1, 0)
+    total_pages = 1 + (-(-reste // par_page) if reste else 0)
+
+    def pied(page):
+        _draw(c, f"{quiz.title} — {titre.lower()} — éditée le {edite}",
+              X0, 287.0, 7.5, gray=0.45)
+        _draw(c, f"page {page} / {total_pages}", X1, 287.0, 7.5,
+              align="right", gray=0.45)
+
+    # ---- première page
+    y = 18.0
+    for ligne in lignes_entete:
+        _draw(c, ligne, PAGE_W / 2, y, 9, align="center", gray=0.3)
+        y += 4.2
+    y += 4.0
+    _draw(c, titre, PAGE_W / 2, y + 4.0, 17, bold=True, align="center")
+    _draw(c, quiz.title, PAGE_W / 2, y + 11.5, 12, align="center")
+    sous_titre = quiz.class_group.name
+    if batch is not None:
+        sous_titre += f" — lot {batch}"
+    _draw(c, sous_titre, PAGE_W / 2, y + 17.0, 9.5, align="center", gray=0.35)
+    resume = (f"Note minimale {'d’admission' if concours else 'de réussite'} : "
+              f"{admission['seuil']:g} / {admission['max_score'] or 0:g}   —   "
+              f"{admission['n_admis']} {qui} sur {admission['n']} "
+              f"{'candidats notés' if concours else 'étudiants notés'} "
+              f"({admission['pct']} %)")
+    _draw(c, resume, PAGE_W / 2, y + 24.0, 9.5, align="center", gray=0.2)
+    c.setLineWidth(0.5)
+    c.line(X0 * mm, _y(y + 28.0), X1 * mm, _y(y + 28.0))
+    y = entete_tableau(debut_p1)
+    page, sur_la_page = 1, 0
+    capacite = par_page_1
+
+    for i, r in enumerate(admis):
+        if sur_la_page == capacite:
+            pied(page)
+            c.showPage()
+            page += 1
+            _draw(c, f"{titre} — {quiz.title} (suite)", X0, 18.0, 10, bold=True)
+            y = entete_tableau(30.0)
+            sur_la_page, capacite = 0, par_page
+        if i % 2:
+            c.setFillGray(0.97)
+            c.rect(X0 * mm, _y(y + 2.2), (X1 - X0) * mm, LIGNE * mm, stroke=0, fill=1)
+            c.setFillGray(0.0)
+        s = r["student"]
+        _draw(c, str(r["rang"]), cols[0], y, 10, bold=True)
+        _draw(c, s.full_name, cols[1], y, 10)
+        _draw(c, s.student_number or "—", cols[2], y, 10)
+        _draw(c, f"{r['score']:g} / {r['max_score']:g}", X1 - 2, y, 10,
+              bold=True, align="right")
+        y += LIGNE
+        sur_la_page += 1
+
+    if not admis:
+        _draw(c, f"Aucun {'candidat admis' if concours else 'étudiant n’atteint la note minimale'}.",
+              X0 + 2, y + 2, 10, gray=0.35)
+        y += LIGNE
+    c.setLineWidth(0.4)
+    c.line(X0 * mm, _y(y - 3.0), X1 * mm, _y(y - 3.0))
+    if y + 8 <= BAS:
+        _draw(c, f"Liste arrêtée à {admission['n_admis']} {qui}.", X0, y + 4.0,
+              10, bold=True)
+    pied(page)
+    c.showPage()
+    c.save()
+    return buf.getvalue()

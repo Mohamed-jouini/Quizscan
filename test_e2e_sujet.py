@@ -170,12 +170,65 @@ def verifier_mise_a_jour(teacher):
           "commande, feuille de réponses intacte")
 
 
+def verifier_renommage(teacher):
+    """Renommer un concours depuis ses réglages : le titre, sa liste de
+    candidats, et les PDF qui l'impriment suivent ; le geste est tracé."""
+    from grader.models import Modification
+    enseignant_complet(teacher)
+    quiz = _concours(teacher, "fr")
+    quiz.class_group.name = "Concours — concours-fr"
+    quiz.class_group.save()
+    client = Client()
+    client.force_login(teacher)
+    assert client.post(f"/quiz/{quiz.pk}/", {"generate_pdf": "1"}).status_code == 302
+    quiz.refresh_from_db()
+    fiche, sujet = quiz.sheet_pdf.name, quiz.subject_pdf.name
+    page = client.get(f"/quiz/{quiz.pk}/").content.decode()
+    assert 'name="title"' in page and "Titre du concours" in page, \
+        "champ « Titre du concours » absent des réglages"
+
+    r = client.post(f"/quiz/{quiz.pk}/", {
+        "update_settings": "1", "title": "  Concours national   2026 ",
+        "sheet_mode": quiz.sheet_mode, "id_mode": quiz.id_mode,
+        "id_digits": quiz.id_digits, "wrong_penalty": "0.5",
+        "grading_mode": quiz.grading_mode,
+        "entete": quiz.entete, "duree": quiz.duree})
+    assert r.status_code == 302
+    quiz.refresh_from_db()
+    assert quiz.title == "Concours national 2026", quiz.title
+    # « concours » déjà dans le titre : la liste prend le titre tel quel
+    assert quiz.class_group.name == "Concours national 2026", quiz.class_group.name
+    assert quiz.sheet_pdf.name != fiche and quiz.subject_pdf.name != sujet, \
+        "les PDF n'ont pas été refaits"
+    for doc in (quiz.sheet_pdf, quiz.subject_pdf):
+        assert "Concours national 2026" in _texte(doc.read()), f"{doc.name} : ancien titre"
+    assert "Régénérez la fiche" not in client.get(f"/quiz/{quiz.pk}/").content.decode(), \
+        "fiche signalée à régénérer alors qu'elle vient de l'être"
+    trace = Modification.objects.get(quiz=quiz, action="titre")
+    assert (trace.avant, trace.apres) == ("concours-fr", "Concours national 2026")
+
+    # Une classe ordinaire ne se renomme pas avec ses épreuves.
+    classe = ClassGroup.objects.create(name="SUJET classe", owner=teacher)
+    devoir = Quiz.objects.create(title="Devoir 1", class_group=classe, owner=teacher)
+    client.post(f"/quiz/{devoir.pk}/", {"update_settings": "1", "title": "Devoir 2",
+                                        "sheet_mode": "full", "id_mode": "name",
+                                        "id_digits": "6", "wrong_penalty": "0"})
+    devoir.refresh_from_db()
+    classe.refresh_from_db()
+    assert devoir.title == "Devoir 2" and classe.name == "SUJET classe"
+    devoir.delete()
+    classe.delete()
+    print("  renommage      titre, liste de candidats, sujet et feuille suivent ; "
+          "journalisé")
+
+
 def main():
     logging.disable(logging.WARNING)
     User.objects.filter(username="prof_sujet").delete()
     teacher = User.objects.create(username="prof_sujet")
     verifier_choix(teacher)
     verifier_mise_a_jour(teacher)
+    verifier_renommage(teacher)
     print("\n✅ TEST DU SUJET AVEC SES CHOIX RÉUSSI")
 
 

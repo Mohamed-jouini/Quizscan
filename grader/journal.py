@@ -103,6 +103,12 @@ def reponse_modifiee(utilisateur, reponse, *, case_avant, multiple_avant,
           avant=note_avant, apres=reponse.points_awarded)
 
 
+def corrige_supprime(utilisateur, fiche):
+    noter(utilisateur, "corrige_supprime", quiz=fiche.quiz,
+          objet=f"{fiche.source_name or 'corrigé'} (page {fiche.page_index + 1})",
+          avant=f"{len(fiche.detected or {})} réponse(s) lue(s)", apres="supprimé")
+
+
 def copie_supprimee(utilisateur, copie):
     noter(utilisateur, "copie_supprimee", quiz=copie.batch.quiz,
           objet=libelle_copie(copie),

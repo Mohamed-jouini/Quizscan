@@ -326,9 +326,17 @@ def class_detail(request, pk):
             if student_pk is not None:
                 Student.objects.filter(pk=student_pk, class_group=group).delete()
             return redirect("class_detail", pk=pk)
+    # Retour : la liste des candidats d'un concours se rejoint depuis la
+    # page du concours, on y revient ; une classe, depuis la liste des classes.
+    concours = (_my_quizzes(request).filter(class_group=group, auto_enroll=True)
+                .order_by("pk").first())
+    if concours is not None:
+        retour = (reverse("quiz_detail", args=[concours.pk]), "Retour au concours")
+    else:
+        retour = (reverse("class_list"), "Retour aux classes")
     return render(request, "grader/class_detail.html",
                   {"group": group, "import_form": import_form,
-                   "xlsx_form": xlsx_form,
+                   "xlsx_form": xlsx_form, "retour": retour,
                    "students_page": _page(request, group.students.all()),
                    "students_total": group.students.count()})
 
@@ -563,6 +571,23 @@ def quiz_detail(request, pk):
             else:
                 messages.error(request, "Aucune copie en attente de correction.")
             return redirect("quiz_detail", pk=pk)
+        elif "delete_answer_key" in request.POST:
+            # Supprimer un corrigé scanné ne défait PAS les bonnes réponses
+            # qu'il a renseignées : elles ont pu être retouchées depuis, et
+            # des copies sont peut-être déjà notées avec. Seule la pièce
+            # (images) disparaît ; le geste est inscrit au journal.
+            fiche = quiz.answer_key_sheets.filter(
+                pk=_int_or_none(request.POST.get("delete_answer_key"))).first()
+            if fiche is not None:
+                journal.corrige_supprime(request.user, fiche)
+                fichiers = [f.name for f in (fiche.image, fiche.overlay_image) if f]
+                fiche.delete()
+                services._effacer_fichiers(fichiers)
+                messages.success(request, "Corrigé scanné supprimé. Les bonnes "
+                                          "réponses déjà enregistrées restent en "
+                                          "place : modifiez-les dans la liste des "
+                                          "questions si besoin.")
+            return redirect("quiz_detail", pk=pk)
         elif "delete_question" in request.POST:
             question_pk = _int_or_none(request.POST.get("delete_question"))
             question = (quiz.questions.filter(pk=question_pk).first()
@@ -577,6 +602,15 @@ def quiz_detail(request, pk):
             ok = True
             ancienne_penalite = quiz.wrong_penalty
             ancien_cartouche = (quiz.entete, quiz.duree)
+            # Renommer : la liste de candidats d'un concours suit, le sujet et
+            # (si rien de ce qui est lu ne bouge) la feuille sont refaits.
+            if request.POST.get("title", "").strip():
+                renomme = services.renommer_epreuve(
+                    quiz, request.POST["title"], request.user)
+                quiz.refresh_from_db()
+                if renomme[0] or renomme[1]:
+                    messages.info(request, "Titre modifié : les PDF de "
+                                           "l'épreuve portent le nouveau titre.")
             if "entete" in request.POST:
                 quiz.entete = request.POST["entete"].strip()[:2000]
             if "duree" in request.POST:
@@ -1096,6 +1130,26 @@ def quiz_results_xlsx(request, pk):
     resp = HttpResponse(
         data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     resp["Content-Disposition"] = f'attachment; filename="resultats_{quiz.pk}.xlsx"'
+    return resp
+
+
+@login_required
+def quiz_admis_pdf(request, pk):
+    """Liste des admis (ou des réussites) par ordre de mérite, en PDF."""
+    quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    batch = None
+    batch_pk = _int_or_none(request.GET.get("batch"))
+    if batch_pk is not None:
+        batch = quiz.batches.filter(pk=batch_pk).first()
+    admission = services.admissions(quiz, services.compute_results(quiz, batch))
+    if admission is None:
+        messages.error(request, "Indiquez d'abord la note minimale "
+                                "d'admission (ci-dessous).")
+        return redirect(reverse("quiz_results", args=[pk]) + "#admission")
+    data = bulletin_mod.generate_liste_admis_pdf(quiz, admission, batch)
+    resp = HttpResponse(data, content_type="application/pdf")
+    nom = "liste_admis" if quiz.auto_enroll else "liste_reussites"
+    resp["Content-Disposition"] = f'attachment; filename="{nom}_{quiz.pk}.pdf"'
     return resp
 
 

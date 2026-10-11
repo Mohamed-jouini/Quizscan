@@ -191,6 +191,21 @@ def main():
     print("  bulletins      « Bulletins des admis » : 3 relevés par ordre de mérite ; "
           "résultat et rang sur chaque relevé")
 
+    # ------------------------------------------- 7. liste des admis en PDF
+    assert f'href="/quiz/{quiz.pk}/admis.pdf"' in page, \
+        "bouton « Exporter la liste (PDF) » absent"
+    r = client.get(f"/quiz/{quiz.pk}/admis.pdf")
+    assert r.status_code == 200 and "liste_admis" in r["Content-Disposition"]
+    texte = "".join(p.get_text() for p in pymupdf.open(stream=r.content,
+                                                       filetype="pdf"))
+    positions = [texte.index(n) for n in ("AMRI", "BEN SALEM", "CHAABANE")]
+    assert positions == sorted(positions), "liste pas dans l'ordre de mérite"
+    for absent in ("ESSID", "DRISS", "FERCHICHI"):
+        assert absent not in texte, f"{absent} (non admis) dans la liste des admis"
+    assert "Liste arrêtée à 3 admis" in texte and "3 admis sur 6" in texte
+    print("  liste PDF      « Exporter la liste (PDF) » : admis seuls, ordre de "
+          "mérite, liste arrêtée")
+
     # ----------------------------------------- 6. retour à « pas de seuil »
     client.post(f"/quiz/{quiz.pk}/", {
         "update_settings": "1", "sheet_mode": quiz.sheet_mode,
@@ -204,6 +219,8 @@ def main():
     assert "?admis=1" not in client.get(f"/quiz/{quiz.pk}/resultats/").content.decode()
     r = client.get(f"/quiz/{quiz.pk}/bulletins.pdf?admis=1")
     assert r.status_code == 302, r.status_code
+    r = client.get(f"/quiz/{quiz.pk}/admis.pdf")
+    assert r.status_code == 302 and r["Location"].endswith("#admission"), r.status_code
 
     Quiz.objects.filter(owner=prof).delete()
     print("\n✅ TEST DE LA NOTE D'ADMISSION RÉUSSI")

@@ -9,12 +9,13 @@
       {% for p in profs %}<b>{{ p.get_full_name|default:p.username }}</b>{% if not forloop.last %}, {% endif %}{% endfor %}
       {% endif %}{% endwith %}</p>
   </div>
-  {% if students_total %}
   <div class="page-head__actions">
+    <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
+    {% if students_total %}
     <a class="btn small" href="{% url 'class_labels_pdf' group.pk %}"
        target="_blank">Planche d'étiquettes (PDF)</a>
+    {% endif %}
   </div>
-  {% endif %}
 </header>
 <div class="grid2">
   <div class="card">
