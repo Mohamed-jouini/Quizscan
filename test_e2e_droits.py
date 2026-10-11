@@ -144,7 +144,7 @@ def main():
         f"la note du QCM a bougé : {reponse_qcm.points_awarded}")
     print("  note de QCM   inchangée malgré un envoi direct OK")
 
-    # L'administrateur, lui, peut rectifier une case mal lue.
+    # L'administrateur non plus : la réponse lue ne se modifie pour personne.
     User.objects.filter(username="dr_admin").delete()
     patron = User.objects.create_superuser("dr_admin", email="",
                                            password="Mdp-Droits-123")
@@ -153,10 +153,15 @@ def main():
         f"choice_{reponse_qcm.pk}": "2",
     })
     reponse_qcm.refresh_from_db()
-    assert reponse_qcm.detected_choice == 2, (
-        "l'administrateur doit pouvoir rectifier une case mal lue "
-        f"(restée {reponse_qcm.detected_choice})")
-    print("  administrateur rectifie une case mal lue OK")
+    assert reponse_qcm.detected_choice == 0, (
+        "l'administrateur a modifié la case lue sur un QCM "
+        f"(devenue {reponse_qcm.detected_choice})")
+    # Écran de vérification : ni liste « Correction », ni « Changer d'étudiant ».
+    page = _client(patron).get(f"/copies/{copie.pk}/").content.decode()
+    assert f'name="choice_{reponse_qcm.pk}"' not in page, "colonne « Correction » affichée"
+    assert "Changer d'étudiant" not in page and 'name="student"' not in page, (
+        "copie identifiée : l'étudiant ne doit pas pouvoir être changé")
+    print("  administrateur pas de retouche des réponses ni de l'étudiant OK")
 
     # ---------------------------------------------------------------- 4
     # L'écran ne propose pas ce que le compte ne peut pas faire.

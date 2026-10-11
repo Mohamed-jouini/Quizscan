@@ -93,6 +93,27 @@ def main():
     assert "indiquez la <b>note minimale d'admission</b>" in page, \
         "sans seuil, la page doit dire comment obtenir la liste des admis"
     assert "<th>Résultat</th>" not in page
+    # Le bouton « Bulletins des admis » est là même sans seuil : il mène au
+    # réglage (avant, il n'apparaissait qu'une fois le seuil réglé ailleurs,
+    # et on concluait qu'il n'existait pas).
+    assert 'href="#admission"' in page and "Bulletins des admis" in page
+    assert 'action="/quiz/%d/note-admission/"' % quiz.pk in page, \
+        "pas de réglage de la note minimale sur la page des résultats"
+
+    # -------------------- 2 bis. réglage depuis la page des résultats
+    r = client.post(f"/quiz/{quiz.pk}/note-admission/", {"note_admission": "abc"})
+    quiz.refresh_from_db()
+    assert r.status_code == 302 and quiz.note_admission is None, "valeur invalide acceptée"
+    r = client.post(f"/quiz/{quiz.pk}/note-admission/", {"note_admission": "12,0"})
+    assert r.status_code == 302 and r["Location"].endswith("/resultats/#admission")
+    quiz.refresh_from_db()
+    assert quiz.note_admission == SEUIL
+    page = client.get(f"/quiz/{quiz.pk}/resultats/").content.decode()
+    assert "Bulletins des admis (3)" in page and "?admis=1" in page
+    quiz.note_admission = None
+    quiz.save()
+    print("  résultats      bouton « Bulletins des admis » toujours visible, "
+          "note minimale réglable sur place")
 
     # ------------------------------------- 2. réglage depuis la page du quiz
     r = client.post(f"/quiz/{quiz.pk}/", {

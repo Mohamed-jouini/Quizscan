@@ -139,6 +139,40 @@ def main():
         assert bleu < 50, f"cadre NOM/PRÉNOM dessiné sur l'image de contrôle ({bleu} px)"
     print("image de contrôle sans cadre NOM/PRÉNOM (non imprimé sur un concours)")
 
+    # Copies scannées AVANT la correction : leur image de contrôle enregistrée
+    # porte encore les cadres. Ouvrir la copie les efface, une fois, sans
+    # toucher au reste de l'image.
+    from grader import omr
+    redressee = cv2.imdecode(np.frombuffer(sheet.warped_image.read(), np.uint8),
+                             cv2.IMREAD_COLOR)
+    ancienne = omr.draw_overlay(redressee, {"qcm": [], "name_boxes": L._name_boxes()},
+                                {}, {}, zone_nom=True)
+    temoin = (px(30), px(120), px(60), px(130))      # marque hors des cadres
+    cv2.rectangle(ancienne, temoin[:2], temoin[2:], (0, 0, 230), -1)
+    services._save_jpg(sheet.overlay_image, ancienne, "overlay.jpg", quality=70)
+    sheet.save(update_fields=["overlay_image"])
+
+    def bleus(image):
+        total = 0
+        for x, y, w, h in L._name_boxes().values():
+            z = image[px(y) - 4:px(y + h) + 4, px(x) - 4:px(x + w) + 4]
+            total += int(((z[:, :, 0] > 150) & (z[:, :, 1] < 130) & (z[:, :, 2] < 60)).sum())
+        return total
+
+    assert bleus(ancienne) > 1000, "simulation de l'ancienne image ratée"
+    lecteur = Client()
+    lecteur.force_login(teacher)
+    assert lecteur.get(f"/copies/{sheet.pk}/").status_code == 200
+    sheet.refresh_from_db()
+    nette = cv2.imdecode(np.frombuffer(sheet.overlay_image.read(), np.uint8),
+                         cv2.IMREAD_COLOR)
+    assert bleus(nette) < 50, f"cadres NOM/PRÉNOM toujours là ({bleus(nette)} px)"
+    zone = nette[temoin[1] + 3:temoin[3] - 3, temoin[0] + 3:temoin[2] - 3]
+    assert zone[:, :, 2].mean() > 180 and zone[:, :, 0].mean() < 60, \
+        "le nettoyage a touché au reste de l'image"
+    assert not services.nettoyer_controle(sheet), "nettoyage refait une seconde fois"
+    print("anciennes images de contrôle : cadres effacés à l'ouverture, reste intact")
+
     # import ultérieur des noms officiels par numéro
     teacher.set_password("x")
     teacher.save()

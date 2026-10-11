@@ -151,17 +151,19 @@ def main():
     assert sh2.student_id == s2.pk and sh2.status == "ok"
 
     # Copie reconnue par son QR : le nom s'affiche directement, avec la façon
-    # dont il a été trouvé ; la liste ne sert qu'à corriger, repliée. Avant :
-    # « Nom lu par OCR : (rien) — confiance 100 % » et une liste ouverte.
+    # dont il a été trouvé, et ne se change pas. Avant : « Nom lu par OCR :
+    # (rien) — confiance 100 % » et une liste « Affecter à » ouverte.
     revue = c.get(f"/copies/{sh1.pk}/").content.decode()
     assert 'class="identite-copie__nom">BEN SALAH Ahmed<' in revue
     assert "Reconnu par son code QR" in revue and "Nom lu par OCR" not in revue
-    assert '<details class="reaffecter">' in revue, "liste des étudiants non repliée"
-    # Enregistrer sans toucher à la liste (ni même l'envoyer) ne désaffecte pas.
-    c.post(f"/copies/{sh1.pk}/", {})
+    assert 'name="student"' not in revue, "liste des étudiants sur une copie reconnue"
+    # QCM seuls, copie reconnue : rien à enregistrer, des liens de navigation.
+    assert "Enregistrer et retour au lot" not in revue and "Retour au lot" in revue
+    # Un envoi fabriqué ne réaffecte pas une copie reconnue.
+    c.post(f"/copies/{sh1.pk}/", {"student": s2.pk})
     sh1.refresh_from_db()
-    assert sh1.student_id == s1.pk, "copie désaffectée par un formulaire sans liste"
-    print("vérification : nom de l'étudiant affiché directement, liste repliée ✔")
+    assert sh1.student_id == s1.pk, "copie reconnue réaffectée par un envoi direct"
+    print("vérification : nom de l'étudiant affiché, non modifiable ✔")
 
     r = c.get(f"/quiz/{quiz.pk}/resultats/")
     rows = {row["student"].last_name: row for row in r.context["rows"]}

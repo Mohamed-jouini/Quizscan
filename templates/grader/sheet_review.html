@@ -36,8 +36,8 @@
     <div class="card">
       <h2>Étudiant</h2>
       {% if sheet.student %}
-      {# Copie identifiée : le nom, et comment il a été trouvé. La liste ne  #}
-      {# sert qu'à corriger une erreur : repliée, ouverte à la demande.     #}
+      {# Copie identifiée : le nom, et comment il a été trouvé. Pas de     #}
+      {# changement d'étudiant ici : la lecture du QR ou du n° fait foi.   #}
       <div class="identite-copie">
         <span class="avatar">{{ sheet.student.last_name|slice:":1" }}{{ sheet.student.first_name|slice:":1" }}</span>
         <div>
@@ -51,15 +51,6 @@
       {% if sheet.name_crop and identification.methode == "ocr" %}
       <p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}" alt="Nom écrit sur la copie"></p>
       {% endif %}
-      <details class="reaffecter">
-        <summary>Changer d'étudiant</summary>
-        <select name="student" aria-label="Étudiant de cette copie">
-          <option value="">— non identifié —</option>
-          {% for s in students %}
-          <option value="{{ s.pk }}" {% if sheet.student_id == s.pk %}selected{% endif %}>{{ s.full_name }}</option>
-          {% endfor %}
-        </select>
-      </details>
       {% else %}
       <p class="helptext helptext--serre">Copie non identifiée{% if sheet.id_read %} — identifiant lu : <b>{{ sheet.id_read }}</b>, inconnu dans la liste{% elif sheet.ocr_name_raw %} — nom lu : <b>{{ sheet.ocr_name_raw }}</b>{% endif %}.
         Choisissez l'étudiant :</p>
@@ -76,39 +67,20 @@
 
     <div class="card">
       <h2>Réponses</h2>
-      {% if not qcm_modifiable %}
       <p class="helptext helptext--serre">
-        Les QCM sont notés par lecture optique : leur note est le constat des
-        cases cochées et ne se modifie pas. Seules les réponses manuscrites
-        sont à noter ici. Une case mal lue se signale à l'administrateur.
+        Les QCM sont notés par lecture optique : la réponse retenue est le
+        constat des cases noircies et ne se modifie pas. Seules les réponses
+        manuscrites sont à noter ici.
       </p>
-      {% endif %}
       <div class="table-wrap">
         <table>
-        <tr><th>Q</th><th>Détecté</th><th>Attendu</th><th>Correction</th><th>Points</th></tr>
+        <tr><th>Q</th><th>Détecté</th><th>Attendu</th><th>Points</th></tr>
         {% for a in answers %}
         <tr>
           <td>{{ a.question.order }}</td>
           {% if a.question.qtype == "qcm" %}
           <td>{{ a.detected_letter }}{% if a.is_multiple %} <span class="badge warn">multiple</span>{% endif %}</td>
           <td>{{ a.question.correct_letter }}</td>
-          <td>
-            {% if qcm_modifiable %}
-            <select name="choice_{{ a.pk }}">
-              <option value="blank" {% if a.detected_choice is None %}selected{% endif %}>vide</option>
-              {% for i, letter in a.question.letter_options %}
-              <option value="{{ i }}" {% if a.detected_choice == i %}selected{% endif %}>{{ letter }}</option>
-              {% endfor %}
-            </select>
-            {% else %}
-            {# La note d'un QCM est le constat de ce qui est coche : elle ne #}
-            {# se retouche pas. Voir grader/droits.py.                       #}
-            <span class="verrou" title="La note d'un QCM ne se modifie pas">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-              lecture optique
-            </span>
-            {% endif %}
-          </td>
           <td>{{ a.points_awarded|floatformat:"-2"|default:"—" }} / {{ a.question.points|floatformat:"-2" }}</td>
           {% else %}
           <td colspan="2">
@@ -116,21 +88,26 @@
             {% if a.open_crop %}<br><a href="{{ a.open_crop.url }}" target="_blank">
               <img src="{{ a.open_crop.url }}" style="max-width:100%;border:1px solid var(--line);border-radius:4px"></a>{% endif %}
           </td>
-          <td><input class="champ--note" type="text" name="points_{{ a.pk }}"
+          <td class="cellule--serree"><input class="champ--note" type="text" name="points_{{ a.pk }}"
                      value="{{ a.points_awarded|floatformat:'-2'|default_if_none:'' }}"
-                     placeholder="note"></td>
-          <td>/ {{ a.question.points|floatformat:"-2" }}</td>
+                     placeholder="note"> / {{ a.question.points|floatformat:"-2" }}</td>
           {% endif %}
         </tr>
         {% endfor %}
       </table>
       </div>
       <p>
+        {% if a_enregistrer %}
         {% if next_id %}
         <button class="btn" type="submit" name="save_next" value="1">
           Enregistrer et copie suivante ▶</button>
         {% endif %}
         <button class="btn secondary" type="submit">Enregistrer et retour au lot</button>
+        {% else %}
+        {# Rien à enregistrer : copie reconnue, QCM seuls. #}
+        {% if next_id %}<a class="btn" href="{% url 'sheet_review' next_id %}">Copie suivante ▶</a>{% endif %}
+        <a class="btn secondary" href="{% url 'batch_detail' sheet.batch.pk %}">Retour au lot</a>
+        {% endif %}
       </p>
     </div>
   </div>

@@ -30,4 +30,18 @@ class Command(BaseCommand):
                 sujets += services.actualiser_sujet(quiz)
             except Exception as exc:  # noqa: BLE001 — une fiche ne bloque pas les autres
                 self.stderr.write(f"quiz {quiz.pk} : {type(exc).__name__}: {exc}")
-        self.stdout.write(f"{faites} fiche(s) et {sujets} sujet(s) mis à jour.")
+        # Images de contrôle de concours à étiquette encadrant des cases
+        # NOM/PRÉNOM qui n'existent pas sur la feuille (avant la correction).
+        from grader.models import SheetScan
+        images = 0
+        for sheet in (SheetScan.objects.select_related("batch__quiz")
+                      .filter(batch__quiz__auto_enroll=True,
+                              batch__quiz__id_mode__in=("sticker", "qr"))
+                      .exclude(overlay_image="")
+                      .exclude(overlay_image__contains="controle_net")):
+            try:
+                images += services.nettoyer_controle(sheet)
+            except Exception as exc:  # noqa: BLE001 — une image ne bloque pas les autres
+                self.stderr.write(f"copie {sheet.pk} : {type(exc).__name__}: {exc}")
+        self.stdout.write(f"{faites} fiche(s), {sujets} sujet(s) et {images} "
+                          "image(s) de contrôle mis à jour.")

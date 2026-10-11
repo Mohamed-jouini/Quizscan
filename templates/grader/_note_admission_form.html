@@ -1,0 +1,16 @@
+{% comment %}
+Note minimale d'admission, réglée depuis la page des résultats.
+Paramètres : quiz, batch (facultatif), libelle_bouton.
+{% endcomment %}
+<form class="form-admission" method="post" action="{% url 'quiz_note_admission' quiz.pk %}">
+  {% csrf_token %}
+  {% if batch %}<input type="hidden" name="batch" value="{{ batch.pk }}">{% endif %}
+  <label for="id_note_admission_res">{% if quiz.auto_enroll %}Note minimale d'admission{% else %}Note minimale de réussite{% endif %}</label>
+  <span class="form-admission__champ">
+    <input id="id_note_admission_res" class="champ--court" type="text" inputmode="decimal"
+           name="note_admission" value="{{ quiz.note_admission|default_if_none:''|floatformat:'-2' }}"
+           placeholder="ex. 10">
+    <span class="helptext helptext--serre">/ {{ quiz.max_score|floatformat:"-2" }}</span>
+  </span>
+  <button class="btn small" type="submit">{{ libelle_bouton }}</button>
+</form>

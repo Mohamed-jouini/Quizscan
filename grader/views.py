@@ -598,17 +598,11 @@ def quiz_detail(request, pk):
             except (ValueError, TypeError):
                 pass
             if "note_admission" in request.POST:
-                brut = request.POST["note_admission"].strip().replace(",", ".")
-                if not brut:
-                    quiz.note_admission = None
+                valide, valeur = _lire_note_admission(request.POST["note_admission"])
+                if valide:
+                    quiz.note_admission = valeur
                 else:
-                    try:
-                        valeur = float(brut)
-                        if valeur < 0:
-                            raise ValueError
-                        quiz.note_admission = valeur
-                    except ValueError:
-                        ok = False
+                    ok = False
             new_grading = request.POST.get("grading_mode")
             if quiz.auto_enroll and new_grading in dict(Quiz.GRADING_MODES):
                 quiz.grading_mode = new_grading
@@ -947,17 +941,22 @@ def sheet_review(request, pk):
     prev_id = sheet_ids[position - 1] if position > 0 else None
     next_id = sheet_ids[position + 1] if position + 1 < len(sheet_ids) else None
 
-    # Retoucher la case lue sur un QCM, c'est en changer la note : reserve
-    # a l'administrateur. L'enseignant garde l'affectation du candidat et la
-    # notation des reponses manuscrites, qui sont son travail.
-    qcm_modifiable = droits.peut_noter_qcm(request.user)
+    # Ce qui se fait sur cet écran : affecter une copie NON identifiée, et
+    # noter les réponses manuscrites. Une copie reconnue (QR, n°) garde son
+    # étudiant ; une case lue sur un QCM ne se retouche pas — pour personne
+    # (voir grader/droits.py).
+    a_enregistrer = sheet.student is None or any(
+        a.question.qtype == "open" for a in answers)
+    # Image de contrôle d'avant la correction : cadres NOM/PRÉNOM sur une
+    # fiche de concours qui n'en a pas — effacés une fois pour toutes.
+    services.nettoyer_controle(sheet)
 
     if request.method == "POST":
         droits.exiger(request.user, droits.CORRIGER, "vérifier les copies")
-        # ré-affectation de l'étudiant — seulement si le champ est envoyé :
-        # un formulaire sans liste (copie déjà identifiée) ne doit pas
-        # désaffecter la copie.
-        if "student" in request.POST:
+        # affectation — seulement d'une copie non identifiée : la liste
+        # n'est affichée que pour elle, et un envoi fabriqué à la main ne
+        # doit pas davantage réaffecter une copie reconnue.
+        if "student" in request.POST and sheet.student is None:
             sid = _int_or_none(request.POST.get("student"))
             ancien = sheet.student
             sheet.student = (students.filter(pk=sid).first()
@@ -970,30 +969,9 @@ def sheet_review(request, pk):
         # corrections des réponses
         for a in answers:
             if a.question.qtype == "qcm":
-                # Champ absent de l'ecran pour un enseignant ; un formulaire
-                # fabrique a la main ne doit pas davantage l'emporter.
-                if not qcm_modifiable:
-                    continue
-                val = (request.POST.get(f"choice_{a.pk}") or "").strip()
-                if val in ("", "blank"):
-                    new_choice = None          # réponse vide
-                else:
-                    new_choice = _int_or_none(val)
-                    # valeur non numérique ou case inexistante : champ ignoré
-                    if new_choice is None or not (
-                            0 <= new_choice < a.question.num_bubbles):
-                        continue
-                if new_choice != a.detected_choice or a.is_multiple:
-                    journal.noter(
-                        request.user, "case_qcm", copie=sheet,
-                        objet=f"{journal.libelle_copie(sheet)} — question {a.question.order}",
-                        avant="plusieurs cases" if a.is_multiple
-                        else journal.lettre(a.question, a.detected_choice),
-                        apres=journal.lettre(a.question, new_choice))
-                    a.detected_choice = new_choice
-                    a.is_multiple = False
-                    a.manually_set = False   # recalcul automatique des points
-                    a.save()
+                # La réponse lue ne se modifie pas : un champ « choice_… »
+                # envoyé à la main est ignoré.
+                continue
             else:
                 val = request.POST.get(f"points_{a.pk}", "").strip().replace(",", ".")
                 if val != "":
@@ -1025,12 +1003,56 @@ def sheet_review(request, pk):
         "answers": answers,
         "position": position + 1, "total": len(sheet_ids),
         "prev_id": prev_id, "next_id": next_id,
-        "qcm_modifiable": qcm_modifiable,
+        "a_enregistrer": a_enregistrer,
         "historique": sheet.modifications.all()[:30],
     })
 
 
 # ------------------------------------------------------------ résultats
+
+def _lire_note_admission(texte):
+    """« 10 », « 10,5 » ou vide (pas de seuil) -> (valide, valeur)."""
+    brut = (texte or "").strip().replace(",", ".")
+    if not brut:
+        return True, None
+    try:
+        valeur = float(brut)
+    except ValueError:
+        return False, None
+    return (valeur >= 0), (valeur if valeur >= 0 else None)
+
+
+@login_required
+def quiz_note_admission(request, pk):
+    """Règle la note minimale d'admission depuis la page des résultats.
+
+    Le réglage existait sur la page de l'épreuve, mais c'est sur les
+    résultats qu'on cherche les admis : sans ce raccourci, le bouton
+    « Bulletins des admis » restait introuvable tant qu'on ignorait qu'il
+    fallait d'abord passer par les réglages."""
+    quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    retour = reverse("quiz_results", args=[pk])
+    lot = _int_or_none(request.POST.get("batch"))
+    if lot is not None:
+        retour += f"?batch={lot}"
+    if request.method != "POST":
+        return redirect(retour)
+    droits.exiger(request.user, droits.CREER, "régler la note d'admission")
+    valide, valeur = _lire_note_admission(request.POST.get("note_admission"))
+    if not valide:
+        messages.error(request, "Note minimale invalide : saisissez un nombre, "
+                                "par exemple 10 ou 10,5.")
+    else:
+        quiz.note_admission = valeur
+        quiz.save(update_fields=["note_admission"])
+        if valeur is None:
+            messages.success(request, "Note minimale retirée.")
+        else:
+            qui = "admis" if quiz.auto_enroll else "réussites"
+            messages.success(request, f"Note minimale fixée à {valeur:g} : liste "
+                                      f"et bulletins des {qui} ci-dessous.")
+    return redirect(retour + "#admission")
+
 
 @login_required
 def quiz_results(request, pk):

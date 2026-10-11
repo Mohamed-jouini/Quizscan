@@ -479,6 +479,52 @@ def moderniser_fiche_grille(quiz):
     return True
 
 
+# Marque des images de contrôle nettoyées (nom du fichier) : le nettoyage
+# ne se refait pas à chaque ouverture ni à chaque démarrage.
+_CONTROLE_NET = "controle_net"
+
+
+def _sans_cases_nom_imprimees(quiz):
+    """Fiche de concours à étiquette : les cases NOM/PRÉNOM n'y ont jamais
+    été imprimées (voir sheet_pdf.generate_sheet_pdf), mais l'ancienne image
+    de contrôle les encadrait quand même."""
+    return quiz.auto_enroll and quiz.id_mode in ("sticker", "qr")
+
+
+def nettoyer_controle(sheet):
+    """Efface les deux cadres bleus « NOM / PRÉNOM » d'une image de contrôle
+    enregistrée avant la correction de omr.draw_overlay (zone_nom).
+
+    Seulement là où ces cases n'existent pas sur la feuille (concours à
+    étiquette). Dans la zone des cadres, l'image de contrôle n'est que l'image
+    redressée plus ces cadres : on y recopie l'image redressée, conservée
+    elle aussi. Le reste (cercles des réponses, QR) ne bouge pas.
+    Retourne True si l'image a été réécrite."""
+    quiz = sheet.batch.quiz
+    if (not _sans_cases_nom_imprimees(quiz) or not sheet.overlay_image
+            or not sheet.warped_image
+            or _CONTROLE_NET in (sheet.overlay_image.name or "")):
+        return False
+    try:
+        with sheet.overlay_image.open("rb") as f:
+            controle = cv2.imdecode(np.frombuffer(f.read(), np.uint8), cv2.IMREAD_COLOR)
+        with sheet.warped_image.open("rb") as f:
+            redressee = cv2.imdecode(np.frombuffer(f.read(), np.uint8), cv2.IMREAD_COLOR)
+    except (OSError, ValueError):
+        return False
+    if controle is None or redressee is None or controle.shape != redressee.shape:
+        return False
+    marge = 6   # trait de 2 px, débordement de l'antialiasing et du JPEG
+    # Les cadres étaient dessinés aux emplacements standard des cases.
+    for x, y, w, h in layout_mod._name_boxes().values():
+        x0, y0 = max(omr._mm(x) - marge, 0), max(omr._mm(y) - marge, 0)
+        x1, y1 = omr._mm(x + w) + marge, omr._mm(y + h) + marge
+        controle[y0:y1, x0:x1] = redressee[y0:y1, x0:x1]
+    _save_jpg(sheet.overlay_image, controle, f"{_CONTROLE_NET}.jpg", quality=70)
+    sheet.save(update_fields=["overlay_image"])
+    return True
+
+
 def actualiser_sujet(quiz, forcer=False):
     """Refait le SUJET (document des questions, mode « sujet séparé ») s'il a
     été dessiné par une version antérieure — par exemple un sujet de concours

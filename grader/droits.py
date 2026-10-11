@@ -31,13 +31,10 @@ def peut_corriger(utilisateur):
     return utilisateur.has_perm(CORRIGER)
 
 
-def peut_noter_qcm(utilisateur):
-    """Droit de retoucher la réponse lue sur un QCM — administrateurs seuls.
-
-    Changer la case retenue change la note : c'est pourquoi ce geste reste
-    hors de portée de l'enseignant, même s'il corrige les copies.
-    """
-    return utilisateur.is_superuser
+# Pas de droit de retoucher la réponse lue sur un QCM : la case retenue est
+# le constat de la lecture optique, et la changer change la note. Retiré à
+# tous, administrateur compris (demande de l'utilisateur, 11 octobre 2026) —
+# ni l'écran de vérification ni l'administration ne le permettent.
 
 
 def exiger(utilisateur, droit, geste):

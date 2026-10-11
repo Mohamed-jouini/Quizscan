@@ -65,8 +65,10 @@ def main():
     redac = Question.objects.create(quiz=quiz, order=2, qtype="open", points=4)
     lot = ScanBatch.objects.create(quiz=quiz, label="JR lot", status="done",
                                    total_pages=1)
+    # Copie non identifiée : c'est la seule qu'on affecte à la main (une
+    # copie reconnue par son QR ou son n° garde son étudiant).
     copie = SheetScan.objects.create(batch=lot, source_name="jr.jpg",
-                                     status="ok", student=alice)
+                                     status="no_match", student=None)
     copie.image.save("jr.jpg", ContentFile(b"faux scan"), save=True)
     r_qcm = Answer.objects.create(sheet=copie, question=qcm, detected_choice=1,
                                   points_awarded=0.0)
@@ -84,17 +86,22 @@ def main():
     assert "identification" in gestes, "réattribution d'une copie non tracée"
     assert "note" in gestes, "note manuscrite non tracée"
     entree = Modification.objects.get(copie=copie, action="identification")
-    assert entree.avant == "ALICE A" and entree.apres == "BRUNO B", (
+    assert entree.avant == "non attribuée" and entree.apres == "BRUNO B", (
         f"valeurs mal tracées : {entree.avant!r} → {entree.apres!r}")
     assert entree.auteur_nom == "jr_prof", f"auteur : {entree.auteur_nom!r}"
     note = Modification.objects.get(copie=copie, action="note")
     assert (note.avant, note.apres) == ("—", "3"), (note.avant, note.apres)
 
-    # Renvoyer le même formulaire ne doit rien ajouter.
+    # Renvoyer le même formulaire ne doit rien ajouter — ni réaffecter la
+    # copie, désormais identifiée, même si l'envoi désigne quelqu'un d'autre.
     avant = Modification.objects.count()
     c.post(f"/copies/{copie.pk}/", envoi)
+    c.post(f"/copies/{copie.pk}/", {"student": alice.pk,
+                                    f"points_{r_redac.pk}": "3"})
     assert Modification.objects.count() == avant, (
         "un formulaire renvoyé tel quel a rempli le journal de non-événements")
+    copie.refresh_from_db()
+    assert copie.student_id == bruno.pk, "une copie identifiée a été réaffectée"
     print("  copie          attribution et note tracées, rien de plus OK")
 
     # ---------------------------------------------------------------- 2
@@ -113,26 +120,26 @@ def main():
     print("  épreuve        bonne réponse, barème, pénalité, suppression OK")
 
     # ---------------------------------------------------------------- 3
-    # L'administrateur rectifie une case de QCM : tracé aussi.
+    # La réponse lue sur un QCM ne se modifie pour personne, administrateur
+    # compris : ni par l'écran de vérification, ni par l'administration de
+    # Django, qui court-circuite les vues.
     a = Client()
     a.force_login(patron)
-    a.post(f"/copies/{copie.pk}/", {"student": bruno.pk,
-                                    f"choice_{r_qcm.pk}": "2"})
-    case = Modification.objects.filter(copie=copie, action="case_qcm").first()
-    assert case and (case.avant, case.apres) == ("B", "C"), (
-        "la rectification d'une case par l'administrateur n'est pas tracée")
-    assert case.auteur_nom == "jr_admin"
-
-    # Et depuis l'administration de Django, qui court-circuite les vues.
+    page = a.get(f"/copies/{copie.pk}/").content.decode()
+    assert f'name="choice_{r_qcm.pk}"' not in page, "liste « Correction » affichée"
     r_qcm.refresh_from_db()
-    envoi = a.post(f"/admin/grader/answer/{r_qcm.pk}/change/", {
-        "sheet": copie.pk, "question": qcm.pk, "detected_choice": "3",
-        "points_awarded": "0", "fill_ratios": "null"})
-    assert envoi.status_code == 302, f"admin -> {envoi.status_code}"
-    assert Modification.objects.filter(
-        copie=copie, action="case_qcm", apres="D").exists(), (
-        "une modification faite dans l'administration échappe au journal")
-    print("  administration rectifications tracées, vues et admin OK")
+    points_avant = r_qcm.points_awarded   # pénalité de la section 2 comprise
+    a.post(f"/copies/{copie.pk}/", {f"choice_{r_qcm.pk}": "2"})
+    a.post(f"/admin/grader/answer/{r_qcm.pk}/change/", {
+        "detected_choice": "3", "points_awarded": "1", "fill_ratios": "null"})
+    r_qcm.refresh_from_db()
+    assert r_qcm.detected_choice == 1 and r_qcm.points_awarded == points_avant, (
+        f"réponse de QCM modifiée : case {r_qcm.detected_choice}, "
+        f"{r_qcm.points_awarded} pt")
+    assert not Modification.objects.filter(copie=copie, action="case_qcm").exists()
+    assert a.get("/admin/grader/answer/add/").status_code == 403, \
+        "une réponse ne doit pas pouvoir être saisie à la main"
+    print("  administration réponse de QCM non modifiable, même par l'administrateur OK")
 
     # ---------------------------------------------------------------- 4
     # Le journal ne se retouche pas, même par un administrateur.

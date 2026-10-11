@@ -398,6 +398,19 @@ class AnswerAdmin(TitresFrancais, admin.ModelAdmin):
     # dizaines de milliers de lignes : jamais de liste déroulante ici
     raw_id_fields = ("sheet", "question")
 
+    def has_add_permission(self, request):
+        # Une réponse naît de la lecture d'une copie, jamais d'une saisie.
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        """La réponse lue sur un QCM ne se retouche pas, ici non plus : ni la
+        case retenue, ni ses points (calculés). Seule la note d'une réponse
+        manuscrite se saisit. Voir grader/droits.py."""
+        figes = ["sheet", "question", "detected_choice", "is_multiple"]
+        if obj is not None and obj.question.qtype == "qcm":
+            figes += ["points_awarded", "manually_set"]
+        return figes
+
     def save_model(self, request, obj, form, change):
         ancienne = Answer.objects.filter(pk=obj.pk).first() if change else None
         super().save_model(request, obj, form, change)
