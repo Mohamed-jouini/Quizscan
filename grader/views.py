@@ -896,9 +896,19 @@ def batch_detail(request, pk):
     batch = get_object_or_404(_my_batches(request), pk=pk)
     stalled = services.is_stalled(batch)
     if request.method == "POST" and ("launch_grading" in request.POST
-                                     or "resume" in request.POST):
+                                     or "resume" in request.POST
+                                     or "reidentifier" in request.POST):
         droits.exiger(request.user, droits.CORRIGER,
                       "lancer la correction des copies")
+    if request.method == "POST" and "reidentifier" in request.POST:
+        n = services.reidentifier_lot(batch, request.user)
+        if n:
+            messages.success(request, f"{n} copie(s) identifiée(s) automatiquement.")
+        else:
+            messages.info(request, "Aucune copie de plus n'a pu être identifiée "
+                                   "par son nom : affectez-les à l'écran de "
+                                   "vérification.")
+        return redirect("batch_detail", pk=pk)
     if request.method == "POST" and "launch_grading" in request.POST:
         try:
             n_batches, n_pages = services.launch_pending(batch.quiz)
@@ -927,6 +937,7 @@ def batch_detail(request, pk):
     n_total = batch.sheets.count()
     n_auto = batch.sheets.filter(status="ok").count()
     n_attention = n_total - n_auto
+    n_a_identifier = batch.sheets.filter(status="no_match", student=None).count()
     n_open_pending = Answer.objects.filter(
         sheet__batch=batch, question__qtype="open",
         points_awarded__isnull=True).count()
@@ -936,6 +947,7 @@ def batch_detail(request, pk):
                    "first_review_id": first_review_id,
                    "n_total": n_total, "n_auto": n_auto,
                    "n_attention": n_attention,
+                   "n_a_identifier": n_a_identifier,
                    "n_open_pending": n_open_pending})
 
 
@@ -953,6 +965,13 @@ def _identification(sheet):
     if lu and not sheet.ocr_name_raw:
         return {"methode": "grille",
                 "texte": f"Reconnu par son n° d'inscription ({lu})"}
+    if sheet.student_confirmed:              # affectée à l'écran de vérification
+        return {"methode": "main", "texte": "Affecté à la main"}
+    if sheet.ocr_name_raw and sheet.match_score < omr.SEUIL_ECART:
+        return {"methode": "ocr",
+                "texte": f"Nom écrit peu lisible (lu « {sheet.ocr_name_raw} ») : "
+                         "attribué par élimination, seul étudiant de la classe "
+                         "encore sans copie — vérifiez sur l'image"}
     if sheet.ocr_name_raw:
         return {"methode": "ocr",
                 "texte": f"Reconnu par le nom écrit, lu « {sheet.ocr_name_raw} » "
@@ -1034,8 +1053,10 @@ def sheet_review(request, pk):
         messages.success(request, "Corrections enregistrées.")
         return redirect("batch_detail", pk=sheet.batch_id)
 
+    propose, ressemblance = services.proposition(sheet, list(students))
     return render(request, "grader/sheet_review.html", {
         "sheet": sheet, "quiz": quiz, "students": students,
+        "propose": propose, "ressemblance": round(ressemblance),
         "identification": _identification(sheet),
         "answers": answers,
         "position": position + 1, "total": len(sheet_ids),

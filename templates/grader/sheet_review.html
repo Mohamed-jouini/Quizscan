@@ -53,13 +53,13 @@
       {% endif %}
       {% else %}
       <p class="helptext helptext--serre">Copie non identifiée{% if sheet.id_read %} — identifiant lu : <b>{{ sheet.id_read }}</b>, inconnu dans la liste{% elif sheet.ocr_name_raw %} — nom lu : <b>{{ sheet.ocr_name_raw }}</b>{% endif %}.
-        Choisissez l'étudiant :</p>
+        {% if propose %}Étudiant proposé : <b>{{ propose.full_name }}</b> (ressemblance {{ ressemblance }} %, parmi les étudiants sans copie) — vérifiez sur l'image puis enregistrez.{% else %}Choisissez l'étudiant :{% endif %}</p>
       {% if sheet.name_crop %}<p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}" alt="Nom écrit sur la copie"></p>{% endif %}
       <label for="id_student">Affecter à</label>
       <select id="id_student" name="student">
         <option value="">— non identifié —</option>
         {% for s in students %}
-        <option value="{{ s.pk }}">{{ s.full_name }}</option>
+        <option value="{{ s.pk }}"{% if propose and s.pk == propose.pk %} selected{% endif %}>{{ s.full_name }}</option>
         {% endfor %}
       </select>
       {% endif %}

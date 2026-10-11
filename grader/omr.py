@@ -2,11 +2,12 @@
 cases (OMR), OCR du nom et rapprochement avec la liste de classe."""
 import logging
 import re
+import unicodedata
 
 import cv2
 import numpy as np
 import pytesseract
-from rapidfuzz import fuzz, process as rf_process
+from rapidfuzz import fuzz, process as rf_process, utils as rf_utils
 
 from . import layout as L
 
@@ -231,14 +232,59 @@ def _crop_rect(img, rect, inset_mm=1.6):
     return img[max(y0, 0):y1, max(x0, 0):x1]
 
 
-def _ocr_crop(crop, ocr_lang, config):
-    """OCR d'un recadrage. Retourne "" plutôt que de lever : l'absence de
-    Tesseract sur le serveur ne doit pas faire perdre la lecture de la copie
-    (elle est alors simplement « à identifier »)."""
+class _TesseractAbsent(Exception):
+    pass
+
+
+def _variantes_image(crop):
+    """Plusieurs mises au propre d'une case NOM ou PRÉNOM manuscrite.
+
+    Tesseract est fait pour l'imprimé : sur une écriture à la main, une
+    seule binarisation lit souvent n'importe quoi (« DIWOSACCU SATLH » pour
+    « BEN SALEN SAMIA »). On lui donne trois versions de la même case et on
+    garde, plus loin, celle qui ressemble le mieux à un étudiant de la classe.
+      1. agrandie, adoucie, seuil d'Otsu (la lecture historique) ;
+      2. agrandie davantage, traits du cadre effacés, écriture épaissie,
+         marge blanche — un trait de stylo fin devient lisible ;
+      3. seuil adaptatif (éclairage ou encre inégaux), écriture épaissie."""
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-    gray = cv2.resize(gray, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
-    gray = cv2.GaussianBlur(gray, (3, 3), 0)
-    _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    v1 = cv2.GaussianBlur(cv2.resize(gray, None, fx=2.0, fy=2.0,
+                                     interpolation=cv2.INTER_CUBIC), (3, 3), 0)
+    _, v1 = cv2.threshold(v1, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    g3 = cv2.resize(gray, None, fx=3.0, fy=3.0, interpolation=cv2.INTER_CUBIC)
+    _, encre = cv2.threshold(g3, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    h, w = encre.shape
+    # traits longs = bords de la case, pas l'écriture
+    horizontaux = cv2.getStructuringElement(cv2.MORPH_RECT, (max(w // 3, 1), 1))
+    verticaux = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(h * 2 // 3, 1)))
+    lignes = (cv2.morphologyEx(encre, cv2.MORPH_OPEN, horizontaux)
+              | cv2.morphologyEx(encre, cv2.MORPH_OPEN, verticaux))
+    encre = cv2.dilate(cv2.subtract(encre, lignes), np.ones((3, 3), np.uint8))
+    v2 = cv2.copyMakeBorder(255 - encre, 24, 24, 24, 24,
+                            cv2.BORDER_CONSTANT, value=255)
+
+    g2 = cv2.resize(gray, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+    adapt = cv2.adaptiveThreshold(g2, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                  cv2.THRESH_BINARY, 41, 15)
+    adapt = cv2.erode(adapt, np.ones((2, 2), np.uint8))
+    v3 = cv2.copyMakeBorder(adapt, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
+    return [v1, v2, v3]
+
+
+def _ocr_crop(crop, ocr_lang, config):
+    """OCR d'un recadrage (première variante). Voir _ocr_image."""
+    try:
+        return _ocr_image(_variantes_image(crop)[0], ocr_lang, config)
+    except _TesseractAbsent:
+        return ""
+
+
+def _ocr_image(th, ocr_lang, config):
+    """OCR d'une image déjà binarisée. Retourne "" plutôt que de lever :
+    l'absence de Tesseract sur le serveur ne doit pas faire perdre la lecture
+    de la copie (elle est alors simplement « à identifier »). Lève
+    _TesseractAbsent pour que l'appelant n'insiste pas sur les variantes."""
     try:
         txt = pytesseract.image_to_string(th, lang=ocr_lang, config=config)
     except pytesseract.TesseractNotFoundError:
@@ -246,11 +292,58 @@ def _ocr_crop(crop, ocr_lang, config):
                     "(installez tesseract-ocr, tesseract-ocr-fra et "
                     "tesseract-ocr-ara). Les copies non identifiées par QR "
                     "ou par grille de n° restent à affecter à la main.")
-        return ""
+        raise _TesseractAbsent()
     except Exception as exc:  # noqa: BLE001 — paquet de langue absent, image illisible…
         log.warning("OCR du nom impossible (%s: %s)", type(exc).__name__, exc)
         return ""
     return re.sub(r"\s+", " ", txt).strip()
+
+
+def _reglages_ocr(language):
+    if language == "ar":
+        return "ara+fra", "--psm 7"
+    return "fra+eng", ("--psm 7 -c tessedit_char_whitelist="
+                       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+                       "ÀÂÄÇÉÈÊËÎÏÔÖÙÛÜàâäçéèêëîïôöùûü-")
+
+
+def lire_nom(warped_bgr, page_layout, language="fr"):
+    """Lectures de la zone NOM / PRÉNOM, une par variante d'image.
+
+    Retourne (lectures, image_recadrée) ; lectures = [(nom, prénom), …], une
+    par variante (voir _variantes_image), sans doublon ni lecture vide.
+    Tesseract absent : liste vide, la copie reste « à identifier »."""
+    nb = page_layout.get("name_boxes")
+    vide = np.full((10, 10, 3), 255, dtype=np.uint8)
+    if not nb:
+        return [], vide
+    ocr_lang, config = _reglages_ocr(language)
+    crops, colonnes = [], []
+    try:
+        for key in ("last", "first"):
+            crop = _crop_rect(warped_bgr, nb[key])
+            if not crop.size:                  # zone hors de l'image recalée
+                crops.append(vide)
+                colonnes.append(["", "", ""])
+                continue
+            crops.append(crop)
+            colonnes.append([_ocr_image(v, ocr_lang, config)
+                             for v in _variantes_image(crop)])
+    except _TesseractAbsent:
+        colonnes = []
+    lectures = []
+    if len(colonnes) == 2:
+        for nom, prenom in zip(*colonnes):
+            if (nom or prenom) and (nom, prenom) not in lectures:
+                lectures.append((nom, prenom))
+    while len(crops) < 2:
+        crops.append(vide)
+    h = max(c.shape[0] for c in crops)
+    sep = np.full((h, 12, 3), 255, dtype=np.uint8)
+    padded = [cv2.copyMakeBorder(c, 0, h - c.shape[0], 0, 0,
+                                 cv2.BORDER_CONSTANT, value=(255, 255, 255))
+              for c in crops]
+    return lectures, cv2.hconcat([padded[0], sep, padded[1]])
 
 
 def read_name(warped_bgr, page_layout, language="fr"):
@@ -305,25 +398,72 @@ def _normalize_arabic(text):
     return re.sub(r"[ً-ٰٟ]", "", text)
 
 
+def _forme(texte):
+    """Forme comparable d'un nom : arabe normalisé, sans accents, sans
+    casse ni ponctuation. Sans cela, rapidfuzz (≥ 3) compte « SAMIA » et
+    « Samia » comme différents : une lecture PARFAITE en capitales ne
+    faisait que 73 % de ressemblance avec la fiche de l'étudiant."""
+    texte = unicodedata.normalize("NFKD", _normalize_arabic(texte or ""))
+    texte = "".join(c for c in texte if not unicodedata.combining(c))
+    return rf_utils.default_process(texte)
+
+
+def _ressemblance(lecture, etudiant):
+    """Meilleure ressemblance d'une lecture (nom, prénom) avec un étudiant :
+    nom complet dans un ordre ou l'autre, ou case par case."""
+    nom, prenom = (_forme(t) for t in lecture)
+    nom_e, prenom_e = _forme(etudiant.last_name), _forme(etudiant.first_name)
+    lu = f"{nom} {prenom}".strip()
+    if not lu:
+        return 0.0
+    scores = [fuzz.token_sort_ratio(lu, f"{nom_e} {prenom_e}")]
+    if nom and prenom:
+        scores.append((fuzz.ratio(nom, nom_e) + fuzz.ratio(prenom, prenom_e)) / 2)
+    return float(max(scores))
+
+
+# Acceptation d'un rapprochement : au-dessus de MATCH_THRESHOLD, ou nettement
+# devant le deuxième de la classe (la liste est fermée : un nom mal lu mais
+# qui ne ressemble qu'à un seul élève désigne cet élève).
+SEUIL_ECART = 45.0
+ECART_MIN = 15.0
+
+
+def identifier(lectures, students, deja_pris=()):
+    """Choisit l'étudiant d'une copie d'après ses lectures OCR.
+
+    deja_pris : étudiants qui ont déjà leur copie pour cette page. Ils ne
+    sont plus candidats — sauf ressemblance écrasante (≥ 85), signe d'une
+    page scannée deux fois : la copie reste alors « à identifier ». Quand un
+    seul étudiant reste sans copie, une ressemblance même faible le désigne.
+    Retourne (étudiant|None, score, meilleure lecture, classement)."""
+    if not lectures or not students:
+        return None, 0.0, ("", ""), []
+    classement = []
+    for s in students:
+        meilleure = max(lectures, key=lambda lec: _ressemblance(lec, s))
+        classement.append((s, _ressemblance(meilleure, s), meilleure))
+    classement.sort(key=lambda c: -c[1])
+    pris = {getattr(s, "pk", s) for s in deja_pris}
+    tete = classement[0]
+    if tete[0].pk in pris and tete[1] >= 85:
+        return None, tete[1], tete[2], classement
+    libres = [c for c in classement if c[0].pk not in pris] or classement
+    premier = libres[0]
+    second = libres[1][1] if len(libres) > 1 else 0.0
+    accepte = (premier[1] >= MATCH_THRESHOLD
+               or (premier[1] >= SEUIL_ECART and premier[1] - second >= ECART_MIN)
+               or (len(libres) == 1 and bool(pris) and premier[1] >= 25))
+    return (premier[0] if accepte else None), premier[1], premier[2], classement
+
+
 def match_student(ocr_text, students):
-    """Associe le texte OCR à un étudiant de la classe (rapprochement flou).
-    Retourne (étudiant|None, score)."""
+    """Associe un texte OCR (« NOM Prénom ») à un étudiant de la classe.
+    Retourne (étudiant|None, score). Voir identifier()."""
     if not ocr_text or not students:
         return None, 0.0
-    # normalisation légère de l'arabe (hamza/alef, ta marbouta, tatweel)
-    ocr_text = _normalize_arabic(ocr_text)
-    candidates = {}
-    for s in students:
-        candidates[_normalize_arabic(f"{s.last_name} {s.first_name}")] = s
-        candidates[_normalize_arabic(f"{s.first_name} {s.last_name}")] = s
-    best = rf_process.extractOne(ocr_text, list(candidates.keys()),
-                                 scorer=fuzz.token_sort_ratio)
-    if best is None:
-        return None, 0.0
-    name, score, _ = best
-    if score < MATCH_THRESHOLD:
-        return None, float(score)
-    return candidates[name], float(score)
+    etudiant, score, _, _ = identifier([(ocr_text, "")], students)
+    return etudiant, score
 
 
 # ---------------------------------------------------------------- extras

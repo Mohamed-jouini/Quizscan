@@ -133,6 +133,12 @@ def run_batch(batch_id):
                     done.add(page_name)
                     batch.processed_pages = len(done)
                     batch.save(update_fields=["processed_pages", "updated_at"])
+        # Seconde passe : les copies restées « à identifier » profitent de
+        # ce que les autres ont été reconnues (élimination).
+        try:
+            reidentifier_lot(batch)
+        except Exception:  # noqa: BLE001 — n'empêche jamais la fin du lot
+            log.exception("Seconde identification du lot %s", batch_id)
         batch.status = "done"
         batch.total_pages = max(batch.total_pages, batch.processed_pages)
         batch.save(update_fields=["status", "total_pages", "updated_at"])
@@ -604,6 +610,92 @@ def actualiser_sujet(quiz, forcer=False):
     return True
 
 
+def _deja_identifies(quiz, sheet):
+    """Étudiants qui ont déjà une copie identifiée pour cette page du quiz."""
+    return set(SheetScan.objects
+               .filter(batch__quiz=quiz, page_index=sheet.page_index,
+                       student__isnull=False)
+               .exclude(pk=sheet.pk)
+               .values_list("student_id", flat=True))
+
+
+def _identifier_par_nom(sheet, warped, page_layout, quiz, students):
+    """Lit NOM / PRÉNOM (plusieurs variantes d'image) et rapproche de la
+    classe (omr.identifier). Renseigne sur la copie la lecture retenue, sa
+    ressemblance et le recadrage ; retourne l'étudiant ou None."""
+    lectures, recadrage = omr.lire_nom(warped, page_layout, quiz.language)
+    if not lectures and sheet.ocr_name_raw:  # OCR muet : la lecture d'avant
+        lectures = [(sheet.ocr_name_raw, "")]
+    etudiant, score, lecture, _ = omr.identifier(
+        lectures, students, deja_pris=_deja_identifies(quiz, sheet))
+    if lectures or not sheet.ocr_name_raw:   # sans OCR, garder la lecture d'avant
+        sheet.ocr_name_raw = " ".join(t for t in lecture if t)[:200]
+        sheet.match_score = score
+    _save_jpg(sheet.name_crop, recadrage, "name.jpg")
+    return etudiant
+
+
+def proposition(sheet, students):
+    """Étudiant le plus probable d'une copie restée « à identifier », pour
+    le présélectionner à l'écran de vérification : rapprochement du nom déjà
+    lu (sans relancer l'OCR) parmi les étudiants qui n'ont pas encore leur
+    copie. Retourne (étudiant|None, ressemblance en %)."""
+    if sheet.student_id is not None:
+        return None, 0.0
+    pris = _deja_identifies(sheet.batch.quiz, sheet)
+    libres = [s for s in students if s.pk not in pris]
+    if not libres:
+        return None, 0.0
+    if len(libres) == 1:                      # dernier étudiant sans copie
+        _, score, _, _ = omr.identifier([(sheet.ocr_name_raw or "", "")], libres)
+        return libres[0], score
+    if not sheet.ocr_name_raw:
+        return None, 0.0
+    _, score, _, classement = omr.identifier([(sheet.ocr_name_raw, "")], libres)
+    if classement and classement[0][1] >= 35:
+        return classement[0][0], classement[0][1]
+    return None, score
+
+
+def reidentifier_lot(batch, utilisateur=None):
+    """Seconde chance pour les copies « à identifier » d'un lot : nouvelle
+    lecture du nom (sur l'image redressée conservée) et rapprochement, cette
+    fois en sachant quels étudiants ont déjà leur copie — quand il n'en
+    reste qu'un, une lecture même médiocre le désigne.
+
+    Lancée d'office à la fin de chaque lot, et par le bouton « Identifier
+    automatiquement » de la page du lot (copies scannées avant). Retourne le
+    nombre de copies identifiées."""
+    quiz = batch.quiz
+    disposition = quiz.layout_json or {}
+    pages = disposition.get("pages", [])
+    students = list(quiz.class_group.students.all())
+    faites = 0
+    for sheet in batch.sheets.filter(status="no_match", student__isnull=True):
+        if sheet.page_index >= len(pages) or not sheet.warped_image:
+            continue
+        page_layout = pages[sheet.page_index]
+        if not _has_name_zone(page_layout, quiz):
+            continue
+        try:
+            with sheet.warped_image.open("rb") as f:
+                warped = cv2.imdecode(np.frombuffer(f.read(), np.uint8),
+                                      cv2.IMREAD_COLOR)
+        except (OSError, ValueError):
+            continue
+        if warped is None:
+            continue
+        etudiant = _identifier_par_nom(sheet, warped, page_layout, quiz, students)
+        if etudiant is not None:
+            sheet.student = etudiant
+            sheet.status = "ok"
+            faites += 1
+            if utilisateur is not None:
+                journal.attribution(utilisateur, sheet, None)
+        sheet.save()
+    return faites
+
+
 def _process_sheet(sheet, img, layout, students, questions, quiz):
     language = quiz.language
     warped, page_index = omr.detect_and_warp(img)
@@ -666,11 +758,7 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
         sheet.match_score = 100.0
     elif student is None and _has_name_zone(page_layout, quiz):
         # secours automatique dans tous les modes : OCR du nom manuscrit
-        ocr_text, name_crop, _parts = omr.read_name(warped, page_layout, language)
-        sheet.ocr_name_raw = ocr_text[:200]
-        student, score = omr.match_student(ocr_text, students)
-        sheet.match_score = score
-        _save_jpg(sheet.name_crop, name_crop, "name.jpg")
+        student = _identifier_par_nom(sheet, warped, page_layout, quiz, students)
     sheet.student = student
 
     # Lecture des cases QCM

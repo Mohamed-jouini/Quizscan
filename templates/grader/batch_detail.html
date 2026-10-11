@@ -67,6 +67,11 @@
     les notes sont déjà disponibles dans les résultats.
     {% if n_attention %}{{ n_attention }} copie(s) demandent votre attention
       (non identifiées ou illisibles).{% endif %}
+    {% if n_a_identifier and perms.grader.corriger_copies %}
+    <form class="inline" method="post">{% csrf_token %}
+      <button class="btn small" name="reidentifier" value="1" type="submit">Identifier automatiquement ({{ n_a_identifier }})</button>
+    </form>
+    {% endif %}
     {% if n_open_pending %}{{ n_open_pending }} réponse(s) manuscrite(s)
       restent à noter à l'écran.{% endif %}
     {% if not n_attention and not n_open_pending %}
