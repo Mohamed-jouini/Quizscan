@@ -42,6 +42,9 @@
       <a class="nav__item {% if un == 'concours_list' %}is-active{% endif %}" href="{% url 'concours_list' %}">
         <svg viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M6 4h12v5a6 6 0 0 1-12 0z"/><path d="M6 6H4v1.5A3.5 3.5 0 0 0 6.6 11"/><path d="M18 6h2v1.5A3.5 3.5 0 0 1 17.4 11"/></svg>
         <span>Concours</span></a>
+      <a class="nav__item {% if un == 'resultats_list' or un == 'quiz_results' %}is-active{% endif %}" href="{% url 'resultats_list' %}">
+        <svg viewBox="0 0 24 24"><path d="M4 20V11"/><path d="M10 20V5"/><path d="M16 20v-8"/><path d="M21 20H3"/></svg>
+        <span>Résultats</span></a>
       {% if user.is_superuser %}
       <a class="nav__item" href="{% url 'admin:index' %}">
         <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6.2v5c0 4.5 3.1 8.6 7.5 9.8 4.4-1.2 7.5-5.3 7.5-9.8v-5L12 3Z"/></svg>

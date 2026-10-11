@@ -1,0 +1,23 @@
+{% extends "grader/base.html" %}
+{% block title %}Résultats — QuizScan{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>Résultats</h1>
+    <p class="page-head__meta">
+      <b>{{ concours|length }}</b> concours · <b>{{ classes|length }}</b> quiz de classe
+      — cliquez sur une épreuve pour ouvrir ses résultats.
+    </p>
+  </div>
+</header>
+
+<div class="card">
+  <div class="card__head"><h2>Concours ({{ concours|length }})</h2></div>
+  {% include "grader/_resultats_tableau.html" with lignes=concours concours=True vide="Aucun concours pour le moment." %}
+</div>
+
+<div class="card">
+  <div class="card__head"><h2>Quiz de classe ({{ classes|length }})</h2></div>
+  {% include "grader/_resultats_tableau.html" with lignes=classes concours=False vide="Aucun quiz de classe pour le moment." %}
+</div>
+{% endblock %}

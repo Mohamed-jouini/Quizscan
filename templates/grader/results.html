@@ -65,6 +65,21 @@
 </li></ul>
 {% endif %}
 
+{% if rows %}
+{# Recherche : filtre la liste des admis ET le tableau des notes. #}
+<form class="recherche-etudiant" method="get" role="search">
+  {% if batch %}<input type="hidden" name="batch" value="{{ batch.pk }}">{% endif %}
+  <label for="id_q" class="visually-hidden">Rechercher un étudiant</label>
+  <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
+         placeholder="Rechercher un {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} : nom, prénom ou n° d'inscription">
+  <button class="btn small" type="submit">Rechercher</button>
+  {% if recherche %}
+  <a class="btn small secondary" href="?{% if batch %}batch={{ batch.pk }}{% endif %}">Effacer</a>
+  <span class="recherche-etudiant__bilan">{{ n_trouves }} résultat{{ n_trouves|pluralize }} pour « {{ recherche }} »</span>
+  {% endif %}
+</form>
+{% endif %}
+
 {% if admission %}
 <div class="card admission" id="admission">
   <div class="card__head">
@@ -104,13 +119,15 @@
   <div class="table-wrap">
     <table>
     <tr><th>Rang</th><th>Nom et prénom</th><th>N° d'inscription</th><th>Note</th></tr>
-    {% for r in admission.admis %}
+    {% for r in admission.admis_affiches %}
     <tr>
       <td>{{ r.rang }}</td>
       <td><b>{{ r.student.full_name }}</b></td>
       <td>{{ r.student.student_number|default:"—" }}</td>
       <td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>
     </tr>
+    {% empty %}
+    <tr><td colspan="4">Aucun {% if quiz.auto_enroll %}admis{% else %}étudiant ayant réussi{% endif %} ne correspond à « {{ recherche }} ».</td></tr>
     {% endfor %}
     </table>
   </div>
@@ -168,7 +185,7 @@
            href="{% url 'quiz_bulletins_pdf' quiz.pk %}?student={{ r.student.pk }}{% if batch %}&batch={{ batch.pk }}{% endif %}">🧾</a></td>
     </tr>
     {% empty %}
-    <tr><td colspan="9">Aucune copie identifiée pour le moment.</td></tr>
+    <tr><td colspan="9">{% if recherche %}Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} ne correspond à « {{ recherche }} ».{% else %}Aucune copie identifiée pour le moment.{% endif %}</td></tr>
     {% endfor %}
   </table>
   </div>

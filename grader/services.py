@@ -1032,6 +1032,9 @@ def resume_epreuve(quiz):
         # Part du barème, pour la jauge : une moyenne de 8,5 ne veut rien
         # dire sans savoir si l'épreuve est sur 14 ou sur 20.
         "pct": round(moyenne / bareme * 100) if bareme else 0,
+        # Avec une note minimale : combien l'atteignent (même requête).
+        "admis": (par_candidat.filter(total__gte=quiz.note_admission).count()
+                  if quiz.note_admission is not None else None),
     }
 
 

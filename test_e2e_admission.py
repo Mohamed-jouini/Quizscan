@@ -11,6 +11,7 @@ règle la note minimale, puis on vérifie :
 4. le réglage depuis la page du concours, et le retour à « pas de seuil ».
 """
 import os
+import re
 import sys
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -155,6 +156,50 @@ def main():
     assert "ESSID" not in liste and "DRISS" not in liste, "non admis dans la liste"
     print("  page           carte d'admission, liste par ordre de mérite, "
           "colonne « Résultat »")
+
+    # ------------------------------------- 4 ter. menu « Résultats »
+    menu = client.get("/resultats/").content.decode()
+    concours_bloc = menu.split("Concours (", 1)[1].split("Quiz de classe (", 1)[0]
+    assert f'href="/quiz/{quiz.pk}/resultats/"' in concours_bloc, \
+        "le concours n'est pas listé dans « Résultats »"
+    assert ">3 / 6<" in concours_bloc, "nombre d'admis absent ou différent de la page"
+    assert re.search(r'nav__item is-active" href="/resultats/"', menu), \
+        "entrée de menu « Résultats » absente ou inactive"
+    assert re.search(r'nav__item is-active" href="/resultats/"',
+                     client.get(f"/quiz/{quiz.pk}/resultats/").content.decode()), \
+        "le menu « Résultats » doit rester actif sur les résultats d'une épreuve"
+    print("  menu           « Résultats » : concours listé avec ses admis, "
+          "lien vers ses résultats")
+
+    # ----------------------------------------- 4 bis. recherche d'un étudiant
+    from grader import views
+
+    def tableaux(q):
+        html = client.get(f"/quiz/{quiz.pk}/resultats/", {"q": q}).content.decode()
+        admis = html.split("Liste des admis", 1)[1].split("</table>", 1)[0] \
+            if "Liste des admis" in html else ""
+        notes = html.split("Manuscrites à corriger", 1)[1].split("</table>", 1)[0]
+        noms = lambda bloc: [n for n in CANDIDATS if n in bloc]  # noqa: E731
+        return html, noms(admis), noms(notes)
+
+    html, admis, notes = tableaux("chaab")
+    assert admis == ["CHAABANE"] and notes == ["CHAABANE"], (admis, notes)
+    assert re.search(r"<td>2</td>\s*<td><b>CHAABANE", html), "rang réel perdu"
+    assert "3<span class=\"tile__unit\">/ 6" in html.replace("\n", ""), \
+        "la recherche ne doit pas changer les décomptes"
+    assert "1 résultat pour « chaab »" in html
+    # par numéro d'inscription (ESSID = 7003, non admis) : absent de la
+    # liste des admis, présent dans le tableau des notes
+    html, admis, notes = tableaux("7003")
+    assert admis == [] and notes == ["ESSID"], (admis, notes)
+    assert "Aucun admis ne correspond à « 7003 »" in html
+    # mots dans le désordre, sans majuscules
+    assert tableaux("x amri")[2] == ["AMRI"]
+    assert tableaux("introuvable")[2] == []
+    # l'arabe : أحمد et احمد se retrouvent
+    assert views._forme_recherche("أحمد") == views._forme_recherche("احمد")
+    print("  recherche      nom, n°, mots dans le désordre ; filtre les deux "
+          "tableaux, rangs et décomptes réels")
 
     # ----------------------------------------------------- 5. export Excel
     wb = load_workbook(BytesIO(client.get(

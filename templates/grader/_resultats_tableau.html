@@ -1,0 +1,30 @@
+{% comment %}
+Tableau des épreuves de la page « Résultats ».
+Paramètres : lignes (quiz + resume), concours (booléen), vide (texte).
+{% endcomment %}
+{% if lignes %}
+<div class="table-wrap">
+  <table>
+  <tr>
+    <th>{% if concours %}Concours{% else %}Quiz{% endif %}</th>
+    <th>{% if concours %}Liste de candidats{% else %}Classe{% endif %}</th>
+    <th>Copies notées</th><th>Moyenne</th>
+    <th>{% if concours %}Admis{% else %}Réussite{% endif %}</th><th></th>
+  </tr>
+  {% for l in lignes %}
+  <tr>
+    <td><a href="{% url 'quiz_results' l.quiz.pk %}"><b>{{ l.quiz.title }}</b></a></td>
+    <td>{{ l.quiz.class_group.name }}</td>
+    <td>{% if l.resume %}{{ l.resume.n }}{% else %}<span class="badge grey">aucune</span>{% endif %}</td>
+    <td class="score">{% if l.resume %}{{ l.resume.moyenne|floatformat:"-2" }} / {{ l.resume.bareme|floatformat:"-2" }}{% else %}—{% endif %}</td>
+    <td>{% if l.resume and l.resume.admis is not None %}<span class="badge ok">{{ l.resume.admis }} / {{ l.resume.n }}</span>
+        {% elif l.quiz.note_admission is None %}<span class="helptext helptext--serre">pas de note minimale</span>
+        {% else %}—{% endif %}</td>
+    <td class="cellule--droite"><a class="btn small" href="{% url 'quiz_results' l.quiz.pk %}">Voir les résultats</a></td>
+  </tr>
+  {% endfor %}
+  </table>
+</div>
+{% else %}
+<p class="helptext">{{ vide }}</p>
+{% endif %}

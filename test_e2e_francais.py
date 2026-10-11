@@ -123,7 +123,7 @@ def main():
     # ---------------------------------------------------------------- 1
     enseignant = Client()
     enseignant.force_login(prof)
-    pages = ["/", "/classes/", "/concours/", "/quiz/nouveau/",
+    pages = ["/", "/classes/", "/concours/", "/resultats/", "/quiz/nouveau/",
              f"/classes/{groupe.pk}/", f"/quiz/{quiz.pk}/",
              f"/quiz/{quiz.pk}/resultats/", f"/lots/{lot.pk}/",
              f"/lots/{lot.pk}/supprimer/", f"/copies/{copie.pk}/",

@@ -1,4 +1,6 @@
+import unicodedata
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -21,6 +23,7 @@ from . import journal
 from . import importers
 from . import labels_pdf as labels_mod
 from . import layout as layout_mod
+from . import omr
 from . import qr as qr_mod
 from . import services, sheet_pdf
 from .export import results_workbook
@@ -1088,6 +1091,43 @@ def quiz_note_admission(request, pk):
     return redirect(retour + "#admission")
 
 
+def _forme_recherche(texte):
+    """Texte comparable pour la recherche : sans majuscules ni accents, et
+    l'arabe ramené à ses lettres de base (أ إ آ -> ا, ة -> ه, ى -> ي)."""
+    texte = omr._normalize_arabic(texte or "")
+    texte = unicodedata.normalize("NFKD", texte.casefold())
+    return "".join(c for c in texte if not unicodedata.combining(c))
+
+
+def _filtrer_etudiants(rows, recherche):
+    """Lignes dont le nom, le prénom ou le n° d'inscription contiennent tous
+    les mots cherchés, dans n'importe quel ordre (« ahmed ben » trouve
+    « BEN SALAH Ahmed »)."""
+    mots = _forme_recherche(recherche).split()
+    if not mots:
+        return rows
+
+    def fiche(r):
+        s = r["student"]
+        return _forme_recherche(f"{s.last_name} {s.first_name} {s.student_number or ''}")
+
+    return [r for r in rows if all(m in fiche(r) for m in mots)]
+
+
+@login_required
+def resultats_list(request):
+    """Menu « Résultats » : toutes les épreuves accessibles, concours et quiz
+    de classe, avec leur effectif noté, leur moyenne et, si une note
+    minimale est réglée, le nombre d'admis. Un clic ouvre les résultats."""
+    epreuves = (_my_quizzes(request).select_related("class_group")
+                .order_by("-pk"))
+    lignes = [{"quiz": q, "resume": services.resume_epreuve(q)} for q in epreuves]
+    return render(request, "grader/resultats_list.html", {
+        "concours": [l for l in lignes if l["quiz"].auto_enroll],
+        "classes": [l for l in lignes if not l["quiz"].auto_enroll],
+    })
+
+
 @login_required
 def quiz_results(request, pk):
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
@@ -1097,6 +1137,17 @@ def quiz_results(request, pk):
         batch = quiz.batches.filter(pk=batch_pk).first()
     rows = services.compute_results(quiz, batch)
     admission = services.admissions(quiz, rows)   # pose aussi row["resultat"]
+    # Recherche d'un étudiant (nom ou n°) : elle filtre les deux tableaux,
+    # pas les statistiques ni les décomptes, et chacun garde son vrai rang.
+    recherche = " ".join(request.GET.get("q", "").split())[:100]
+    trouves = _filtrer_etudiants(rows, recherche)
+    if admission:
+        admission["admis_affiches"] = _filtrer_etudiants(admission["admis"], recherche)
+    parametres = {}
+    if batch:
+        parametres["batch"] = batch.pk
+    if recherche:
+        parametres["q"] = recherche
     unmatched = SheetScan.objects.filter(batch__quiz=quiz, student=None)
     if batch:
         unmatched = unmatched.filter(batch=batch)
@@ -1104,10 +1155,11 @@ def quiz_results(request, pk):
     # tableau des notes est paginé ("rows_page"), un concours pouvant
     # compter des milliers de candidats.
     return render(request, "grader/results.html", {
-        "quiz": quiz, "rows": rows, "rows_page": _page(request, rows),
+        "quiz": quiz, "rows": rows, "rows_page": _page(request, trouves),
         "rows_total": len(rows), "batch": batch,
-        # conservé dans les liens de pagination : filtre par lot
-        "batch_qs": f"batch={batch.pk}" if batch else "",
+        "recherche": recherche, "n_trouves": len(trouves),
+        # conservés dans les liens de pagination : lot et recherche
+        "batch_qs": urlencode(parametres),
         "batches": quiz.batches.all(), "unmatched": unmatched[:200],
         "unmatched_total": unmatched.count(),
         "pending_pages": sum(b.total_pages for b in quiz.batches.filter(status="pending")),

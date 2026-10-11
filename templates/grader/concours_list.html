@@ -30,7 +30,6 @@
       <td>{{ q.questions.count }}</td>
       <td>
         <a class="btn small" href="{% url 'class_detail' q.class_group.pk %}">Candidats &amp; QR</a>
-        <a class="btn small secondary" href="{% url 'quiz_results' q.pk %}">Résultats</a>
       </td>
     </tr>
     {% endfor %}

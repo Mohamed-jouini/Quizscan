@@ -14,13 +14,12 @@
   {% if quizzes %}
   <div class="table-wrap">
     <table>
-    <tr><th>Titre</th><th>Classe</th><th>Questions</th><th></th></tr>
+    <tr><th>Titre</th><th>Classe</th><th>Questions</th></tr>
     {% for q in quizzes %}
     <tr>
       <td><a href="{% url 'quiz_detail' q.pk %}">{{ q.title }}</a></td>
       <td>{{ q.class_group.name }}</td>
       <td>{{ q.questions.count }}</td>
-      <td><a class="btn small secondary" href="{% url 'quiz_results' q.pk %}">Résultats</a></td>
     </tr>
     {% endfor %}
   </table>
