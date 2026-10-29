@@ -158,6 +158,42 @@ def test_ajout_direct(c, prof):
     return classe
 
 
+def test_import_base(c, prof, classe):
+    concours = ClassGroup.objects.create(name="Concours — base", owner=prof)
+    url = reverse("class_detail", args=[concours.pk])
+    page = c.get(url).content.decode()
+    assert "Importer depuis la base de données" in page and "Registre des inscriptions" in page
+    assert f'value="groupe:{classe.pk}"' in page
+    # registre, filtré : un seul
+    r = c.post(url, {"importer_base": "1", "source": "registre", "filtre": "salem"},
+               follow=True)
+    assert list(concours.students.values_list("student_number", flat=True)) == ["104523"]
+    s = concours.students.get()
+    assert s.inscrit.numero == "104523" and s.last_name == "BEN SALEM"
+    # registre entier : les autres, sans doublon
+    n_registre = Inscrit.objects.count()
+    r = c.post(url, {"importer_base": "1", "source": "registre", "filtre": ""}, follow=True)
+    assert concours.students.count() == n_registre
+    assert "1 déjà présent(s)" in _messages(r), _messages(r)
+    # une autre classe, dont un étudiant sans n° (dédoublonné par le nom)
+    Student.objects.create(class_group=classe, last_name="SANSNUMERO", first_name="Ali")
+    autre = ClassGroup.objects.create(name="Vide — base", owner=prof)
+    url2 = reverse("class_detail", args=[autre.pk])
+    c.post(url2, {"importer_base": "1", "source": f"groupe:{classe.pk}"})
+    c.post(url2, {"importer_base": "1", "source": f"groupe:{classe.pk}"})
+    assert autre.students.count() == classe.students.count(), autre.students.count()
+    assert autre.students.get(student_number="104526").inscrit is not None
+    # liste d'un collègue : refusée
+    c2 = Client()
+    c2.force_login(enseignant_complet(User.objects.get_or_create(username="prof_insc2")[0]))
+    c2.post(reverse("class_detail", args=[ClassGroup.objects.create(
+        name="Collègue — base", owner=User.objects.get(username="prof_insc2")).pk]),
+        {"importer_base": "1", "source": f"groupe:{classe.pk}"})
+    assert not Student.objects.filter(class_group__name="Collègue — base").exists()
+    print("  import direct : registre (filtré puis entier, sans doublon) et autre "
+          "classe ; liste d'un collègue refusée OK")
+
+
 def _qsi(img, page, numero, nom, prenom):
     """Colle un QR de carte d'inscription dans l'emplacement de l'étiquette."""
     import qrcode
@@ -258,8 +294,9 @@ def test_communiques(c, prof, autre):
     assert c2.post(reverse("inscriptions"), {"supprimer": i.pk}).status_code == 403
     c.post(reverse("inscriptions"), {"supprimer": i.pk})
     assert not Inscrit.objects.filter(numero="104526").exists()
-    s = Student.objects.get(student_number="104526")
-    assert s.inscrit is None and s.last_name == "GHARBI"
+    restes = Student.objects.filter(student_number="104526")
+    assert restes.exists() and all(s.inscrit is None and s.last_name == "GHARBI"
+                                   for s in restes)
     print("  retrait d'une inscription : auteur seul, l'étudiant reste dans sa classe OK")
 
 
@@ -294,7 +331,9 @@ def main():
     print("Vérification d'une liste importée :")
     test_verification_import(c, prof)
     print("Ajout direct :")
-    test_ajout_direct(c, prof)
+    classe = test_ajout_direct(c, prof)
+    print("Import depuis la base de données :")
+    test_import_base(c, prof, classe)
     print("Scan et espace public :")
     test_scan_et_public(c, prof)
     print("Communiqués :")

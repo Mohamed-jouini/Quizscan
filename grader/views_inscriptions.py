@@ -27,10 +27,7 @@ def _peut_retirer(utilisateur, objet, champ):
 
 def _filtrer(qs, recherche):
     """Chaque mot doit se trouver dans le nom, le prénom ou le n°."""
-    for mot in recherche.split():
-        qs = qs.filter(Q(nom__icontains=mot) | Q(prenom__icontains=mot)
-                       | Q(numero__icontains=mot))
-    return qs
+    return insc.filtrer_inscrits(qs, recherche)
 
 
 def _retour(request):

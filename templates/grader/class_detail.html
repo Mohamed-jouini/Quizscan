@@ -83,6 +83,27 @@
   </div>
   <div>
     <div class="card">
+      <h2>Importer depuis la base de données</h2>
+      {% if n_registre or autres_groupes %}
+      <form method="post">{% csrf_token %}
+        <label for="id_source">Liste à importer</label>
+        <select id="id_source" name="source">
+          {% if n_registre %}<option value="registre">Registre des inscriptions — {{ n_registre }} étudiant{{ n_registre|pluralize }}</option>{% endif %}
+          {% for g in autres_groupes %}
+          <option value="groupe:{{ g.pk }}">{{ g.name }} — {{ g.n }} étudiant{{ g.n|pluralize }}</option>
+          {% endfor %}
+        </select>
+        <label for="id_filtre">Filtrer (facultatif)</label>
+        <input id="id_filtre" type="text" name="filtre" maxlength="100" autocomplete="off"
+               placeholder="Nom, prénom ou début de n° — vide : toute la liste">
+        <p><button class="btn" name="importer_base" value="1" type="submit">Importer</button></p>
+      </form>
+      <span class="helptext">Les étudiants déjà présents (même n°) ne sont pas recréés. Depuis le registre, chacun garde son identité enregistrée et son QR code.</span>
+      {% else %}
+      <p class="helptext">La base est encore vide : inscrivez des étudiants au <a href="{% url 'inscriptions' %}">registre des inscriptions</a> ou créez une autre classe.</p>
+      {% endif %}
+    </div>
+    <div class="card">
       <h2>Ajouter des inscrits</h2>
       <form method="post">{% csrf_token %}
         <label for="id_numeros">N° d'inscription</label>

@@ -136,6 +136,46 @@ def ajouter_a_classe(groupe, inscrits):
     return ajoutes, deja
 
 
+def filtrer_inscrits(qs, recherche):
+    """Chaque mot doit se trouver dans le nom, le prénom ou le n°."""
+    from django.db.models import Q
+    for mot in (recherche or "").split():
+        qs = qs.filter(Q(nom__icontains=mot) | Q(prenom__icontains=mot)
+                       | Q(numero__icontains=mot))
+    return qs
+
+
+def filtrer_etudiants(qs, recherche):
+    """Même filtre, sur les étudiants d'une classe ou d'un concours."""
+    from django.db.models import Q
+    for mot in (recherche or "").split():
+        qs = qs.filter(Q(last_name__icontains=mot) | Q(first_name__icontains=mot)
+                       | Q(student_number__icontains=mot))
+    return qs
+
+
+@transaction.atomic
+def copier_etudiants(groupe, etudiants):
+    """Ajoute à une classe ou à un concours les étudiants d'un autre groupe
+    (même nom, prénom, n° et fiche du registre). Déjà présent — même n°, ou
+    même nom et prénom quand il n'y a pas de n° — : pas recréé.
+    Retourne (ajoutés, déjà présents)."""
+    ajoutes = deja = 0
+    for e in etudiants:
+        numero = (e.student_number or "").strip()
+        present = (groupe.students.filter(student_number=numero) if numero
+                   else groupe.students.filter(last_name=e.last_name,
+                                               first_name=e.first_name)).exists()
+        if present:
+            deja += 1
+            continue
+        Student.objects.create(class_group=groupe, last_name=e.last_name,
+                               first_name=e.first_name, student_number=numero,
+                               inscrit_id=e.inscrit_id)
+        ajoutes += 1
+    return ajoutes, deja
+
+
 # ------------------------------------------- vérification d'une liste
 
 def verifier(lignes):

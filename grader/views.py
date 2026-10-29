@@ -384,6 +384,36 @@ def class_detail(request, pk):
             elif not trouves:
                 messages.error(request, "Indiquez au moins un n° d'inscription.")
             return redirect("class_detail", pk=pk)
+        elif "importer_base" in request.POST:
+            # Import direct depuis la base : le registre des inscriptions, ou
+            # une autre classe / un autre concours de l'enseignant.
+            source = request.POST.get("source", "")
+            filtre = " ".join(request.POST.get("filtre", "").split())[:100]
+            if source == "registre":
+                inscrits = list(inscriptions_mod.filtrer_inscrits(
+                    Inscrit.objects.all(), filtre)[:5000])
+                ajoutes, deja = inscriptions_mod.ajouter_a_classe(group, inscrits)
+                origine = "du registre des inscriptions"
+            else:
+                autre = _my_classes(request).exclude(pk=pk).filter(
+                    pk=_int_or_none(source.removeprefix("groupe:"))).first()
+                if autre is None:
+                    messages.error(request, "Choisissez la liste à importer.")
+                    return redirect("class_detail", pk=pk)
+                ajoutes, deja = inscriptions_mod.copier_etudiants(
+                    group, inscriptions_mod.filtrer_etudiants(autre.students.all(), filtre))
+                origine = f"de « {autre.name} »"
+            if ajoutes or deja:
+                msg = f"{ajoutes} étudiant(s) importé(s) {origine}"
+                if filtre:
+                    msg += f" (filtre « {filtre} »)"
+                if deja:
+                    msg += f" ; {deja} déjà présent(s), non recréé(s)"
+                messages.success(request, msg + ".")
+            else:
+                messages.error(request, "Aucun étudiant à importer"
+                               + (f" pour le filtre « {filtre} »." if filtre else "."))
+            return redirect("class_detail", pk=pk)
         elif "fermer_verification" in request.POST:
             request.session.pop(f"verification_{pk}", None)
             return redirect("class_detail", pk=pk)
@@ -404,6 +434,10 @@ def class_detail(request, pk):
                   {"group": group, "import_form": import_form,
                    "xlsx_form": xlsx_form, "retour": retour,
                    "verification": request.session.get(f"verification_{pk}"),
+                   "n_registre": Inscrit.objects.count(),
+                   "autres_groupes": (_my_classes(request).exclude(pk=pk)
+                                      .annotate(n=Count("students"))
+                                      .filter(n__gt=0).order_by("name")),
                    "est_concours": concours is not None,
                    "students_page": _page(request, group.students.all()),
                    "students_total": group.students.count()})
