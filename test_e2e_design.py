@@ -79,11 +79,19 @@ def main():
     quiz = Quiz.objects.create(title="Design", class_group=groupe, owner=prof)
     Question.objects.create(quiz=quiz, order=1, qtype="qcm", points=1,
                             correct_choice=0)
+    ecrit = Quiz.objects.create(title="Design écrit", class_group=groupe,
+                                owner=prof, type_epreuve="ecrit")
+    oral = Quiz.objects.create(title="Design oral", class_group=groupe,
+                               owner=prof, type_epreuve="oral")
 
     anonyme = ["/comptes/login/", "/comptes/administration/"]
+    public = ["/public/", "/public/resultats/", "/public/resultats/?numero=0",
+              "/public/communiques/"]
     enseignant = ["/", "/classes/", f"/classes/{groupe.pk}/", "/concours/",
+                  "/inscriptions/", "/communiques/",
                   "/quiz/nouveau/", f"/quiz/{quiz.pk}/",
-                  f"/quiz/{quiz.pk}/resultats/", "/comptes/password_change/"]
+                  f"/quiz/{quiz.pk}/resultats/", "/comptes/password_change/",
+                  f"/quiz/{ecrit.pk}/", f"/quiz/{oral.pk}/"]
     administration = ["/admin/", "/admin/auth/user/", "/admin/auth/user/add/",
                       f"/admin/auth/user/{admin.pk}/change/",
                       f"/admin/auth/user/{admin.pk}/password/",
@@ -108,7 +116,7 @@ def main():
             # Le bouton « Mot de passe » a quitté la barre du haut : c'est
             # désormais le nom de la personne qui y mène. Sans ce contrôle,
             # le réglage pourrait disparaître de l'interface sans bruit.
-            if etiquette != "connexion":
+            if etiquette not in ("connexion", "public"):
                 assert 'class="qs-identite"' in corps and 'password_change' in corps, (
                     f"{url} : plus aucun accès au changement de mot de passe")
                 assert "qs-moncompte" not in corps, (
@@ -137,6 +145,7 @@ def main():
         return corps[debut:corps.index("</aside>", debut)]
 
     controle(Client(), anonyme, "connexion")
+    controle(Client(), public, "public")
     c = Client(); c.force_login(prof)
     controle(c, enseignant, "enseignant")
     c = Client(); c.force_login(admin)

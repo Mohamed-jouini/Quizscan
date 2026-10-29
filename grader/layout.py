@@ -45,6 +45,48 @@ class TooManyPages(ValueError):
         self.pages = pages
 
 
+# ---------------------------------------------------------------------------
+# Calage par CADRE (depuis le 29 octobre 2026, à la demande de l'utilisateur :
+# plus de carrés noirs dans les coins). Un trait fin encadre la page ; ses
+# quatre coins recalent le scan. Une rangée de petits tirets centrée en haut
+# donne le n° de page et le sens (bit de départ + parité : une page à l'envers
+# ne se lit pas comme une page à l'endroit). Les copies imprimées avant, avec
+# les repères ArUco, se lisent toujours (omr.detect_and_warp les essaie
+# d'abord). Rien de ce qui est lu (cases, grilles, QR) ne bouge.
+# ---------------------------------------------------------------------------
+CADRE_MARGE = 10.0     # axe du trait du cadre, depuis le bord de la page (mm)
+CADRE_TRAIT = 1.2      # épaisseur du trait (mm)
+CODE_Y = 12.6          # haut des tirets du code de page (mm)
+CODE_W, CODE_H, CODE_PAS = 4.0, 2.2, 6.0
+CODE_N = 8             # départ (toujours plein) + 6 bits de page + parité
+
+
+def code_cases():
+    """Rectangles [x, y, w, h] (mm) des tirets du code de page."""
+    x0 = PAGE_W / 2 - (CODE_N * CODE_PAS - (CODE_PAS - CODE_W)) / 2
+    return [[round(x0 + i * CODE_PAS, 2), CODE_Y, CODE_W, CODE_H]
+            for i in range(CODE_N)]
+
+
+def code_page(page_index):
+    """Tirets pleins (True) codant le n° de page : départ, 6 bits, parité."""
+    if not 0 <= page_index < 64:
+        raise TooManyPages(page_index + 1)
+    bits = [bool((page_index >> (5 - i)) & 1) for i in range(6)]
+    return [True] + bits + [sum(bits) % 2 == 1]
+
+
+def lire_code_page(pleins):
+    """Inverse de code_page : n° de page, ou None si le code n'est pas valide
+    (page à l'envers, tirets mal lus)."""
+    if len(pleins) != CODE_N or not pleins[0]:
+        return None
+    bits = pleins[1:7]
+    if (sum(bits) % 2 == 1) != pleins[7]:
+        return None
+    return sum(1 << (5 - i) for i, b in enumerate(bits) if b)
+
+
 CONTENT_X0 = 26.0
 CONTENT_X1 = PAGE_W - 26.0
 CONTENT_Y1 = PAGE_H - MARKER_MARGIN - MARKER_SIZE - 4.0
@@ -96,6 +138,12 @@ def layout_signature(quiz):
                        q.num_bubbles, q.points, q.open_height_mm]
                       for q in quiz.questions.order_by("order")],
     }
+    if getattr(quiz, "type_epreuve", "qcm") in ("ecrit", "oral"):
+        # seulement pour l'écrit et l'oral : les empreintes des fiches QCM
+        # existantes ne doivent pas changer (toutes seraient « périmées »)
+        data["ecrit"] = [quiz.note_sur, quiz.pages_redaction]
+        if quiz.type_epreuve == "oral":
+            data["oral"] = [s.pk for s in quiz.class_group.students.all()]
     raw = json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
@@ -142,6 +190,9 @@ def _checked(layout):
     """Refuse une disposition qui dépasse le nombre de pages numérotables."""
     if len(layout["pages"]) > MAX_SHEET_PAGES:
         raise TooManyPages(len(layout["pages"]))
+    # fiche dessinée avec le cadre de calage (et non les carrés ArUco) : les
+    # PDF enregistrés sans cette marque sont refaits (services.moderniser_calage)
+    layout["calage"] = "cadre"
     return layout
 
 
@@ -161,6 +212,8 @@ def build_layout(quiz):
       ]
     }
     """
+    if getattr(quiz, "type_epreuve", "qcm") in ("ecrit", "oral"):
+        return _build_ecrit_layout(quiz)
     if getattr(quiz, "sheet_mode", "grid") == "full":
         return _build_full_layout(quiz)
 
@@ -368,6 +421,82 @@ def _build_full_layout(quiz):
         y += BLOCK_GAP
 
     return _checked({"mode": "full", "num_choices": ncho, "pages": pages})
+
+
+# ---------------------------------------------------------------------------
+# Épreuve écrite : page de garde de la copie. Identification (comme les
+# fiches QCM), grille de la note « réservé au correcteur », puis des lignes
+# pour rédiger. Seule cette page porte des repères et se scanne.
+# ---------------------------------------------------------------------------
+
+NOTE_LIGNE = 8.0       # interligne de la zone de rédaction (mm)
+
+
+def _note_rows(note_sur):
+    """Lignes de la grille de note : chiffres de la partie entière (selon le
+    barème : 20 -> dizaines, unités), puis dixièmes et centièmes — quatre
+    champs pour une note sur 20, ex. 15,75 (demande de l'utilisateur, 29
+    octobre 2026). Les centièmes s'ajoutent SOUS les dixièmes : une copie
+    imprimée avec trois lignes se lit toujours (ligne absente = vide = 0)."""
+    n = len(str(int(note_sur)))
+    entiers = ["centaines", "dizaines", "unites"][-n:] if n <= 3 else \
+        ["chiffre"] * n
+    return entiers + ["dixiemes", "centiemes"]
+
+
+def _add_note_grid(page, y, note_sur, order):
+    """Cadre « réservé au correcteur » : une ligne de cases 0..9 par chiffre
+    de la note (même dessin et même lecture que la grille de n°)."""
+    kinds = _note_rows(note_sur)
+    x_box, x0 = CONTENT_X0 + 30.0, CONTENT_X0 + 42.0
+    y_title = y + 6.0
+    y_rows = y + 20.5
+    rows, boxes = [], []
+    for i in range(len(kinds)):
+        cy = y_rows + i * ID_ROW_STEP
+        rows.append([[round(x0 + k * ID_COL_STEP, 2), round(cy, 2)]
+                     for k in range(10)])
+        boxes.append([x_box, round(cy - 2.6, 2), 6.5, 5.2])
+    h = round(y_rows - y + (len(kinds) - 1) * ID_ROW_STEP + 6.0, 2)
+    page["note_grid"] = {
+        "order": order, "r": ID_BUBBLE_R, "rows": rows, "write_boxes": boxes,
+        "kinds": kinds, "decimales": 2, "sur": note_sur,
+        "rect": [CONTENT_X0, round(y, 2), CONTENT_X1 - CONTENT_X0, h],
+        "title_y": round(y_title, 2), "header_y": round(y_rows - 4.6, 2),
+    }
+    return y + h
+
+
+def _build_ecrit_layout(quiz):
+    """Page de garde d'une copie écrite, ou fiche d'évaluation orale.
+
+    Oral : une fiche NOMINATIVE par étudiant (nom et QR imprimés, l'examinateur
+    n'a rien à identifier), la grille de la note, quelques lignes pour ses
+    observations ; pas de pages de rédaction."""
+    oral = getattr(quiz, "type_epreuve", "qcm") == "oral"
+    id_mode = "qr" if oral else getattr(quiz, "id_mode", "name")
+    page = {"page_index": 0, "name_boxes": _name_boxes(id_mode),
+            "qcm": [], "open": []}
+    if oral:
+        y = _add_qr_zone(page, 0, sticker=False)
+    elif id_mode == "grid":
+        y = _add_id_grid(page, 48.0, getattr(quiz, "id_digits", 6) or 6)
+        y = _add_qr_corner(page, y)
+    elif id_mode in ("qr", "sticker"):
+        y = _add_qr_zone(page, 0, sticker=_uses_sticker(quiz))
+    else:
+        y = NAME_BOXES_Y + NAME_BOX_H + 6.0
+    note_q = quiz.questions.filter(qtype="open").order_by("order").first()
+    y = _add_note_grid(page, y + 3.0, quiz.note_sur, note_q.order if note_q else 1)
+    if oral:
+        page["lignes"] = {"y0": round(y + 16.0, 2), "y1": min(y + 16.0 + 6 * NOTE_LIGNE,
+                                                              CONTENT_Y1),
+                          "pas": NOTE_LIGNE, "titre": "observations"}
+        return _checked({"mode": "oral", "num_choices": 0, "pages": [page],
+                         "pages_redaction": 0})
+    page["lignes"] = {"y0": round(y + 12.0, 2), "y1": CONTENT_Y1, "pas": NOTE_LIGNE}
+    return _checked({"mode": "ecrit", "num_choices": 0, "pages": [page],
+                     "pages_redaction": int(getattr(quiz, "pages_redaction", 1) or 0)})
 
 
 def _uses_sticker(quiz):

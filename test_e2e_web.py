@@ -170,6 +170,7 @@ def main():
     assert rows["BEN SALAH"]["score"] == 5.0 and rows["TRABELSI"]["score"] == 6.0
 
     # corrigé modifié après l'épreuve : Q6 = D -> notes recalculées
+    # (le barème « 2 » envoyé est ignoré : une QCM vaut toujours 1 point)
     q6 = quiz.questions.get(order=6)
     r = c.post(f"/quiz/{quiz.pk}/", {"edit_question": q6.pk, "correct": "3",
                                      "points": "2"})
@@ -178,11 +179,14 @@ def main():
     rows = {row["student"].last_name: row for row in r.context["rows"]}
     print("après correction du corrigé : BEN SALAH",
           rows["BEN SALAH"]["score"], "TRABELSI", rows["TRABELSI"]["score"])
-    assert rows["BEN SALAH"]["score"] == 7.0 and rows["TRABELSI"]["score"] == 5.0
+    assert rows["BEN SALAH"]["score"] == 6.0 and rows["TRABELSI"]["score"] == 5.0
+    assert (rows["BEN SALAH"]["correct"], rows["BEN SALAH"]["n_qcm"],
+            rows["BEN SALAH"]["pct"]) == (6, 6, 100), rows["BEN SALAH"]
 
-    # le barème est imprimé sur la fiche : alerte « régénérez la fiche »
+    # le corrigé n'est pas imprimé sur la fiche (et le barème d'une QCM ne
+    # change plus) : pas d'alerte « régénérez la fiche »
     r = c.get(f"/quiz/{quiz.pk}/")
-    assert r.context["layout_stale"], "alerte de fiche périmée attendue"
+    assert not r.context["layout_stale"], "alerte de fiche périmée inattendue"
     c.post(f"/quiz/{quiz.pk}/", {"generate_pdf": "1"})
     assert not c.get(f"/quiz/{quiz.pk}/").context["layout_stale"]
 

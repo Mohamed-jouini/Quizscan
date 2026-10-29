@@ -1,0 +1,10 @@
+{% extends "public/base.html" %}
+{% block title %}{{ avis.titre }}{% endblock %}
+{% block content %}
+<article class="pub-section pub-article">
+  <a class="pub-retour" href="{% url 'public_communiques' %}">← Tous les communiqués</a>
+  <span class="pub-avis__date">{{ avis.cree_le|date:"d/m/Y à H:i" }}</span>
+  <h1>{{ avis.titre }}</h1>
+  <div class="pub-article__texte">{{ avis.texte|linebreaks }}</div>
+</article>
+{% endblock %}

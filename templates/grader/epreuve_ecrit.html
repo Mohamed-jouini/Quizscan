@@ -1,0 +1,122 @@
+{% extends "grader/base.html" %}
+{% block title %}{{ quiz.title }} — QuizScan{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>{{ quiz.title }}</h1>
+    <p class="page-head__meta"><span class="badge info">Épreuve écrite</span>
+      <span>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b></span></p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
+    <a class="btn small secondary" href="{% url 'class_detail' quiz.class_group.pk %}">{% if quiz.auto_enroll %}Candidats{% else %}Étudiants{% endif %} &amp; étiquettes QR</a>
+    <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">Résultats</a>
+  </div>
+</header>
+
+<ol class="etapes">
+  <li class="{% if quiz.sujet_texte %}is-fait{% endif %}"><b>Rédigez le sujet</b><span>énoncé, en-tête, durée et barème, ci-dessous.</span></li>
+  <li class="{% if quiz.sheet_pdf %}is-fait{% endif %}"><b>Téléchargez et imprimez</b><span>le sujet et les copies (page de garde avec l'identification et le cadre du correcteur).</span></li>
+  <li><b>Corrigez sur papier</b><span>écrivez la note dans le cadre « Réservé au correcteur » et noircissez ses chiffres (dizaines, unités, dixièmes).</span></li>
+  <li class="{% if batches %}is-fait{% endif %}"><b>Scannez les pages de garde</b><span>la note et le QR (ou le n°) sont lus, la note est affectée à l'étudiant.</span></li>
+</ol>
+
+{% if perimee %}
+<div class="note note--warn">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
+  <div class="note__body">Le barème ou l'identification ont changé depuis l'impression : <b>régénérez les documents</b> avant de distribuer de nouvelles copies.</div>
+</div>
+{% endif %}
+
+<div class="grid2">
+  <div class="card">
+    <h2>1. Le sujet</h2>
+    {% if perms.grader.creer_epreuve %}
+    <form method="post">{% csrf_token %}
+      <label for="id_title">Titre de l'épreuve</label>
+      <input id="id_title" type="text" name="title" value="{{ quiz.title }}" maxlength="200" required>
+      {{ form.non_field_errors }}
+      {% for field in form %}
+      <div id="row_{{ field.name }}">
+        {{ field.errors }}
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+        {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
+      </div>
+      {% endfor %}
+      <p><button class="btn" name="reglages" value="1" type="submit">Enregistrer</button></p>
+    </form>
+    {% else %}
+    <p class="pre-ligne">{{ quiz.sujet_texte|default:"Sujet non rédigé." }}</p>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>2. Documents à imprimer</h2>
+      {% if perms.grader.creer_epreuve %}
+      <form method="post">{% csrf_token %}
+        {% if quiz.id_mode == "qr" and quiz.auto_enroll %}
+        <label for="id_nb">Nombre de copies anonymes</label>
+        <input id="id_nb" class="champ--court" type="number" name="nb" value="100" min="1" max="2000">
+        {% endif %}
+        <p><button class="btn" name="generer" value="1" type="submit">
+          {% if quiz.sheet_pdf %}Régénérer les documents{% else %}Générer le sujet et les copies{% endif %}</button></p>
+      </form>
+      {% endif %}
+      {% if quiz.sheet_pdf %}
+      <div class="documents">
+        {% if quiz.subject_pdf %}<a class="document" href="{{ quiz.subject_pdf.url }}" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>
+          <span><b>Sujet</b><small>énoncé à distribuer (non scanné)</small></span></a>{% endif %}
+        <a class="document" href="{{ quiz.sheet_pdf.url }}" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>
+          <span><b>Copies</b><small>page de garde + {{ quiz.pages_redaction }} page(s) lignée(s), en A4 à 100 %</small></span></a>
+      </div>
+      {% else %}<p class="helptext">Enregistrez le sujet puis générez les documents.</p>{% endif %}
+      <span class="helptext">Seule la page de garde se scanne ; les pages lignées scannées avec elle sont ignorées.
+        {% if quiz.id_mode == "sticker" or quiz.id_mode == "grid" %}Chaque étudiant colle son étiquette QR sur la page de garde{% if quiz.id_mode == "grid" %} ou noircit son n° d'inscription{% endif %}.{% endif %}</span>
+    </div>
+
+    <div class="card">
+      <h2>3. Copies corrigées à scanner</h2>
+      {% if perms.grader.corriger_copies %}
+      <form method="post" action="{% url 'quiz_upload' quiz.pk %}" enctype="multipart/form-data">{% csrf_token %}
+        <label>{{ upload_form.label.label }}</label>{{ upload_form.label }}
+        <label>{{ upload_form.files.label }}</label>{{ upload_form.files }}
+        <span class="helptext">{{ upload_form.files.help_text }}</span>
+        <p><button class="btn" type="submit" {% if not quiz.sheet_pdf %}disabled title="Générez d'abord les documents"{% endif %}>Lire les notes et les affecter</button></p>
+      </form>
+      {% else %}<p class="helptext">Votre compte ne téléverse pas de copies.</p>{% endif %}
+      {% if batches %}
+      <div class="table-wrap">
+        <table>
+          <tr><th>Lot</th><th>Date</th><th>Pages</th><th>Identifiées</th></tr>
+          {% for b in batches %}
+          <tr><td><a href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
+              {% if b.is_processing %}<span class="badge warn">lecture {{ b.processed_pages }}/{{ b.total_pages }}</span>{% endif %}</td>
+            <td>{{ b.created_at|date:"d/m/Y H:i" }}</td><td>{{ b.sheets.count }}</td><td>{{ b.identified_count }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if journal %}
+<div class="card">
+  <h2>Journal de l'épreuve</h2>
+  {% include "grader/_journal.html" with entrees=journal %}
+</div>
+{% endif %}
+<script>
+// « Nombre de chiffres du n° » ne concerne que la grille de n° d'inscription
+(function () {
+  var mode = document.getElementById("id_id_mode");
+  var row = document.getElementById("row_id_digits");
+  if (!mode || !row) return;
+  function sync() { row.hidden = mode.value !== "grid"; }
+  mode.addEventListener("change", sync); sync();
+})();
+</script>
+{% endblock %}

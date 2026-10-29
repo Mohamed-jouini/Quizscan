@@ -1,0 +1,44 @@
+{% extends "public/base.html" %}
+{% block title %}Accueil{% endblock %}
+{% block content %}
+<section class="pub-hero">
+  <h1>Résultats et communiqués</h1>
+  <p>Saisissez votre n° d'inscription pour consulter vos notes publiées.</p>
+  {% include "public/_recherche.html" %}
+</section>
+
+<section class="pub-section">
+  <div class="pub-section__tete">
+    <h2>Derniers communiqués</h2>
+    {% if n_avis > avis|length %}<a href="{% url 'public_communiques' %}">Tous les communiqués ({{ n_avis }}) →</a>{% endif %}
+  </div>
+  {% if avis %}
+  <div class="pub-cartes">
+    {% for a in avis %}
+    <a class="pub-avis" href="{% url 'public_communique' a.pk %}">
+      <span class="pub-avis__date">{{ a.cree_le|date:"d/m/Y" }}</span>
+      <b class="pub-avis__titre">{{ a.titre }}</b>
+      <span class="pub-avis__texte">{{ a.texte|truncatechars:160 }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}<p class="pub-vide">Aucun communiqué publié pour l'instant.</p>{% endif %}
+</section>
+
+<section class="pub-section">
+  <div class="pub-section__tete"><h2>Résultats publiés</h2></div>
+  {% if epreuves %}
+  <ul class="pub-epreuves">
+    {% for q in epreuves %}
+    <li>
+      <a href="{% url 'public_epreuve' q.pk %}">
+        <b>{{ q.title }}</b>
+        <span>{% if q.auto_enroll %}Concours{% else %}{{ q.class_group.name }}{% endif %}{% if q.publie_le %} · publié le {{ q.publie_le|date:"d/m/Y" }}{% endif %}</span>
+      </a>
+      {% if q.admis_publies %}<span class="badge ok">liste des {% if q.auto_enroll %}admis{% else %}réussis{% endif %}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="pub-vide">Aucun résultat publié pour l'instant.</p>{% endif %}
+</section>
+{% endblock %}

@@ -9,8 +9,8 @@ from .forms import AdminLoginForm
 # useradmin n'est importé que pour son effet : il remplace l'écran des
 # comptes livré par Django (voir grader/useradmin.py).
 __all__ = ["useradmin"]
-from .models import (Answer, AnswerKeySheet, ClassGroup, Modification,
-                     Question, Quiz, ScanBatch, SheetScan, Student)
+from .models import (Answer, AnswerKeySheet, ClassGroup, Communique, Inscrit,
+                     Modification, Question, Quiz, ScanBatch, SheetScan, Student)
 
 # L'administrateur de l'établissement gère les comptes (Utilisateurs) et garde
 # une vue d'ensemble de toutes les classes, épreuves et copies.
@@ -170,7 +170,33 @@ class StudentAdmin(TitresFrancais, admin.ModelAdmin):
     list_select_related = ("class_group",)
     # une classe de concours peut compter des milliers de candidats : une
     # liste déroulante les chargerait tous dans la page
-    raw_id_fields = ("class_group",)
+    raw_id_fields = ("class_group", "inscrit")
+
+
+@admin.register(Inscrit)
+class InscritAdmin(TitresFrancais, admin.ModelAdmin):
+    titre_liste = "Inscriptions"
+    titre_ajout = "Nouvelle inscription"
+    titre_modification = "Modifier l'inscription"
+    list_display = ("numero", "nom", "prenom", "cree_le", "cree_par")
+    search_fields = ("numero", "nom", "prenom")
+    readonly_fields = ("cree_le", "cree_par")
+
+
+@admin.register(Communique)
+class CommuniqueAdmin(TitresFrancais, admin.ModelAdmin):
+    titre_liste = "Communiqués"
+    titre_ajout = "Nouveau communiqué"
+    titre_modification = "Modifier le communiqué"
+    list_display = ("titre", "publie", "cree_le", "auteur")
+    list_filter = ("publie",)
+    search_fields = ("titre", "texte")
+    readonly_fields = ("cree_le", "auteur")
+
+    def save_model(self, request, obj, form, change):
+        if obj.auteur_id is None:
+            obj.auteur = request.user
+        super().save_model(request, obj, form, change)
 
 
 class QuestionInline(admin.TabularInline):

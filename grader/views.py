@@ -21,6 +21,7 @@ from . import bulletin as bulletin_mod
 from . import droits
 from . import journal
 from . import importers
+from . import inscriptions as inscriptions_mod
 from . import labels_pdf as labels_mod
 from . import layout as layout_mod
 from . import omr
@@ -31,8 +32,8 @@ from .forms import (CONCOURS_ID_MODES, AdminLoginForm, AnswerKeyUploadForm,
                     BulkQcmForm, CandidateFileForm, ClassGroupForm,
                     QuestionBankForm, QuestionForm, QuestionImportForm,
                     QuizForm, StudentImportForm, UploadForm)
-from .models import (ARABIC_LETTERS, Answer, ClassGroup, Question, Quiz,
-                     ScanBatch, SheetScan, Student, choice_letter)
+from .models import (ARABIC_LETTERS, Answer, ClassGroup, Communique, Inscrit,
+                     Question, Quiz, ScanBatch, SheetScan, Student, choice_letter)
 
 
 # Chaque enseignant ne voit que ses propres classes et quiz
@@ -127,6 +128,8 @@ def dashboard(request):
     n_sheets = sheets.count()
     # « lue avec succès » = repères détectés ET étudiant identifié, donc
     # aucune intervention nécessaire : c'est le taux que l'enseignant suit.
+    # les pages de rédaction d'un écrit (ignorées au scan) ne comptent pas
+    n_sheets = n_sheets - sheets.filter(status="ignoree").count()
     n_auto = sheets.filter(status="ok").count()
     n_attention = n_sheets - n_auto
     auto_pct = round(n_auto / n_sheets * 100) if n_sheets else 0
@@ -205,7 +208,22 @@ def dashboard(request):
     else:
         temps = {"valeur": round(minutes / 60, 1), "unite": "heures"}
 
+    # --- Admis, non admis, moyenne et répartition, toutes épreuves -------
+    bilan = services.bilan_admissions(quizzes)
+    types = dict(quizzes.values_list("type_epreuve").annotate(n=Count("pk")))
+    autres = {
+        "qcm": types.get("qcm", 0), "ecrit": types.get("ecrit", 0),
+        "oral": types.get("oral", 0),
+        "concours": quizzes.filter(auto_enroll=True).count(),
+        "publiees": quizzes.filter(Q(resultats_publies=True)
+                                   | Q(admis_publies=True)).count(),
+        "inscrits": Inscrit.objects.count(),
+        "communiques": Communique.objects.filter(publie=True).count(),
+    }
+
     return render(request, "grader/dashboard.html", {
+        "bilan": bilan,
+        "autres": autres,
         "epreuves_bloquees": epreuves_bloquees,
         "lots_en_attente": lots_en_attente,
         "pages_en_attente": pages_en_attente,
@@ -268,23 +286,46 @@ def concours_list(request):
 
 def _save_candidates(group, rows):
     """Crée / met à jour les candidats à partir de lignes (nom, prénom, n°).
-    Un candidat portant déjà le même n° d'inscription est mis à jour."""
+    Un candidat portant déjà le même n° d'inscription est mis à jour.
+
+    Chaque ligne est d'abord vérifiée contre le registre des inscriptions
+    (inscriptions.verifier) : un n° inscrit prend l'identité du registre et
+    y est relié. Retourne (créés, mis à jour, rapport de vérification)."""
+    verifiees, decomptes = inscriptions_mod.verifier(rows)
     created = updated = 0
-    for last, first, number in rows:
-        number = (number or "").strip()
+    for r in verifiees:
+        inscrit, number = r["inscrit"], r["numero"]
+        last, first = ((inscrit.nom, inscrit.prenom) if inscrit
+                       else (r["nom"].upper(), r["prenom"]))
         if number:
             existing = group.students.filter(student_number=number).first()
             if existing:
-                existing.last_name = last.upper()
-                existing.first_name = first
-                existing.save(update_fields=["last_name", "first_name"])
+                existing.last_name, existing.first_name = last, first
+                existing.inscrit = inscrit
+                existing.save(update_fields=["last_name", "first_name", "inscrit"])
                 updated += 1
                 continue
         _, was_created = Student.objects.get_or_create(
-            class_group=group, last_name=last.upper(), first_name=first,
-            defaults={"student_number": number})
+            class_group=group, last_name=last, first_name=first,
+            defaults={"student_number": number, "inscrit": inscrit})
         created += was_created
-    return created, updated
+    return created, updated, inscriptions_mod.rapport_session(verifiees, decomptes)
+
+
+def _apres_import(request, group, rows, rapport):
+    """Garde le rapport de vérification pour la page de la classe et, sur
+    demande, inscrit au registre les candidats qui n'y figurent pas."""
+    if request.POST.get("inscrire_inconnus"):
+        inconnus = {a["numero"] for a in rapport["anomalies"]
+                    if a["etat"] == "non_inscrit"}
+        lignes = [r for r in rows
+                  if inscriptions_mod.numero_propre(r[2]) in inconnus]
+        bilan = inscriptions_mod.importer(lignes, request.user)
+        if bilan["crees"]:
+            messages.info(request, f"{len(bilan['crees'])} candidat(s) ajouté(s) "
+                                   "au registre des inscriptions.")
+            _, _, rapport = _save_candidates(group, rows)   # désormais reliés
+    request.session[f"verification_{group.pk}"] = rapport
 
 
 @login_required
@@ -297,11 +338,12 @@ def class_detail(request, pk):
             import_form = StudentImportForm(request.POST)
             if import_form.is_valid():
                 rows = import_form.parse()
-                _, updated = _save_candidates(group, rows)
+                _, updated, rapport = _save_candidates(group, rows)
                 msg = f"{len(rows)} étudiant(s) importé(s)."
                 if updated:
                     msg += f" ({updated} nom(s) mis à jour par numéro)"
                 messages.success(request, msg)
+                _apres_import(request, group, rows, rapport)
                 return redirect("class_detail", pk=pk)
         elif "import_xlsx" in request.POST:
             xlsx_form = CandidateFileForm(request.POST, request.FILES)
@@ -317,13 +359,34 @@ def class_detail(request, pk):
                 if not rows:
                     messages.error(request, "Aucun candidat trouvé dans ce fichier.")
                     return redirect("class_detail", pk=pk)
-                created, updated = _save_candidates(group, rows)
+                created, updated, rapport = _save_candidates(group, rows)
                 messages.success(
                     request,
                     f"{len(rows)} candidat(s) importé(s) "
                     f"({created} créé(s), {updated} mis à jour). "
                     "Un QR code est disponible pour chacun.")
+                _apres_import(request, group, rows, rapport)
                 return redirect("class_detail", pk=pk)
+        elif "ajouter_inscrits" in request.POST:
+            trouves, inconnus = inscriptions_mod.chercher(
+                request.POST.get("numeros", ""))
+            ajoutes, deja = inscriptions_mod.ajouter_a_classe(group, trouves)
+            if ajoutes or deja:
+                msg = f"{ajoutes} inscrit(s) ajouté(s)"
+                if deja:
+                    msg += f", {deja} déjà présent(s)"
+                messages.success(request, msg + ".")
+            if inconnus:
+                messages.error(request, "N° absent(s) du registre des inscriptions : "
+                               + ", ".join(inconnus[:30])
+                               + (" …" if len(inconnus) > 30 else "")
+                               + ". Inscrivez-les d'abord (menu Inscriptions).")
+            elif not trouves:
+                messages.error(request, "Indiquez au moins un n° d'inscription.")
+            return redirect("class_detail", pk=pk)
+        elif "fermer_verification" in request.POST:
+            request.session.pop(f"verification_{pk}", None)
+            return redirect("class_detail", pk=pk)
         elif "delete_student" in request.POST:
             student_pk = _int_or_none(request.POST.get("delete_student"))
             if student_pk is not None:
@@ -340,6 +403,8 @@ def class_detail(request, pk):
     return render(request, "grader/class_detail.html",
                   {"group": group, "import_form": import_form,
                    "xlsx_form": xlsx_form, "retour": retour,
+                   "verification": request.session.get(f"verification_{pk}"),
+                   "est_concours": concours is not None,
                    "students_page": _page(request, group.students.all()),
                    "students_total": group.students.count()})
 
@@ -394,6 +459,8 @@ def quiz_create(request):
             quiz.class_group = ClassGroup.objects.create(
                 owner=request.user, name=name)
         quiz.save()
+        if not quiz.est_qcm:
+            services.question_note(quiz)       # la question qui porte la note
         return redirect("quiz_detail", pk=quiz.pk)
     return render(request, "grader/quiz_form.html",
                   {"form": form, "is_concours": is_concours})
@@ -443,6 +510,13 @@ def _add_questions(quiz, items, next_order, errors):
 @login_required
 def quiz_detail(request, pk):
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    if not quiz.est_qcm:
+        # épreuve écrite ou orale : page à part (views_epreuves)
+        from .views_epreuves import epreuve_detail
+        if request.method == "GET" and services.moderniser_calage(quiz):
+            messages.info(request, "Fiche mise à jour : les carrés noirs des coins sont remplacés par un "
+                               "cadre fin. Les copies déjà imprimées restent lisibles.")
+        return epreuve_detail(request, quiz)
     qform = QuestionForm(quiz=quiz)
     bulk_form = BulkQcmForm(quiz=quiz)
     import_form = QuestionImportForm()
@@ -457,6 +531,9 @@ def quiz_detail(request, pk):
         messages.info(request, "Fiche de réponses mise à jour : plus de cases NOM "
                                "et PRÉNOM, la copie est identifiée par le code QR. "
                                "Les copies déjà imprimées restent lisibles.")
+    elif request.method == "GET" and services.moderniser_calage(quiz):
+        messages.info(request, "Fiche mise à jour : les carrés noirs des coins sont remplacés par un "
+                               "cadre fin. Les copies déjà imprimées restent lisibles.")
     if request.method == "GET" and services.actualiser_sujet(quiz):
         messages.info(request, "Sujet mis à jour : chaque question QCM affiche "
                                "maintenant ses choix de réponse.")
@@ -492,7 +569,6 @@ def quiz_detail(request, pk):
                     for letter in bulk_form.cleaned_data["answer_key"]:
                         Question.objects.create(
                             quiz=quiz, order=next_order, qtype="qcm",
-                            points=bulk_form.cleaned_data["points"],
                             num_choices=bulk_form.cleaned_data["num_choices"],
                             correct_choice=ord(letter) - ord("A"))
                         next_order += 1
@@ -936,7 +1012,9 @@ def batch_detail(request, pk):
                        .values_list("pk", flat=True).first())
     n_total = batch.sheets.count()
     n_auto = batch.sheets.filter(status="ok").count()
-    n_attention = n_total - n_auto
+    # écrit : les pages de rédaction scannées avec la copie ne demandent rien
+    n_ignorees = batch.sheets.filter(status="ignoree").count()
+    n_attention = n_total - n_auto - n_ignorees
     n_a_identifier = batch.sheets.filter(status="no_match", student=None).count()
     n_open_pending = Answer.objects.filter(
         sheet__batch=batch, question__qtype="open",

@@ -1,0 +1,42 @@
+{% extends "public/base.html" %}
+{% block title %}Résultats{% endblock %}
+{% block content %}
+<section class="pub-hero pub-hero--court">
+  <h1>Mes résultats</h1>
+  {% include "public/_recherche.html" %}
+</section>
+
+{% if trop %}
+<p class="pub-alerte">Trop de recherches depuis votre connexion. Réessayez dans quelques minutes.</p>
+{% elif numero %}
+  {% if lignes %}
+  <section class="pub-section">
+    <div class="pub-identite">
+      <span class="avatar">{{ identite.last_name|slice:":1" }}{{ identite.first_name|slice:":1" }}</span>
+      <span><b>{{ identite.last_name }} {{ identite.first_name }}</b><small>N° d'inscription {{ numero }}</small></span>
+    </div>
+    <div class="pub-cartes">
+      {% for l in lignes %}
+      <article class="pub-note">
+        <span class="pub-note__epreuve">{{ l.quiz.title }}</span>
+        <span class="pub-note__classe">{% if l.quiz.auto_enroll %}Concours{% else %}{{ l.quiz.class_group.name }}{% endif %}</span>
+        {% if l.quiz.a_des_qcm %}
+        <span class="pub-note__chiffre"><b>{{ l.row.correct }}</b> / {{ l.row.n_qcm }} bonnes réponses</span>
+        {% else %}
+        <span class="pub-note__chiffre"><b>{{ l.row.score|floatformat:"-2" }}</b> / {{ l.row.max_score|floatformat:"-2" }}{% if l.quiz.type_epreuve == "oral" %} · oral{% else %} · écrit{% endif %}</span>
+        {% endif %}
+        <span class="pub-note__pct">{{ l.row.pct }} %</span>
+        {% if l.row.resultat == "admis" %}<span class="badge ok pub-note__verdict">{% if l.quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</span>
+        {% elif l.row.resultat == "refuse" %}<span class="badge bad pub-note__verdict">{% if l.quiz.auto_enroll %}Non admis{% else %}Non réussi{% endif %}</span>
+        {% elif l.row.resultat == "en_attente" %}<span class="badge warn pub-note__verdict">Correction en cours</span>
+        {% elif l.row.pending_open %}<span class="badge warn">Note provisoire : correction en cours</span>{% endif %}
+        {% if l.quiz.a_des_qcm %}<span class="pub-note__detail">{% if l.quiz.note_distincte %}Note {{ l.row.score|floatformat:"-2" }} / {{ l.row.max_score|floatformat:"-2" }} · {% endif %}{{ l.row.wrong }} fausse(s) · {{ l.row.blank }} sans réponse · 1 point par bonne réponse</span>{% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% else %}
+  <p class="pub-vide">Aucun résultat publié pour le n° <b>{{ numero }}</b>. Vérifiez le numéro ; si vos résultats ne sont pas encore publiés, revenez plus tard.</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

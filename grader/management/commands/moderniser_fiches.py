@@ -25,6 +25,8 @@ class Command(BaseCommand):
         for quiz in Quiz.objects.exclude(sheet_pdf=""):
             try:
                 faites += services.moderniser_fiche_grille(quiz)
+                # carrés noirs des coins -> cadre fin (29 octobre 2026)
+                faites += services.moderniser_calage(quiz)
                 # Sujets (mode « sujet séparé ») dessinés par une version
                 # antérieure, ex. concours sans les choix des QCM.
                 sujets += services.actualiser_sujet(quiz)

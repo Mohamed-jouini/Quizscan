@@ -1,0 +1,19 @@
+{% extends "public/base.html" %}
+{% block title %}Communiqués{% endblock %}
+{% block content %}
+<section class="pub-hero pub-hero--court"><h1>Communiqués</h1></section>
+<section class="pub-section">
+  {% if page_avis.object_list %}
+  <div class="pub-cartes pub-cartes--liste">
+    {% for a in page_avis %}
+    <a class="pub-avis" href="{% url 'public_communique' a.pk %}">
+      <span class="pub-avis__date">{{ a.cree_le|date:"d/m/Y" }}</span>
+      <b class="pub-avis__titre">{{ a.titre }}</b>
+      <span class="pub-avis__texte">{{ a.texte|truncatechars:240 }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% include "grader/_pagination.html" with page=page_avis label="Communiqués" %}
+  {% else %}<p class="pub-vide">Aucun communiqué publié pour l'instant.</p>{% endif %}
+</section>
+{% endblock %}

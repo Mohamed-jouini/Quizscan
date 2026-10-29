@@ -20,12 +20,12 @@ import pymupdf
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import close_old_connections, connection, transaction
-from django.db.models import Avg, Count, Max, Min, Sum
+from django.db.models import Avg, Count, Max, Min, Q, Sum
 
 from . import journal, omr, sheet_pdf
 from . import layout as layout_mod
-from .models import (Answer, AnswerKeySheet, ClassGroup, Quiz, ScanBatch,
-                     SheetScan, Student)
+from .models import (Answer, AnswerKeySheet, ClassGroup, Inscrit, Question, Quiz,
+                     ScanBatch, SheetScan, Student)
 
 log = logging.getLogger(__name__)
 
@@ -123,8 +123,18 @@ def run_batch(batch_id):
                             _process_sheet(sheet, img, layout, students,
                                            questions, quiz)
                         except omr.MarkerError as e:
-                            sheet.status = "no_markers"
-                            sheet.error_message = str(e)
+                            if quiz.type_epreuve == "ecrit":
+                                # copie scannée en entier : les pages de
+                                # rédaction n'ont pas de repères, seule la
+                                # page de garde est lue
+                                sheet.status = "ignoree"
+                                sheet.error_message = (
+                                    "Page sans repères : page de rédaction, "
+                                    "ignorée. Si c'est une page de garde, "
+                                    "rescannez-la bien à plat.")
+                            else:
+                                sheet.status = "no_markers"
+                                sheet.error_message = str(e)
                         except Exception as e:  # noqa: BLE001 — page illisible
                             log.exception("Page illisible (%s)", page_name)
                             sheet.status = "error"
@@ -430,7 +440,7 @@ def _has_name_zone(page_layout, quiz):
 
 # Ce que le scan lit sur une page : si ces positions sont identiques, une
 # copie imprimée avec l'ancienne fiche se lit avec la nouvelle disposition.
-_ZONES_LUES = ("id_grid", "qcm", "open")
+_ZONES_LUES = ("id_grid", "qcm", "open", "note_grid")
 
 
 def fiche_grille_perimee(quiz):
@@ -499,6 +509,55 @@ def regenerer_fiche_compatible(quiz):
     quiz.sheet_pdf.save(f"fiche_quiz_{quiz.pk}.pdf", ContentFile(pdf), save=False)
     quiz.save(update_fields=["layout_json", "sheet_pdf"])
     return True
+
+
+def moderniser_calage(quiz):
+    """Refait un PDF enregistré qui porte encore les carrés noirs (repères
+    ArUco) dans les coins : la fiche est redessinée avec le cadre fin
+    (demande de l'utilisateur, 29 octobre 2026). Les copies déjà imprimées
+    avec les carrés se lisent toujours (omr.detect_and_warp les essaie).
+
+    Seulement si rien de ce qui est lu ne bouge (comme regenerer_fiche_
+    compatible). Pas pour les fiches anonymes « QR » de concours, dont le
+    nombre d'exemplaires n'est pas connu : elles se refont par le bouton.
+    Retourne True si le PDF a été remplacé."""
+    disposition = quiz.layout_json
+    if not quiz.sheet_pdf or not disposition or disposition.get("calage") == "cadre":
+        return False
+    if quiz.type_epreuve == "oral":
+        from .views_epreuves import _generer_fiches_orales
+        _generer_fiches_orales(quiz)
+        return True
+    if quiz.type_epreuve == "ecrit":
+        if quiz.id_mode == "qr" and quiz.auto_enroll:
+            return False
+        from .views_epreuves import _generer_documents
+        _generer_documents(quiz)
+        return True
+    if quiz.id_mode == "qr":
+        if quiz.auto_enroll:
+            return False
+        try:
+            nouvelle = layout_mod.build_layout(quiz)
+        except layout_mod.TooManyPages:
+            return False
+        if len(nouvelle["pages"]) != len(disposition.get("pages", [])) or any(
+                page.get(cle) != avant.get(cle)
+                for page, avant in zip(nouvelle["pages"], disposition["pages"])
+                for cle in _ZONES_LUES):
+            return False
+        pdf = sheet_pdf.generate_sheet_pdf(
+            quiz, nouvelle, students=list(quiz.class_group.students.all()))
+        nouvelle["signature"] = disposition.get("signature",
+                                                layout_mod.layout_signature(quiz))
+        if "sujet_version" in disposition:
+            nouvelle["sujet_version"] = disposition["sujet_version"]
+        quiz.layout_json = nouvelle
+        quiz.sheet_pdf.save(f"fiches_nominatives_quiz_{quiz.pk}.pdf",
+                            ContentFile(pdf), save=False)
+        quiz.save(update_fields=["layout_json", "sheet_pdf"])
+        return True
+    return regenerer_fiche_compatible(quiz)
 
 
 def renommer_epreuve(quiz, titre, utilisateur):
@@ -724,7 +783,15 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
         elif kind == "QSA":
             serial = value
             sheet.id_read = f"Fiche {value:04d}"
-    if student is None and page_layout.get("id_grid"):
+        elif kind == "QSI":
+            # carte d'inscription collée à la place de l'étiquette
+            sheet.id_read = f"QR {value}"[:20]
+            student = omr.match_student_by_id(value, students)
+            if student is None and quiz.auto_enroll:
+                grid_id = value       # concours : candidat créé ci-dessous
+            if student is not None:
+                sheet.match_score = 100.0
+    if student is None and not grid_id and page_layout.get("id_grid"):
         grid_id = omr.read_id_grid(warped, page_layout)
         sheet.id_read = grid_id or sheet.id_read
         student = omr.match_student_by_id(grid_id, students)
@@ -749,10 +816,18 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
             student = quiz.class_group.students.filter(
                 student_number=number).first()
         if student is None:
-            student = Student.objects.create(
-                class_group=quiz.class_group, student_number=number,
-                last_name=(last_t.upper()[:80] or f"CANDIDAT {number}"),
-                first_name=first_t[:80])
+            # n° présent au registre des inscriptions : identité officielle
+            inscrit = Inscrit.objects.filter(numero=number).first()
+            if inscrit is not None:
+                student = Student.objects.create(
+                    class_group=quiz.class_group, student_number=number,
+                    last_name=inscrit.nom, first_name=inscrit.prenom,
+                    inscrit=inscrit)
+            else:
+                student = Student.objects.create(
+                    class_group=quiz.class_group, student_number=number,
+                    last_name=(last_t.upper()[:80] or f"CANDIDAT {number}"),
+                    first_name=first_t[:80])
         if student not in students:
             students.append(student)
         sheet.match_score = 100.0
@@ -765,6 +840,11 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
     results = omr.read_bubbles(warped, page_layout)
     overlay = omr.draw_overlay(warped, page_layout, results, questions,
                                zone_nom=_has_name_zone(page_layout, quiz))
+    # Écrit : note noircie par le correcteur dans la grille de la page de garde
+    grille_note = page_layout.get("note_grid")
+    if grille_note:
+        note_lue, chiffres = omr.lire_note(warped, grille_note, grille_note["sur"])
+        omr.dessiner_note(overlay, grille_note, chiffres, note_lue, grille_note["sur"])
     _save_jpg(sheet.warped_image, warped, "warped.jpg", quality=70)
     _save_jpg(sheet.overlay_image, overlay, "overlay.jpg", quality=70)
 
@@ -793,6 +873,106 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
         crop = omr.crop_open_zone(warped, item["rect"])
         _save_jpg(a.open_crop, crop, "open.jpg")
         a.save()
+
+    if grille_note:
+        q = questions.get(grille_note["order"])
+        if q is not None:
+            # illisible ou au-dessus du barème : la note reste à saisir à
+            # l'écran de vérification (« réponse manuscrite à noter »)
+            a = Answer(sheet=sheet, question=q,
+                       points_awarded=(note_lue if note_lue is not None
+                                       and note_lue <= q.points else None))
+            _save_jpg(a.open_crop, omr.crop_open_zone(warped, grille_note["rect"]),
+                      "note.jpg")
+            a.save()
+
+
+# ------------------------------------------------- écrit et oral : la note
+
+def question_note(quiz):
+    """La question unique qui porte la note d'une épreuve écrite ou orale
+    (réponse « manuscrite » notée sur quiz.note_sur). Créée au besoin ; son
+    barème suit celui de l'épreuve. Ainsi résultats, admission, bulletins,
+    publication et export marchent comme pour un QCM."""
+    q = quiz.questions.filter(qtype="open").order_by("order").first()
+    if q is None:
+        q = Question.objects.create(quiz=quiz, order=1, qtype="open",
+                                    points=quiz.note_sur,
+                                    text="Note de l'épreuve")
+    elif q.points != quiz.note_sur:
+        q.points = quiz.note_sur
+        q.save(update_fields=["points"])
+    return q
+
+
+LOT_ORAL = "Notes de l'oral"
+
+
+def lot_oral(quiz):
+    lot, _ = ScanBatch.objects.get_or_create(
+        quiz=quiz, label=LOT_ORAL, defaults={"status": "done"})
+    return lot
+
+
+def _reponses_retenues(quiz, q):
+    """{student_id: réponse} — la note qui compte pour chaque étudiant :
+    celle de sa première copie (même règle que compute_results), qu'elle
+    vienne d'une fiche scannée ou de la saisie à l'écran."""
+    retenues = {}
+    for r in (Answer.objects.filter(sheet__batch__quiz=quiz, question=q,
+                                    sheet__student__isnull=False)
+              .select_related("sheet").order_by("sheet__created_at", "pk")):
+        retenues.setdefault(r.sheet.student_id, r)
+    return retenues
+
+
+def notes_orales(quiz):
+    """{student_id: note} des notes d'un oral, scannées ou saisies."""
+    q = question_note(quiz)
+    return {sid: r.points_awarded for sid, r in _reponses_retenues(quiz, q).items()
+            if r.points_awarded is not None}
+
+
+@transaction.atomic
+def enregistrer_notes_orales(quiz, notes, utilisateur=None):
+    """Saisie des notes d'un oral : notes = {étudiant: note | None}.
+    None efface la note (étudiant absent : il ne figure plus aux résultats).
+    Chaque changement est tracé au journal. Retourne le nombre de notes
+    modifiées."""
+    q = question_note(quiz)
+    lot = lot_oral(quiz)
+    retenues = _reponses_retenues(quiz, q)
+    changees = 0
+    for etudiant, note in notes.items():
+        # la note qui compte : celle d'une fiche scannée s'il y en a une
+        reponse = retenues.get(etudiant.pk)
+        copie = reponse.sheet if reponse else None
+        avant = reponse.points_awarded if reponse else None
+        if note == avant:
+            continue
+        journal.noter(utilisateur, "note", quiz=quiz, copie=copie,
+                      objet=f"{etudiant.full_name} — oral", avant=avant, apres=note)
+        changees += 1
+        if note is None:
+            if copie.batch_id == lot.pk:
+                copie.delete()              # saisie à l'écran : absent
+            else:                           # fiche scannée : note à reprendre
+                reponse.points_awarded = None
+                reponse.manually_set = True
+                reponse.save(update_fields=["points_awarded", "manually_set"])
+            continue
+        if copie is None:
+            copie = SheetScan.objects.create(batch=lot, student=etudiant, status="ok",
+                                             source_name="oral",
+                                             student_confirmed=True)
+        if reponse is None:
+            reponse = Answer(sheet=copie, question=q)
+        reponse.points_awarded = note
+        reponse.manually_set = True
+        reponse.save()
+    lot.total_pages = lot.processed_pages = lot.sheets.count()
+    lot.save(update_fields=["total_pages", "processed_pages", "updated_at"])
+    return changees
 
 
 def _auto_points(question, answer):
@@ -837,8 +1017,8 @@ def rescore_quiz(quiz):
     return len(sheets)
 
 
-def compute_results(quiz, batch=None):
-    """Agrège les résultats par étudiant.
+def compute_results(quiz, batch=None, student=None):
+    """Agrège les résultats par étudiant (ou pour un seul : espace public).
 
     Retourne une liste de dicts triée par nom :
     {student, score, max_score, answered, correct, wrong, blank,
@@ -847,6 +1027,8 @@ def compute_results(quiz, batch=None):
     sheets = SheetScan.objects.filter(batch__quiz=quiz).exclude(student=None)
     if batch is not None:
         sheets = sheets.filter(batch=batch)
+    if student is not None:
+        sheets = sheets.filter(student=student)
     sheets = sheets.select_related("student").prefetch_related("answers__question")
 
     per_student = {}
@@ -880,11 +1062,16 @@ def compute_results(quiz, batch=None):
                 entry["pending_open"] += 1
 
     max_score = quiz.max_score
+    # Une QCM = un point : le résultat se lit en bonnes réponses sur le
+    # nombre de QCM, et en pourcentage de la note maximale.
+    n_qcm = quiz.questions.filter(qtype="qcm").count()
     rows = []
     for entry in per_student.values():
         entry.pop("seen_questions")
         entry["score"] = max(round(entry["score"], 2), 0.0)
         entry["max_score"] = max_score
+        entry["n_qcm"] = n_qcm
+        entry["pct"] = round(entry["score"] / max_score * 100) if max_score else 0
         rows.append(entry)
     rows.sort(key=lambda r: (r["student"].last_name.lower(), r["student"].first_name.lower()))
     return rows
@@ -1048,6 +1235,91 @@ def _convergence_suspecte(stat, repartition):
 # une hypothèse, pas une mesure : elle est affichée en clair à l'écran
 # plutôt que fondue dans le résultat.
 MINUTES_PAR_COPIE_A_LA_MAIN = 2
+
+
+# Tranches de la répartition des résultats (en % du barème).
+TRANCHES = [(0, 20), (20, 40), (40, 60), (60, 80), (80, 101)]
+
+
+def bilan_admissions(quizzes, par_epreuve_max=8):
+    """Tableau de bord : admis, non admis et en attente sur toutes les
+    épreuves, moyenne générale, répartition des résultats, et le détail des
+    épreuves les plus récentes.
+
+    Deux requêtes en tout, quel que soit le nombre de copies : le total de
+    points par (épreuve, étudiant), puis le barème de chaque épreuve. Mêmes
+    règles que services.admissions : admis si la note atteint la note
+    minimale ; sinon « en attente » tant qu'une réponse manuscrite reste à
+    noter ; sinon non admis. Une épreuve sans note minimale compte dans la
+    moyenne et la répartition, pas dans l'admission."""
+    quizzes = list(quizzes)
+    par_pk = {q.pk: q for q in quizzes}
+    baremes = dict(Question.objects.filter(quiz__in=quizzes)
+                   .values_list("quiz_id").annotate(m=Sum("points")))
+    lignes = (Answer.objects
+              .filter(sheet__batch__quiz__in=quizzes, sheet__student__isnull=False)
+              .values("sheet__batch__quiz_id", "sheet__student_id")
+              .annotate(total=Sum("points_awarded"),
+                        attente=Count("pk", filter=Q(question__qtype="open",
+                                                     points_awarded__isnull=True))))
+    epreuves = {}
+    pcts = []
+    for l in lignes:
+        quiz = par_pk[l["sheet__batch__quiz_id"]]
+        bareme = baremes.get(quiz.pk) or 0
+        note = max(l["total"] or 0.0, 0.0)
+        pct = round(note / bareme * 100) if bareme else 0
+        pcts.append(pct)
+        e = epreuves.setdefault(quiz.pk, {"quiz": quiz, "n": 0, "admis": 0,
+                                          "attente": 0, "refuses": 0, "somme": 0})
+        e["n"] += 1
+        e["somme"] += pct
+        if quiz.note_admission is None:
+            continue
+        if note >= quiz.note_admission:
+            e["admis"] += 1
+        elif l["attente"]:
+            e["attente"] += 1
+        else:
+            e["refuses"] += 1
+
+    for e in epreuves.values():
+        e["moyenne_pct"] = round(e["somme"] / e["n"])
+        e["seuil"] = e["quiz"].note_admission is not None
+        jugees = e["admis"] + e["attente"] + e["refuses"]
+        e["pct_admis"] = round(e["admis"] / jugees * 100) if jugees else 0
+        # largeurs des segments de la barre empilée (en %)
+        for cle in ("admis", "attente", "refuses"):
+            e[f"w_{cle}"] = round(e[cle] / jugees * 100, 1) if jugees else 0
+
+    avec_seuil = [e for e in epreuves.values() if e["seuil"]]
+    admis = sum(e["admis"] for e in avec_seuil)
+    attente = sum(e["attente"] for e in avec_seuil)
+    refuses = sum(e["refuses"] for e in avec_seuil)
+    jugees = admis + attente + refuses
+    repartition = []
+    for bas, haut in TRANCHES:
+        n = sum(1 for p in pcts if bas <= p < haut)
+        repartition.append({"libelle": f"{bas}–{min(haut, 100)} %", "n": n})
+    pic = max([r["n"] for r in repartition] or [0]) or 1
+    for r in repartition:
+        r["hauteur"] = round(r["n"] / pic * 100) if r["n"] else 0
+        r["part"] = round(r["n"] / len(pcts) * 100) if pcts else 0
+    recentes = sorted(epreuves.values(), key=lambda e: -e["quiz"].pk)
+    return {
+        "n_notes": len(pcts),
+        "n_epreuves": len(epreuves),
+        "n_sans_seuil": len(epreuves) - len(avec_seuil),
+        "jugees": jugees,
+        "admis": admis, "attente": attente, "refuses": refuses,
+        "pct_admis": round(admis / jugees * 100) if jugees else 0,
+        "pct_refuses": round(refuses / jugees * 100) if jugees else 0,
+        "moyenne_pct": round(sum(pcts) / len(pcts)) if pcts else 0,
+        "reussite_50": round(sum(1 for p in pcts if p >= 50) / len(pcts) * 100)
+        if pcts else 0,
+        "repartition": repartition,
+        "par_epreuve": recentes[:par_epreuve_max],
+    }
 
 
 def corriges_douteux(quizzes):

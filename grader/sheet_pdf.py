@@ -81,6 +81,21 @@ LABELS = {
         "identhelp": "Collez votre étiquette QR dans le cadre ci-contre. "
                      "Sans étiquette, remplissez la grille du n° d'inscription "
                      "ci-dessous.",
+        "ecrit_instr": "Rédigez sur les lignes ci-dessous et sur les pages "
+                       "suivantes. Ne rien écrire dans le cadre du correcteur.",
+        "note_titre": "RÉSERVÉ AU CORRECTEUR — NOTE SUR {n}",
+        "note_aide": "Écrivez chaque chiffre de la note dans sa case puis "
+                     "noircissez-le ; ligne vide = 0. Ex. 15,75 : 1 · 5 · 7 · 5.",
+        "note_ecrite": "Note :",
+        "signature": "Correcteur :",
+        "centaines": "Centaines", "dizaines": "Dizaines", "unites": "Unités",
+        "dixiemes": "Dixièmes", "centiemes": "Centièmes", "chiffre": "Chiffre",
+        "oral_instr": "Fiche d'évaluation orale — l'examinateur noircit la note "
+                      "puis scanne la fiche : la note est affectée à l'étudiant.",
+        "observations": "Observations de l'examinateur",
+        "redaction": "Copie — page de rédaction",
+        "ne_pas_scanner": "Ne pas scanner cette page : seule la page de garde "
+                          "est lue.",
     },
     "ar": {
         "last": "اللقب", "first": "الاسم",
@@ -96,6 +111,18 @@ LABELS = {
         "ident": "التعريف",
         "identhelp": "ألصق ملصق رمز QR في الإطار المقابل. "
                      "إن لم يكن لديك ملصق، املأ شبكة رقم التسجيل أدناه.",
+        "ecrit_instr": "اكتب على الأسطر أدناه وفي الصفحات الموالية. "
+                       "لا تكتب شيئا في إطار المصحّح.",
+        "note_titre": "خاص بالمصحّح — العدد على {n}",
+        "note_aide": "اكتب كل رقم من العدد في خانته ثم املأه؛ السطر الفارغ = 0.",
+        "note_ecrite": "العدد:",
+        "signature": "المصحّح:",
+        "centaines": "المئات", "dizaines": "العشرات", "unites": "الآحاد",
+        "dixiemes": "الأعشار", "centiemes": "أجزاء المائة", "chiffre": "رقم",
+        "oral_instr": "بطاقة تقييم شفاهي — يملأ الممتحن العدد ثم تُمسح البطاقة ضوئيا.",
+        "observations": "ملاحظات الممتحن",
+        "redaction": "ورقة التحرير",
+        "ne_pas_scanner": "لا تُمسح هذه الصفحة ضوئيا: تُقرأ صفحة الغلاف فقط.",
     },
 }
 
@@ -156,23 +183,25 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
         pidx = page["page_index"]
 
         # Repères ArUco (avec leur marge blanche débordant légèrement)
-        for mid, (x, y) in L.marker_positions(pidx).items():
-            pad = L.MARKER_SIZE * (20 / 300)
-            c.drawImage(_marker_image(mid),
-                        (x - pad) * mm, _y(y - pad, L.MARKER_SIZE + 2 * pad),
-                        (L.MARKER_SIZE + 2 * pad) * mm, (L.MARKER_SIZE + 2 * pad) * mm)
+        # Calage : cadre fin autour de la page et code de page en haut (plus
+        # de carrés noirs dans les coins, voir layout.CADRE_MARGE).
+        _dessiner_cadre(c, pidx)
 
         # En-tête (concours : titre seul, sans le nom du conteneur de candidats)
         head_title = (quiz.title if concours
                       else f"{quiz.title} — {quiz.class_group.name}")
         draw(head_title, L.PAGE_W / 2, _y(24.0),
              13, bold=True, align="center")
-        if lang == "ar":
-            draw(T["instr"], L.PAGE_W / 2, _y(28.5), 8, align="center")
+        consigne = {"ecrit": T["ecrit_instr"], "oral": T["oral_instr"]}.get(
+            mode, T["instr"])
+        if mode in ("ecrit", "oral"):
+            draw(consigne, L.PAGE_W / 2, _y(28.5), 8, align="center")
+        elif lang == "ar":
+            draw(consigne, L.PAGE_W / 2, _y(28.5), 8, align="center")
             draw(f"{T['page']} {pidx + 1} / {len(layout['pages'])}",
                  L.CONTENT_X1, _y(28.5), 8, align="right")
         else:
-            draw(f"{T['page']} {pidx + 1} / {len(layout['pages'])} — {T['instr']}",
+            draw(f"{T['page']} {pidx + 1} / {len(layout['pages'])} — {consigne}",
                  L.PAGE_W / 2, _y(28.5), 8, align="center")
 
         # Zone nom / prénom  (ou emplacement réservé à une étiquette autocollante)
@@ -375,12 +404,96 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
             c.rect(x * mm, _y(y, h), w * mm, h * mm)
             c.setStrokeGray(0.0)
 
+        if page.get("note_grid"):
+            _dessiner_grille_note(c, draw, page["note_grid"], T, lang)
+        if page.get("lignes"):
+            if page["lignes"].get("titre"):
+                titre = T[page["lignes"]["titre"]]
+                if lang == "ar":
+                    draw(titre, L.CONTENT_X1, _y(page["lignes"]["y0"] - 4.0), 9,
+                         bold=True, align="right")
+                else:
+                    draw(titre, L.CONTENT_X0, _y(page["lignes"]["y0"] - 4.0), 9,
+                         bold=True)
+            _dessiner_lignes(c, page["lignes"])
+
         draw(f"{quiz.title} — page {pidx + 1}",
              L.PAGE_W / 2, _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
         c.showPage()
 
+        # Écrit : pages lignées après la page de garde de chaque copie. Sans
+        # repères : elles ne se scannent pas (et sont ignorées si elles le sont).
+        if mode == "ecrit" and pidx == len(layout["pages"]) - 1:
+            n = int(layout.get("pages_redaction", 0) or 0)
+            for k in range(n):
+                draw(f"{T['redaction']} {k + 2} / {n + 1} — {quiz.title}",
+                     L.PAGE_W / 2, _y(16.0), 9, bold=True, align="center")
+                draw(T["ne_pas_scanner"], L.PAGE_W / 2, _y(21.0), 7.5,
+                     align="center", gray=0.45)
+                _dessiner_lignes(c, {"y0": 30.0, "y1": L.PAGE_H - 16.0,
+                                     "pas": L.NOTE_LIGNE})
+                c.showPage()
+
     c.save()
     return buf.getvalue()
+
+
+def _dessiner_cadre(c, page_index):
+    """Trait du cadre de calage et tirets du code de page (n° et sens)."""
+    m, t = L.CADRE_MARGE, L.CADRE_TRAIT
+    c.setStrokeGray(0.0)
+    c.setLineWidth(t * mm)
+    c.rect(m * mm, _y(m, L.PAGE_H - 2 * m), (L.PAGE_W - 2 * m) * mm,
+           (L.PAGE_H - 2 * m) * mm, stroke=1, fill=0)
+    c.setFillGray(0.0)
+    for (x, y, w, h), plein in zip(L.code_cases(), L.code_page(page_index)):
+        if plein:
+            c.rect(x * mm, _y(y, h), w * mm, h * mm, stroke=0, fill=1)
+    c.setLineWidth(1)
+
+
+def _dessiner_lignes(c, zone):
+    """Lignes d'écriture de la copie (gris clair : la lecture ne les voit pas,
+    elles sont hors des zones lues)."""
+    c.setStrokeGray(0.78)
+    c.setLineWidth(0.4)
+    y = zone["y0"]
+    while y <= zone["y1"]:
+        c.line(L.CONTENT_X0 * mm, _y(y), L.CONTENT_X1 * mm, _y(y))
+        y += zone["pas"]
+    c.setStrokeGray(0.0)
+
+
+def _dessiner_grille_note(c, draw, g, T, lang):
+    """Cadre « réservé au correcteur » : grille de la note à noircir (même
+    dessin que la grille de n° d'inscription), note en clair et signature."""
+    x, y, w, h = g["rect"]
+    c.setLineWidth(1.1)
+    c.roundRect(x * mm, _y(y, h), w * mm, h * mm, 2.5 * mm, stroke=1, fill=0)
+    draw(T["note_titre"].format(n=f"{g['sur']:g}"), x + 4.0, _y(g["title_y"]),
+         9.5, bold=True)
+    draw(T["note_aide"], x + 4.0, _y(g["title_y"] + 4.5), 6.8, gray=0.35)
+    for k in range(10):
+        cx = g["rows"][0][k][0]
+        draw(str(k), cx, _y(g["header_y"]), 6.5, align="center", gray=0.35)
+    for kind, row, box in zip(g["kinds"], g["rows"], g["write_boxes"]):
+        bx, by, bw, bh = box
+        draw(T.get(kind, kind), x + 4.0, _y(by + bh / 2 + 1.2), 8, bold=True)
+        c.setLineWidth(0.6)
+        c.rect(bx * mm, _y(by, bh), bw * mm, bh * mm)
+        for k, (cx, cy) in enumerate(row):
+            c.circle(cx * mm, _y(cy), g["r"] * mm, stroke=1, fill=0)
+            draw(str(k), cx, _y(cy + 0.7), 5, align="center", gray=0.6)
+        if kind == "dixiemes":
+            # virgule entre la partie entière et les dixièmes
+            draw(",", bx - 2.2, _y(by + bh - 0.6), 12, bold=True)
+    # à droite des cases : la note en clair et la signature du correcteur
+    xr = g["rows"][0][-1][0] + 8.0
+    draw(T["note_ecrite"], xr, _y(y + 16.0), 9, bold=True)
+    c.setLineWidth(0.8)
+    c.rect(xr * mm, _y(y + 18.0, 11.0), (x + w - 4.0 - xr) * mm, 11.0 * mm)
+    draw(f"/ {g['sur']:g}", x + w - 6.0, _y(y + 25.5), 10, bold=True, align="right")
+    draw(T["signature"], xr, _y(y + h - 3.0), 8, gray=0.35)
 
 
 # Version du dessin du SUJET. À augmenter à chaque changement de ce qu'il
@@ -395,6 +508,9 @@ SUJET_VERSION = 3
 # réellement : cases à noircir (pas de croix), étiquette QR ou grille de n°.
 SUJET_TEXTES = {
     "fr": {
+        "epreuve_ecrite": "Épreuve écrite — note sur {n}",
+        "consigne_ecrite": "Rédigez sur la copie fournie. Ne rien écrire dans "
+                           "le cadre réservé au correcteur.",
         "epreuve": "Épreuve à choix multiples",
         "epreuve_mixte": "Questions à choix multiples et rédigées",
         "duree": "Durée : {d}",
@@ -431,6 +547,9 @@ SUJET_TEXTES = {
         "page": "{i}/{n}",
     },
     "ar": {
+        "epreuve_ecrite": "اختبار كتابي — العدد على {n}",
+        "consigne_ecrite": "حرّر على الورقة المسلّمة إليك. لا تكتب شيئا في "
+                           "الإطار المخصّص للمصحّح.",
         "epreuve": "اختبار في الأسئلة متعددة الاختيارات",
         "epreuve_mixte": "أسئلة متعددة الاختيارات وأسئلة تحريرية",
         "duree": "المدة : {d}",
@@ -524,10 +643,14 @@ def generate_subject_pdf(quiz, questions=None):
             draw(text, X0 + retrait, y, size, bold, gray=gray)
 
     sticker = getattr(quiz, "id_mode", "name") == "sticker"
+    ecrit = getattr(quiz, "type_epreuve", "qcm") == "ecrit"
     concours = getattr(quiz, "auto_enroll", False)
+    # page de garde « remarques / consignes » : concours QCM seulement (elle
+    # décrit une épreuve à cases)
+    garde = concours and not ecrit
     # Titre écrit à la main (mode étiquette hors concours) : le même sujet
     # peut servir à plusieurs épreuves, il ne porte ni titre ni classe.
-    titre_a_la_main = sticker and not concours
+    titre_a_la_main = sticker and not concours and not ecrit
 
     def fmt_pts(points):
         unit = (T["pt"] if points <= 1 else T["pts"])
@@ -537,6 +660,19 @@ def generate_subject_pdf(quiz, questions=None):
     # Chaque question est un bloc insécable : on calcule d'abord sa hauteur
     # pour paginer, puis on dessine — la pagination « n/N » a besoin du total.
     blocs = []
+    if ecrit:
+        # Épreuve écrite : l'énoncé saisi, paragraphe par paragraphe (une
+        # ligne vide les sépare), puis la consigne de la copie.
+        paragraphes = [p.strip() for p in
+                       (quiz.sujet_texte or "").replace("\r", "").split("\n\n")
+                       if p.strip()]
+        paragraphes.append(S.get("consigne_ecrite", ""))
+        for p in paragraphes:
+            lignes_p = []
+            for l in p.split("\n"):
+                lignes_p += wrap(l, 11, W) or [""]
+            blocs.append((None, lignes_p, [], 0.0, len(lignes_p) * 6.0 + 4.0))
+        qs = []
     for q in qs:
         tete = wrap(f"{q.order}. {q.text}".strip() + f" {fmt_pts(q.points)}",
                     11.5, W, bold=True)
@@ -552,14 +688,14 @@ def generate_subject_pdf(quiz, questions=None):
     CARTOUCHE_H = 36.0
     debut_questions_p1 = HAUT + CARTOUCHE_H + 10.0
     pages = [[]]                       # blocs de chaque page de questions
-    y = HAUT if concours else debut_questions_p1
+    y = HAUT if garde else debut_questions_p1
     for bloc in blocs:
         if y + bloc[4] > BAS and pages[-1]:
             pages.append([])
             y = HAUT
         pages[-1].append(bloc)
         y += bloc[4]
-    total = len(pages) + (1 if concours else 0)
+    total = len(pages) + (1 if garde else 0)
     page_no = [0]
 
     def entete_page():
@@ -618,8 +754,11 @@ def generate_subject_pdf(quiz, questions=None):
                    (x_epr + wcol - 5) * mm, (L.PAGE_H - (y0 + 13.5)) * mm)
         else:
             bloc_centre([quiz.title], x_epr, y0, moitie, size=11, gras_premiere=True)
-        bas = [S["epreuve"] if all(q.qtype == "qcm" for q in qs)
-               else S["epreuve_mixte"]]
+        if ecrit:
+            bas = [S.get("epreuve_ecrite", "{n}").format(n=f"{quiz.note_sur:g}")]
+        else:
+            bas = [S["epreuve"] if all(q.qtype == "qcm" for q in qs)
+                   else S["epreuve_mixte"]]
         if quiz.duree:
             bas.append(S["duree"].format(d=quiz.duree))
         bloc_centre(bas, x_epr, y0 + moitie, moitie, size=9, gras_premiere=True)
@@ -681,7 +820,7 @@ def generate_subject_pdf(quiz, questions=None):
     # --------------------------------------------------------------- dessin
     entete_page()
     cartouche()
-    if concours:
+    if garde:
         page_de_garde()
         pied_page()
         c.showPage()
@@ -699,7 +838,8 @@ def generate_subject_pdf(quiz, questions=None):
         for q, tete, choix, cadre, h in page:
             for t in tete:
                 y += 6.0
-                ligne(t, y, 11.5, bold=True)
+                # un paragraphe d'énoncé (q None) en romain, un intitulé en gras
+                ligne(t, y, 11.5 if q else 11, bold=q is not None)
             y += 1.5
             for bloc in choix:
                 for t in bloc:

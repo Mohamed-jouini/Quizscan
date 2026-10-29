@@ -17,6 +17,43 @@
     {% endif %}
   </div>
 </header>
+{% if verification %}
+{% with d=verification.decomptes %}
+<div class="card verif">
+  <div class="card__head">
+    <h2>Vérification par le registre des inscriptions</h2>
+    <form class="inline" method="post">{% csrf_token %}
+      <button class="btn small secondary" name="fermer_verification" value="1" type="submit">Fermer</button>
+    </form>
+  </div>
+  <p class="helptext helptext--serre">Dernière liste importée : {{ verification.total }} ligne(s), comparées par n° d'inscription aux étudiants déjà enregistrés.</p>
+  <div class="verif__chiffres">
+    <span class="verif__chiffre verif__chiffre--ok"><b>{{ d.conforme }}</b> conforme(s)</span>
+    <span class="verif__chiffre verif__chiffre--alerte"><b>{{ d.nom_different }}</b> nom différent</span>
+    <span class="verif__chiffre verif__chiffre--alerte"><b>{{ d.non_inscrit }}</b> non inscrit(s)</span>
+    <span class="verif__chiffre"><b>{{ d.sans_numero }}</b> sans n°</span>
+  </div>
+  {% if verification.anomalies %}
+  <div class="table-wrap">
+    <table>
+      <tr><th>N°</th><th>Dans le fichier</th><th>Au registre</th><th>Constat</th></tr>
+      {% for a in verification.anomalies %}
+      <tr>
+        <td>{{ a.numero|default:"—" }}</td>
+        <td>{{ a.nom }} {{ a.prenom }}</td>
+        <td>{{ a.registre|default:"—" }}</td>
+        <td>{% if a.etat == "nom_different" %}<span class="badge warn">Nom différent — identité du registre retenue</span>{% elif a.etat == "non_inscrit" %}<span class="badge bad">N° absent du registre</span>{% else %}<span class="badge">Sans n° : non vérifiable</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% if verification.n_anomalies > verification.anomalies|length %}<p class="helptext">… et {{ verification.n_anomalies|add:"-500" }} autre(s).</p>{% endif %}
+  {% else %}
+  <p><span class="badge ok">Tous les candidats figurent au registre, sous le même nom.</span></p>
+  {% endif %}
+</div>
+{% endwith %}
+{% endif %}
 <div class="grid2">
   <div class="card">
     <div class="card__head">
@@ -46,11 +83,24 @@
   </div>
   <div>
     <div class="card">
+      <h2>Ajouter des inscrits</h2>
+      <form method="post">{% csrf_token %}
+        <label for="id_numeros">N° d'inscription</label>
+        <textarea id="id_numeros" name="numeros" rows="3"
+                  placeholder="104523, 104524 …"></textarea>
+        <span class="helptext">Un ou plusieurs n° du registre (séparés par des espaces, virgules ou retours à la ligne) : l'étudiant est ajouté {% if est_concours %}aux candidats du concours{% else %}à la classe{% endif %} sous son identité enregistrée. <a href="{% url 'inscriptions' %}">Registre des inscriptions</a></span>
+        <p><button class="btn" name="ajouter_inscrits" value="1" type="submit">Ajouter</button></p>
+      </form>
+    </div>
+    <div class="card">
       <h2>Importer depuis un fichier</h2>
       <form method="post" enctype="multipart/form-data">{% csrf_token %}
         {{ xlsx_form.file.errors }}
         {{ xlsx_form.file }}
         <span class="helptext">{{ xlsx_form.file.help_text }}</span>
+        <label class="case"><input type="checkbox" name="inscrire_inconnus" value="1">
+          Inscrire au registre les candidats qui n'y figurent pas</label>
+        <span class="helptext">Chaque ligne est vérifiée par son n° contre le registre des inscriptions.</span>
         <p><button class="btn" name="import_xlsx" value="1" type="submit">
           Importer le fichier</button></p>
       </form>

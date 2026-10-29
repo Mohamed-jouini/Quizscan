@@ -65,6 +65,24 @@
 </li></ul>
 {% endif %}
 
+{% if perms.grader.corriger_copies and not batch %}
+<div class="card publication" id="publication">
+  <div class="card__head">
+    <h2>Publication sur l'espace public</h2>
+    {% if quiz.resultats_publies or quiz.admis_publies %}<span class="badge ok">publié le {{ quiz.publie_le|date:"d/m/Y H:i" }}</span>{% else %}<span class="badge grey">non publié</span>{% endif %}
+  </div>
+  <form method="post" action="{% url 'quiz_publication' quiz.pk %}" class="publication__form">{% csrf_token %}
+    <label class="case"><input type="checkbox" name="resultats_publies" value="1" {% if quiz.resultats_publies %}checked{% endif %}>
+      Chaque {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} consulte son résultat (bonnes réponses, pourcentage, admis ou non) avec son n° d'inscription</label>
+    <label class="case"><input type="checkbox" name="admis_publies" value="1" {% if quiz.admis_publies %}checked{% endif %} {% if quiz.note_admission is None %}disabled{% endif %}>
+      Afficher la liste des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %} (rang, n°, nom, bonnes réponses, pourcentage){% if quiz.note_admission is None %} — indiquez d'abord la note minimale{% endif %}</label>
+    <p><button class="btn small" type="submit">Enregistrer la publication</button>
+      {% if quiz.resultats_publies or quiz.admis_publies %}<a class="btn small secondary" href="{% url 'public_epreuve' quiz.pk %}" target="_blank" rel="noopener">Voir la page publique</a>{% endif %}</p>
+  </form>
+  {% if unmatched_total or pending_pages %}<p class="helptext">Attention : {% if unmatched_total %}{{ unmatched_total }} copie(s) non identifiée(s){% endif %}{% if unmatched_total and pending_pages %} et {% endif %}{% if pending_pages %}{{ pending_pages }} page(s) non corrigée(s){% endif %} — leurs notes manqueront sur l'espace public.</p>{% endif %}
+</div>
+{% endif %}
+
 {% if rows %}
 {# Recherche : filtre la liste des admis ET le tableau des notes. #}
 <form class="recherche-etudiant" method="get" role="search">
@@ -92,7 +110,7 @@
 <div class="card admission" id="admission">
   <div class="card__head">
     <h2>{% if quiz.auto_enroll %}Admission{% else %}Réussite{% endif %}</h2>
-    <span class="badge grey">note minimale {{ admission.seuil|floatformat:"-2" }} / {{ admission.max_score|floatformat:"-2" }}</span>
+    <span class="badge grey">{% if quiz.note_distincte %}note minimale {{ admission.seuil|floatformat:"-2" }} / {{ admission.max_score|floatformat:"-2" }}{% else %}au moins {{ admission.seuil|floatformat:"-2" }} bonnes réponses sur {{ admission.max_score|floatformat:"-2" }}{% endif %}</span>
     {% if perms.grader.creer_epreuve %}
     <details class="admission__regler">
       <summary>Modifier la note minimale</summary>
@@ -126,16 +144,18 @@
   </div>
   <div class="table-wrap">
     <table>
-    <tr><th>Rang</th><th>Nom et prénom</th><th>N° d'inscription</th><th>Note</th></tr>
+    <tr><th>Rang</th><th>Nom et prénom</th><th>N° d'inscription</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>Pourcentage</th>{% if quiz.note_distincte %}<th>Note</th>{% endif %}</tr>
     {% for r in admission.admis_affiches %}
     <tr>
       <td>{{ r.rang }}</td>
       <td><b>{{ r.student.full_name }}</b></td>
       <td>{{ r.student.student_number|default:"—" }}</td>
-      <td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>
+      {% if quiz.a_des_qcm %}<td class="score">{{ r.correct }} / {{ r.n_qcm }}</td>{% endif %}
+      <td>{% include "grader/_pourcentage.html" with pct=r.pct %}</td>
+      {% if quiz.note_distincte %}<td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>{% endif %}
     </tr>
     {% empty %}
-    <tr><td colspan="4">Aucun {% if quiz.auto_enroll %}admis{% else %}étudiant ayant réussi{% endif %} ne correspond à « {{ recherche }} ».</td></tr>
+    <tr><td colspan="6">Aucun {% if quiz.auto_enroll %}admis{% else %}étudiant ayant réussi{% endif %} ne correspond à « {{ recherche }} ».</td></tr>
     {% endfor %}
     </table>
   </div>
@@ -167,28 +187,31 @@
   <div class="table-wrap">
     <table>
     <tr>
-      <th>Étudiant</th><th>Note</th><th>Répondues</th><th>Correctes</th>
-      <th>Fausses</th><th>Sans réponse</th><th>Manuscrites à corriger</th>
-      {% if admission %}<th>Résultat</th>{% endif %}<th></th>
+      <th>Étudiant</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>Pourcentage</th>
+      {% if quiz.note_distincte %}<th>Note</th>{% endif %}
+      {% if quiz.a_des_qcm %}<th>Fausses</th><th>Sans réponse</th>{% endif %}
+      {% if quiz.note_distincte %}<th>{% if quiz.a_des_qcm %}Manuscrites à corriger{% else %}Note à saisir{% endif %}</th>{% endif %}
+      <th>Résultat</th><th></th>
     </tr>
     {% for r in rows_page %}
     <tr>
       <td><b>{{ r.student.full_name }}</b>
           {% if r.student.student_number %}<span class="helptext">n° {{ r.student.student_number }}</span>{% endif %}</td>
-      <td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>
-      <td>{{ r.answered }}</td>
-      <td><span class="badge ok">{{ r.correct }}</span></td>
-      <td><span class="badge bad">{{ r.wrong }}</span></td>
-      <td><span class="badge grey">{{ r.blank }}</span></td>
-      <td>{% if r.pending_open %}<span class="badge warn">{{ r.pending_open }}</span>{% else %}—{% endif %}</td>
-      {% if admission %}<td>
+      {% if quiz.a_des_qcm %}<td class="score">{{ r.correct }} / {{ r.n_qcm }}</td>{% endif %}
+      <td>{% include "grader/_pourcentage.html" with pct=r.pct %}</td>
+      {% if quiz.note_distincte %}<td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>{% endif %}
+      {% if quiz.a_des_qcm %}<td><span class="badge bad">{{ r.wrong }}</span></td>
+      <td><span class="badge grey">{{ r.blank }}</span></td>{% endif %}
+      {% if quiz.note_distincte %}<td>{% if r.pending_open %}<span class="badge warn">{{ r.pending_open }}</span>{% else %}—{% endif %}</td>{% endif %}
+      <td>
         {% if r.resultat == "admis" %}<span class="badge ok">{% if quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</span>
         {% elif r.resultat == "en_attente" %}<span class="badge warn">En attente</span>
-        {% else %}<span class="badge bad">{% if quiz.auto_enroll %}Non admis{% else %}Non réussi{% endif %}</span>{% endif %}
-      </td>{% endif %}
-      <td>{% for s in r.sheets %}
-        <a class="btn small secondary" href="{% url 'sheet_review' s.pk %}">copie p{{ s.page_index|add:1 }}</a>
-      {% endfor %}
+        {% elif r.resultat == "refuse" %}<span class="badge bad">{% if quiz.auto_enroll %}Non admis{% else %}Non réussi{% endif %}</span>
+        {% else %}<a class="helptext" href="#admission" title="Indiquez la note minimale">à fixer</a>{% endif %}
+      </td>
+      <td>{% for s in r.sheets %}{% if s.image %}
+        <a class="btn small secondary" href="{% url 'sheet_review' s.pk %}">{% if quiz.type_epreuve == "oral" %}fiche{% else %}copie p{{ s.page_index|add:1 }}{% endif %}</a>
+      {% endif %}{% endfor %}
         <a class="btn small secondary" title="Bulletin individuel"
            href="{% url 'quiz_bulletins_pdf' quiz.pk %}?student={{ r.student.pk }}{% if batch %}&batch={{ batch.pk }}{% endif %}">🧾</a></td>
     </tr>
@@ -246,6 +269,7 @@
     </table>
     </div>
   </div>
+  {% if quiz.a_des_qcm %}
   <div class="card">
     <h2>Réussite par question</h2>
     <div class="table-wrap">
@@ -279,8 +303,10 @@
       tiers fort et du tiers faible du classement : elle n'est calculée qu'à
       partir de dix copies.</p>
   </div>
+  {% endif %}
 </div>
 
+{% if quiz.a_des_qcm %}
 <div class="card">
   <h2>Où sont parties les réponses</h2>
   <p class="helptext helptext--serre">Savoir qu'une question a fait huit
@@ -311,5 +337,6 @@
   </div>
   <p class="helptext">La case encadrée est la bonne réponse enregistrée.</p>
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}

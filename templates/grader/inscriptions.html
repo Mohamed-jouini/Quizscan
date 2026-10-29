@@ -1,0 +1,148 @@
+{% extends "grader/base.html" %}
+{% block title %}Inscriptions — QuizScan{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>Inscriptions</h1>
+    <p class="page-head__meta"><span><b>{{ total }}</b> étudiant(s) inscrit(s) au registre de l'établissement</span></p>
+    <p class="helptext">Chacun a sa carte avec un QR code (n°, nom, prénom). Les listes de candidats importées dans un concours ou une classe sont vérifiées contre ce registre.</p>
+  </div>
+  <div class="page-head__actions">
+    {% if n_trouves %}
+    <a class="btn small secondary" href="{% url 'inscriptions_cartes' %}{% if recherche %}?q={{ recherche|urlencode }}{% endif %}"
+       target="_blank">Cartes d'inscription (PDF){% if recherche %} — recherche{% endif %}</a>
+    {% endif %}
+  </div>
+</header>
+
+{% if rapport %}
+<div class="card verif">
+  <h2>Bilan de l'import</h2>
+  <div class="verif__chiffres">
+    <span class="verif__chiffre verif__chiffre--ok"><b>{{ rapport.crees|length }}</b> inscrit(s)</span>
+    <span class="verif__chiffre"><b>{{ rapport.deja|length }}</b> déjà inscrit(s)</span>
+    <span class="verif__chiffre verif__chiffre--alerte"><b>{{ rapport.conflits|length }}</b> n° déjà pris par un autre nom</span>
+    <span class="verif__chiffre verif__chiffre--alerte"><b>{{ rapport.sans_numero|length }}</b> sans n° (non inscrits)</span>
+  </div>
+  {% if rapport.conflits or rapport.sans_numero %}
+  <div class="table-wrap">
+    <table>
+      <tr><th>N°</th><th>Dans la liste</th><th>Au registre</th><th>Constat</th></tr>
+      {% for l in rapport.conflits %}
+      <tr><td>{{ l.numero }}</td><td>{{ l.nom }} {{ l.prenom }}</td><td>{{ l.inscrit }}</td>
+        <td><span class="badge warn">N° déjà attribué : rien n'a été écrasé</span></td></tr>
+      {% endfor %}
+      {% for l in rapport.sans_numero %}
+      <tr><td>—</td><td>{{ l.nom }} {{ l.prenom }}</td><td>—</td>
+        <td><span class="badge bad">Sans n° d'inscription</span></td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="grid2">
+  <div class="card">
+    <h2>Inscrire un étudiant</h2>
+    <form method="post" class="form-inscription">{% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="form-inscription__champs">
+        <div>{{ form.nom.label_tag }}{{ form.nom }}{{ form.nom.errors }}</div>
+        <div>{{ form.prenom.label_tag }}{{ form.prenom }}{{ form.prenom.errors }}</div>
+        <div>{{ form.numero.label_tag }}{{ form.numero }}{{ form.numero.errors }}</div>
+      </div>
+      <p><button class="btn" name="inscrire" value="1" type="submit">Inscrire et créer son QR code</button></p>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Inscrire depuis une liste</h2>
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      {{ fichier.file.errors }}{{ fichier.file }}
+      <span class="helptext">{{ fichier.file.help_text }} Un n° déjà inscrit n'est jamais écrasé.</span>
+      <p><button class="btn" name="importer" value="1" type="submit">Importer le fichier</button></p>
+    </form>
+    <details class="plie">
+      <summary>… ou copier-coller une liste</summary>
+      <form method="post">{% csrf_token %}
+        {{ collage.text.errors }}{{ collage.text }}
+        <p><button class="btn secondary" name="coller" value="1" type="submit">Inscrire la liste</button></p>
+      </form>
+    </details>
+  </div>
+</div>
+
+<form class="recherche-etudiant" method="get" role="search">
+  <div class="recherche-etudiant__champ">
+    <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+    <label for="id_q" class="visually-hidden">Rechercher un inscrit</label>
+    <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
+           placeholder="Rechercher — nom, prénom ou n° d'inscription">
+    {% if recherche %}
+    <a class="recherche-etudiant__effacer" href="{% url 'inscriptions' %}"
+       title="Effacer la recherche" aria-label="Effacer la recherche">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+    {% endif %}
+  </div>
+  <button class="btn" type="submit">Rechercher</button>
+  {% if recherche %}
+  <span class="recherche-etudiant__bilan {% if not n_trouves %}is-vide{% endif %}">
+    {{ n_trouves }} résultat{{ n_trouves|pluralize }} pour « {{ recherche }} »</span>
+  {% endif %}
+</form>
+
+<div class="card">
+  {% if page_inscrits.object_list %}
+  <form method="post">{% csrf_token %}
+    <input type="hidden" name="q" value="{{ recherche }}">
+    <div class="barre-choix">
+      <label for="id_groupe">Ajouter les étudiants cochés à</label>
+      <select id="id_groupe" name="groupe">
+        {% for g, concours in groupes %}{% if concours %}<option value="{{ g.pk }}">Concours — {{ g.name }}</option>{% endif %}{% endfor %}
+        {% for g, concours in groupes %}{% if not concours %}<option value="{{ g.pk }}">Classe — {{ g.name }}</option>{% endif %}{% endfor %}
+      </select>
+      <button class="btn small" name="ajouter" value="1" type="submit" {% if not groupes %}disabled{% endif %}>Ajouter</button>
+      <button class="btn small secondary" type="submit" formaction="{% url 'inscriptions_cartes' %}"
+              formtarget="_blank">Cartes des cochés (PDF)</button>
+    </div>
+    {% if not groupes %}<p class="helptext">Créez d'abord une classe ou un concours pour y ajouter des inscrits.</p>{% endif %}
+    {% include "grader/_pagination.html" with page=page_inscrits label="Inscrits" querystring=querystring %}
+    <div class="table-wrap">
+      <table>
+        <tr><th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="Tout cocher"></th>
+          <th>N° d'inscription</th><th>Nom</th><th>Prénom</th><th>Classes / concours</th><th>QR</th><th></th></tr>
+        {% for i in page_inscrits %}
+        <tr>
+          <td class="col-choix"><input type="checkbox" name="choix" value="{{ i.pk }}" aria-label="Choisir {{ i.nom_complet }}"></td>
+          <td><b>{{ i.numero }}</b></td><td>{{ i.nom }}</td><td>{{ i.prenom }}</td>
+          <td>{% if i.n_places %}{{ i.n_places }}{% else %}<span class="helptext">—</span>{% endif %}</td>
+          <td><img class="qr-mini" src="{% url 'inscrit_qr' i.pk %}" alt="QR {{ i.nom_complet }}" width="46" height="46" loading="lazy"></td>
+          <td class="actions-ligne">
+            <a class="btn small secondary" href="{% url 'inscriptions_cartes' %}?choix={{ i.pk }}" target="_blank">Carte</a>
+            {% if user.is_superuser or i.cree_par_id == user.pk %}
+            <button class="btn small danger" name="supprimer" value="{{ i.pk }}" type="submit"
+                    onclick="return confirm('Retirer {{ i.nom_complet|escapejs }} du registre ? Ses classes et concours le gardent.')">✕</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% include "grader/_pagination.html" with page=page_inscrits label="Inscrits" querystring=querystring %}
+  </form>
+  <script>
+  document.querySelectorAll(".tout-cocher").forEach(function (maitre) {
+    maitre.addEventListener("change", function () {
+      maitre.closest("table").querySelectorAll('input[name="choix"]').forEach(function (c) {
+        c.checked = maitre.checked;
+      });
+    });
+  });
+  </script>
+  {% elif recherche %}
+  <p>Aucun inscrit ne correspond à « {{ recherche }} ».</p>
+  {% else %}
+  <p>Aucun étudiant inscrit pour l'instant : inscrivez-en un ci-dessus, ou importez une liste.</p>
+  {% endif %}
+</div>
+{% endblock %}

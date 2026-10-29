@@ -1,0 +1,55 @@
+{% extends "grader/base.html" %}
+{% block title %}Communiqués — QuizScan{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>Communiqués</h1>
+    <p class="page-head__meta">Avis publiés sur l'espace public : dates d'examen, convocations, salles, consignes…</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn small secondary" href="{% url 'public_accueil' %}" target="_blank" rel="noopener">Voir l'espace public</a>
+  </div>
+</header>
+<div class="grid2">
+  <div class="card">
+    <h2>{% if modifie %}Modifier le communiqué{% else %}Nouveau communiqué{% endif %}</h2>
+    <form method="post">{% csrf_token %}
+      {% if modifie %}<input type="hidden" name="modifier" value="{{ modifie.pk }}">{% endif %}
+      {{ form.titre.label_tag }}{{ form.titre }}{{ form.titre.errors }}
+      {{ form.texte.label_tag }}{{ form.texte }}{{ form.texte.errors }}
+      <span class="helptext">Texte simple ; les retours à la ligne sont conservés.</span>
+      <label class="case">{{ form.publie }} Publier sur l'espace public</label>
+      <span class="helptext">{{ form.publie.help_text }}</span>
+      <p><button class="btn" type="submit">{% if modifie %}Enregistrer{% else %}Publier{% endif %}</button>
+        {% if modifie %}<a class="btn secondary" href="{% url 'communiques' %}">Annuler</a>{% endif %}</p>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Communiqués ({{ page_avis.paginator.count }})</h2>
+    {% if page_avis.object_list %}
+    {% include "grader/_pagination.html" with page=page_avis label="Communiqués" %}
+    <ul class="avis-liste">
+      {% for a in page_avis %}
+      <li class="avis-liste__item">
+        <div class="avis-liste__tete">
+          <b>{{ a.titre }}</b>
+          {% if a.publie %}<span class="badge ok">publié</span>{% else %}<span class="badge grey">brouillon</span>{% endif %}
+        </div>
+        <span class="helptext">{{ a.cree_le|date:"d/m/Y H:i" }}{% if a.auteur %} · {{ a.auteur.get_full_name|default:a.auteur.username }}{% endif %}</span>
+        <p class="avis-liste__texte">{{ a.texte|truncatechars:220|linebreaksbr }}</p>
+        {% if user.is_superuser or a.auteur_id == user.pk %}
+        <div class="actions-ligne">
+          <a class="btn small secondary" href="?modifier={{ a.pk }}">Modifier</a>
+          <form class="inline" method="post">{% csrf_token %}
+            <button class="btn small danger" name="supprimer" value="{{ a.pk }}" type="submit"
+                    onclick="return confirm('Supprimer ce communiqué ?')">Supprimer</button>
+          </form>
+        </div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p>Aucun communiqué pour l'instant.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

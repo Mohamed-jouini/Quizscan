@@ -1,0 +1,35 @@
+{% extends "public/base.html" %}
+{% block title %}{{ quiz.title }}{% endblock %}
+{% block content %}
+<section class="pub-hero pub-hero--court">
+  <h1>{{ quiz.title }}</h1>
+  <p>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %}{% if quiz.publie_le %} · publié le {{ quiz.publie_le|date:"d/m/Y" }}{% endif %}</p>
+  {% if quiz.resultats_publies %}{% include "public/_recherche.html" %}{% endif %}
+</section>
+
+{% if admis is not None %}
+<section class="pub-section">
+  <div class="pub-section__tete">
+    <h2>Liste des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %} par ordre de mérite</h2>
+    <span class="badge ok">{{ admis|length }} {% if quiz.auto_enroll %}admis{% else %}réussi(s){% endif %}</span>
+  </div>
+  {% if admis %}
+  {% include "grader/_pagination.html" with page=admis_page label="Lignes" %}
+  <div class="pub-tableau">
+    <table>
+      <thead><tr><th>Rang</th><th>N° d'inscription</th><th>Nom</th><th>Prénom</th><th>{% if quiz.a_des_qcm %}Bonnes réponses{% else %}Note{% endif %}</th><th>Pourcentage</th></tr></thead>
+      <tbody>
+      {% for a in admis_page %}
+      <tr><td>{{ a.rang }}</td><td>{{ a.numero|default:"—" }}</td><td>{{ a.nom }}</td><td>{{ a.prenom }}</td>
+        <td>{% if quiz.a_des_qcm %}<b>{{ a.correct }}</b> / {{ a.n_qcm }}{% else %}<b>{{ a.note|floatformat:"-2" }}</b> / {{ a.sur|floatformat:"-2" }}{% endif %}</td><td>{{ a.pct }} %</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "grader/_pagination.html" with page=admis_page label="Lignes" %}
+  {% else %}<p class="pub-vide">Aucun {% if quiz.auto_enroll %}admis{% else %}réussi{% endif %} pour l'instant.</p>{% endif %}
+</section>
+{% elif quiz.resultats_publies %}
+<p class="pub-vide">Les notes de cette épreuve se consultent individuellement, avec le n° d'inscription.</p>
+{% endif %}
+{% endblock %}

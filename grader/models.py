@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils.functional import cached_property
 
 # Hauteur maximale d'une zone de réponse manuscrite (mm) : au-delà, le bloc
 # ne tient plus dans la zone imprimable d'une page A4 (voir layout.py).
@@ -52,12 +53,42 @@ class ClassGroup(models.Model):
             self.enseignants.add(self.owner_id)
 
 
+class Inscrit(models.Model):
+    """Registre des inscriptions de l'établissement : une personne, un
+    n° d'inscription, quelles que soient les classes ou concours où elle
+    figure ensuite. C'est la référence contre laquelle une liste de
+    candidats importée est vérifiée (même n°, même nom ?)."""
+    numero = models.CharField("n° d'inscription", max_length=40, unique=True)
+    nom = models.CharField("nom", max_length=80)
+    prenom = models.CharField("prénom", max_length=80)
+    cree_par = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                 null=True, blank=True, related_name="+",
+                                 verbose_name="inscrit par")
+    cree_le = models.DateTimeField("inscrit le", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "inscription"
+        verbose_name_plural = "inscriptions"
+        ordering = ["nom", "prenom"]
+
+    @property
+    def nom_complet(self):
+        return f"{self.nom} {self.prenom}"
+
+    def __str__(self):
+        return f"{self.numero} — {self.nom_complet}"
+
+
 class Student(models.Model):
     class_group = models.ForeignKey(ClassGroup, on_delete=models.CASCADE,
                                     related_name="students", verbose_name="classe")
     last_name = models.CharField("nom", max_length=80)
     first_name = models.CharField("prénom", max_length=80)
     student_number = models.CharField("n° d'inscription", max_length=40, blank=True)
+    # Fiche du registre des inscriptions (même n°), quand elle existe.
+    inscrit = models.ForeignKey(Inscrit, on_delete=models.SET_NULL, null=True,
+                                blank=True, related_name="places",
+                                verbose_name="inscription")
 
     class Meta:
         verbose_name = "étudiant"
@@ -71,6 +102,11 @@ class Student(models.Model):
     def __str__(self):
         return self.full_name
 
+
+# Chaque réponse juste à une QCM vaut UN point (règle de l'établissement,
+# 14 octobre 2026) : la note se lit alors en nombre de bonnes réponses.
+# Seules les réponses manuscrites gardent un barème libre.
+POINTS_QCM = 1.0
 
 # Ordre alphabétique arabe (hijā'ī) : أ ب ت ث ج ح خ د ذ ر ...
 ARABIC_LETTERS = ["أ", "ب", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر"]
@@ -106,6 +142,31 @@ class Quiz(models.Model):
                               null=True, related_name="quizzes",
                               verbose_name="enseignant")
     title = models.CharField("titre", max_length=200)
+    # Nature de l'épreuve. QCM : cases noircies, lues au scan. Écrit : copie
+    # rédigée, corrigée à la main ; le correcteur noircit la note dans la
+    # grille de la page de garde, lue au scan avec l'identité (QR ou n°).
+    # Oral : notes saisies à l'écran, sans feuille.
+    TYPES = [
+        ("qcm", "QCM — cases à noircir, corrigées automatiquement"),
+        ("ecrit", "Écrit (rédaction) — copie corrigée à la main, note "
+                  "noircie par le correcteur puis scannée"),
+        ("oral", "Oral — notes saisies à l'écran"),
+    ]
+    type_epreuve = models.CharField("type d'épreuve", max_length=6, choices=TYPES,
+                                    default="qcm")
+    note_sur = models.FloatField(
+        "note sur", default=20.0,
+        validators=[MinValueValidator(1), MaxValueValidator(999)],
+        help_text="Écrit et oral : barème de la note (ex. 20).")
+    sujet_texte = models.TextField(
+        "énoncé du sujet", blank=True,
+        help_text="Écrit : texte du sujet, imprimé dans le document « Sujet ». "
+                  "Une ligne vide sépare deux paragraphes.")
+    pages_redaction = models.PositiveSmallIntegerField(
+        "pages de rédaction", default=1,
+        validators=[MaxValueValidator(6)],
+        help_text="Écrit : feuilles lignées imprimées après la page de garde "
+                  "(0 à 6). Elles ne se scannent pas.")
     class_group = models.ForeignKey(ClassGroup, on_delete=models.PROTECT,
                                     related_name="quizzes", verbose_name="classe")
     ID_MODES = [
@@ -173,6 +234,17 @@ class Quiz(models.Model):
     duree = models.CharField(
         "durée de l'épreuve", max_length=60, blank=True,
         help_text="Ex. « 1 h 30 » ou « ساعة ونصف ».")
+    # Espace public : chaque étudiant y consulte sa note avec son
+    # n° d'inscription ; la liste des admis peut y être affichée en plus.
+    resultats_publies = models.BooleanField(
+        "résultats publiés", default=False,
+        help_text="Chaque étudiant consulte sa note sur l'espace public avec "
+                  "son n° d'inscription.")
+    admis_publies = models.BooleanField(
+        "liste des admis publiée", default=False,
+        help_text="La liste des admis (rang, n°, nom) est affichée sur "
+                  "l'espace public.")
+    publie_le = models.DateTimeField("publié le", null=True, blank=True)
     created_at = models.DateTimeField("créée le", auto_now_add=True)
 
     class Meta:
@@ -195,6 +267,23 @@ class Quiz(models.Model):
     @property
     def max_score(self):
         return sum(q.points for q in self.questions.all())
+
+    @property
+    def est_qcm(self):
+        return self.type_epreuve == "qcm"
+
+    @cached_property
+    def a_des_qcm(self):
+        """Des QCM à afficher en « bonnes réponses » ? (pas à l'écrit ni à
+        l'oral, dont la note est portée par une seule question « Note »)."""
+        return self.questions.filter(qtype="qcm").exists()
+
+    @cached_property
+    def note_distincte(self):
+        """La note diffère du nombre de bonnes réponses (une QCM = 1 point)
+        seulement avec une pénalité ou des réponses manuscrites : sinon, on
+        n'affiche pas deux fois le même chiffre."""
+        return bool(self.wrong_penalty) or self.questions.filter(qtype="open").exists()
 
     @property
     def questions_sans_corrige(self):
@@ -225,7 +314,10 @@ class Question(models.Model):
     text = models.CharField("intitulé de la question", max_length=500, blank=True)
     # Textes des choix de réponse (questionnaire complet) : liste de chaînes
     choices = models.JSONField("choix de réponse", default=list, blank=True)
-    points = models.FloatField("barème (points)", default=1.0)
+    points = models.FloatField(
+        "barème (points)", default=1.0,
+        help_text="Une QCM vaut toujours 1 point ; barème libre pour une "
+                  "réponse manuscrite.")
     # Pour les QCM : index de la bonne réponse (0=A, 1=B, ...)
     correct_choice = models.PositiveSmallIntegerField("bonne réponse", null=True, blank=True)
     # Nombre de cases quand le texte des choix n'est pas saisi (grille seule)
@@ -249,6 +341,13 @@ class Question(models.Model):
 
     def __str__(self):
         return f"Q{self.order} ({self.get_qtype_display()})"
+
+    def save(self, *args, **kwargs):
+        # Quel que soit le chemin (formulaire, import, banque, administration),
+        # une QCM vaut un point.
+        if self.qtype == "qcm":
+            self.points = POINTS_QCM
+        super().save(*args, **kwargs)
 
     @property
     def correct_letter(self):
@@ -321,6 +420,8 @@ class SheetScan(models.Model):
     STATUS = [("pending", "En attente"),
               ("ok", "Lu avec succès"),
               ("no_markers", "Repères non détectés"),
+              # écrit : page de rédaction scannée avec la copie (sans repères)
+              ("ignoree", "Page de rédaction, ignorée"),
               ("no_match", "Étudiant non identifié"),
               ("error", "Erreur")]
     batch = models.ForeignKey(ScanBatch, on_delete=models.CASCADE,
@@ -494,3 +595,26 @@ class Modification(models.Model):
 
     def __str__(self):
         return f"{self.get_action_display()} — {self.objet}"
+
+
+class Communique(models.Model):
+    """Avis publié sur l'espace public : dates d'examen, convocations,
+    salles, consignes… Visible de tous dès qu'il est publié."""
+    titre = models.CharField("titre", max_length=200)
+    texte = models.TextField("texte")
+    publie = models.BooleanField(
+        "publié", default=True,
+        help_text="Décoché : le communiqué est gardé en brouillon, invisible "
+                  "du public.")
+    auteur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                               null=True, blank=True, related_name="+",
+                               verbose_name="auteur")
+    cree_le = models.DateTimeField("date", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "communiqué"
+        verbose_name_plural = "communiqués"
+        ordering = ["-cree_le"]
+
+    def __str__(self):
+        return self.titre

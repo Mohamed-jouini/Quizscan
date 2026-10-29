@@ -83,7 +83,7 @@
   {% include "grader/_pagination.html" with page=sheets_page label="Pages" %}
   <div class="table-wrap">
     <table>
-    <tr><th>Page</th><th>Aperçu</th><th>Nom lu (OCR)</th><th>Étudiant</th><th>Statut</th><th></th></tr>
+    <tr><th>Page</th><th>Aperçu</th><th>{% if batch.quiz.type_epreuve == "ecrit" %}Identification lue{% else %}Nom lu (OCR){% endif %}</th><th>Étudiant</th><th>Statut</th><th></th></tr>
     {% for s in sheets_page %}
     <tr>
       <td>{{ s.source_name }}<br><span class="helptext">page fiche {{ s.page_index|add:1 }}</span></td>
@@ -96,6 +96,7 @@
         {% if s.status == "ok" %}<span class="badge ok">Lu</span>
         {% elif s.status == "no_match" %}<span class="badge warn">À identifier</span>
         {% elif s.status == "no_markers" %}<span class="badge bad">Repères non détectés</span>
+        {% elif s.status == "ignoree" %}<span class="badge grey">Page de rédaction</span>
         {% else %}<span class="badge bad">{{ s.get_status_display }}</span>{% endif %}
         {% if s.error_message %}<span class="helptext">{{ s.error_message }}</span>{% endif %}
       </td>

@@ -35,35 +35,51 @@
     <form method="post">{% csrf_token %}
       {{ form.non_field_errors }}
       {% for field in form %}
-        <div id="row_{{ field.name }}"{% if field.name == "grading_mode" %} class="radios"{% endif %}>
+        <div id="row_{{ field.name }}"{% if field.name == "grading_mode" or field.name == "type_epreuve" %} class="radios"{% endif %}>
         {{ field.errors }}
         <label>{{ field.label }}</label>{{ field }}
         {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
         </div>
       {% endfor %}
-      <span class="helptext">Le nombre de choix (A, B, C…) se règle pour chaque question.</span>
+      <span class="helptext" id="aide_qcm">Le nombre de choix (A, B, C…) se règle pour chaque question.</span>
       <p><button class="btn" type="submit">
         {% if is_concours %}Créer le concours{% else %}Créer le quiz{% endif %}</button></p>
     </form>
   </div>
 </div>
 <script>
-// « Nombre de chiffres du n° » ne concerne que la grille de n° d'inscription
+// Les champs affichés suivent le type d'épreuve :
+// QCM -> fiche et pénalité ; écrit -> barème, identification, en-tête et
+// durée du sujet ; oral -> barème seulement.
 (function () {
-  var mode = document.getElementById("id_id_mode");
-  var row = document.getElementById("row_id_digits");
-  if (!mode || !row) return;
-  function sync() { row.hidden = mode.value !== "grid"; }
-  mode.addEventListener("change", sync); sync();
-})();
-// En-tête et durée ne s'impriment que sur le sujet (« sujet séparé »)
-(function () {
-  var mode = document.getElementById("id_sheet_mode");
-  var rows = ["row_entete", "row_duree"].map(function (id) {
-    return document.getElementById(id); }).filter(Boolean);
-  if (!mode || !rows.length) return;
-  function sync() { rows.forEach(function (r) { r.hidden = mode.value !== "split"; }); }
-  mode.addEventListener("change", sync); sync();
+  function row(nom) { return document.getElementById("row_" + nom); }
+  function cacher(nom, oui) { var r = row(nom); if (r) r.hidden = oui; }
+  var sheet = document.getElementById("id_sheet_mode");
+  var idmode = document.getElementById("id_id_mode");
+  function type() {
+    var c = document.querySelector('input[name="type_epreuve"]:checked');
+    return c ? c.value : "qcm";
+  }
+  function sync() {
+    var t = type(), qcm = t === "qcm", oral = t === "oral";
+    cacher("note_sur", qcm);
+    cacher("sheet_mode", !qcm);
+    cacher("wrong_penalty", !qcm);
+    cacher("id_mode", oral);
+    cacher("grading_mode", oral);
+    // en-tête et durée : imprimés sur le sujet (QCM « sujet séparé », écrit)
+    var sujet = t === "ecrit" || (qcm && sheet && sheet.value === "split");
+    cacher("entete", !sujet);
+    cacher("duree", !sujet);
+    cacher("id_digits", oral || !idmode || idmode.value !== "grid");
+    var aide = document.getElementById("aide_qcm");
+    if (aide) aide.hidden = !qcm;
+  }
+  document.querySelectorAll('input[name="type_epreuve"]').forEach(function (r) {
+    r.addEventListener("change", sync); });
+  if (sheet) sheet.addEventListener("change", sync);
+  if (idmode) idmode.addEventListener("change", sync);
+  sync();
 })();
 </script>
 {% endblock %}

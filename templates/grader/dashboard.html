@@ -185,6 +185,118 @@
   </div>
 </div>
 
+{# ---- Résultats et admissions, toutes épreuves notées ---- #}
+<section class="bilan" aria-labelledby="titre-bilan">
+  <div class="section-titre">
+    <h2 id="titre-bilan">Résultats et admissions</h2>
+    <span class="helptext helptext--serre">{% if bilan.n_notes %}{{ bilan.n_notes }} note{{ bilan.n_notes|pluralize }} sur {{ bilan.n_epreuves }} épreuve{{ bilan.n_epreuves|pluralize }}{% endif %}</span>
+  </div>
+  {% if bilan.n_notes %}
+  <div class="tiles">
+    <div class="tile tile--accent">
+      <span class="tile__label">Admis / réussis</span>
+      <div class="tile__row">
+        <span class="tile__value">{{ bilan.admis }}<span class="tile__unit">/ {{ bilan.jugees }}</span></span>
+        {% if bilan.jugees %}<span class="chip">{{ bilan.pct_admis }} %</span>{% endif %}
+      </div>
+      <span class="tile__note">{% if bilan.jugees %}candidats ou étudiants ayant atteint la note minimale{% else %}Aucune note minimale fixée : fixez-la sur la page Résultats d'une épreuve.{% endif %}</span>
+    </div>
+    <div class="tile">
+      <span class="tile__label">Non admis</span>
+      <div class="tile__row">
+        <span class="tile__value">{{ bilan.refuses }}</span>
+        {% if bilan.jugees %}<span class="chip bad">{{ bilan.pct_refuses }} %</span>{% endif %}
+      </div>
+      <span class="tile__note">sous la note minimale, copie entièrement notée</span>
+    </div>
+    <div class="tile">
+      <span class="tile__label">En attente</span>
+      <div class="tile__row">
+        <span class="tile__value">{{ bilan.attente }}</span>
+        {% if bilan.attente %}<span class="chip warn">à noter</span>{% endif %}
+      </div>
+      <span class="tile__note">sous la note minimale, mais une réponse manuscrite reste à noter</span>
+    </div>
+    <div class="tile">
+      <span class="tile__label">Moyenne générale</span>
+      <div class="tile__row">
+        <span class="tile__value">{{ bilan.moyenne_pct }}<span class="tile__unit">%</span></span>
+        <span class="chip">{{ bilan.reussite_50 }} % ont la moitié</span>
+      </div>
+      <span class="tile__note">du barème, toutes notes confondues ; {{ bilan.reussite_50 }} % des notes atteignent au moins la moitié du barème</span>
+    </div>
+  </div>
+  {% if bilan.n_sans_seuil %}
+  <p class="helptext helptext--serre bilan__remarque">{{ bilan.n_sans_seuil }} épreuve{{ bilan.n_sans_seuil|pluralize }} sans note minimale : comptée{{ bilan.n_sans_seuil|pluralize }} dans la moyenne et la répartition, pas dans l'admission.</p>
+  {% endif %}
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card__head">
+        <h2>Admission par épreuve</h2>
+        <span class="spacer"></span>
+        <span class="legende" aria-hidden="true">
+          <span><i class="pastille pastille--admis"></i>Admis</span>
+          <span><i class="pastille pastille--attente"></i>En attente</span>
+          <span><i class="pastille pastille--refuses"></i>Non admis</span>
+        </span>
+      </div>
+      <ul class="admission-liste">
+        {% for e in bilan.par_epreuve %}
+        <li>
+          <div class="admission-liste__tete">
+            <a href="{% url 'quiz_results' e.quiz.pk %}"><b>{{ e.quiz.title|truncatechars:38 }}</b></a>
+            <span class="badge grey">{% if e.quiz.type_epreuve == "ecrit" %}écrit{% elif e.quiz.type_epreuve == "oral" %}oral{% else %}QCM{% endif %}{% if e.quiz.auto_enroll %} · concours{% endif %}</span>
+            <span class="spacer"></span>
+            {% if e.seuil %}<span class="admission-liste__chiffre"><b>{{ e.admis }}</b> / {{ e.n }} admis · {{ e.pct_admis }} %</span>{% endif %}
+          </div>
+          {% if e.seuil %}
+          <div class="barre-empilee" role="img"
+               aria-label="{{ e.admis }} admis, {{ e.attente }} en attente, {{ e.refuses }} non admis sur {{ e.n }}">
+            {% if e.admis %}<i class="pastille--admis" style="width:{{ e.w_admis|stringformat:'s' }}%" title="Admis : {{ e.admis }} ({{ e.w_admis|floatformat:0 }} %)"></i>{% endif %}
+            {% if e.attente %}<i class="pastille--attente" style="width:{{ e.w_attente|stringformat:'s' }}%" title="En attente : {{ e.attente }}"></i>{% endif %}
+            {% if e.refuses %}<i class="pastille--refuses" style="width:{{ e.w_refuses|stringformat:'s' }}%" title="Non admis : {{ e.refuses }} ({{ e.w_refuses|floatformat:0 }} %)"></i>{% endif %}
+          </div>
+          <span class="helptext helptext--serre">moyenne {{ e.moyenne_pct }} % du barème · {{ e.n }} noté{{ e.n|pluralize }}</span>
+          {% else %}
+          <span class="helptext helptext--serre">{{ e.n }} noté{{ e.n|pluralize }} · moyenne {{ e.moyenne_pct }} % ·
+            <a href="{% url 'quiz_results' e.quiz.pk %}#admission">fixer la note minimale</a> pour compter les admis</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card__head"><h2>Répartition des résultats</h2></div>
+      <p class="helptext helptext--serre">Nombre de notes par tranche, en % du barème de chaque épreuve.</p>
+      <div class="histo" role="img"
+           aria-label="{% for r in bilan.repartition %}{{ r.libelle }} : {{ r.n }}{% if not forloop.last %} ; {% endif %}{% endfor %}">
+        {% for r in bilan.repartition %}
+        <div class="histo__col" title="{{ r.libelle }} : {{ r.n }} note{{ r.n|pluralize }} ({{ r.part }} %)">
+          <span class="histo__n">{{ r.n }}</span>
+          <span class="histo__piste"><i style="height:{{ r.hauteur }}%"></i></span>
+          <span class="histo__lib">{{ r.libelle }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <p class="helptext helptext--serre">Aucune note pour l'instant : les statistiques d'admission apparaîtront après la correction des premières copies.</p>
+  {% endif %}
+
+  <div class="chiffres">
+    <span class="chiffre"><b>{{ autres.qcm }}</b> QCM</span>
+    <span class="chiffre"><b>{{ autres.ecrit }}</b> écrit{{ autres.ecrit|pluralize }}</span>
+    <span class="chiffre"><b>{{ autres.oral }}</b> ora{{ autres.oral|pluralize:"l,ux" }}</span>
+    <span class="chiffre"><b>{{ autres.concours }}</b> concours</span>
+    <a class="chiffre" href="{% url 'public_accueil' %}" target="_blank" rel="noopener"><b>{{ autres.publiees }}</b> résultat{{ autres.publiees|pluralize }} publié{{ autres.publiees|pluralize }}</a>
+    <a class="chiffre" href="{% url 'inscriptions' %}"><b>{{ autres.inscrits }}</b> inscrit{{ autres.inscrits|pluralize }} au registre</a>
+    <a class="chiffre" href="{% url 'communiques' %}"><b>{{ autres.communiques }}</b> communiqué{{ autres.communiques|pluralize }} publié{{ autres.communiques|pluralize }}</a>
+  </div>
+</section>
+
 <div class="grid2">
   {# ---- Épreuves récentes ---- #}
   <div class="card">

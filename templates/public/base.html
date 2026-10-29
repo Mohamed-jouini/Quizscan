@@ -1,0 +1,39 @@
+{% comment %}
+Squelette de l'espace public (sans compte) : résultats publiés et
+communiqués. Même feuille de style et même bascule de thème que le reste
+de l'application ; pas de menu latéral, une barre de navigation en haut.
+{% endcomment %}{% load static qs_statique %}<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Espace public{% endblock %} — QuizScan</title>
+<link rel="stylesheet" href="{% statique 'grader/quizscan.css' %}">
+<script src="{% statique 'grader/theme.js' %}"></script>
+</head>
+<body class="pub">
+{% with un=request.resolver_match.url_name %}
+<header class="pub-tete">
+  <div class="pub-tete__dedans">
+    <a class="pub-marque" href="{% url 'public_accueil' %}">
+      <span class="side__mark"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg></span>
+      <span class="pub-marque__nom">QuizScan<small>Espace public</small></span>
+    </a>
+    <nav class="pub-nav" aria-label="Espace public">
+      <a class="{% if un == 'public_accueil' %}is-active{% endif %}" href="{% url 'public_accueil' %}">Accueil</a>
+      <a class="{% if un == 'public_resultat' or un == 'public_epreuve' %}is-active{% endif %}" href="{% url 'public_resultat' %}">Résultats</a>
+      <a class="{% if un == 'public_communiques' or un == 'public_communique' %}is-active{% endif %}" href="{% url 'public_communiques' %}">Communiqués</a>
+    </nav>
+    <span class="pub-tete__outils">
+      {% include "grader/_theme_toggle.html" %}
+      <a class="btn small secondary" href="{% url 'login' %}">Espace enseignant</a>
+    </span>
+  </div>
+</header>
+<main class="pub-page">
+{% block content %}{% endblock %}
+</main>
+<footer class="pub-pied">QuizScan · résultats et communiqués publiés par l'établissement</footer>
+{% endwith %}
+</body>
+</html>

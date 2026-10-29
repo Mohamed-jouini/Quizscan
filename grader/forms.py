@@ -2,8 +2,8 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 
 from . import importers
-from .models import (MAX_CHOICES, MAX_OPEN_HEIGHT_MM, ClassGroup, Question,
-                     Quiz, choice_letter)
+from .models import (MAX_CHOICES, MAX_OPEN_HEIGHT_MM, POINTS_QCM, ClassGroup,
+                     Communique, Inscrit, Question, Quiz, choice_letter)
 
 
 class DecimalField(forms.FloatField):
@@ -30,6 +30,46 @@ class ClassGroupForm(forms.ModelForm):
     class Meta:
         model = ClassGroup
         fields = ["name"]
+
+
+class InscritForm(forms.ModelForm):
+    """Inscription d'un étudiant au registre de l'établissement."""
+
+    class Meta:
+        model = Inscrit
+        fields = ["nom", "prenom", "numero"]
+        widgets = {
+            "nom": forms.TextInput(attrs={"placeholder": "BEN SALEM",
+                                          "autocomplete": "off"}),
+            "prenom": forms.TextInput(attrs={"placeholder": "Samia",
+                                             "autocomplete": "off"}),
+            "numero": forms.TextInput(attrs={"placeholder": "104523",
+                                             "autocomplete": "off"}),
+        }
+        error_messages = {"numero": {
+            "unique": "Ce n° d'inscription est déjà attribué (voir la liste)."}}
+
+    def clean_numero(self):
+        from .inscriptions import numero_propre
+        numero = numero_propre(self.cleaned_data["numero"])
+        if not numero:
+            raise forms.ValidationError("Indiquez le n° d'inscription.")
+        return numero
+
+    def clean_nom(self):
+        return " ".join(self.cleaned_data["nom"].split()).upper()
+
+    def clean_prenom(self):
+        return " ".join(self.cleaned_data["prenom"].split())
+
+
+class CommuniqueForm(forms.ModelForm):
+    """Avis publié sur l'espace public."""
+
+    class Meta:
+        model = Communique
+        fields = ["titre", "texte", "publie"]
+        widgets = {"texte": forms.Textarea(attrs={"rows": 6})}
 
 
 class StudentImportForm(forms.Form):
@@ -137,12 +177,13 @@ class QuizForm(forms.ModelForm):
 
     class Meta:
         model = Quiz
-        fields = ["title", "class_group", "language", "sheet_mode",
-                  "entete", "duree",
+        fields = ["title", "type_epreuve", "class_group", "language", "note_sur",
+                  "sheet_mode", "entete", "duree",
                   "id_mode", "id_digits", "grading_mode", "wrong_penalty"]
         widgets = {"grading_mode": forms.RadioSelect,
+                   "type_epreuve": forms.RadioSelect,
                    "entete": forms.Textarea(attrs={"rows": 3})}
-        field_classes = {"wrong_penalty": DecimalField}
+        field_classes = {"wrong_penalty": DecimalField, "note_sur": DecimalField}
         labels = {"id_digits": "Nombre de chiffres du n° d'inscription"}
         help_texts = {"id_digits": "Taille de la grille à noircir sur la fiche "
                                    "(ex. 6 pour un n° comme 104523)."}
@@ -150,6 +191,10 @@ class QuizForm(forms.ModelForm):
     def __init__(self, *args, user=None, concours=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.concours = concours
+        # Facultatifs à l'envoi : QCM sur 20 par défaut (formulaires et
+        # scripts d'avant les épreuves écrites et orales).
+        self.fields["type_epreuve"].required = False
+        self.fields["note_sur"].required = False
         if concours:
             # un concours a sa propre liste de candidats, créée automatiquement
             del self.fields["class_group"]
@@ -165,6 +210,44 @@ class QuizForm(forms.ModelForm):
             self.fields["class_group"].queryset = qs
             self.fields["class_group"].empty_label = "— choisir une classe —"
             self.fields["class_group"].required = True
+
+    def clean_type_epreuve(self):
+        return self.cleaned_data.get("type_epreuve") or "qcm"
+
+    def clean_note_sur(self):
+        return self.cleaned_data.get("note_sur") or 20.0
+
+
+class EpreuveEcritForm(forms.ModelForm):
+    """Réglages d'une épreuve écrite : sujet, barème, copie à imprimer."""
+
+    class Meta:
+        model = Quiz
+        fields = ["sujet_texte", "entete", "duree", "note_sur", "id_mode",
+                  "id_digits", "pages_redaction"]
+        widgets = {"sujet_texte": forms.Textarea(attrs={
+                       "rows": 9, "placeholder": "Ex. Racontez un voyage qui vous a "
+                                                 "marqué…\n\nVous décrirez les lieux "
+                                                 "et vos impressions."}),
+                   "entete": forms.Textarea(attrs={"rows": 3})}
+        field_classes = {"note_sur": DecimalField}
+        labels = {"id_digits": "Nombre de chiffres du n° d'inscription",
+                  "pages_redaction": "Pages lignées après la page de garde"}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.auto_enroll:
+            self.fields["id_mode"].choices = [
+                c for c in Quiz.ID_MODES if c[0] in CONCOURS_ID_MODES]
+        if self.instance.language == "ar":
+            self.fields["sujet_texte"].widget.attrs["dir"] = "rtl"
+
+
+class EpreuveOralForm(forms.ModelForm):
+    class Meta:
+        model = Quiz
+        fields = ["note_sur"]
+        field_classes = {"note_sur": DecimalField}
 
 
 class QuestionForm(forms.ModelForm):
@@ -211,6 +294,11 @@ class QuestionForm(forms.ModelForm):
             n = min(max(n, 2), MAX_CHOICES)
         self.fields["correct_letter"].choices = \
             [("", "—")] + [(str(i), choice_letter(i, lang)) for i in range(n)]
+        # Une QCM vaut toujours 1 point : le barème ne concerne que les
+        # réponses manuscrites (champ masqué pour une QCM).
+        self.fields["points"].required = False
+        self.fields["points"].label = "Barème de la réponse manuscrite (points)"
+        self.fields["points"].help_text = "Une QCM vaut toujours 1 point."
         # Quiz en arabe : saisie de droite à gauche pour l'intitulé et les choix
         if quiz and quiz.language == "ar":
             for name in ("text", "choices_text"):
@@ -226,6 +314,8 @@ class QuestionForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
+        if data.get("qtype") == "qcm" or data.get("points") is None:
+            data["points"] = POINTS_QCM
         if data.get("qtype") == "qcm":
             # La bonne réponse est FACULTATIVE : elle peut être renseignée
             # plus tard, à la main ou en scannant la fiche remplie avec le
@@ -264,8 +354,6 @@ class BulkQcmForm(forms.Form):
     num_choices = forms.IntegerField(
         label="Nombre de choix par question", initial=4, min_value=2,
         max_value=MAX_CHOICES)
-    points = DecimalField(label="Barème par question", initial=1.0, min_value=0)
-
     def __init__(self, *args, quiz=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.quiz = quiz

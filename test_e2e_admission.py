@@ -38,13 +38,14 @@ from grader.models import (Answer, ClassGroup, Question, Quiz,  # noqa: E402
 from test_commun import enseignant_complet  # noqa: E402
 
 # nom : (QCM justes sur 4, points de la question manuscrite ou None = à noter)
+# Une QCM vaut 1 point ; la rédaction est notée sur 20 (barème total 24).
 CANDIDATS = {
-    "AMRI": (4, 4.0),        # 24 -> admis, 1er
-    "BEN SALEM": (3, 0.0),   # 15 -> admis, 2e ex aequo
-    "CHAABANE": (3, 0.0),    # 15 -> admis, 2e ex aequo
-    "ESSID": (2, 1.0),       # 11 -> non admis (copie entièrement notée)
-    "DRISS": (2, None),      # 10 -> en attente (manuscrite pas encore notée)
-    "FERCHICHI": (1, 0.0),   #  5 -> non admis
+    "AMRI": (4, 20.0),       # 24 -> admis, 1er
+    "BEN SALEM": (3, 12.0),  # 15 -> admis, 2e ex aequo
+    "CHAABANE": (3, 12.0),   # 15 -> admis, 2e ex aequo
+    "ESSID": (2, 9.0),       # 11 -> non admis (copie entièrement notée)
+    "DRISS": (2, None),      #  2 -> en attente (manuscrite pas encore notée)
+    "FERCHICHI": (1, 0.0),   #  1 -> non admis
 }
 SEUIL = 12.0
 
@@ -59,11 +60,11 @@ def _concours():
     quiz = Quiz.objects.create(title="ADM concours", class_group=groupe,
                                owner=prof, auto_enroll=True, id_mode="sticker",
                                sheet_mode="grid")
-    qcm = [Question.objects.create(quiz=quiz, order=n, qtype="qcm", points=5,
+    qcm = [Question.objects.create(quiz=quiz, order=n, qtype="qcm",
                                    num_choices=4, correct_choice=0)
            for n in range(1, 5)]
     redaction = Question.objects.create(quiz=quiz, order=5, qtype="open",
-                                        points=4)
+                                        points=20)
     lot = ScanBatch.objects.create(quiz=quiz, label="ADM lot", status="done",
                                    total_pages=len(CANDIDATS))
     for i, (nom, (justes, manuscrite)) in enumerate(CANDIDATS.items()):
@@ -75,7 +76,7 @@ def _concours():
             juste = n <= justes
             Answer.objects.create(sheet=copie, question=q,
                                   detected_choice=0 if juste else 1,
-                                  points_awarded=5.0 if juste else 0.0)
+                                  points_awarded=1.0 if juste else 0.0)
         Answer.objects.create(sheet=copie, question=redaction,
                               points_awarded=manuscrite,
                               manually_set=manuscrite is not None)
@@ -93,7 +94,9 @@ def main():
     page = client.get(f"/quiz/{quiz.pk}/resultats/").content.decode()
     assert "indiquez la <b>note minimale d'admission</b>" in page, \
         "sans seuil, la page doit dire comment obtenir la liste des admis"
-    assert "<th>Résultat</th>" not in page
+    # sans seuil, la colonne « Résultat » invite à le fixer
+    assert "<th>Résultat</th>" in page and "à fixer" in page
+    assert "Non admis" not in page
     # Le bouton « Bulletins des admis » est là même sans seuil : il mène au
     # réglage (avant, il n'apparaissait qu'une fois le seuil réglé ailleurs,
     # et on concluait qu'il n'existait pas).
@@ -137,7 +140,7 @@ def main():
              for r in adm["classement"]]
     assert rangs == [("AMRI", 1, 24.0), ("BEN SALEM", 2, 15.0),
                      ("CHAABANE", 2, 15.0), ("ESSID", 4, 11.0),
-                     ("DRISS", 5, 10.0), ("FERCHICHI", 6, 5.0)], rangs
+                     ("DRISS", 5, 2.0), ("FERCHICHI", 6, 1.0)], rangs
     resultats = {r["student"].last_name: r["resultat"] for r in rows}
     assert resultats["DRISS"] == "en_attente", "manuscrite à noter : pas encore refusé"
     assert resultats["ESSID"] == "refuse" and resultats["AMRI"] == "admis"
@@ -145,6 +148,22 @@ def main():
         ["AMRI", "BEN SALEM", "CHAABANE"]
     print("  classement     3 admis sur 6 (50 %), ex aequo au même rang, "
           "1 en attente de notation")
+
+    # ----------------------------------------- tableau de bord : le bilan
+    bilan = services.bilan_admissions(Quiz.objects.filter(pk=quiz.pk))
+    assert (bilan["admis"], bilan["attente"], bilan["refuses"], bilan["jugees"]) == \
+        (3, 1, 2, 6), bilan
+    assert bilan["pct_admis"] == 50 and bilan["n_notes"] == 6
+    assert sum(r["n"] for r in bilan["repartition"]) == 6
+    e = bilan["par_epreuve"][0]
+    assert (e["w_admis"], e["w_attente"]) == (50.0, 16.7), e
+    accueil = client.get("/").content.decode()
+    for attendu in ("Résultats et admissions", "Admis / réussis", "Non admis",
+                    "Admission par épreuve", "Répartition des résultats",
+                    "<b>3</b> / 6 admis · 50 %", 'style="width:50.0%"'):
+        assert attendu in accueil, f"« {attendu} » absent du tableau de bord"
+    print("  tableau bord   admis 3, en attente 1, non admis 2 ; barre par "
+          "épreuve et répartition OK")
 
     # ----------------------------------------------- 4. page des résultats
     page = client.get(f"/quiz/{quiz.pk}/resultats/").content.decode()

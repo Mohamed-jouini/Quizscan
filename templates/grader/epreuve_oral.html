@@ -1,0 +1,124 @@
+{% extends "grader/base.html" %}
+{% block title %}{{ quiz.title }} — QuizScan{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>{{ quiz.title }}</h1>
+    <p class="page-head__meta"><span class="badge info">Épreuve orale</span>
+      <span>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b> · <b>{{ n_notes }}</b> / {{ lignes|length }} noté(s)</span></p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
+    <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">Résultats</a>
+  </div>
+</header>
+
+<ol class="etapes">
+  <li class="{% if quiz.sheet_pdf %}is-fait{% endif %}"><b>Imprimez les fiches</b><span>une fiche d'évaluation par étudiant, nom et QR déjà imprimés.</span></li>
+  <li><b>Notez pendant l'oral</b><span>l'examinateur écrit la note dans le cadre et noircit ses chiffres (ex. 15,75 : 1 · 5 · 7 · 5).</span></li>
+  <li class="{% if batches %}is-fait{% endif %}"><b>Scannez les fiches</b><span>chaque note est affectée automatiquement à son étudiant.</span></li>
+</ol>
+
+{% if perimee %}
+<div class="note note--warn">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
+  <div class="note__body">La liste des étudiants ou le barème ont changé depuis l'impression : <b>régénérez les fiches</b> pour les nouveaux étudiants (les fiches déjà imprimées restent lisibles).</div>
+</div>
+{% endif %}
+
+<div class="grid2">
+  <div class="card">
+    <h2>1. Fiches d'évaluation</h2>
+    {% if perms.grader.creer_epreuve %}
+    <form method="post">{% csrf_token %}
+      <p><button class="btn" name="generer" value="1" type="submit" {% if not lignes %}disabled title="Ajoutez d'abord les étudiants"{% endif %}>
+        {% if quiz.sheet_pdf %}Régénérer les fiches{% else %}Générer les fiches ({{ lignes|length }}){% endif %}</button></p>
+    </form>
+    {% endif %}
+    {% if quiz.sheet_pdf %}
+    <div class="documents">
+      <a class="document" href="{{ quiz.sheet_pdf.url }}" target="_blank">
+        <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>
+        <span><b>Fiches d'évaluation</b><small>une par étudiant, en A4 à 100 %</small></span></a>
+    </div>
+    {% endif %}
+    <span class="helptext">Chaque fiche porte le nom et le QR de l'étudiant, le cadre de la note (dizaines, unités, dixièmes, centièmes) et des lignes pour les observations.</span>
+  </div>
+
+  <div class="card">
+    <h2>2. Fiches notées à scanner</h2>
+    {% if perms.grader.corriger_copies %}
+    <form method="post" action="{% url 'quiz_upload' quiz.pk %}" enctype="multipart/form-data">{% csrf_token %}
+      <label>{{ upload_form.label.label }}</label>{{ upload_form.label }}
+      <label>{{ upload_form.files.label }}</label>{{ upload_form.files }}
+      <p><button class="btn" type="submit" {% if not quiz.sheet_pdf %}disabled title="Générez d'abord les fiches"{% endif %}>Lire les notes et les affecter</button></p>
+    </form>
+    {% else %}<p class="helptext">Votre compte ne téléverse pas de fiches.</p>{% endif %}
+    {% if batches %}
+    <div class="table-wrap">
+      <table>
+        <tr><th>Lot</th><th>Date</th><th>Fiches</th><th>Identifiées</th></tr>
+        {% for b in batches %}
+        <tr><td><a href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
+            {% if b.is_processing %}<span class="badge warn">lecture {{ b.processed_pages }}/{{ b.total_pages }}</span>{% endif %}</td>
+          <td>{{ b.created_at|date:"d/m/Y H:i" }}</td><td>{{ b.sheets.count }}</td><td>{{ b.identified_count }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid2 grid2--large">
+  <div class="card">
+    <h2>Notes de l'oral</h2>
+    <p class="helptext helptext--serre">Les notes lues au scan apparaissent ici ; vous pouvez aussi les saisir ou les corriger à la main.</p>
+    {% if lignes %}
+    <form method="post" class="notes-orales">{% csrf_token %}
+      <div class="table-wrap">
+        <table>
+          <tr><th>Nom et prénom</th><th>N° d'inscription</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th></tr>
+          {% for e, note in lignes %}
+          <tr>
+            <td><b>{{ e.full_name }}</b></td>
+            <td>{{ e.student_number|default:"—" }}</td>
+            <td><input class="champ--note" type="text" inputmode="decimal" name="note_{{ e.pk }}"
+                       value="{{ note }}" aria-label="Note de {{ e.full_name }}"
+                       {% if not perms.grader.corriger_copies %}disabled{% endif %}></td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% if perms.grader.corriger_copies %}
+      <p><button class="btn" name="notes" value="1" type="submit">Enregistrer les notes</button></p>
+      {% endif %}
+      <span class="helptext">Virgule ou point acceptés (14,5). Une case vide = pas de note (absent) : l'étudiant ne figure pas aux résultats. Chaque note modifiée est inscrite au journal.</span>
+    </form>
+    {% else %}
+    <p>Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} :
+      <a href="{% url 'class_detail' quiz.class_group.pk %}">ajoutez-les d'abord</a> (import Excel ou registre des inscriptions).</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Réglages</h2>
+    {% if perms.grader.creer_epreuve %}
+    <form method="post">{% csrf_token %}
+      <label for="id_title">Titre de l'épreuve</label>
+      <input id="id_title" type="text" name="title" value="{{ quiz.title }}" maxlength="200" required>
+      {{ form.note_sur.errors }}
+      <label for="{{ form.note_sur.id_for_label }}">{{ form.note_sur.label }}</label>{{ form.note_sur }}
+      <p><button class="btn secondary" name="reglages" value="1" type="submit">Enregistrer</button></p>
+    </form>
+    {% endif %}
+    <p class="helptext">Note minimale de réussite, liste des admis, bulletins et publication sur l'espace public : page <a href="{% url 'quiz_results' quiz.pk %}">Résultats</a>.</p>
+  </div>
+</div>
+
+{% if journal %}
+<div class="card">
+  <h2>Journal de l'épreuve</h2>
+  {% include "grader/_journal.html" with entrees=journal %}
+</div>
+{% endif %}
+{% endblock %}

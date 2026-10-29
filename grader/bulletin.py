@@ -93,11 +93,21 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
         if s.student_number:
             _draw(c, f"N° {s.student_number}", X1, 48.0, 10, align="right", gray=0.3)
 
-        # Note globale
-        _draw(c, f"{r['score']:g} / {r['max_score']:g}", X0, 62.0, 22, bold=True)
-        _draw(c, "NOTE", X0, 67.5, 8, gray=0.45)
-        resume = (f"{r['answered']} répondues — {r['correct']} correctes — "
-                  f"{r['wrong']} fausses — {r['blank']} sans réponse")
+        # Résultat : bonnes réponses (une QCM = 1 point) et pourcentage
+        if quiz.a_des_qcm:
+            _draw(c, f"{r['correct']} / {r['n_qcm']}", X0, 62.0, 22, bold=True)
+            _draw(c, "BONNES RÉPONSES", X0, 67.5, 8, gray=0.45)
+        else:                       # écrit ou oral : la note elle-même
+            _draw(c, f"{r['score']:g} / {r['max_score']:g}", X0, 62.0, 22, bold=True)
+            _draw(c, "NOTE", X0, 67.5, 8, gray=0.45)
+        _draw(c, f"{r['pct']} %", X0 + 46, 62.0, 22, bold=True)
+        _draw(c, "POURCENTAGE", X0 + 46, 67.5, 8, gray=0.45)
+        resume = f"{r['wrong']} fausse(s) — {r['blank']} sans réponse"
+        if not quiz.a_des_qcm:
+            resume = {"ecrit": "Épreuve écrite", "oral": "Épreuve orale"}.get(
+                quiz.type_epreuve, "")
+        elif quiz.note_distincte:
+            resume = f"note {r['score']:g} / {r['max_score']:g} — " + resume
         if r["pending_open"]:
             resume += f" — {r['pending_open']} manuscrite(s) non corrigée(s)"
         _draw(c, resume, X1, 62.0, 9.5, align="right", gray=0.25)
@@ -109,7 +119,12 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
             _draw(c, f"note minimale {admission['seuil']:g} / {r['max_score']:g}",
                   X1, 72.5, 8, align="right", gray=0.45)
 
-        # Tableau du détail
+        # Tableau du détail (pas pour un écrit ou un oral : une seule note)
+        if not quiz.a_des_qcm:
+            _draw(c, f"QuizScan — {quiz.class_group.name}", PAGE_W / 2, 290.0, 7,
+                  align="center", gray=0.5)
+            c.showPage()
+            continue
         y = 78.0
         headers = ["Q", "Type", "Réponse", "Attendue", "Points"]
         cols = [X0, X0 + 14, X0 + 52, X0 + 92, X0 + 128]
@@ -193,7 +208,7 @@ def generate_liste_admis_pdf(quiz, admission, batch=None):
     edite = timezone.localtime().strftime("%d/%m/%Y")
 
     LIGNE, BAS = 7.2, 272.0
-    cols = [X0 + 2, X0 + 20, X0 + 112]          # rang, nom, n° ; note à droite
+    cols = [X0 + 2, X0 + 20, X0 + 96]           # rang, nom, n° ; résultat à droite
 
     def entete_tableau(y):
         c.setFillGray(0.93)
@@ -201,7 +216,9 @@ def generate_liste_admis_pdf(quiz, admission, batch=None):
         c.setFillGray(0.0)
         for texte, x in zip(("Rang", "Nom et prénom", "N° d'inscription"), cols):
             _draw(c, texte, x, y, 9, bold=True, gray=0.25)
-        _draw(c, "Note", X1 - 2, y, 9, bold=True, align="right", gray=0.25)
+        _draw(c, "Bonnes rép." if quiz.a_des_qcm else "Note", X1 - 24, y, 9,
+              bold=True, align="right", gray=0.25)
+        _draw(c, "%", X1 - 2, y, 9, bold=True, align="right", gray=0.25)
         return y + 8.5
 
     # En-tête de la première page : quelques lignes de plus que les suivantes.
@@ -258,8 +275,10 @@ def generate_liste_admis_pdf(quiz, admission, batch=None):
         _draw(c, str(r["rang"]), cols[0], y, 10, bold=True)
         _draw(c, s.full_name, cols[1], y, 10)
         _draw(c, s.student_number or "—", cols[2], y, 10)
-        _draw(c, f"{r['score']:g} / {r['max_score']:g}", X1 - 2, y, 10,
+        _draw(c, (f"{r['correct']} / {r['n_qcm']}" if quiz.a_des_qcm
+                  else f"{r['score']:g} / {r['max_score']:g}"), X1 - 24, y, 10,
               bold=True, align="right")
+        _draw(c, f"{r['pct']} %", X1 - 2, y, 10, align="right")
         y += LIGNE
         sur_la_page += 1
 

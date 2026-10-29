@@ -68,9 +68,15 @@
     <div class="card">
       <h2>Réponses</h2>
       <p class="helptext helptext--serre">
+        {% if quiz.type_epreuve == "ecrit" or quiz.type_epreuve == "oral" %}
+        {% if quiz.type_epreuve == "oral" %}Épreuve orale : la note noircie par l'examinateur a été lue sur la fiche d'évaluation.{% else %}Épreuve écrite : la note noircie par le correcteur a été lue dans le
+        cadre de la page de garde.{% endif %} Vérifiez-la sur l'image ; si elle était
+        illisible, saisissez-la ici.
+        {% else %}
         Les QCM sont notés par lecture optique : la réponse retenue est le
         constat des cases noircies et ne se modifie pas. Seules les réponses
         manuscrites sont à noter ici.
+        {% endif %}
       </p>
       <div class="table-wrap">
         <table>
@@ -84,7 +90,7 @@
           <td>{{ a.points_awarded|floatformat:"-2"|default:"—" }} / {{ a.question.points|floatformat:"-2" }}</td>
           {% else %}
           <td colspan="2">
-            Réponse manuscrite :
+            {% if quiz.type_epreuve == "ecrit" or quiz.type_epreuve == "oral" %}{% if a.points_awarded is None %}<span class="badge warn">Note illisible : à saisir</span>{% else %}Note lue dans le cadre du correcteur :{% endif %}{% else %}Réponse manuscrite :{% endif %}
             {% if a.open_crop %}<br><a href="{{ a.open_crop.url }}" target="_blank">
               <img src="{{ a.open_crop.url }}" style="max-width:100%;border:1px solid var(--line);border-radius:4px"></a>{% endif %}
           </td>

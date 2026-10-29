@@ -234,8 +234,9 @@
               {% endfor %}
             </select>
             {% endif %}
+            {% if q.qtype == "qcm" %}<span class="helptext" title="Chaque QCM vaut 1 point">1 pt</span>{% else %}
             <input type="text" name="points" value="{{ q.points|floatformat:'-2' }}" title="Barème (points)"
-                   oninput="this.form.querySelector('button').hidden=false"> pt
+                   oninput="this.form.querySelector('button').hidden=false"> pt{% endif %}
             <button class="btn small" name="edit_question" value="{{ q.pk }}" hidden title="Enregistrer — les notes sont recalculées">✓</button>
           </form>
         </td>
@@ -253,7 +254,7 @@
       {% endfor %}
     </table>
     </div>
-    <span class="helptext">Le corrigé et le barème restent modifiables après l'épreuve :
+    <span class="helptext">Chaque QCM vaut 1 point. Le corrigé (et le barème des réponses manuscrites) reste modifiable après l'épreuve :
       les notes des copies déjà scannées sont recalculées immédiatement.</span>
     {% else %}<p>Aucune question pour le moment.</p>{% endif %}
 
@@ -312,7 +313,7 @@
         <span class="helptext">{{ bulk_form.answer_key.help_text }}</span>
         {{ bulk_form.num_choices.errors }}
         <label>{{ bulk_form.num_choices.label }}</label>{{ bulk_form.num_choices }}
-        <label>{{ bulk_form.points.label }}</label>{{ bulk_form.points }}
+        <span class="helptext">Chaque QCM vaut 1 point.</span>
         <p><button class="btn" name="bulk_add" value="1" type="submit">Créer les questions</button></p>
       </form>
     </div>
@@ -381,7 +382,7 @@
   if (!ta || !sel) return;
   var qtype = document.getElementById("id_qtype");
   var rows = {};
-  ["choices_text", "correct_letter", "open_height_mm"]
+  ["choices_text", "correct_letter", "open_height_mm", "points"]
     .forEach(function (n) { rows[n] = document.getElementById("row_" + n); });
 
   function rebuild() {
@@ -396,6 +397,7 @@
       if (rows[name]) rows[name].hidden = open;
     });
     if (rows.open_height_mm) rows.open_height_mm.hidden = !open;
+    if (rows.points) rows.points.hidden = !open;     // une QCM vaut 1 point
 
     var cur = sel.value;
     sel.innerHTML = '<option value="">— à définir plus tard —</option>';

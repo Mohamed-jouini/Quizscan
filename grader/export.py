@@ -16,7 +16,7 @@ def results_workbook(quiz, rows, stats=None, admission=None):
 
     headers = ["Nom", "Prénom", "N° inscription", "Note", "Sur",
                "Répondues", "Correctes", "Fausses", "Sans réponse",
-               "Manuscrites à corriger"]
+               "Manuscrites à corriger", "Pourcentage"]
     if admission:
         headers.append("Résultat")
     ws.append([f"{quiz.title} — {quiz.class_group.name}"])
@@ -34,12 +34,13 @@ def results_workbook(quiz, rows, stats=None, admission=None):
         s = r["student"]
         ligne = [s.last_name, s.first_name, s.student_number,
                  r["score"], r["max_score"], r["answered"], r["correct"],
-                 r["wrong"], r["blank"], r["pending_open"]]
+                 r["wrong"], r["blank"], r["pending_open"], r["pct"] / 100]
         if admission:
             ligne.append(RESULTAT.get(r.get("resultat"), ""))
         ws.append(ligne)
+        ws.cell(row=ws.max_row, column=11).number_format = "0%"
 
-    widths = [22, 18, 14, 8, 6, 11, 10, 8, 13, 20, 12]
+    widths = [22, 18, 14, 8, 6, 11, 10, 8, 13, 20, 12, 12]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A3"
@@ -51,7 +52,8 @@ def results_workbook(quiz, rows, stats=None, admission=None):
                    f"{admission['seuil']:g} / {admission['max_score'] or 0:g}) : "
                    f"{admission['n_admis']} sur {admission['n']}"])
         wa["A1"].font = Font(bold=True, size=12)
-        entetes = ["Rang", "Nom", "Prénom", "N° inscription", "Note", "Sur"]
+        entetes = ["Rang", "Nom", "Prénom", "N° inscription", "Note", "Sur",
+                   "Bonnes réponses", "Pourcentage"]
         wa.append(entetes)
         for col in range(1, len(entetes) + 1):
             cell = wa.cell(row=2, column=col)
@@ -60,8 +62,9 @@ def results_workbook(quiz, rows, stats=None, admission=None):
         for r in admission["admis"]:
             s = r["student"]
             wa.append([r["rang"], s.last_name, s.first_name, s.student_number,
-                       r["score"], r["max_score"]])
-        for i, w in enumerate([7, 22, 18, 14, 8, 6], start=1):
+                       r["score"], r["max_score"], r["correct"], r["pct"] / 100])
+            wa.cell(row=wa.max_row, column=8).number_format = "0%"
+        for i, w in enumerate([7, 22, 18, 14, 8, 6, 15, 12], start=1):
             wa.column_dimensions[get_column_letter(i)].width = w
         wa.freeze_panes = "A3"
 

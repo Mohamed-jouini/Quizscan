@@ -108,6 +108,10 @@ def main():
     # Épreuve : bonne réponse, barème, pénalité, suppression de question.
     c.post(f"/quiz/{quiz.pk}/", {"edit_question": qcm.pk, "correct": "2",
                                  "points": "2"})
+    qcm.refresh_from_db()
+    assert qcm.points == 1.0, "une QCM vaut toujours 1 point"
+    # le barème ne se règle plus que sur une réponse manuscrite
+    c.post(f"/quiz/{quiz.pk}/", {"edit_question": redac.pk, "points": "6"})
     c.post(f"/quiz/{quiz.pk}/", {"update_settings": "1", "wrong_penalty": "0,5",
                                  "sheet_mode": quiz.sheet_mode,
                                  "id_mode": quiz.id_mode, "id_digits": "6"})

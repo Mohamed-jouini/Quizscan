@@ -10,7 +10,7 @@ Paramètres : quiz, batch (facultatif), libelle_bouton.
     <input id="id_note_admission_res" class="champ--court" type="text" inputmode="decimal"
            name="note_admission" value="{{ quiz.note_admission|default_if_none:''|floatformat:'-2' }}"
            placeholder="ex. 10">
-    <span class="helptext helptext--serre">/ {{ quiz.max_score|floatformat:"-2" }}</span>
+    <span class="helptext helptext--serre">/ {{ quiz.max_score|floatformat:"-2" }}{% if not quiz.note_distincte %} bonnes réponses (1 point par QCM){% endif %}</span>
   </span>
   <button class="btn small" type="submit">{{ libelle_bouton }}</button>
 </form>

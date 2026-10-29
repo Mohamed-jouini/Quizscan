@@ -44,7 +44,7 @@ def main():
     r = c.get("/quiz/nouveau/?concours=1")
     fields = set(r.context["form"].fields)
     # entete / duree : cartouche du sujet (affichés en mode « sujet séparé »)
-    assert fields == {"title", "language", "sheet_mode", "entete", "duree",
+    assert fields == {"title", "type_epreuve", "note_sur", "language", "sheet_mode", "entete", "duree",
                       "id_mode", "id_digits", "grading_mode", "wrong_penalty"}, fields
     modes = [m for m, _ in r.context["form"].fields["id_mode"].choices]
     assert modes == ["grid", "sticker"], modes
@@ -112,7 +112,8 @@ def main():
                      "open_height_mm": 25})
     assert r.status_code == 302, "une question sans bonne réponse doit être acceptée"
     q_sans = quiz.questions.order_by("-order").first()
-    assert q_sans.correct_choice is None and q_sans.points == 1.5, q_sans.points
+    # une QCM vaut toujours 1 point, quel que soit le barème envoyé
+    assert q_sans.correct_choice is None and q_sans.points == 1.0, q_sans.points
     assert not quiz.corrige_complet
     assert q_sans.order in quiz.questions_sans_corrige.values_list("order", flat=True)
     q_sans.delete()
@@ -143,7 +144,10 @@ def main():
     row = services.compute_results(quiz, batch)[0]
     print("copie :", sheet.status, sheet.student, "note", row["score"], "/",
           row["max_score"])
-    assert sheet.student and row["score"] == 5.0 and row["wrong"] == 1
+    # 4 bonnes réponses sur 5 QCM (la question à 5 cases vaut 1 point,
+    # pas les 2 envoyés) : 4 / 5, 80 %
+    assert sheet.student and row["score"] == 4.0 and row["wrong"] == 1
+    assert (row["correct"], row["n_qcm"], row["pct"]) == (4, 5, 80), row
     r = c.get(f"/copies/{sheet.pk}/")
     assert r.status_code == 200
 

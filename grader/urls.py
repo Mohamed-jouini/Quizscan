@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_inscriptions as vi, views_public as vp
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
@@ -24,4 +24,16 @@ urlpatterns = [
     path("lots/<int:pk>/", views.batch_detail, name="batch_detail"),
     path("lots/<int:pk>/supprimer/", views.batch_delete, name="batch_delete"),
     path("copies/<int:pk>/", views.sheet_review, name="sheet_review"),
+    # registre des inscriptions, communiqués, publication (personnel)
+    path("inscriptions/", vi.inscriptions, name="inscriptions"),
+    path("inscriptions/<int:pk>/qr.png", vi.inscrit_qr, name="inscrit_qr"),
+    path("inscriptions/cartes.pdf", vi.inscriptions_cartes, name="inscriptions_cartes"),
+    path("communiques/", vi.communiques, name="communiques"),
+    path("quiz/<int:pk>/publication/", vi.quiz_publication, name="quiz_publication"),
+    # espace public (sans compte)
+    path("public/", vp.accueil, name="public_accueil"),
+    path("public/resultats/", vp.resultat, name="public_resultat"),
+    path("public/epreuves/<int:pk>/", vp.epreuve, name="public_epreuve"),
+    path("public/communiques/", vp.communiques, name="public_communiques"),
+    path("public/communiques/<int:pk>/", vp.communique, name="public_communique"),
 ]

@@ -36,8 +36,118 @@ def _mm(v):
 # ---------------------------------------------------------------- recalage
 
 def detect_and_warp(image_bgr):
-    """Détecte les repères ArUco, identifie la page et recale l'image
-    dans le repère canonique. Retourne (image_recalée, page_index)."""
+    """Recale le scan dans le repère canonique et identifie la page.
+    Retourne (image_recalée, page_index).
+
+    Deux générations de fiches : les copies d'avant le 29 octobre 2026 ont
+    quatre repères ArUco dans les coins (essayés d'abord, ils ne coûtent
+    presque rien à chercher) ; les nouvelles, un cadre fin et un code de page
+    en haut (voir layout.CADRE_MARGE)."""
+    try:
+        return _caler_aruco(image_bgr)
+    except MarkerError:
+        resultat = _caler_par_cadre(image_bgr)
+        if resultat is None:
+            raise MarkerError("Cadre de la page non détecté (page mal scannée, "
+                              "coupée ou sans cadre ?)") from None
+        return resultat
+
+
+# Cadre : bord extérieur et bord intérieur du trait (le contour trouvé peut
+# être l'un ou l'autre) ; la bande de contrôle est l'axe du trait.
+_CADRE_BORDS = (L.CADRE_MARGE - L.CADRE_TRAIT / 2, L.CADRE_MARGE + L.CADRE_TRAIT / 2)
+
+
+def _ordre_horaire(points):
+    """Quatre points dans l'ordre des aiguilles d'une montre (à l'écran)."""
+    centre = points.mean(axis=0)
+    angles = np.arctan2(points[:, 1] - centre[1], points[:, 0] - centre[0])
+    return points[np.argsort(angles)]
+
+
+def _cadres_candidats(gray):
+    """Quadrilatères assez grands pour être le cadre, du plus grand au plus
+    petit."""
+    h, w = gray.shape
+    flou = cv2.GaussianBlur(gray, (5, 5), 0)
+    encre = cv2.adaptiveThreshold(flou, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                  cv2.THRESH_BINARY_INV, 51, 15)
+    encre = cv2.morphologyEx(encre, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    contours, _ = cv2.findContours(encre, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    quads = []
+    for contour in contours:
+        aire = cv2.contourArea(contour)
+        if aire < 0.25 * h * w:
+            continue
+        approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True)
+        if len(approx) == 4 and cv2.isContourConvex(approx):
+            quads.append((aire, _ordre_horaire(approx.reshape(4, 2).astype(np.float32))))
+    quads.sort(key=lambda q: -q[0])
+    return [q for _, q in quads]
+
+
+def _gris_moyen(gray_canon, rect_mm, marge=0.2):
+    x, y, w, h = rect_mm
+    x0, y0 = _mm(x + w * marge), _mm(y + h * marge)
+    x1, y1 = _mm(x + w * (1 - marge)), _mm(y + h * (1 - marge))
+    zone = gray_canon[max(y0, 0):y1, max(x0, 0):x1]
+    return float(zone.mean()) if zone.size else 255.0
+
+
+def _score_trait(gray_canon):
+    """Part des points de l'axe du cadre qui sont de l'encre (recalage juste)."""
+    m = L.CADRE_MARGE
+    pts = ([(m, y) for y in np.linspace(m + 5, L.PAGE_H - m - 5, 40)]
+           + [(L.PAGE_W - m, y) for y in np.linspace(m + 5, L.PAGE_H - m - 5, 40)]
+           + [(x, m) for x in np.linspace(m + 5, L.PAGE_W - m - 5, 30)]
+           + [(x, L.PAGE_H - m) for x in np.linspace(m + 5, L.PAGE_W - m - 5, 30)])
+    sombres = sum(1 for x, y in pts
+                  if 0 <= _mm(y) < CANON_H and 0 <= _mm(x) < CANON_W
+                  and gray_canon[_mm(y), _mm(x)] < 140)
+    return sombres / len(pts)
+
+
+def _caler_par_cadre(image_bgr):
+    """Recalage par le cadre fin. Essaie chaque quadrilatère candidat dans ses
+    quatre orientations (page à l'endroit, à l'envers, tournée) : retient celle
+    dont le code de page est valide et dont le trait tombe sur l'axe du cadre.
+    Retourne (image_recalée, page_index) ou None."""
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    for quad in _cadres_candidats(gray)[:6]:
+        meilleur = None
+        for k in range(4):
+            pts = np.roll(quad, -k, axis=0)          # haut-gauche, haut-droit, ...
+            largeur = np.linalg.norm(pts[1] - pts[0])
+            hauteur = np.linalg.norm(pts[3] - pts[0])
+            if hauteur < largeur:                    # portrait attendu
+                continue
+            for bord in _CADRE_BORDS:
+                dst = np.array([[_mm(bord), _mm(bord)],
+                                [_mm(L.PAGE_W - bord), _mm(bord)],
+                                [_mm(L.PAGE_W - bord), _mm(L.PAGE_H - bord)],
+                                [_mm(bord), _mm(L.PAGE_H - bord)]], dtype=np.float32)
+                H = cv2.getPerspectiveTransform(pts.astype(np.float32), dst)
+                canon = cv2.warpPerspective(gray, H, (CANON_W, CANON_H),
+                                            borderValue=255)
+                page = L.lire_code_page([_gris_moyen(canon, r) < 128
+                                         for r in L.code_cases()])
+                if page is None:
+                    continue
+                score = _score_trait(canon)
+                if score >= 0.6 and (meilleur is None or score > meilleur[0]):
+                    meilleur = (score, H, page)
+        if meilleur:
+            _, H, page = meilleur
+            warped = cv2.warpPerspective(image_bgr, H, (CANON_W, CANON_H),
+                                         flags=cv2.INTER_CUBIC,
+                                         borderMode=cv2.BORDER_CONSTANT,
+                                         borderValue=(255, 255, 255))
+            return warped, page
+    return None
+
+
+def _caler_aruco(image_bgr):
+    """Recalage par les quatre repères ArUco des copies d'avant le cadre."""
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     params = cv2.aruco.DetectorParameters()
     detector = cv2.aruco.ArucoDetector(ARUCO_DICT, params)
@@ -119,17 +229,16 @@ def read_bubbles(warped_bgr, page_layout):
     return results
 
 
-def read_id_grid(warped_bgr, page_layout):
-    """Lit la grille du numéro d'inscription.
-    Retourne la chaîne du numéro, ou "" si une ligne est illisible/ambiguë."""
-    grid = page_layout.get("id_grid")
-    if not grid:
-        return ""
+def _lire_chiffres(warped_bgr, grid):
+    """Lit une grille de chiffres (une ligne par position, colonnes 0..9) :
+    grille du n° d'inscription ou grille de la note (écrit).
+    Retourne une liste, un élément par ligne : le chiffre (int), None si la
+    ligne est vide, "?" si plusieurs cases sont noircies sans net gagnant."""
     gray = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2GRAY)
     binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
                                    cv2.THRESH_BINARY_INV, 41, 12)
     r = _mm(grid["r"] * 0.75)
-    digits = []
+    lus = []
     for row in grid["rows"]:
         ratios = []
         for cx, cy in row:
@@ -140,16 +249,71 @@ def read_id_grid(warped_bgr, page_layout):
             ratios.append(filled / max(cv2.countNonZero(mask), 1))
         marked = [i for i, v in enumerate(ratios) if v >= FILL_THRESHOLD]
         if len(marked) == 1:
-            digits.append(str(marked[0]))
+            lus.append(marked[0])
         elif len(marked) > 1:
             top = sorted(marked, key=lambda i: -ratios[i])
-            if ratios[top[0]] >= 1.8 * ratios[top[1]]:
-                digits.append(str(top[0]))
-            else:
-                return ""
+            lus.append(top[0] if ratios[top[0]] >= 1.8 * ratios[top[1]] else "?")
         else:
-            return ""
-    return "".join(digits)
+            lus.append(None)
+    return lus
+
+
+def read_id_grid(warped_bgr, page_layout):
+    """Lit la grille du numéro d'inscription.
+    Retourne la chaîne du numéro, ou "" si une ligne est illisible/ambiguë."""
+    grid = page_layout.get("id_grid")
+    if not grid:
+        return ""
+    lus = _lire_chiffres(warped_bgr, grid)
+    if any(d is None or d == "?" for d in lus):
+        return ""
+    return "".join(str(d) for d in lus)
+
+
+def lire_note(warped_bgr, grille, note_sur):
+    """Note noircie par le correcteur dans la grille de la page de garde
+    (épreuve écrite) : une ligne par chiffre — dizaines, unités, dixièmes,
+    centièmes (« decimales » de la grille : 2 ; 1 sur les premières copies).
+
+    Une ligne laissée vide vaut 0 (« 8,5 » se noircit sans toucher aux
+    dizaines) ; une grille entièrement vide, une ligne ambiguë ou une note
+    au-dessus du barème donnent None : la note reste à saisir à l'écran.
+    Retourne (note | None, chiffres lus)."""
+    lus = _lire_chiffres(warped_bgr, grille)
+    if "?" in lus or all(d is None for d in lus):
+        return None, lus
+    chiffres = [d or 0 for d in lus]
+    decimales = grille.get("decimales", 1)
+    entier = int("".join(str(d) for d in chiffres[:len(chiffres) - decimales]) or 0)
+    fraction = chiffres[len(chiffres) - decimales:]
+    note = entier + sum(d / 10 ** (k + 1) for k, d in enumerate(fraction))
+    note = round(note, decimales)
+    if note > note_sur:
+        return None, lus
+    return note, lus
+
+
+def dessiner_note(image, grille, lus, note, note_sur):
+    """Sur l'image de contrôle : cases de la note retenues (vert), ligne
+    ambiguë (orange), et la note lue écrite à côté de la grille."""
+    r = _mm(grille["r"]) + 3
+    for row, d in zip(grille["rows"], lus):
+        if d is None:
+            continue
+        if d == "?":
+            cx, cy = row[0]
+            cv2.rectangle(image, (_mm(cx) - r, _mm(cy) - r),
+                          (_mm(row[-1][0]) + r, _mm(cy) + r), (0, 140, 255), 3)
+            continue
+        cx, cy = row[d]
+        cv2.circle(image, (_mm(cx), _mm(cy)), r, (40, 170, 60), 4)
+    x, y, w, h = grille["rect"]
+    texte = (f"Note lue : {note:g} / {note_sur:g}" if note is not None
+             else "Note illisible : a saisir")
+    couleur = (40, 150, 60) if note is not None else (0, 110, 230)
+    cv2.putText(image, texte, (_mm(x + 2), _mm(y + h + 7)),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.4, couleur, 3, cv2.LINE_AA)
+    return image
 
 
 def _qr_variants(crop):
@@ -180,6 +344,9 @@ def _decode_qr(detector, img):
     if not data:
         return None
     parts = data.split("|")
+    # carte d'inscription : « QSI|<n°>|<NOM>|<Prénom> » — le n° identifie
+    if len(parts) >= 2 and parts[0] == "QSI" and parts[1].strip():
+        return "QSI", None, "".join(parts[1].split())
     if (len(parts) == 3 and parts[0] in ("QS", "QSA")
             and parts[1].isdigit() and parts[2].isdigit()):
         return parts[0], int(parts[1]), int(parts[2])
@@ -190,7 +357,8 @@ def read_qr(warped_bgr, page_layout):
     """Décode le QR code d'une fiche (QR imprimé ou étiquette collée).
     Retourne (kind, quiz_id, valeur) : kind "QS" = fiche nominative
     (valeur = id étudiant), "QSA" = fiche anonyme de concours
-    (valeur = n° de série) ; (None, None, None) si aucun QR lisible."""
+    (valeur = n° de série), "QSI" = carte d'inscription (valeur = n°
+    d'inscription, texte) ; (None, None, None) si aucun QR lisible."""
     zone = page_layout.get("qr")
     detector = cv2.QRCodeDetector()
     if zone:

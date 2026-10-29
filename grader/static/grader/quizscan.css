@@ -1600,3 +1600,198 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   --art-4:var(--dk-art-4); --art-5:var(--dk-art-5); --art-6:var(--dk-art-6);
   --art-7:var(--dk-art-7); --art-leaf:var(--dk-art-leaf);
 }
+
+/* === Inscriptions, communiqués, publication (espace enseignant) ========== */
+.shell label.case{display:flex;align-items:flex-start;gap:9px;font-size:14px;
+  font-weight:500;color:var(--qs-ink);margin:12px 0 2px;cursor:pointer}
+.case input{margin-top:3px;accent-color:var(--qs-blue)}
+.verif__chiffres{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 14px}
+.verif__chiffre{padding:6px 12px;border-radius:999px;font-size:13px;
+  background:var(--qs-track);color:var(--qs-muted)}
+.verif__chiffre b{color:var(--qs-ink);margin-right:3px}
+.verif__chiffre--ok{background:var(--qs-ok-bg);color:var(--qs-ok)}
+.verif__chiffre--alerte{background:var(--qs-warn-bg);color:var(--qs-warn)}
+.form-inscription__champs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:0 12px}
+.plie{margin-top:8px}
+.plie summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--qs-blue)}
+.barre-choix{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:10px 12px;margin-bottom:12px;border-radius:12px;background:var(--qs-surface-2)}
+.shell .barre-choix label{margin:0}
+.shell .barre-choix select{width:auto;min-width:220px;max-width:100%}
+.shell th.col-choix,.shell td.col-choix{width:34px;padding-right:0}
+.qr-mini{display:block;border-radius:4px;background:#fff}
+.actions-ligne{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.avis-liste{list-style:none;margin:0;padding:0}
+.avis-liste__item{padding:12px 0;border-bottom:1px solid var(--qs-line)}
+.avis-liste__item:last-child{border-bottom:0}
+.avis-liste__tete{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.avis-liste__texte{margin:6px 0 8px;font-size:14px;color:var(--qs-ink-soft)}
+.publication__form{margin-top:4px}
+
+/* === Espace public ======================================================= */
+.pub{display:flex;flex-direction:column;min-height:100vh}
+.pub-tete{background:var(--qs-side-bg);color:var(--qs-side-ink)}
+.pub-tete__dedans{max-width:1080px;margin:0 auto;padding:14px 16px;display:flex;
+  align-items:center;gap:14px 22px;flex-wrap:wrap}
+.pub-marque{display:flex;align-items:center;gap:10px;text-decoration:none;
+  color:var(--qs-side-ink)}
+.pub-marque__nom{font-weight:700;font-size:17px;line-height:1.1}
+.pub-marque__nom small{display:block;font-size:9.5px;font-weight:600;letter-spacing:1.3px;
+  text-transform:uppercase;color:var(--qs-side-muted);margin-top:3px}
+.pub-nav{display:flex;gap:4px;flex-wrap:wrap}
+.pub-nav a{color:var(--qs-side-muted);text-decoration:none;font-weight:600;font-size:14px;
+  padding:7px 12px;border-radius:9px}
+.pub-nav a:hover{background:var(--qs-side-hover);color:var(--qs-side-ink)}
+.pub-nav a.is-active{background:var(--qs-accent);color:var(--qs-accent-ink)}
+.pub-tete__outils{margin-left:auto;display:flex;align-items:center;gap:10px}
+.pub-page{flex:1;width:100%;max-width:1080px;margin:0 auto;padding:0 16px 40px}
+.pub-hero{margin:28px 0 8px;padding:32px 28px;border-radius:var(--qs-r-panel);
+  background:var(--qs-surface);border:1px solid var(--qs-line)}
+.pub-hero h1{font-size:28px}
+.pub-hero p{color:var(--qs-muted);margin:8px 0 0}
+.pub-hero--court{padding:24px 28px}
+.pub-recherche{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.pub-recherche__champ{position:relative;flex:1 1 280px;max-width:520px}
+.pub-recherche__champ svg{position:absolute;left:15px;top:50%;width:19px;height:19px;
+  transform:translateY(-50%);fill:none;stroke:var(--qs-faint);stroke-width:2;
+  stroke-linecap:round;pointer-events:none}
+.pub-recherche input{width:100%;height:48px;padding:0 16px 0 44px;font:inherit;
+  font-size:16px;border:1px solid var(--qs-field-line);border-radius:12px;
+  background:var(--qs-surface);color:var(--qs-ink);box-sizing:border-box}
+.pub-recherche .btn{height:48px;padding:0 22px;border-radius:12px}
+.pub-section{margin-top:26px}
+.pub-section__tete{display:flex;align-items:center;justify-content:space-between;
+  gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.pub-section__tete h2{margin:0;font-size:18px}
+.pub-cartes{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.pub-cartes--liste{grid-template-columns:1fr}
+.pub-avis{display:flex;flex-direction:column;gap:6px;padding:18px;border-radius:var(--qs-r-card);
+  background:var(--qs-surface);border:1px solid var(--qs-line);text-decoration:none;
+  color:var(--qs-ink);transition:border-color .15s}
+.pub-avis:hover{border-color:var(--qs-blue)}
+.pub-avis__date{font-size:12px;font-weight:600;color:var(--qs-blue);
+  text-transform:uppercase;letter-spacing:.6px}
+.pub-avis__titre{font-size:16px}
+.pub-avis__texte{font-size:14px;color:var(--qs-muted)}
+.pub-epreuves{list-style:none;margin:0;padding:0;border:1px solid var(--qs-line);
+  border-radius:var(--qs-r-card);background:var(--qs-surface);overflow:hidden}
+.pub-epreuves li{display:flex;align-items:center;gap:10px;padding:14px 18px;
+  border-bottom:1px solid var(--qs-line)}
+.pub-epreuves li:last-child{border-bottom:0}
+.pub-epreuves a{flex:1;text-decoration:none;color:var(--qs-ink);display:flex;
+  flex-direction:column}
+.pub-epreuves a span{font-size:13px;color:var(--qs-muted)}
+.pub-epreuves a:hover b{color:var(--qs-blue)}
+.pub-vide{color:var(--qs-muted);padding:18px;border:1px dashed var(--qs-line-strong);
+  border-radius:var(--qs-r-card);margin:18px 0 0}
+.pub-alerte{margin:18px 0 0;padding:14px 18px;border-radius:12px;
+  background:var(--qs-warn-bg);color:var(--qs-warn)}
+.pub-identite{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.pub-identite b{display:block;font-size:18px}
+.pub-identite small{color:var(--qs-muted)}
+.pub-note{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:18px;
+  border-radius:var(--qs-r-card);background:var(--qs-surface);border:1px solid var(--qs-line)}
+.pub-note__epreuve{font-weight:700;font-size:16px}
+.pub-note__classe,.pub-note__detail{font-size:13px;color:var(--qs-muted)}
+.pub-note__chiffre{font-size:15px;color:var(--qs-muted)}
+.pub-note__chiffre b{font-size:30px;color:var(--qs-ink);letter-spacing:-.5px}
+.pub-tableau{overflow-x:auto;border:1px solid var(--qs-line);border-radius:var(--qs-r-card);
+  background:var(--qs-surface)}
+.pub-tableau table{width:100%;border-collapse:collapse}
+.pub-tableau th,.pub-tableau td{padding:11px 14px;text-align:left;
+  border-bottom:1px solid var(--qs-line);font-size:14px}
+.pub-tableau th{background:var(--qs-th-bg);font-size:12.5px;font-weight:600;color:var(--qs-muted)}
+.pub-tableau tr:last-child td{border-bottom:0}
+.pub-article{max-width:760px}
+.pub-article h1{margin:6px 0 14px}
+.pub-article__texte{font-size:15.5px;line-height:1.7}
+.pub-retour{display:inline-block;margin-bottom:14px;font-size:14px;text-decoration:none}
+.pub-pied{text-align:center;font-size:12.5px;color:var(--qs-muted);padding:18px 16px 26px}
+@media (max-width:720px){
+  .form-inscription__champs{grid-template-columns:1fr}
+  .pub-tete__outils{margin-left:0}
+  .pub-hero{padding:22px 18px}
+  .pub-hero h1{font-size:23px}
+}
+
+/* Pourcentage d'un résultat : chiffre et petite jauge (une QCM = 1 point). */
+.pourcentage{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.pourcentage b{min-width:42px;font-variant-numeric:tabular-nums}
+.pourcentage__jauge{width:64px;height:6px;border-radius:999px;background:var(--qs-track);
+  overflow:hidden}
+.pourcentage__jauge i{display:block;height:100%;border-radius:999px;background:var(--qs-grad-chart)}
+.pub-note__pct{font-size:22px;font-weight:700;color:var(--qs-blue);letter-spacing:-.3px}
+.pub-note__verdict{font-size:13.5px;padding:5px 14px}
+
+/* === Épreuves écrites et orales ========================================== */
+/* Les quatre étapes d'une épreuve écrite, cochées au fur et à mesure. */
+.etapes{list-style:none;counter-reset:etape;margin:0 0 18px;padding:0;display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.etapes li{counter-increment:etape;position:relative;padding:14px 14px 14px 52px;
+  border:1px solid var(--qs-line);border-radius:var(--qs-r-card);background:var(--qs-surface)}
+.etapes li::before{content:counter(etape);position:absolute;left:14px;top:13px;width:26px;
+  height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:13px;background:var(--qs-track);color:var(--qs-muted)}
+.etapes li.is-fait::before{content:"✓";background:var(--qs-accent);color:var(--qs-accent-ink)}
+.etapes b{display:block;font-size:14px}
+.etapes span{display:block;font-size:12.5px;color:var(--qs-muted);margin-top:2px}
+.documents{display:grid;gap:10px;margin:6px 0 10px}
+.document{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;
+  border:1px solid var(--qs-line);text-decoration:none;color:var(--qs-ink);
+  transition:border-color .15s}
+.document:hover{border-color:var(--qs-blue)}
+.document svg{width:30px;height:30px;flex:none;fill:none;stroke:var(--qs-blue);stroke-width:1.6;
+  stroke-linejoin:round}
+.document b{display:block;font-size:14px}
+.document small{display:block;font-size:12.5px;color:var(--qs-muted)}
+.pre-ligne{white-space:pre-line}
+.grid2--large{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
+.shell .notes-orales input.champ--note{width:90px;padding:6px 9px;text-align:center}
+@media (max-width:860px){.grid2--large{grid-template-columns:1fr}}
+
+/* === Tableau de bord : résultats et admissions =========================== */
+.bilan{margin:6px 0 18px}
+.section-titre{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:6px 0 12px}
+.section-titre h2{margin:0;font-size:17px}
+.bilan__remarque{margin:-6px 0 14px}
+/* Légende et pastilles : couleurs d'état (admis / en attente / non admis),
+   toujours accompagnées d'un libellé et d'un chiffre. */
+.legende{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--qs-muted)}
+.legende span{display:inline-flex;align-items:center;gap:5px}
+.pastille{display:inline-block;width:10px;height:10px;border-radius:3px}
+.pastille--admis{background:var(--qs-ok)}
+.pastille--attente{background:var(--qs-warn)}
+.pastille--refuses{background:var(--qs-bad)}
+.admission-liste{list-style:none;margin:4px 0 0;padding:0}
+.admission-liste li{padding:11px 0;border-bottom:1px solid var(--qs-line)}
+.admission-liste li:last-child{border-bottom:0}
+.admission-liste__tete{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+.admission-liste__tete a{color:var(--qs-ink);text-decoration:none}
+.admission-liste__tete a:hover{color:var(--qs-blue)}
+.admission-liste__chiffre{font-size:13px;color:var(--qs-muted);white-space:nowrap}
+.admission-liste__chiffre b{color:var(--qs-ink)}
+/* Barre empilée : segments séparés de 2 px (fond de carte), bouts arrondis. */
+.barre-empilee{display:flex;gap:2px;height:10px;border-radius:4px;overflow:hidden;
+  background:var(--qs-track);margin-bottom:4px}
+.barre-empilee i{display:block;height:100%;min-width:3px}
+.barre-empilee i:first-child{border-radius:4px 0 0 4px}
+.barre-empilee i:last-child{border-radius:0 4px 4px 0}
+.barre-empilee i:only-child{border-radius:4px}
+/* Histogramme vertical : une seule série, une seule teinte, barres fines. */
+.histo{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:end;
+  height:190px;margin-top:10px;padding-bottom:2px;border-bottom:1px solid var(--qs-line)}
+.histo__col{display:flex;flex-direction:column;align-items:center;height:100%;gap:4px}
+.histo__n{font-size:12.5px;font-weight:600;color:var(--qs-ink);font-variant-numeric:tabular-nums}
+.histo__piste{flex:1;width:100%;max-width:38px;display:flex;align-items:flex-end}
+.histo__piste i{display:block;width:100%;border-radius:4px 4px 0 0;background:var(--qs-blue);
+  min-height:0;transition:opacity .15s}
+.histo__col:hover .histo__piste i{opacity:.8}
+.histo__lib{font-size:11.5px;color:var(--qs-muted);white-space:nowrap}
+.chiffres{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.chiffre{display:inline-flex;align-items:baseline;gap:5px;padding:7px 12px;border-radius:999px;
+  border:1px solid var(--qs-line);background:var(--qs-surface);font-size:13px;
+  color:var(--qs-muted);text-decoration:none}
+.chiffre b{color:var(--qs-ink);font-size:14px}
+a.chiffre:hover{border-color:var(--qs-blue)}
+@media (max-width:620px){.histo__lib{font-size:10px}}
