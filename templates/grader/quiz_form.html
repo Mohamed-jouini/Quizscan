@@ -66,12 +66,16 @@
     cacher("sheet_mode", !qcm);
     cacher("wrong_penalty", !qcm);
     cacher("id_mode", oral);
+    cacher("talon_nom", oral);
     cacher("grading_mode", oral);
     // en-tête et durée : imprimés sur le sujet (QCM « sujet séparé », écrit)
     var sujet = t === "ecrit" || (qcm && sheet && sheet.value === "split");
     cacher("entete", !sujet);
     cacher("duree", !sujet);
     cacher("id_digits", oral || !idmode || idmode.value !== "grid");
+    // admis d'une épreuve précédente : la liste est créée, pas de classe
+    var prec = document.getElementById("id_epreuve_precedente");
+    cacher("class_group", !!(prec && prec.value));
     var aide = document.getElementById("aide_qcm");
     if (aide) aide.hidden = !qcm;
   }
@@ -79,6 +83,8 @@
     r.addEventListener("change", sync); });
   if (sheet) sheet.addEventListener("change", sync);
   if (idmode) idmode.addEventListener("change", sync);
+  var precSel = document.getElementById("id_epreuve_precedente");
+  if (precSel) precSel.addEventListener("change", sync);
   sync();
 })();
 </script>

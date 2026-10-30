@@ -1,0 +1,21 @@
+{% comment %}
+Épreuve « étape suivante » d'un concours : ses candidats sont les admis de
+l'épreuve précédente. Paramètres : etape (services.etat_etape), quiz.
+{% endcomment %}
+{% if etape %}
+<div class="note{% if etape.manquants %} note--warn{% endif %}">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M5 12h12"/><path d="M13 7l5 5-5 5"/></svg></span>
+  <div class="note__body">
+    <b>Candidats : admis de « <a href="{% url 'quiz_results' etape.precedente.pk %}">{{ etape.precedente.title }}</a> »</b>
+    — {{ etape.n_admis }} admis (note ≥ {{ etape.seuil|floatformat:"-2" }}).
+    {% if etape.manquants %}
+    <b>{{ etape.manquants }} {% if etape.manquants > 1 %}nouveaux{% else %}nouvel{% endif %} admis</b> pas encore dans la liste (note minimale modifiée ou copies corrigées depuis).
+    {% else %}Tous sont dans la liste des candidats.{% endif %}
+    {% if perms.grader.creer_epreuve %}
+    <form class="inline" method="post">{% csrf_token %}
+      <button class="btn small{% if not etape.manquants %} secondary{% endif %}" name="passer_admis" value="1" type="submit">Mettre à jour la liste des admis</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

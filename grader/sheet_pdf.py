@@ -72,6 +72,13 @@ LABELS = {
         "idnum": "N° D'INSCRIPTION — écrivez votre numéro dans les cases puis "
                  "noircissez le chiffre correspondant sur chaque ligne :",
         "personal": "FICHE PERSONNELLE — vérifiez votre nom, ne l'échangez pas.",
+        "place": "PLACE N° {n}",
+        "talon_coupe": "Talon à découper avant la correction : il porte votre nom. "
+                       "La copie reste identifiée par son QR code.",
+        "talon_copie": "COPIE ANONYME après découpe du talon — n'écrivez "
+                       "votre nom nulle part.",
+        "anonyme": "COPIE ANONYME — asseyez-vous à la place indiquée. "
+                   "N'écrivez votre nom nulle part sur cette copie.",
         "writename": "Écrivez votre nom et votre prénom dans les cases ci-dessus.",
         "fiche": "Fiche",
         "sticker": "Emplacement réservé — collez ici le QR code qui vous a été remis",
@@ -103,6 +110,13 @@ LABELS = {
         "page": "صفحة", "question": "السؤال", "pt": "نقطة", "pts": "نقاط",
         "idnum": "رقم التسجيل — اكتب رقمك في الخانات ثم املأ الرقم المطابق في كل سطر:",
         "personal": "بطاقة شخصية — تأكد من اسمك ولا تتبادلها.",
+        "place": "المكان رقم {n}",
+        "talon_coupe": "قسيمة تُقصّ قبل الإصلاح: تحمل اسمك. تبقى الورقة معرّفة "
+                       "برمز QR.",
+        "talon_copie": "ورقة مجهولة الهوية بعد قصّ القسيمة — لا تكتب اسمك "
+                       "في أي موضع.",
+        "anonyme": "ورقة مجهولة الهوية — اجلس في المكان المبيّن. "
+                   "لا تكتب اسمك في أي موضع من الورقة.",
         "writename": "اكتب لقبك واسمك بخط واضح في الخانات أعلاه.",
         "fiche": "بطاقة",
         "sticker": "مكان مخصّص — ألصق هنا رمز QR الذي سُلّم إليك",
@@ -135,8 +149,13 @@ def _qr_image(payload):
     return ImageReader(qr.make_image().get_image())
 
 
-def generate_sheet_pdf(quiz, layout, students=None, serials=None):
+def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
     """Retourne les octets du PDF de la fiche du quiz.
+
+    places : copies ANONYMES à numéro de place ({id étudiant: n° de place}) :
+    le bandeau porte « PLACE N° 12 » au lieu du nom ; le QR, lui, identifie
+    toujours l'étudiant au scan. La correspondance place -> nom est sur la
+    liste d'émargement du surveillant (bulletin.generate_liste_emargement).
 
     students : fiches nominatives (mode QR) — le jeu complet de pages est
     répété pour chaque étudiant, avec son nom imprimé et son QR code.
@@ -185,24 +204,31 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
         # Repères ArUco (avec leur marge blanche débordant légèrement)
         # Calage : cadre fin autour de la page et code de page en haut (plus
         # de carrés noirs dans les coins, voir layout.CADRE_MARGE).
-        _dessiner_cadre(c, pidx)
+        talon = bool(layout.get("talon"))
+        _dessiner_cadre(c, pidx, layout.get("cadre_haut", L.CADRE_MARGE), talon)
 
         # En-tête (concours : titre seul, sans le nom du conteneur de candidats)
         head_title = (quiz.title if concours
                       else f"{quiz.title} — {quiz.class_group.name}")
-        draw(head_title, L.PAGE_W / 2, _y(24.0),
-             13, bold=True, align="center")
         consigne = {"ecrit": T["ecrit_instr"], "oral": T["oral_instr"]}.get(
             mode, T["instr"])
-        if mode in ("ecrit", "oral"):
-            draw(consigne, L.PAGE_W / 2, _y(28.5), 8, align="center")
-        elif lang == "ar":
-            draw(consigne, L.PAGE_W / 2, _y(28.5), 8, align="center")
-            draw(f"{T['page']} {pidx + 1} / {len(layout['pages'])}",
-                 L.CONTENT_X1, _y(28.5), 8, align="right")
+        if talon:
+            # nom, titre et consigne sur le talon, au-dessus du trait de coupe
+            _dessiner_talon(c, draw, student, head_title,
+                            f"{T['page']} {pidx + 1} / {len(layout['pages'])}",
+                            consigne, T, lang)
         else:
-            draw(f"{T['page']} {pidx + 1} / {len(layout['pages'])} — {consigne}",
-                 L.PAGE_W / 2, _y(28.5), 8, align="center")
+            draw(head_title, L.PAGE_W / 2, _y(24.0),
+                 13, bold=True, align="center")
+            if mode in ("ecrit", "oral"):
+                draw(consigne, L.PAGE_W / 2, _y(28.5), 8, align="center")
+            elif lang == "ar":
+                draw(consigne, L.PAGE_W / 2, _y(28.5), 8, align="center")
+                draw(f"{T['page']} {pidx + 1} / {len(layout['pages'])}",
+                     L.CONTENT_X1, _y(28.5), 8, align="right")
+            else:
+                draw(f"{T['page']} {pidx + 1} / {len(layout['pages'])} — {consigne}",
+                     L.PAGE_W / 2, _y(28.5), 8, align="center")
 
         # Zone nom / prénom  (ou emplacement réservé à une étiquette autocollante)
         nb = page["name_boxes"]
@@ -296,9 +322,22 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
             c.roundRect(bx_ * mm, _y(by_, bh_), bw_ * mm, bh_ * mm, 2 * mm,
                         stroke=0, fill=1)
             c.setFillGray(0.0)
-            title_txt = f"{student.last_name} {student.first_name}"
-            sub_txt = T["personal"]
-            num_txt = f"N° {student.student_number}" if student.student_number else ""
+            if talon:
+                # le nom est sur le talon découpé : dans le cadre, rien
+                # qui identifie l'étudiant à l'œil
+                title_txt = quiz.title
+                sub_txt = T["talon_copie"]
+                num_txt = ""
+            elif places is not None:
+                # copie anonyme : le n° de place, ni nom ni n° d'inscription
+                title_txt = T["place"].format(n=places.get(student.pk, "—"))
+                sub_txt = T["anonyme"]
+                num_txt = ""
+            else:
+                title_txt = f"{student.last_name} {student.first_name}"
+                sub_txt = T["personal"]
+                num_txt = (f"N° {student.student_number}"
+                           if student.student_number else "")
             if lang == "ar":
                 draw(title_txt, bx_ + bw_ - 5, _y(by_ + 9.0), 14,
                      bold=True, align="right")
@@ -438,18 +477,53 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None):
     return buf.getvalue()
 
 
-def _dessiner_cadre(c, page_index):
-    """Trait du cadre de calage et tirets du code de page (n° et sens)."""
+def _dessiner_cadre(c, page_index, haut=L.CADRE_MARGE, talon=False):
+    """Trait du cadre de calage et tirets du code de page (n° et sens).
+    Copie à talon : le cadre commence plus bas (haut) et un 9e tiret, plein,
+    la distingue d'une copie normale à la lecture."""
     m, t = L.CADRE_MARGE, L.CADRE_TRAIT
     c.setStrokeGray(0.0)
     c.setLineWidth(t * mm)
-    c.rect(m * mm, _y(m, L.PAGE_H - 2 * m), (L.PAGE_W - 2 * m) * mm,
-           (L.PAGE_H - 2 * m) * mm, stroke=1, fill=0)
+    c.rect(m * mm, _y(haut, L.PAGE_H - m - haut), (L.PAGE_W - 2 * m) * mm,
+           (L.PAGE_H - m - haut) * mm, stroke=1, fill=0)
     c.setFillGray(0.0)
-    for (x, y, w, h), plein in zip(L.code_cases(), L.code_page(page_index)):
+    for (x, y, w, h), plein in zip(L.code_cases(haut), L.code_page(page_index)):
         if plein:
             c.rect(x * mm, _y(y, h), w * mm, h * mm, stroke=0, fill=1)
+    if talon:
+        x, y, w, h = L.case_variante(haut)
+        c.rect(x * mm, _y(y, h), w * mm, h * mm, stroke=0, fill=1)
     c.setLineWidth(1)
+
+
+def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang):
+    """Talon du haut de la copie : nom et n° de l'étudiant, épreuve, consigne,
+    puis le trait pointillé « couper ici » (hors du cadre de lecture)."""
+    x0, x1 = 14.0, L.PAGE_W - 14.0
+    rtl = lang == "ar"
+    nom = f"{student.last_name} {student.first_name}" if student else ""
+    num = f"N° {student.student_number}" if student and student.student_number else ""
+    debut, fin, sens_debut, sens_fin = ((x1, x0, "right", "left") if rtl
+                                        else (x0, x1, "left", "right"))
+    draw(nom, debut, _y(11.5), 16, bold=True, align=sens_debut)
+    if num:
+        draw(num, fin, _y(11.5), 12, bold=True, align=sens_fin)
+    draw(titre, debut, _y(18.0), 9.5, align=sens_debut, gray=0.3)
+    draw(page_txt, fin, _y(18.0), 8, align=sens_fin, gray=0.4)
+    draw(consigne, debut, _y(23.5), 8, align=sens_debut, gray=0.35)
+    # trait de coupe, pointillé, sur toute la largeur
+    c.setStrokeGray(0.35)
+    c.setLineWidth(0.6)
+    c.setDash(3, 2)
+    c.line(4 * mm, _y(L.TALON_COUPE), (L.PAGE_W - 4) * mm, _y(L.TALON_COUPE))
+    c.setDash()
+    c.setStrokeGray(0.0)
+    c.setFont("ZapfDingbats", 11)
+    c.setFillGray(0.35)
+    c.drawString(5 * mm, _y(L.TALON_COUPE + 1.3), "✂")
+    c.setFillGray(0.0)
+    draw(T["talon_coupe"], L.PAGE_W / 2, _y(L.TALON_COUPE - 1.6), 6.8,
+         align="center", gray=0.45)
 
 
 def _dessiner_lignes(c, zone):

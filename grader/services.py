@@ -529,13 +529,13 @@ def moderniser_calage(quiz):
         _generer_fiches_orales(quiz)
         return True
     if quiz.type_epreuve == "ecrit":
-        if quiz.id_mode == "qr" and quiz.auto_enroll:
+        if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.talon_nom:
             return False
         from .views_epreuves import _generer_documents
         _generer_documents(quiz)
         return True
     if quiz.id_mode == "qr":
-        if quiz.auto_enroll:
+        if quiz.auto_enroll and not quiz.talon_nom:
             return False
         try:
             nouvelle = layout_mod.build_layout(quiz)
@@ -905,74 +905,42 @@ def question_note(quiz):
     return q
 
 
+# Lot des notes d'oral SAISIES À LA MAIN avant le 30 octobre 2026. Depuis, les
+# notes d'oral ne viennent que des fiches scannées (demande de l'utilisateur) ;
+# ce lot n'est plus alimenté, ses notes restent tant qu'on ne le supprime pas.
 LOT_ORAL = "Notes de l'oral"
-
-
-def lot_oral(quiz):
-    lot, _ = ScanBatch.objects.get_or_create(
-        quiz=quiz, label=LOT_ORAL, defaults={"status": "done"})
-    return lot
 
 
 def _reponses_retenues(quiz, q):
     """{student_id: réponse} — la note qui compte pour chaque étudiant :
-    celle de sa première copie (même règle que compute_results), qu'elle
-    vienne d'une fiche scannée ou de la saisie à l'écran."""
+    celle de sa première copie (même règle que compute_results)."""
     retenues = {}
     for r in (Answer.objects.filter(sheet__batch__quiz=quiz, question=q,
                                     sheet__student__isnull=False)
-              .select_related("sheet").order_by("sheet__created_at", "pk")):
+              .select_related("sheet__batch").order_by("sheet__created_at", "pk")):
         retenues.setdefault(r.sheet.student_id, r)
     return retenues
 
 
 def notes_orales(quiz):
-    """{student_id: note} des notes d'un oral, scannées ou saisies."""
-    q = question_note(quiz)
-    return {sid: r.points_awarded for sid, r in _reponses_retenues(quiz, q).items()
-            if r.points_awarded is not None}
-
-
-@transaction.atomic
-def enregistrer_notes_orales(quiz, notes, utilisateur=None):
-    """Saisie des notes d'un oral : notes = {étudiant: note | None}.
-    None efface la note (étudiant absent : il ne figure plus aux résultats).
-    Chaque changement est tracé au journal. Retourne le nombre de notes
-    modifiées."""
-    q = question_note(quiz)
-    lot = lot_oral(quiz)
-    retenues = _reponses_retenues(quiz, q)
-    changees = 0
-    for etudiant, note in notes.items():
-        # la note qui compte : celle d'une fiche scannée s'il y en a une
-        reponse = retenues.get(etudiant.pk)
-        copie = reponse.sheet if reponse else None
-        avant = reponse.points_awarded if reponse else None
-        if note == avant:
-            continue
-        journal.noter(utilisateur, "note", quiz=quiz, copie=copie,
-                      objet=f"{etudiant.full_name} — oral", avant=avant, apres=note)
-        changees += 1
-        if note is None:
-            if copie.batch_id == lot.pk:
-                copie.delete()              # saisie à l'écran : absent
-            else:                           # fiche scannée : note à reprendre
-                reponse.points_awarded = None
-                reponse.manually_set = True
-                reponse.save(update_fields=["points_awarded", "manually_set"])
-            continue
-        if copie is None:
-            copie = SheetScan.objects.create(batch=lot, student=etudiant, status="ok",
-                                             source_name="oral",
-                                             student_confirmed=True)
-        if reponse is None:
-            reponse = Answer(sheet=copie, question=q)
-        reponse.points_awarded = note
-        reponse.manually_set = True
-        reponse.save()
-    lot.total_pages = lot.processed_pages = lot.sheets.count()
-    lot.save(update_fields=["total_pages", "processed_pages", "updated_at"])
-    return changees
+    """Pour la page d'un oral : [(étudiant, état, réponse)] où l'état est
+    « lue » (note lue sur la fiche scannée), « illisible » (fiche scannée,
+    note à vérifier sur la fiche), « manuelle » (ancienne saisie à la main)
+    ou « attendue » (fiche pas encore scannée)."""
+    retenues = _reponses_retenues(quiz, question_note(quiz))
+    lignes = []
+    for etudiant in quiz.class_group.students.all():
+        r = retenues.get(etudiant.pk)
+        if r is None:
+            etat = "attendue"
+        elif r.sheet.batch.label == LOT_ORAL and not r.sheet.image:
+            etat = "manuelle"
+        elif r.points_awarded is None:
+            etat = "illisible"
+        else:
+            etat = "lue"
+        lignes.append((etudiant, etat, r))
+    return lignes
 
 
 def _auto_points(question, answer):
@@ -1235,6 +1203,57 @@ def _convergence_suspecte(stat, repartition):
 # une hypothèse, pas une mesure : elle est affichée en clair à l'écran
 # plutôt que fondue dans le résultat.
 MINUTES_PAR_COPIE_A_LA_MAIN = 2
+
+
+# ------------------------------------------------ copies anonymes (places)
+
+def places_anonymes(quiz):
+    """Numéros de place des copies anonymes : [(n° de place, étudiant)],
+    par n° d'inscription puis par nom (l'ordre de la liste d'émargement)."""
+    etudiants = sorted(quiz.class_group.students.all(),
+                       key=lambda s: ((s.student_number or "~").zfill(12),
+                                      s.last_name, s.first_name))
+    return list(enumerate(etudiants, start=1))
+
+
+# ------------------------------------------- concours en plusieurs étapes
+
+def admis_de(quiz):
+    """Étudiants admis à une épreuve (note minimale atteinte), par ordre de
+    mérite. Liste vide sans note minimale. « En attente » n'est pas admis."""
+    admission = admissions(quiz, compute_results(quiz))
+    return [r["student"] for r in admission["admis"]] if admission else []
+
+
+def faire_passer_admis(cible):
+    """Ajoute aux candidats de l'épreuve « cible » les admis de son épreuve
+    précédente (QCM -> écrit -> oral). Ne retire personne : un candidat déjà
+    présent, ou déjà noté, garde sa place. Retourne (ajoutés, déjà là, admis)."""
+    from .inscriptions import copier_etudiants
+    precedente = cible.epreuve_precedente
+    if precedente is None:
+        return 0, 0, 0
+    admis = admis_de(precedente)
+    ajoutes, deja = copier_etudiants(cible.class_group, admis)
+    return ajoutes, deja, len(admis)
+
+
+def etat_etape(cible):
+    """Pour la page d'une épreuve « étape suivante » : combien d'admis à
+    l'épreuve précédente, combien déjà dans la liste, combien à ajouter."""
+    precedente = cible.epreuve_precedente
+    if precedente is None:
+        return None
+    admis = admis_de(precedente)
+    presents_num = set(cible.class_group.students.exclude(student_number="")
+                       .values_list("student_number", flat=True))
+    presents_nom = set(cible.class_group.students.values_list("last_name", "first_name"))
+    manquants = sum(1 for s in admis
+                    if not ((s.student_number and s.student_number in presents_num)
+                            or (not s.student_number
+                                and (s.last_name, s.first_name) in presents_nom)))
+    return {"precedente": precedente, "n_admis": len(admis), "manquants": manquants,
+            "seuil": precedente.note_admission}
 
 
 # Tranches de la répartition des résultats (en % du barème).

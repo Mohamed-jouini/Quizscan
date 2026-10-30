@@ -177,9 +177,10 @@ class QuizForm(forms.ModelForm):
 
     class Meta:
         model = Quiz
-        fields = ["title", "type_epreuve", "class_group", "language", "note_sur",
+        fields = ["title", "type_epreuve", "epreuve_precedente", "class_group",
+                  "language", "note_sur",
                   "sheet_mode", "entete", "duree",
-                  "id_mode", "id_digits", "grading_mode", "wrong_penalty"]
+                  "id_mode", "id_digits", "talon_nom", "grading_mode", "wrong_penalty"]
         widgets = {"grading_mode": forms.RadioSelect,
                    "type_epreuve": forms.RadioSelect,
                    "entete": forms.Textarea(attrs={"rows": 3})}
@@ -188,9 +189,21 @@ class QuizForm(forms.ModelForm):
         help_texts = {"id_digits": "Taille de la grille à noircir sur la fiche "
                                    "(ex. 6 pour un n° comme 104523)."}
 
-    def __init__(self, *args, user=None, concours=False, **kwargs):
+    def __init__(self, *args, user=None, concours=False, precedentes=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.concours = concours
+        # Étape suivante d'un concours : les candidats sont les admis d'une
+        # épreuve précédente (QCM -> écrit -> oral). Seules les épreuves de
+        # l'enseignant qui ont une note minimale sont proposées.
+        prec = self.fields["epreuve_precedente"]
+        prec.queryset = (precedentes if precedentes is not None
+                         else Quiz.objects.none()).filter(note_admission__isnull=False)
+        prec.required = False
+        prec.empty_label = "— aucune : tous les étudiants de la liste —"
+        prec.label = "Candidats : admis de l'épreuve"
+        prec.help_text = ("Concours en plusieurs étapes : seuls les admis de cette "
+                          "épreuve passent à celle-ci (ex. admis au QCM -> écrit, "
+                          "admis à l'écrit -> oral).")
         # Facultatifs à l'envoi : QCM sur 20 par défaut (formulaires et
         # scripts d'avant les épreuves écrites et orales).
         self.fields["type_epreuve"].required = False
@@ -209,7 +222,24 @@ class QuizForm(forms.ModelForm):
                 qs = qs.filter(enseignants=user).distinct()
             self.fields["class_group"].queryset = qs
             self.fields["class_group"].empty_label = "— choisir une classe —"
-            self.fields["class_group"].required = True
+            # avec une épreuve précédente, la liste des candidats (ses admis)
+            # est créée pour cette épreuve : pas de classe à choisir
+            self.fields["class_group"].required = not self.data.get("epreuve_precedente")
+            self.fields["class_group"].help_text = (
+                "Inutile avec « admis de l'épreuve » : la liste des admis est "
+                "créée pour cette épreuve.")
+
+    def _get_validation_exclusions(self):
+        exclus = super()._get_validation_exclusions()
+        if (getattr(self, "cleaned_data", {}) or {}).get("epreuve_precedente") is not None:
+            exclus.add("class_group")       # renseignée par la vue
+        return exclus
+
+    def clean(self):
+        data = super().clean()
+        if data.get("talon_nom"):
+            data["id_mode"] = "qr"      # nom et QR imprimés, nom sur le talon
+        return data
 
     def clean_type_epreuve(self):
         return self.cleaned_data.get("type_epreuve") or "qcm"
@@ -224,7 +254,7 @@ class EpreuveEcritForm(forms.ModelForm):
     class Meta:
         model = Quiz
         fields = ["sujet_texte", "entete", "duree", "note_sur", "id_mode",
-                  "id_digits", "pages_redaction"]
+                  "id_digits", "talon_nom", "pages_redaction"]
         widgets = {"sujet_texte": forms.Textarea(attrs={
                        "rows": 9, "placeholder": "Ex. Racontez un voyage qui vous a "
                                                  "marqué…\n\nVous décrirez les lieux "
@@ -241,6 +271,12 @@ class EpreuveEcritForm(forms.ModelForm):
                 c for c in Quiz.ID_MODES if c[0] in CONCOURS_ID_MODES]
         if self.instance.language == "ar":
             self.fields["sujet_texte"].widget.attrs["dir"] = "rtl"
+
+    def clean(self):
+        data = super().clean()
+        if data.get("talon_nom"):
+            data["id_mode"] = "qr"      # nom et QR imprimés, nom sur le talon
+        return data
 
 
 class EpreuveOralForm(forms.ModelForm):

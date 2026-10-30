@@ -44,7 +44,7 @@ def main():
     r = c.get("/quiz/nouveau/?concours=1")
     fields = set(r.context["form"].fields)
     # entete / duree : cartouche du sujet (affichés en mode « sujet séparé »)
-    assert fields == {"title", "type_epreuve", "note_sur", "language", "sheet_mode", "entete", "duree",
+    assert fields == {"title", "type_epreuve", "epreuve_precedente", "talon_nom", "note_sur", "language", "sheet_mode", "entete", "duree",
                       "id_mode", "id_digits", "grading_mode", "wrong_penalty"}, fields
     modes = [m for m, _ in r.context["form"].fields["id_mode"].choices]
     assert modes == ["grid", "sticker"], modes

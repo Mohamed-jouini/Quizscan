@@ -12,6 +12,7 @@
     <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">Résultats</a>
   </div>
 </header>
+{% include "grader/_etape_precedente.html" %}
 
 <ol class="etapes">
   <li class="{% if quiz.sheet_pdf %}is-fait{% endif %}"><b>Imprimez les fiches</b><span>une fiche d'évaluation par étudiant, nom et QR déjà imprimés.</span></li>
@@ -72,28 +73,33 @@
 <div class="grid2 grid2--large">
   <div class="card">
     <h2>Notes de l'oral</h2>
-    <p class="helptext helptext--serre">Les notes lues au scan apparaissent ici ; vous pouvez aussi les saisir ou les corriger à la main.</p>
+    <p class="helptext helptext--serre">Notes lues au scan des fiches d'évaluation, et seulement elles. Une note illisible se vérifie sur sa fiche (image sous les yeux).</p>
+    {% if lot_manuel %}
+    <div class="note note--warn">
+      <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
+      <div class="note__body">{{ lot_manuel.sheets.count }} note(s) avaient été <b>saisies à la main</b> avant : elles comptent encore dans les résultats.
+        {% if perms.grader.corriger_copies %}<a class="btn small secondary" href="{% url 'batch_delete' lot_manuel.pk %}">Supprimer ces notes saisies</a>{% endif %}</div>
+    </div>
+    {% endif %}
     {% if lignes %}
-    <form method="post" class="notes-orales">{% csrf_token %}
-      <div class="table-wrap">
-        <table>
-          <tr><th>Nom et prénom</th><th>N° d'inscription</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th></tr>
-          {% for e, note in lignes %}
-          <tr>
-            <td><b>{{ e.full_name }}</b></td>
-            <td>{{ e.student_number|default:"—" }}</td>
-            <td><input class="champ--note" type="text" inputmode="decimal" name="note_{{ e.pk }}"
-                       value="{{ note }}" aria-label="Note de {{ e.full_name }}"
-                       {% if not perms.grader.corriger_copies %}disabled{% endif %}></td>
-          </tr>
-          {% endfor %}
-        </table>
-      </div>
-      {% if perms.grader.corriger_copies %}
-      <p><button class="btn" name="notes" value="1" type="submit">Enregistrer les notes</button></p>
-      {% endif %}
-      <span class="helptext">Virgule ou point acceptés (14,5). Une case vide = pas de note (absent) : l'étudiant ne figure pas aux résultats. Chaque note modifiée est inscrite au journal.</span>
-    </form>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Nom et prénom</th><th>N° d'inscription</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th><th>Fiche</th></tr>
+        {% for e, etat, r in lignes %}
+        <tr>
+          <td><b>{{ e.full_name }}</b></td>
+          <td>{{ e.student_number|default:"—" }}</td>
+          <td>{% if etat == "lue" or etat == "manuelle" %}<span class="score">{{ r.points_awarded|floatformat:"-2" }}</span>{% else %}—{% endif %}</td>
+          <td>
+            {% if etat == "lue" %}<a class="btn small secondary" href="{% url 'sheet_review' r.sheet.pk %}">Voir la fiche</a>
+            {% elif etat == "illisible" %}<a class="btn small" href="{% url 'sheet_review' r.sheet.pk %}">Note illisible : vérifier</a>
+            {% elif etat == "manuelle" %}<span class="badge warn">saisie à la main</span>
+            {% else %}<span class="badge grey">pas encore scannée</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
     {% else %}
     <p>Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} :
       <a href="{% url 'class_detail' quiz.class_group.pk %}">ajoutez-les d'abord</a> (import Excel ou registre des inscriptions).</p>

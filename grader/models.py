@@ -167,6 +167,22 @@ class Quiz(models.Model):
         validators=[MaxValueValidator(6)],
         help_text="Écrit : feuilles lignées imprimées après la page de garde "
                   "(0 à 6). Elles ne se scannent pas.")
+    # Copie nominative dont le nom est imprimé sur un TALON, en haut de la
+    # page, hors du cadre de lecture : découpé avant la correction, il rend
+    # la copie anonyme ; le QR (dans le cadre) identifie toujours l'étudiant.
+    talon_nom = models.BooleanField(
+        "nom sur un talon à découper", default=False,
+        help_text="Chaque copie porte le nom et le QR de l'étudiant ; le nom est "
+                  "sur un talon à découper (massicot) avant la correction. La "
+                  "copie reste lisible au scan, et anonyme pour le correcteur.")
+    # Concours en plusieurs étapes (QCM -> écrit -> oral) : les candidats de
+    # cette épreuve sont les admis de l'épreuve précédente.
+    epreuve_precedente = models.ForeignKey(
+        "self", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="epreuves_suivantes",
+        verbose_name="candidats : admis de l'épreuve",
+        help_text="Étape suivante d'un concours : seuls les admis de cette "
+                  "épreuve sont candidats.")
     class_group = models.ForeignKey(ClassGroup, on_delete=models.PROTECT,
                                     related_name="quizzes", verbose_name="classe")
     ID_MODES = [

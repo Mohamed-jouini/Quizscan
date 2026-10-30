@@ -165,6 +165,9 @@ def test_ancienne_grille(quiz):
 
 
 def test_oral(c, groupe):
+    """Oral : les notes ne viennent QUE des fiches scannées (plus de saisie
+    à la main dans le tableau, demande de l'utilisateur, 30 octobre 2026)."""
+    from grader.models import ScanBatch, SheetScan
     r = c.post(reverse("quiz_create"), {
         "title": "Oral d'anglais", "type_epreuve": "oral", "class_group": groupe.pk,
         "language": "fr", "note_sur": "20", "sheet_mode": "grid", "id_mode": "grid",
@@ -173,26 +176,17 @@ def test_oral(c, groupe):
     quiz = Quiz.objects.get(title="Oral d'anglais", class_group=groupe)
     page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
     assert "Notes de l'oral" in page and "AMRI Sana" in page
+    assert "pas encore scannée" in page
     e = {s.last_name: s for s in groupe.students.all()}
-    r = c.post(reverse("quiz_detail", args=[quiz.pk]), {
-        "notes": "1", f"note_{e['AMRI'].pk}": "15,5", f"note_{e['BAKIR'].pk}": "",
-        f"note_{e['CHERIF'].pk}": "25"}, follow=True)
-    messages = " ".join(str(m) for m in r.context["messages"])
-    assert "CHERIF Lina" in messages and "1 note(s) enregistrée(s)" in messages, messages
-    rows = {r["student"].last_name: r for r in services.compute_results(quiz)}
-    assert set(rows) == {"AMRI"} and rows["AMRI"]["score"] == 15.5
-    assert Modification.objects.filter(quiz=quiz, action="note").count() == 1
-    page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
-    assert 'value="15,5"' in page or 'value="15.5"' in page
-    # effacer la note : l'étudiant est absent des résultats
-    c.post(reverse("quiz_detail", args=[quiz.pk]), {"notes": "1", f"note_{e['AMRI'].pk}": ""})
+    assert f'name="note_{e["AMRI"].pk}"' not in page
+    assert "Enregistrer les notes" not in page
+    # un envoi fabriqué « à la main » n'enregistre rien
+    c.post(reverse("quiz_detail", args=[quiz.pk]), {
+        "notes": "1", f"note_{e['AMRI'].pk}": "15,5"})
     assert services.compute_results(quiz) == []
-    c.post(reverse("quiz_detail", args=[quiz.pk]), {"notes": "1", f"note_{e['BAKIR'].pk}": "9"})
-    page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
-    assert "BAKIR Omar" in page and "45 %" in page and "copie p1" not in page
-    print("  oral : notes saisies, refusée hors barème, effacée, journalisée OK")
+    print("  oral : plus de saisie à la main (champ absent, envoi fabriqué ignoré) OK")
 
-    # ---- fiches d'évaluation : imprimées, notées à la main, scannées
+    # ---- fiches d'évaluation : imprimées, notées par l'examinateur, scannées
     c.post(reverse("quiz_detail", args=[quiz.pk]), {"generer": "1"})
     quiz.refresh_from_db()
     fiches = open(quiz.sheet_pdf.path, "rb").read()
@@ -202,29 +196,42 @@ def test_oral(c, groupe):
     assert "RÉSERVÉ AU CORRECTEUR" in doc[0].get_text()
     grille = quiz.layout_json["pages"][0]["note_grid"]
     scans = []
-    for k, (nom, chiffres) in enumerate((("AMRI", [1, 2, 2, 5]), ("CHERIF", [1, 7, None, None]))):
-        page_k = 0 if nom == "AMRI" else 2
+    # AMRI : 12,25 ; CHERIF : deux cases noircies sur les unités (illisible)
+    for nom, page_k, chiffres in (("AMRI", 0, [1, 2, 2, 5]), ("CHERIF", 2, [1, [7, 3], None, None])):
         img = noircir_note(render_page(fiches, page_k), grille, chiffres)
         scans.append(SimpleUploadedFile(f"oral_{nom}.jpg", jpg(simulate_scan(img))))
     lot = services.process_uploaded_files(quiz, scans, label="Jury 1")
     assert all(s.status == "ok" for s in lot.sheets.all()), \
         [(s.source_name, s.status, s.error_message) for s in lot.sheets.all()]
-    rows = {r["student"].last_name: r["score"] for r in services.compute_results(quiz)}
-    assert rows == {"AMRI": 12.25, "BAKIR": 9.0, "CHERIF": 17.0}, rows
+    rows = {r["student"].last_name: r for r in services.compute_results(quiz)}
+    assert rows["AMRI"]["score"] == 12.25 and rows["CHERIF"]["pending_open"] == 1, rows
     page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
-    assert 'value="12,25"' in page and 'value="17"' in page
-    print("  oral scanné : fiches nominatives, 12,25 et 17 lues et affectées "
-          "par QR OK")
+    assert "12,25" in page and "Voir la fiche" in page
+    assert "Note illisible : vérifier" in page and "pas encore scannée" in page
+    print("  oral scanné : 12,25 lue et affectée par QR ; note illisible à "
+          "vérifier ; BAKIR pas encore scannée OK")
 
-    # corriger à la main une note scannée : la même note change, pas de doublon
-    c.post(reverse("quiz_detail", args=[quiz.pk]), {"notes": "1", f"note_{e['CHERIF'].pk}": "16"})
+    # la note illisible se reprend sur la fiche scannée (image sous les yeux)
+    cherif = SheetScan.objects.get(batch=lot, student=e["CHERIF"])
+    reponse = cherif.answers.get()
+    c.post(reverse("sheet_review", args=[cherif.pk]), {f"points_{reponse.pk}": "17"})
     rows = {r["student"].last_name: r["score"] for r in services.compute_results(quiz)}
-    assert rows["CHERIF"] == 16.0
-    from grader.models import SheetScan
-    assert SheetScan.objects.filter(batch__quiz=quiz, student=e["CHERIF"]).count() == 1
+    assert rows == {"AMRI": 12.25, "CHERIF": 17.0}, rows
     page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
     assert ">fiche</a>" in page
-    print("  note scannée corrigée à l'écran, sans doublon OK")
+    print("  note illisible vérifiée sur la fiche scannée : 17 OK")
+
+    # anciennes notes saisies à la main (avant ce changement) : signalées
+    ancien = ScanBatch.objects.create(quiz=quiz, label=services.LOT_ORAL, status="done")
+    vieille = SheetScan.objects.create(batch=ancien, student=e["BAKIR"], status="ok",
+                                       source_name="oral", student_confirmed=True)
+    from grader.models import Answer
+    Answer.objects.create(sheet=vieille, question=services.question_note(quiz),
+                          points_awarded=9.0, manually_set=True)
+    page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
+    assert "saisies à la main" in page and "Supprimer ces notes saisies" in page
+    assert reverse("batch_delete", args=[ancien.pk]) in page
+    print("  anciennes notes saisies à la main : signalées, avec lien de suppression OK")
 
 
 def main():

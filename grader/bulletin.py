@@ -295,3 +295,89 @@ def generate_liste_admis_pdf(quiz, admission, batch=None):
     c.showPage()
     c.save()
     return buf.getvalue()
+
+
+def generate_liste_emargement(quiz, lignes, salle=""):
+    """Liste de placement et d'émargement des copies anonymes.
+
+    lignes : [(n° de place, étudiant)], dans l'ordre des places. Le
+    surveillant y lit qui s'assoit où (la copie ne porte que le n° de place et
+    un QR) ; chaque candidat signe en face de son nom. Pages numérotées,
+    intitulés de colonnes répétés, décompte des présents en fin de liste."""
+    from django.utils import timezone
+
+    load_fonts()
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=A4)
+    X0, X1 = 18.0, 192.0
+    LIGNE, BAS = 9.0, 270.0
+    cols = [X0 + 3, X0 + 22, X0 + 52]        # place, n° d'inscription, nom
+    x_sig = X1 - 48.0                         # début de la case signature
+    entete = [t.strip() for t in (quiz.entete or "").splitlines() if t.strip()]
+    edite = timezone.localtime().strftime("%d/%m/%Y")
+    debut_p1 = 64.0 + 4.2 * len(entete)
+    par_p1 = max(int((BAS - debut_p1 - 9) // LIGNE), 1)
+    par_page = int((BAS - 34.0 - 9) // LIGNE)
+    reste = max(len(lignes) - par_p1, 0)
+    total = 1 + (-(-reste // par_page) if reste else 0)
+
+    def tete_tableau(y):
+        c.setFillGray(0.92)
+        c.rect(X0 * mm, _y(y + 2.6), (X1 - X0) * mm, 8.2 * mm, stroke=0, fill=1)
+        c.setFillGray(0.0)
+        for texte, x in zip(("Place", "N° d'inscription", "Nom et prénom"), cols):
+            _draw(c, texte, x, y, 9, bold=True, gray=0.2)
+        _draw(c, "Signature", x_sig + 3, y, 9, bold=True, gray=0.2)
+        return y + 9.0
+
+    def pied(page):
+        _draw(c, f"{quiz.title} — placement et émargement — édité le {edite}",
+              X0, 287.0, 7.5, gray=0.45)
+        _draw(c, f"page {page} / {total}", X1, 287.0, 7.5, align="right", gray=0.45)
+
+    y = 18.0
+    for t in entete:
+        _draw(c, t, PAGE_W / 2, y, 9, align="center", gray=0.3)
+        y += 4.2
+    _draw(c, "Liste de placement et d'émargement", PAGE_W / 2, y + 6, 16,
+          bold=True, align="center")
+    _draw(c, quiz.title, PAGE_W / 2, y + 13, 12, align="center")
+    _draw(c, f"Salle : {salle or '………………'}      Date : ……/……/…………      "
+             f"Surveillant : ……………………………", PAGE_W / 2, y + 20, 9.5,
+          align="center", gray=0.25)
+    _draw(c, "Copies anonymes : chaque copie porte un n° de place et un QR code, "
+             "jamais le nom. Le candidat s'assoit à sa place et signe ci-dessous.",
+          PAGE_W / 2, y + 26, 8, align="center", gray=0.4)
+    c.setLineWidth(0.5)
+    c.line(X0 * mm, _y(y + 29.5), X1 * mm, _y(y + 29.5))
+    y = tete_tableau(debut_p1)
+    page, sur_page, capacite = 1, 0, par_p1
+    for i, (place, s) in enumerate(lignes):
+        if sur_page == capacite:
+            pied(page)
+            c.showPage()
+            page += 1
+            _draw(c, f"Placement et émargement — {quiz.title} (suite)", X0, 20.0, 10,
+                  bold=True)
+            y = tete_tableau(32.0)
+            sur_page, capacite = 0, par_page
+        if i % 2:
+            c.setFillGray(0.965)
+            c.rect(X0 * mm, _y(y + 3.4), (X1 - X0) * mm, LIGNE * mm, stroke=0, fill=1)
+            c.setFillGray(0.0)
+        _draw(c, str(place), cols[0] + 5, y + 0.6, 12, bold=True, align="center")
+        _draw(c, s.student_number or "—", cols[1], y + 0.6, 10)
+        _draw(c, s.full_name, cols[2], y + 0.6, 10.5, bold=True)
+        c.setStrokeGray(0.55)
+        c.setLineWidth(0.5)
+        c.rect(x_sig * mm, _y(y + 2.8), (X1 - x_sig - 1) * mm, (LIGNE - 1.6) * mm)
+        c.setStrokeGray(0.0)
+        y += LIGNE
+        sur_page += 1
+    y += 8
+    _draw(c, f"Présents : ……… / {len(lignes)}      Absents : ………", X0, y, 10, bold=True)
+    _draw(c, "Signature du surveillant :", X1 - 70, y, 10, bold=True)
+    pied(page)
+    c.showPage()
+    c.save()
+    return buf.getvalue()

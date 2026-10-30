@@ -94,12 +94,13 @@ def _gris_moyen(gray_canon, rect_mm, marge=0.2):
     return float(zone.mean()) if zone.size else 255.0
 
 
-def _score_trait(gray_canon):
-    """Part des points de l'axe du cadre qui sont de l'encre (recalage juste)."""
+def _score_trait(gray_canon, haut=L.CADRE_MARGE):
+    """Part des points de l'axe du cadre qui sont de l'encre (recalage juste).
+    haut : axe du haut du cadre (plus bas sur une copie à talon)."""
     m = L.CADRE_MARGE
-    pts = ([(m, y) for y in np.linspace(m + 5, L.PAGE_H - m - 5, 40)]
-           + [(L.PAGE_W - m, y) for y in np.linspace(m + 5, L.PAGE_H - m - 5, 40)]
-           + [(x, m) for x in np.linspace(m + 5, L.PAGE_W - m - 5, 30)]
+    pts = ([(m, y) for y in np.linspace(haut + 5, L.PAGE_H - m - 5, 40)]
+           + [(L.PAGE_W - m, y) for y in np.linspace(haut + 5, L.PAGE_H - m - 5, 40)]
+           + [(x, haut) for x in np.linspace(m + 5, L.PAGE_W - m - 5, 30)]
            + [(x, L.PAGE_H - m) for x in np.linspace(m + 5, L.PAGE_W - m - 5, 30)])
     sombres = sum(1 for x, y in pts
                   if 0 <= _mm(y) < CANON_H and 0 <= _mm(x) < CANON_W
@@ -109,8 +110,10 @@ def _score_trait(gray_canon):
 
 def _caler_par_cadre(image_bgr):
     """Recalage par le cadre fin. Essaie chaque quadrilatère candidat dans ses
-    quatre orientations (page à l'endroit, à l'envers, tournée) : retient celle
-    dont le code de page est valide et dont le trait tombe sur l'axe du cadre.
+    quatre orientations (page à l'endroit, à l'envers, tournée) et pour les
+    deux hauteurs de cadre (copie normale, copie à talon — découpé ou non) :
+    retient celle dont le code de page est valide, dont le 9e tiret dit le
+    même gabarit, et dont le trait tombe sur l'axe du cadre.
     Retourne (image_recalée, page_index) ou None."""
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     for quad in _cadres_candidats(gray)[:6]:
@@ -121,21 +124,26 @@ def _caler_par_cadre(image_bgr):
             hauteur = np.linalg.norm(pts[3] - pts[0])
             if hauteur < largeur:                    # portrait attendu
                 continue
-            for bord in _CADRE_BORDS:
-                dst = np.array([[_mm(bord), _mm(bord)],
-                                [_mm(L.PAGE_W - bord), _mm(bord)],
-                                [_mm(L.PAGE_W - bord), _mm(L.PAGE_H - bord)],
-                                [_mm(bord), _mm(L.PAGE_H - bord)]], dtype=np.float32)
-                H = cv2.getPerspectiveTransform(pts.astype(np.float32), dst)
-                canon = cv2.warpPerspective(gray, H, (CANON_W, CANON_H),
-                                            borderValue=255)
-                page = L.lire_code_page([_gris_moyen(canon, r) < 128
-                                         for r in L.code_cases()])
-                if page is None:
-                    continue
-                score = _score_trait(canon)
-                if score >= 0.6 and (meilleur is None or score > meilleur[0]):
-                    meilleur = (score, H, page)
+            for haut in L.CADRES_HAUTS:
+                for bord in _CADRE_BORDS:
+                    ecart = bord - L.CADRE_MARGE          # bord extérieur / intérieur
+                    dst = np.array([[_mm(bord), _mm(haut + ecart)],
+                                    [_mm(L.PAGE_W - bord), _mm(haut + ecart)],
+                                    [_mm(L.PAGE_W - bord), _mm(L.PAGE_H - bord)],
+                                    [_mm(bord), _mm(L.PAGE_H - bord)]], dtype=np.float32)
+                    H = cv2.getPerspectiveTransform(pts.astype(np.float32), dst)
+                    canon = cv2.warpPerspective(gray, H, (CANON_W, CANON_H),
+                                                borderValue=255)
+                    page = L.lire_code_page([_gris_moyen(canon, r) < 128
+                                             for r in L.code_cases(haut)])
+                    if page is None:
+                        continue
+                    talon = _gris_moyen(canon, L.case_variante(haut)) < 128
+                    if talon != (haut != L.CADRE_MARGE):
+                        continue                          # pas ce gabarit
+                    score = _score_trait(canon, haut)
+                    if score >= 0.6 and (meilleur is None or score > meilleur[0]):
+                        meilleur = (score, H, page)
         if meilleur:
             _, H, page = meilleur
             warped = cv2.warpPerspective(image_bgr, H, (CANON_W, CANON_H),

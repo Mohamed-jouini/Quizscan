@@ -13,6 +13,7 @@
     <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">Résultats</a>
   </div>
 </header>
+{% include "grader/_etape_precedente.html" %}
 
 <ol class="etapes">
   <li class="{% if quiz.sujet_texte %}is-fait{% endif %}"><b>Rédigez le sujet</b><span>énoncé, en-tête, durée et barème, ci-dessous.</span></li>

@@ -61,11 +61,30 @@ CODE_W, CODE_H, CODE_PAS = 4.0, 2.2, 6.0
 CODE_N = 8             # départ (toujours plein) + 6 bits de page + parité
 
 
-def code_cases():
-    """Rectangles [x, y, w, h] (mm) des tirets du code de page."""
+# Copie à TALON (Quiz.talon_nom) : le cadre commence plus bas, la bande du
+# haut (nom de l'étudiant) est hors du cadre et se découpe au trait pointillé.
+# Le code de page reste à la même distance sous le haut du cadre ; un 9e tiret
+# (« variante ») est plein sur ces copies : sans lui, une copie normale et une
+# copie à talon recalées l'une comme l'autre donneraient toutes deux un code
+# valide (seule la hauteur du cadre change).
+TALON_CADRE_HAUT = 38.0    # axe du haut du cadre sur une copie à talon (mm)
+TALON_COUPE = 30.0         # trait « couper ici » (mm du haut de la page)
+CADRES_HAUTS = (CADRE_MARGE, TALON_CADRE_HAUT)
+
+
+def code_cases(haut=CADRE_MARGE):
+    """Rectangles [x, y, w, h] (mm) des tirets du code de page, sous le haut
+    du cadre (10 mm sur une copie normale, plus bas sur une copie à talon)."""
+    y = round(CODE_Y - CADRE_MARGE + haut, 2)
     x0 = PAGE_W / 2 - (CODE_N * CODE_PAS - (CODE_PAS - CODE_W)) / 2
-    return [[round(x0 + i * CODE_PAS, 2), CODE_Y, CODE_W, CODE_H]
+    return [[round(x0 + i * CODE_PAS, 2), y, CODE_W, CODE_H]
             for i in range(CODE_N)]
+
+
+def case_variante(haut=CADRE_MARGE):
+    """9e tiret, à droite des huit : plein sur une copie à talon."""
+    x, y, w, h = code_cases(haut)[-1]
+    return [round(x + CODE_PAS, 2), y, w, h]
 
 
 def code_page(page_index):
@@ -138,6 +157,8 @@ def layout_signature(quiz):
                        q.num_bubbles, q.points, q.open_height_mm]
                       for q in quiz.questions.order_by("order")],
     }
+    if getattr(quiz, "talon_nom", False):
+        data["talon"] = True        # seulement si coché : empreintes inchangées
     if getattr(quiz, "type_epreuve", "qcm") in ("ecrit", "oral"):
         # seulement pour l'écrit et l'oral : les empreintes des fiches QCM
         # existantes ne doivent pas changer (toutes seraient « périmées »)
@@ -197,6 +218,16 @@ def _checked(layout):
 
 
 def build_layout(quiz):
+    """Disposition de la fiche ; copie à talon : cadre abaissé (voir
+    TALON_CADRE_HAUT), rien de ce qui est lu ne bouge."""
+    layout = _build_sans_talon(quiz)
+    if getattr(quiz, "talon_nom", False):
+        layout["talon"] = True
+        layout["cadre_haut"] = TALON_CADRE_HAUT
+    return layout
+
+
+def _build_sans_talon(quiz):
     """Calcule la disposition complète de la fiche pour un quiz.
 
     Retourne un dictionnaire sérialisable en JSON :
@@ -502,6 +533,8 @@ def _build_ecrit_layout(quiz):
 def _uses_sticker(quiz):
     """Identification par étiquette autocollante (QR du candidat collé sur
     la copie) : mode « étiquette », ou concours identifié par QR."""
+    if getattr(quiz, "talon_nom", False):
+        return False                # QR imprimé, nom sur le talon
     return (getattr(quiz, "id_mode", "name") == "sticker"
             or getattr(quiz, "auto_enroll", False))
 

@@ -137,6 +137,16 @@
     </div>
     {% endif %}
   </div>
+  {% if admission.n_admis and perms.grader.creer_epreuve %}
+  <div class="etape-suivante">
+    <span class="etape-suivante__titre">Étape suivante du concours :</span>
+    {% for suivante in quiz.epreuves_suivantes.all %}
+    <a class="btn small secondary" href="{% url 'quiz_detail' suivante.pk %}">{{ suivante.title|truncatechars:40 }}</a>
+    {% endfor %}
+    <a class="btn small" href="{% url 'quiz_create' %}?{% if quiz.auto_enroll %}concours=1&amp;{% endif %}precedente={{ quiz.pk }}&amp;type=ecrit">Créer l'écrit des {{ admission.n_admis }} admis</a>
+    <a class="btn small" href="{% url 'quiz_create' %}?{% if quiz.auto_enroll %}concours=1&amp;{% endif %}precedente={{ quiz.pk }}&amp;type=oral">Créer l'oral des {{ admission.n_admis }} admis</a>
+  </div>
+  {% endif %}
   {% if admission.admis %}
   <div class="admission__entete-liste">
     <h3 class="admission__titre">{% if quiz.auto_enroll %}Liste des admis{% else %}Liste des étudiants ayant réussi{% endif %}, par ordre de mérite</h3>

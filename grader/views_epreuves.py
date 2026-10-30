@@ -34,6 +34,14 @@ def _renommer(request, quiz):
 
 
 def epreuve_detail(request, quiz):
+    if request.method == "POST" and "passer_admis" in request.POST:
+        # étape suivante d'un concours : les nouveaux admis de l'épreuve
+        # précédente rejoignent la liste des candidats
+        droits.exiger(request.user, droits.CREER, "modifier l'épreuve")
+        ajoutes, deja, n_admis = services.faire_passer_admis(quiz)
+        messages.success(request, f"{ajoutes} admis ajouté(s) aux candidats "
+                                  f"({n_admis} admis au total, {deja} déjà dans la liste).")
+        return redirect("quiz_detail", pk=quiz.pk)
     if quiz.type_epreuve == "oral":
         return _oral(request, quiz)
     return _ecrit(request, quiz)
@@ -47,13 +55,15 @@ def _generer_documents(quiz, nb_exemplaires=100):
     services.question_note(quiz)
     layout = layout_mod.build_layout(quiz)
     students = list(quiz.class_group.students.all())
-    if quiz.id_mode == "qr" and quiz.auto_enroll:
+    if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.talon_nom:
         pdf = sheet_pdf.generate_sheet_pdf(
             quiz, layout, serials=list(range(1, nb_exemplaires + 1)))
         quoi = f"{nb_exemplaires} copies anonymes"
     elif quiz.id_mode == "qr":
         pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, students=students)
-        quoi = f"{len(students)} copies nominatives (nom et QR imprimés)"
+        quoi = (f"{len(students)} copies à talon (nom à découper avant la "
+                "correction, QR imprimé)" if quiz.talon_nom else
+                f"{len(students)} copies nominatives (nom et QR imprimés)")
     else:
         pdf = sheet_pdf.generate_sheet_pdf(quiz, layout)
         quoi = "la copie (une par étudiant)"
@@ -83,8 +93,8 @@ def _ecrit(request, quiz):
                 messages.success(request, "Épreuve enregistrée.")
                 return redirect("quiz_detail", pk=quiz.pk)
         elif "generer" in request.POST:
-            if quiz.id_mode == "qr" and not quiz.auto_enroll and \
-                    not quiz.class_group.students.exists():
+            if quiz.id_mode == "qr" and (not quiz.auto_enroll or quiz.talon_nom) \
+                    and not quiz.class_group.students.exists():
                 messages.error(request, "Copies nominatives : ajoutez d'abord les "
                                         "étudiants de la classe.")
             else:
@@ -100,7 +110,7 @@ def _ecrit(request, quiz):
     return render(request, "grader/epreuve_ecrit.html", {
         "quiz": quiz, "form": form, "retour": _retour(quiz),
         "perimee": perimee, "upload_form": UploadForm(),
-        "batches": quiz.batches.all(),
+        "batches": quiz.batches.all(), "etape": services.etat_etape(quiz),
         "journal": quiz.modifications.all()[:15],
         "n_journal": quiz.modifications.count(),
     })
@@ -121,17 +131,6 @@ def _generer_fiches_orales(quiz):
     quiz.sheet_pdf.save(f"fiches_oral_{quiz.pk}.pdf", ContentFile(pdf), save=False)
     quiz.save()
     return len(etudiants)
-
-
-def _lire_note(texte, sur):
-    """« 14,5 » -> 14.5 ; vide -> None ; hors barème ou illisible -> ValueError."""
-    texte = (texte or "").strip().replace(",", ".")
-    if not texte:
-        return None
-    note = float(texte)
-    if not 0 <= note <= sur:
-        raise ValueError
-    return round(note, 2)
 
 
 def _oral(request, quiz):
@@ -157,33 +156,21 @@ def _oral(request, quiz):
                 messages.success(request, f"{n} fiche(s) d'évaluation prête(s), une par "
                                           "étudiant (nom et QR imprimés).")
             return redirect("quiz_detail", pk=quiz.pk)
-        elif "notes" in request.POST:
-            droits.exiger(request.user, droits.CORRIGER, "noter les étudiants")
-            notes, erreurs = {}, []
-            for e in etudiants:
-                champ = f"note_{e.pk}"
-                if champ not in request.POST:
-                    continue
-                try:
-                    notes[e] = _lire_note(request.POST[champ], quiz.note_sur)
-                except ValueError:
-                    erreurs.append(f"{e.full_name} (« {request.POST[champ]} »)")
-            if erreurs:
-                messages.error(request, f"Notes refusées (entre 0 et {quiz.note_sur:g}) : "
-                               + ", ".join(erreurs[:10]) + ". Les autres sont enregistrées.")
-            n = services.enregistrer_notes_orales(quiz, notes, request.user)
-            messages.success(request, f"{n} note(s) enregistrée(s)." if n
-                             else "Aucune note modifiée.")
-            return redirect("quiz_detail", pk=quiz.pk)
 
-    deja = services.notes_orales(quiz)
-    lignes = [(e, "" if deja.get(e.pk) is None
-               else f"{deja[e.pk]:g}".replace(".", ",")) for e in etudiants]
+    # Les notes de l'oral ne viennent que des fiches scannées (demande de
+    # l'utilisateur, 30 octobre 2026) : plus de saisie dans ce tableau. Une
+    # note illisible se reprend sur l'écran de la fiche, image sous les yeux.
+    lignes = services.notes_orales(quiz)
+    lot_manuel = quiz.batches.filter(label=services.LOT_ORAL).first()
     perimee = bool(quiz.layout_json) and (
         quiz.layout_json.get("signature") != layout_mod.layout_signature(quiz))
     return render(request, "grader/epreuve_oral.html", {
         "quiz": quiz, "form": form, "retour": _retour(quiz), "lignes": lignes,
-        "n_notes": len(deja), "perimee": perimee, "upload_form": UploadForm(),
+        "n_notes": sum(1 for _, etat, _ in lignes if etat in ("lue", "manuelle")),
+        "n_illisibles": sum(1 for _, etat, _ in lignes if etat == "illisible"),
+        "lot_manuel": lot_manuel,
+        "perimee": perimee, "upload_form": UploadForm(),
+        "etape": services.etat_etape(quiz),
         "batches": quiz.batches.exclude(label=services.LOT_ORAL),
         "journal": quiz.modifications.all()[:15],
         "n_journal": quiz.modifications.count(),

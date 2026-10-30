@@ -50,6 +50,11 @@
       {% endfor %}
     </select>
   </div>
+  <div class="reglages__large">
+    <label class="case"><input type="checkbox" name="talon_nom" value="1" {% if quiz.talon_nom %}checked{% endif %}>
+      Nom sur un talon à découper (copie anonyme)</label>
+    <span class="helptext helptext--serre">Chaque copie porte le nom et le QR de l'étudiant ; le nom est sur un talon en haut de la page, à découper au massicot avant la correction. Impose l'identification « QR code ».</span>
+  </div>
   <div id="row_id_digits">
     <label>Chiffres du n° d'inscription</label>
     <input class="champ--court" type="number" name="id_digits"

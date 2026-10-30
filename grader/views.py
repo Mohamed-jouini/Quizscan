@@ -476,11 +476,33 @@ def quiz_create(request):
     # « Nouveau concours » (menu Concours) : liste de candidats propre au
     # concours, identification par étiquette QR ou grille de n°
     is_concours = request.GET.get("concours") == "1"
-    form = QuizForm(request.POST or None, user=request.user, concours=is_concours)
+    # « Créer l'écrit / l'oral des admis » (page des résultats) : formulaire
+    # prérempli avec l'épreuve précédente et le type d'épreuve.
+    initial = {}
+    precedente_pk = _int_or_none(request.GET.get("precedente"))
+    if precedente_pk is not None:
+        prec = _my_quizzes(request).filter(pk=precedente_pk).first()
+        if prec is not None:
+            initial = {"epreuve_precedente": prec.pk, "language": prec.language,
+                       "type_epreuve": request.GET.get("type", "ecrit"),
+                       "note_sur": 20, "entete": prec.entete,
+                       "title": f"{prec.title} — "
+                                f"{'oral' if request.GET.get('type') == 'oral' else 'écrit'}"}
+    form = QuizForm(request.POST or None, user=request.user, concours=is_concours,
+                    precedentes=_my_quizzes(request), initial=initial)
     if request.method == "POST" and form.is_valid():
         quiz = form.save(commit=False)
         quiz.owner = request.user
         quiz.auto_enroll = is_concours
+        precedente = quiz.epreuve_precedente
+        if precedente is not None and not is_concours:
+            # étape suivante : une liste à part, celle des admis
+            base = f"{quiz.title.strip()} — admis de {precedente.title}"[:110]
+            name, i = base, 2
+            while ClassGroup.objects.filter(owner=request.user, name=name).exists():
+                name = f"{base} ({i})"
+                i += 1
+            quiz.class_group = ClassGroup.objects.create(owner=request.user, name=name)
         # Concours : conteneur de candidats dédié, séparé des classes
         if is_concours:
             title = quiz.title.strip()
@@ -495,6 +517,10 @@ def quiz_create(request):
         quiz.save()
         if not quiz.est_qcm:
             services.question_note(quiz)       # la question qui porte la note
+        if precedente is not None:
+            ajoutes, _, n_admis = services.faire_passer_admis(quiz)
+            messages.success(request, f"{ajoutes} admis de « {precedente.title} » "
+                                      "ajoutés aux candidats de cette épreuve.")
         return redirect("quiz_detail", pk=quiz.pk)
     return render(request, "grader/quiz_form.html",
                   {"form": form, "is_concours": is_concours})
@@ -739,6 +765,10 @@ def quiz_detail(request, pk):
             new_id = request.POST.get("id_mode")
             if new_id in dict(_id_modes(quiz)):
                 quiz.id_mode = new_id
+            # nom sur un talon à découper : copies nominatives à QR imprimé
+            quiz.talon_nom = bool(request.POST.get("talon_nom"))
+            if quiz.talon_nom:
+                quiz.id_mode = "qr"
             try:
                 quiz.id_digits = max(3, min(int(request.POST.get(
                     "id_digits", quiz.id_digits)), 10))
@@ -755,7 +785,7 @@ def quiz_detail(request, pk):
                 quiz.grading_mode = new_grading
             quiz.save(update_fields=["wrong_penalty", "sheet_mode", "grading_mode",
                                      "id_mode", "id_digits", "entete", "duree",
-                                     "note_admission"])
+                                     "note_admission", "talon_nom"])
             # Le cartouche n'est imprimé que sur le sujet, jamais scanné : on
             # le refait tout de suite, sans toucher à la feuille de réponses.
             if (quiz.entete, quiz.duree) != ancien_cartouche:
@@ -771,7 +801,8 @@ def quiz_detail(request, pk):
             students = list(quiz.class_group.students.all())
             if not quiz.questions.exists():
                 messages.error(request, "Ajoutez d'abord des questions.")
-            elif quiz.id_mode == "qr" and not quiz.auto_enroll and not students:
+            elif quiz.id_mode == "qr" and (not quiz.auto_enroll or quiz.talon_nom) \
+                    and not students:
                 messages.error(
                     request, "Le mode QR génère une fiche par étudiant : "
                              "importez d'abord la liste des étudiants de la classe "
@@ -782,7 +813,7 @@ def quiz_detail(request, pk):
                 except layout_mod.TooManyPages as exc:
                     messages.error(request, str(exc))
                     return redirect("quiz_detail", pk=pk)
-                if quiz.id_mode == "qr" and quiz.auto_enroll:
+                if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.talon_nom:
                     try:
                         count = max(1, min(int(request.POST.get("qr_count", 100)), 2000))
                     except ValueError:
@@ -802,6 +833,11 @@ def quiz_detail(request, pk):
                     filename = f"fiches_nominatives_quiz_{quiz.pk}.pdf"
                     msg = (f"Fiches nominatives générées : {len(students)} fiches "
                            "avec nom et QR code — distribuez à chaque étudiant la sienne.")
+                    if quiz.talon_nom:
+                        msg = (f"Copies à talon générées : {len(students)} copies, nom et QR "
+                               "imprimés. Avant la correction, découpez le "
+                               "talon au massicot (trait pointillé) : la "
+                               "copie devient anonyme et reste lue par son QR.")
                 else:
                     pdf_bytes = sheet_pdf.generate_sheet_pdf(quiz, layout)
                     filename = f"fiche_quiz_{quiz.pk}.pdf"

@@ -1795,3 +1795,8 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .chiffre b{color:var(--qs-ink);font-size:14px}
 a.chiffre:hover{border-color:var(--qs-blue)}
 @media (max-width:620px){.histo__lib{font-size:10px}}
+
+/* Concours en plusieurs étapes : passage des admis à l'épreuve suivante. */
+.etape-suivante{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0 4px;
+  padding:10px 12px;border-radius:12px;background:var(--qs-surface-2)}
+.etape-suivante__titre{font-size:13px;font-weight:600;color:var(--qs-ink)}
