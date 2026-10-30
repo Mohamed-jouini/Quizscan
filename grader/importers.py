@@ -146,7 +146,21 @@ _LAST = {"nom", "lastname", "last name", "last", "nom de famille", "اللقب"}
 _FIRST = {"prenom", "firstname", "first name", "first", "الاسم"}
 _NUM = {"numero", "numero d inscription", "n", "n inscription", "no", "num",
         "matricule", "inscription", "numero inscription", "id", "identifiant",
-        "cin", "n d inscription", "رقم التسجيل", "الرقم"}
+        "n d inscription", "رقم التسجيل", "الرقم"}
+# Colonnes facultatives du registre des inscriptions. Une colonne « CIN »
+# seule (sans colonne de n° d'inscription) reste lue comme le n° : c'était
+# le cas avant que la CIN ait son propre champ, les fichiers existants
+# donnent le même résultat.
+_CIN = {"cin", "n cin", "numero cin", "num cin", "cin n", "carte d identite",
+        "n carte d identite", "numero de cin", "رقم بطاقة التعريف", "بطاقة التعريف"}
+_NAISSANCE = {"date de naissance", "date naissance", "naissance", "ne le",
+              "nee le", "ne e le", "ddn", "تاريخ الولادة", "تاريخ الميلاد"}
+_ETAB = {"etablissement", "etablissement d origine", "ecole", "lycee", "college",
+         "faculte", "institut", "المؤسسة", "المعهد", "المدرسة"}
+_MAIL = {"email", "e mail", "mail", "adresse mail", "adresse email",
+         "adresse e mail", "courriel", "البريد الالكتروني", "البريد الإلكتروني"}
+_EXTRAS = {"cin": _CIN, "naissance": _NAISSANCE, "etablissement": _ETAB,
+           "email": _MAIL}
 _FULL = {"nom et prenom", "nom prenom", "nom complet", "etudiant", "candidat",
          "الاسم واللقب", "اللقب والاسم"}
 
@@ -182,10 +196,18 @@ def split_name_line(line):
 
 def rows_to_candidates(rows):
     """Lignes de tableau -> [(nom, prénom, numéro)], en-tête détecté."""
+    return [(f["nom"], f["prenom"], f["numero"]) for f in rows_to_fiches(rows)]
+
+
+def rows_to_fiches(rows):
+    """Lignes de tableau -> [{nom, prenom, numero, cin, naissance,
+    etablissement, email}] ; les colonnes facultatives sont reconnues par
+    leur en-tête (vides sinon)."""
     if not rows:
         return []
     header = [norm(c) for c in rows[0]]
     idx = {"last": 0, "first": 1, "number": 2}
+    extras = {}
     full_col = None
     has_header = False
     for i, h in enumerate(header):
@@ -197,7 +219,15 @@ def rows_to_candidates(rows):
             idx["number"] = i; has_header = True
         elif h in _FULL:
             full_col = i; has_header = True
+        else:
+            for cle, noms in _EXTRAS.items():
+                if h in noms:
+                    extras[cle] = i; has_header = True
     found = _found(header)
+    if "cin" in extras and "number" not in found:
+        # ancien usage : la CIN tient lieu de n° d'inscription
+        idx["number"] = extras["cin"]
+        found.add("number")
     out = []
     for r in (rows[1:] if has_header else rows):
         def col(i):
@@ -212,7 +242,10 @@ def rows_to_candidates(rows):
         else:
             last, first, number = col(idx["last"]), col(idx["first"]), col(idx["number"])
         if last or first or number:
-            out.append((last, first, number))
+            fiche = {"nom": last, "prenom": first, "numero": number}
+            for cle in _EXTRAS:
+                fiche[cle] = col(extras.get(cle))
+            out.append(fiche)
     return out
 
 
@@ -230,16 +263,23 @@ def _found(header):
 
 def parse_candidates_file(name, data):
     """Fichier Excel / CSV / Word / PDF / texte -> [(nom, prénom, numéro)]."""
+    return [(f["nom"], f["prenom"], f["numero"]) for f in parse_fiches_file(name, data)]
+
+
+def parse_fiches_file(name, data):
+    """Comme parse_candidates_file, avec les colonnes facultatives du registre
+    (CIN, date de naissance, établissement, e-mail) quand le fichier est un
+    tableau : [{nom, prenom, numero, cin, naissance, etablissement, email}]."""
     ext = _ext(name)
     if ext in (".xlsx", ".xlsm"):
-        return rows_to_candidates(_xlsx_rows(data))
+        return rows_to_fiches(_xlsx_rows(data))
     if ext == ".csv":
-        return rows_to_candidates(_csv_rows(data))
+        return rows_to_fiches(_csv_rows(data))
     if ext == ".docx":
         blocks = _docx_blocks(data)
         table = [b for b in blocks if isinstance(b, list) and any(b)]
         if table:
-            return rows_to_candidates(table)
+            return rows_to_fiches(table)
         lines = [b for b in blocks if isinstance(b, str)]
     elif ext == ".pdf":
         lines = _pdf_lines(data)
@@ -252,7 +292,9 @@ def parse_candidates_file(name, data):
     # une première ligne d'en-tête (« Nom Prénom N° ») est ignorée
     if rows and norm(rows[0][0]) in _LAST | _FULL:
         rows = rows[1:]
-    return [r for r in rows if r[0] or r[1]]
+    return [dict({"nom": r[0], "prenom": r[1], "numero": r[2]},
+                 **{cle: "" for cle in _EXTRAS})
+            for r in rows if r[0] or r[1]]
 
 
 # ------------------------------------------------------------------ questions

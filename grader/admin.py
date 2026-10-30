@@ -178,8 +178,9 @@ class InscritAdmin(TitresFrancais, admin.ModelAdmin):
     titre_liste = "Inscriptions"
     titre_ajout = "Nouvelle inscription"
     titre_modification = "Modifier l'inscription"
-    list_display = ("numero", "nom", "prenom", "cree_le", "cree_par")
-    search_fields = ("numero", "nom", "prenom")
+    list_display = ("numero", "nom", "prenom", "cin", "date_naissance",
+                    "etablissement", "cree_le")
+    search_fields = ("numero", "nom", "prenom", "cin", "email", "etablissement")
     readonly_fields = ("cree_le", "cree_par")
 
 

@@ -313,18 +313,9 @@ def _save_candidates(group, rows):
 
 
 def _apres_import(request, group, rows, rapport):
-    """Garde le rapport de vérification pour la page de la classe et, sur
-    demande, inscrit au registre les candidats qui n'y figurent pas."""
-    if request.POST.get("inscrire_inconnus"):
-        inconnus = {a["numero"] for a in rapport["anomalies"]
-                    if a["etat"] == "non_inscrit"}
-        lignes = [r for r in rows
-                  if inscriptions_mod.numero_propre(r[2]) in inconnus]
-        bilan = inscriptions_mod.importer(lignes, request.user)
-        if bilan["crees"]:
-            messages.info(request, f"{len(bilan['crees'])} candidat(s) ajouté(s) "
-                                   "au registre des inscriptions.")
-            _, _, rapport = _save_candidates(group, rows)   # désormais reliés
+    """Garde le rapport de vérification pour la page de la classe. (Plus
+    d'inscription au registre depuis une liste : l'inscription se fait fiche
+    par fiche, avec CIN et date de naissance.)"""
     request.session[f"verification_{group.pk}"] = rapport
 
 

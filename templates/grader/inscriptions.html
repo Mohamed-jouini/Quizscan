@@ -15,61 +15,24 @@
   </div>
 </header>
 
-{% if rapport %}
-<div class="card verif">
-  <h2>Bilan de l'import</h2>
-  <div class="verif__chiffres">
-    <span class="verif__chiffre verif__chiffre--ok"><b>{{ rapport.crees|length }}</b> inscrit(s)</span>
-    <span class="verif__chiffre"><b>{{ rapport.deja|length }}</b> déjà inscrit(s)</span>
-    <span class="verif__chiffre verif__chiffre--alerte"><b>{{ rapport.conflits|length }}</b> n° déjà pris par un autre nom</span>
-    <span class="verif__chiffre verif__chiffre--alerte"><b>{{ rapport.sans_numero|length }}</b> sans n° (non inscrits)</span>
-  </div>
-  {% if rapport.conflits or rapport.sans_numero %}
-  <div class="table-wrap">
-    <table>
-      <tr><th>N°</th><th>Dans la liste</th><th>Au registre</th><th>Constat</th></tr>
-      {% for l in rapport.conflits %}
-      <tr><td>{{ l.numero }}</td><td>{{ l.nom }} {{ l.prenom }}</td><td>{{ l.inscrit }}</td>
-        <td><span class="badge warn">N° déjà attribué : rien n'a été écrasé</span></td></tr>
-      {% endfor %}
-      {% for l in rapport.sans_numero %}
-      <tr><td>—</td><td>{{ l.nom }} {{ l.prenom }}</td><td>—</td>
-        <td><span class="badge bad">Sans n° d'inscription</span></td></tr>
-      {% endfor %}
-    </table>
-  </div>
-  {% endif %}
-</div>
-{% endif %}
-
-<div class="grid2">
-  <div class="card">
-    <h2>Inscrire un étudiant</h2>
-    <form method="post" class="form-inscription">{% csrf_token %}
-      {{ form.non_field_errors }}
-      <div class="form-inscription__champs">
-        <div>{{ form.nom.label_tag }}{{ form.nom }}{{ form.nom.errors }}</div>
-        <div>{{ form.prenom.label_tag }}{{ form.prenom }}{{ form.prenom.errors }}</div>
-        <div>{{ form.numero.label_tag }}{{ form.numero }}{{ form.numero.errors }}</div>
-      </div>
-      <p><button class="btn" name="inscrire" value="1" type="submit">Inscrire et créer son QR code</button></p>
-    </form>
-  </div>
-  <div class="card">
-    <h2>Inscrire depuis une liste</h2>
-    <form method="post" enctype="multipart/form-data">{% csrf_token %}
-      {{ fichier.file.errors }}{{ fichier.file }}
-      <span class="helptext">{{ fichier.file.help_text }} Un n° déjà inscrit n'est jamais écrasé.</span>
-      <p><button class="btn" name="importer" value="1" type="submit">Importer le fichier</button></p>
-    </form>
-    <details class="plie">
-      <summary>… ou copier-coller une liste</summary>
-      <form method="post">{% csrf_token %}
-        {{ collage.text.errors }}{{ collage.text }}
-        <p><button class="btn secondary" name="coller" value="1" type="submit">Inscrire la liste</button></p>
-      </form>
-    </details>
-  </div>
+<div class="card">
+  <h2>{% if modifie %}Modifier l'inscription de {{ modifie.nom_complet }}{% else %}Inscrire un étudiant{% endif %}</h2>
+  <form method="post" class="form-inscription" id="fiche-inscrit">{% csrf_token %}
+    {% if modifie %}<input type="hidden" name="modifier" value="{{ modifie.pk }}">{% endif %}
+    {{ form.non_field_errors }}
+    <div class="form-inscription__champs">
+      <div>{{ form.nom.label_tag }}{{ form.nom }}{{ form.nom.errors }}</div>
+      <div>{{ form.prenom.label_tag }}{{ form.prenom }}{{ form.prenom.errors }}</div>
+      <div>{{ form.numero.label_tag }}{{ form.numero }}{{ form.numero.errors }}</div>
+      <div>{{ form.cin.label_tag }}{{ form.cin }}{{ form.cin.errors }}</div>
+      <div>{{ form.date_naissance.label_tag }}{{ form.date_naissance }}{{ form.date_naissance.errors }}</div>
+      <div>{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>
+      <div class="form-inscription__large">{{ form.etablissement.label_tag }}{{ form.etablissement }}{{ form.etablissement.errors }}</div>
+    </div>
+    <span class="helptext"><b>Tous les champs sont obligatoires.</b> CIN : 8 chiffres (ou n° de passeport). Le QR code de la carte contient le n° d'inscription, le nom et le prénom — jamais la CIN.</span>
+    <p><button class="btn" name="inscrire" value="1" type="submit">{% if modifie %}Enregistrer{% else %}Inscrire et créer son QR code{% endif %}</button>
+      {% if modifie %}<a class="btn secondary" href="{% url 'inscriptions' %}">Annuler</a>{% endif %}</p>
+  </form>
 </div>
 
 <form class="recherche-etudiant" method="get" role="search">
@@ -77,7 +40,7 @@
     <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
     <label for="id_q" class="visually-hidden">Rechercher un inscrit</label>
     <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
-           placeholder="Rechercher — nom, prénom ou n° d'inscription">
+           placeholder="Rechercher — nom, prénom, n° d'inscription, CIN, établissement ou e-mail">
     {% if recherche %}
     <a class="recherche-etudiant__effacer" href="{% url 'inscriptions' %}"
        title="Effacer la recherche" aria-label="Effacer la recherche">
@@ -110,16 +73,22 @@
     <div class="table-wrap">
       <table>
         <tr><th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="Tout cocher"></th>
-          <th>N° d'inscription</th><th>Nom</th><th>Prénom</th><th>Classes / concours</th><th>QR</th><th></th></tr>
+          <th>N° d'inscription</th><th>Nom et prénom</th><th>CIN</th><th>Né(e) le</th><th>Établissement</th><th>Classes / concours</th><th>QR</th><th></th></tr>
         {% for i in page_inscrits %}
         <tr>
           <td class="col-choix"><input type="checkbox" name="choix" value="{{ i.pk }}" aria-label="Choisir {{ i.nom_complet }}"></td>
-          <td><b>{{ i.numero }}</b></td><td>{{ i.nom }}</td><td>{{ i.prenom }}</td>
+          <td><b>{{ i.numero }}</b></td>
+          <td><b>{{ i.nom }}</b> {{ i.prenom }}{% if i.email %}<span class="helptext">{{ i.email }}</span>{% endif %}
+            {% if not i.fiche_complete %}<span class="badge warn" title="Inscrit avant : CIN, date de naissance, e-mail ou établissement manquant">fiche à compléter</span>{% endif %}</td>
+          <td>{{ i.cin|default:"—" }}</td>
+          <td>{{ i.date_naissance|date:"d/m/Y"|default:"—" }}</td>
+          <td>{{ i.etablissement|default:"—" }}</td>
           <td>{% if i.n_places %}{{ i.n_places }}{% else %}<span class="helptext">—</span>{% endif %}</td>
           <td><img class="qr-mini" src="{% url 'inscrit_qr' i.pk %}" alt="QR {{ i.nom_complet }}" width="46" height="46" loading="lazy"></td>
           <td class="actions-ligne">
             <a class="btn small secondary" href="{% url 'inscriptions_cartes' %}?choix={{ i.pk }}" target="_blank">Carte</a>
             {% if user.is_superuser or i.cree_par_id == user.pk %}
+            <a class="btn small secondary" href="?modifier={{ i.pk }}#fiche-inscrit">Modifier</a>
             <button class="btn small danger" name="supprimer" value="{{ i.pk }}" type="submit"
                     onclick="return confirm('Retirer {{ i.nom_complet|escapejs }} du registre ? Ses classes et concours le gardent.')">✕</button>
             {% endif %}

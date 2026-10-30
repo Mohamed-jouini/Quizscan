@@ -2,7 +2,7 @@
 l'établissement, chacun avec son n° d'inscription et son QR code.
 
 Trois usages :
-  - inscrire un étudiant (saisie ou fichier) et lui remettre sa carte
+  - inscrire un étudiant (fiche complète) et lui remettre sa carte
     d'inscription, dont le QR porte « QSI|<n°>|<NOM>|<Prénom> » ;
   - vérifier une liste de candidats importée (Excel…) contre le registre :
     même n°, même nom ? n° inconnu ? ;
@@ -71,38 +71,6 @@ def rattacher_existants(inscrit):
 
 # ------------------------------------------------------------ registre
 
-@transaction.atomic
-def importer(lignes, utilisateur=None):
-    """Inscrit les lignes (nom, prénom, n°) d'un fichier ou d'un collage.
-
-    Un n° déjà inscrit n'est jamais écrasé : s'il porte le même nom, la
-    ligne est « déjà inscrite » ; sinon c'est un conflit, signalé pour que
-    quelqu'un tranche. Retourne un rapport (listes de dicts)."""
-    rapport = {"crees": [], "deja": [], "conflits": [], "sans_numero": []}
-    vus = {}
-    for nom, prenom, numero in lignes:
-        nom, prenom = (nom or "").strip().upper()[:80], (prenom or "").strip()[:80]
-        numero = numero_propre(numero)
-        ligne = {"nom": nom, "prenom": prenom, "numero": numero}
-        if not numero:
-            rapport["sans_numero"].append(ligne)
-            continue
-        existant = vus.get(numero) or Inscrit.objects.filter(numero=numero).first()
-        if existant is not None:
-            if meme_nom(nom, prenom, existant.nom, existant.prenom):
-                rapport["deja"].append(ligne)
-            else:
-                ligne["inscrit"] = existant.nom_complet
-                rapport["conflits"].append(ligne)
-            continue
-        inscrit = Inscrit.objects.create(numero=numero, nom=nom, prenom=prenom,
-                                         cree_par=utilisateur)
-        rattacher_existants(inscrit)
-        vus[numero] = inscrit
-        rapport["crees"].append(ligne)
-    return rapport
-
-
 def chercher(texte):
     """N° séparés par des espaces, virgules, points-virgules ou retours à la
     ligne -> (inscrits trouvés, n° inconnus), dans l'ordre de saisie."""
@@ -137,11 +105,13 @@ def ajouter_a_classe(groupe, inscrits):
 
 
 def filtrer_inscrits(qs, recherche):
-    """Chaque mot doit se trouver dans le nom, le prénom ou le n°."""
+    """Chaque mot doit se trouver dans le nom, le prénom, le n°, la CIN,
+    l'établissement ou l'adresse e-mail."""
     from django.db.models import Q
     for mot in (recherche or "").split():
         qs = qs.filter(Q(nom__icontains=mot) | Q(prenom__icontains=mot)
-                       | Q(numero__icontains=mot))
+                       | Q(numero__icontains=mot) | Q(cin__icontains=mot)
+                       | Q(etablissement__icontains=mot) | Q(email__icontains=mot))
     return qs
 
 
@@ -257,8 +227,9 @@ def cartes_pdf(inscrits, etablissement=""):
         c.setFillColorRGB(0.12, 0.42, 0.27)
         c.rect((x0 + 3) * mm, y(y0 + 11), (CARTE_W - 6) * mm, 8 * mm, stroke=0, fill=1)
         c.setFillGray(1.0)
-        _draw_text(c, _ellipsize(etablissement or "Carte d'inscription", 8.5,
-                                 CARTE_W - 12, bold=True),
+        bandeau = (f"Carte d'inscription — {i.etablissement}" if i.etablissement
+                   else etablissement or "Carte d'inscription")
+        _draw_text(c, _ellipsize(bandeau, 8.5, CARTE_W - 12, bold=True),
                    (x0 + 6) * mm, y(y0 + 8.2), 8.5, bold=True)
         c.setFillGray(0.0)
         # QR à droite
@@ -279,6 +250,13 @@ def cartes_pdf(inscrits, etablissement=""):
                    ax * mm, y(y0 + 34), 11, bold=True, align=align)
         _draw_text(c, _ellipsize(i.prenom, 10.5, largeur),
                    ax * mm, y(y0 + 40.5), 10.5, align=align)
+        identite = " · ".join(t for t in (
+            f"CIN {i.cin}" if i.cin else "",
+            f"né(e) le {i.date_naissance:%d/%m/%Y}" if i.date_naissance else "") if t)
+        if identite:
+            c.setFillGray(0.3)
+            _draw_text(c, _ellipsize(identite, 7.5, largeur), tx * mm, y(y0 + 45.5), 7.5)
+            c.setFillGray(0.0)
         c.setFillGray(0.5)
         _draw_text(c, "Résultats : espace public, avec ce n°", tx * mm,
                    y(y0 + CARTE_H - 4.5), 6.5)

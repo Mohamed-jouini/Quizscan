@@ -61,6 +61,15 @@ class Inscrit(models.Model):
     numero = models.CharField("n° d'inscription", max_length=40, unique=True)
     nom = models.CharField("nom", max_length=80)
     prenom = models.CharField("prénom", max_length=80)
+    # Identité complémentaire (facultative). La CIN n'est pas dans le QR de
+    # la carte : donnée personnelle, elle reste dans l'application.
+    cin = models.CharField("n° de CIN", max_length=20, blank=True, db_index=True,
+                           help_text="Carte d'identité nationale (8 chiffres) ou "
+                                     "n° de passeport.")
+    date_naissance = models.DateField("date de naissance", null=True, blank=True)
+    etablissement = models.CharField("établissement", max_length=150, blank=True,
+                                     help_text="Établissement d'origine.")
+    email = models.EmailField("adresse e-mail", blank=True)
     cree_par = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                                  null=True, blank=True, related_name="+",
                                  verbose_name="inscrit par")
@@ -74,6 +83,12 @@ class Inscrit(models.Model):
     @property
     def nom_complet(self):
         return f"{self.nom} {self.prenom}"
+
+    @property
+    def fiche_complete(self):
+        """Tous les champs de l'inscription renseignés (obligatoires depuis
+        le 30 octobre 2026 ; une fiche plus ancienne se complète)."""
+        return all((self.cin, self.date_naissance, self.email, self.etablissement))
 
     def __str__(self):
         return f"{self.numero} — {self.nom_complet}"

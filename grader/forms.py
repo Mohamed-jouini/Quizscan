@@ -37,7 +37,8 @@ class InscritForm(forms.ModelForm):
 
     class Meta:
         model = Inscrit
-        fields = ["nom", "prenom", "numero"]
+        fields = ["nom", "prenom", "numero", "cin", "date_naissance", "email",
+                  "etablissement"]
         widgets = {
             "nom": forms.TextInput(attrs={"placeholder": "BEN SALEM",
                                           "autocomplete": "off"}),
@@ -45,9 +46,29 @@ class InscritForm(forms.ModelForm):
                                              "autocomplete": "off"}),
             "numero": forms.TextInput(attrs={"placeholder": "104523",
                                              "autocomplete": "off"}),
+            "cin": forms.TextInput(attrs={"placeholder": "09876543",
+                                          "autocomplete": "off",
+                                          "inputmode": "numeric"}),
+            "date_naissance": forms.DateInput(attrs={"type": "date"},
+                                              format="%Y-%m-%d"),
+            "email": forms.EmailInput(attrs={"placeholder": "prenom.nom@exemple.tn",
+                                             "autocomplete": "off"}),
+            "etablissement": forms.TextInput(attrs={"placeholder": "Lycée pilote de Sfax",
+                                                    "autocomplete": "off"}),
         }
+        help_texts = {"cin": "", "etablissement": ""}
         error_messages = {"numero": {
             "unique": "Ce n° d'inscription est déjà attribué (voir la liste)."}}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Inscription complète obligatoire (demande de l'utilisateur, 30
+        # octobre 2026) : nom, prénom, n°, CIN, date de naissance, e-mail et
+        # établissement. Le modèle les garde facultatifs pour les fiches
+        # inscrites avant, qui se complètent par « Modifier ».
+        for nom in ("cin", "date_naissance", "email", "etablissement"):
+            self.fields[nom].required = True
+            self.fields[nom].error_messages["required"] = "Champ obligatoire."
 
     def clean_numero(self):
         from .inscriptions import numero_propre
@@ -61,6 +82,29 @@ class InscritForm(forms.ModelForm):
 
     def clean_prenom(self):
         return " ".join(self.cleaned_data["prenom"].split())
+
+    def clean_cin(self):
+        """CIN (8 chiffres) ou passeport : lettres et chiffres, sans espaces ;
+        une même CIN ne peut appartenir qu'à un seul inscrit."""
+        cin = "".join(self.cleaned_data.get("cin", "").split()).upper()
+        if not cin.isalnum() or not 6 <= len(cin) <= 20:
+            raise forms.ValidationError(
+                "N° de CIN invalide : 8 chiffres (ou n° de passeport).")
+        autre = Inscrit.objects.filter(cin=cin).exclude(pk=self.instance.pk).first()
+        if autre is not None:
+            raise forms.ValidationError(
+                f"Cette CIN est déjà celle de {autre.nom_complet} (n° {autre.numero}).")
+        return cin
+
+    def clean_date_naissance(self):
+        import datetime
+        date = self.cleaned_data.get("date_naissance")
+        if date and not datetime.date(1900, 1, 1) <= date <= datetime.date.today():
+            raise forms.ValidationError("Date de naissance invraisemblable.")
+        return date
+
+    def clean_etablissement(self):
+        return " ".join(self.cleaned_data.get("etablissement", "").split())
 
 
 class CommuniqueForm(forms.ModelForm):

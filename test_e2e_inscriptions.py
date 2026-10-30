@@ -41,6 +41,77 @@ KEY = "ABCDAB"
 REPONSES = {1: 0, 2: 1, 3: 2, 4: 3, 5: 0, 6: 3}       # 5 / 6
 
 
+def test_identite(c, prof, autre):
+    import datetime
+    url = reverse("inscriptions")
+    page = c.get(url).content.decode()
+    for champ in ("id_cin", "id_date_naissance", "id_email", "id_etablissement"):
+        assert f'id="{champ}"' in page, champ
+    r = c.post(url, {"inscrire": "1", "nom": "Khelifi", "prenom": "Omar",
+                     "numero": "207001", "cin": " 0987 6543 ",
+                     "date_naissance": "2006-03-15", "email": "omar.k@exemple.tn",
+                     "etablissement": "  Lycée  pilote de Sfax "}, follow=True)
+    i = Inscrit.objects.get(numero="207001")
+    assert (i.cin, i.date_naissance, i.email, i.etablissement) == (
+        "09876543", datetime.date(2006, 3, 15), "omar.k@exemple.tn",
+        "Lycée pilote de Sfax"), (i.cin, i.date_naissance, i.email, i.etablissement)
+    print("  inscription complète : CIN nettoyée, date, e-mail, établissement OK")
+
+    # contrôles : CIN déjà prise, CIN invalide, naissance future, e-mail faux
+    for donnees, erreur in (
+            ({"cin": "09876543"}, "déjà celle de KHELIFI Omar"),
+            ({"cin": "12-34"}, "N° de CIN invalide"),
+            ({"date_naissance": "2099-01-01"}, "invraisemblable"),
+            ({"email": "pas-un-mail"}, "adresse de courriel valide")):
+        r = c.post(url, dict(_fiche("TEST", "X", "207002", "22220002"), **donnees))
+        assert r.status_code == 200 and erreur in r.content.decode(), (donnees, erreur)
+    assert not Inscrit.objects.filter(numero="207002").exists()
+    print("  contrôles : CIN en double ou invalide, date future, e-mail faux refusés OK")
+
+    # modifier : le registre fait foi, les listes reliées suivent
+    groupe = ClassGroup.objects.create(name="Identité — classe", owner=prof)
+    c.post(reverse("class_detail", args=[groupe.pk]),
+           {"ajouter_inscrits": "1", "numeros": "207001"})
+    page = c.get(url + f"?modifier={i.pk}").content.decode()
+    assert "Modifier l'inscription de KHELIFI Omar" in page and 'value="09876543"' in page
+    c.post(url, {"inscrire": "1", "modifier": i.pk, "nom": "KHELIFI", "prenom": "Omar Ali",
+                 "numero": "207001", "cin": "09876543", "date_naissance": "2006-03-15",
+                 "email": "omar@exemple.tn", "etablissement": "Lycée pilote de Sfax"})
+    i.refresh_from_db()
+    assert i.prenom == "Omar Ali" and i.email == "omar@exemple.tn"
+    assert groupe.students.get().first_name == "Omar Ali"
+    c2 = Client()
+    c2.force_login(autre)
+    assert c2.get(url + f"?modifier={i.pk}").status_code == 403
+    print("  modifier : fiche préremplie, liste de classe mise à jour, "
+          "réservé à l'auteur OK")
+
+    # fiche inscrite avant le 30 octobre : signalée, à compléter pour la modifier
+    t = Inscrit.objects.create(numero="207003", nom="TOUMI", prenom="Rim", cree_par=prof)
+    page = c.get(url + "?q=207003").content.decode()
+    assert "fiche à compléter" in page
+    r = c.post(url, {"inscrire": "1", "modifier": t.pk, "nom": "TOUMI", "prenom": "Rim",
+                     "numero": "207003"})
+    assert r.content.decode().count("Champ obligatoire.") == 4
+    c.post(url, _fiche("TOUMI", "Rim", "207003", "11223344", modifier=t.pk,
+                       date_naissance="2005-12-01", etablissement="Lycée Bourguiba"))
+    t.refresh_from_db()
+    assert t.fiche_complete and t.etablissement == "Lycée Bourguiba"
+    assert "fiche à compléter" not in c.get(url + "?q=207003").content.decode()
+    print("  ancienne fiche incomplète : signalée, complétée par « Modifier » OK")
+
+    # recherche par CIN ou établissement ; carte PDF avec CIN et naissance
+    assert c.get(url + "?q=11223344").context["n_trouves"] == 1
+    assert c.get(url + "?q=Bourguiba").context["n_trouves"] == 1
+    carte = c.get(reverse("inscriptions_cartes") + f"?choix={t.pk}").content
+    texte = pymupdf.open(stream=carte, filetype="pdf")[0].get_text()
+    assert "CIN 11223344" in texte and "01/12/2005" in texte and "Lycée Bourguiba" in texte
+    qr = _decode_png(c.get(reverse("inscrit_qr", args=[t.pk])).content)
+    assert "11223344" not in qr, "la CIN ne doit pas être dans le QR"
+    print("  recherche par CIN / établissement ; carte avec CIN et date ; "
+          "CIN absente du QR OK")
+
+
 def _xlsx(lignes):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -64,18 +135,35 @@ def _messages(r):
     return " ".join(str(m) for m in r.context["messages"]) if r.context else ""
 
 
+def _fiche(nom, prenom, numero, cin, **autres):
+    """Envoi complet du formulaire d'inscription (tous les champs obligatoires)."""
+    return dict({"inscrire": "1", "nom": nom, "prenom": prenom, "numero": numero,
+                 "cin": cin, "date_naissance": "2005-06-01",
+                 "email": f"{prenom.lower()}.{cin}@exemple.tn",
+                 "etablissement": "Lycée pilote"}, **autres)
+
+
 def test_registre(c, prof):
-    r = c.post(reverse("inscriptions"), {"inscrire": "1", "nom": " ben  salem ",
-                                         "prenom": "Samia", "numero": "104 523"},
-               follow=True)
+    url = reverse("inscriptions")
+    # nom, prénom et n° seuls ne suffisent plus : tout est obligatoire
+    r = c.post(url, {"inscrire": "1", "nom": "BEN SALEM", "prenom": "Samia",
+                     "numero": "104523"})
+    assert r.status_code == 200 and r.content.decode().count("Champ obligatoire.") == 4
+    assert not Inscrit.objects.filter(numero="104523").exists()
+    page = c.get(url).content.decode()
+    assert "Tous les champs sont obligatoires" in page
+    print("  inscription incomplète refusée : CIN, naissance, e-mail, établissement "
+          "obligatoires OK")
+
+    r = c.post(url, _fiche(" ben  salem ", "Samia", "104 523", "11110001"), follow=True)
     i = Inscrit.objects.get(numero="104523")
     assert (i.nom, i.prenom, i.cree_par_id) == ("BEN SALEM", "Samia", prof.pk)
+    assert i.fiche_complete
     assert "inscrit(e) sous le n° 104523" in r.content.decode()
-    r = c.post(reverse("inscriptions"), {"inscrire": "1", "nom": "AUTRE",
-                                         "prenom": "Nom", "numero": "104523"})
+    r = c.post(url, _fiche("AUTRE", "Nom", "104523", "11110009"))
     assert r.status_code == 200 and "déjà attribué" in r.content.decode()
     assert Inscrit.objects.filter(numero="104523").count() == 1
-    print("  inscription (n° nettoyé, NOM en capitales, n° unique) OK")
+    print("  inscription complète (n° nettoyé, NOM en capitales, n° unique) OK")
 
     r = c.get(reverse("inscrit_qr", args=[i.pk]))
     assert r["Content-Type"] == "image/png"
@@ -84,23 +172,24 @@ def test_registre(c, prof):
     assert r["Content-Type"] == "application/pdf"
     texte = pymupdf.open(stream=r.content, filetype="pdf")[0].get_text()
     assert "104523" in texte and "BEN SALEM" in texte and "Samia" in texte
-    print("  QR de la carte = n°, NOM, prénom ; carte d'inscription PDF OK")
+    print("  QR de la carte = n° d'inscription, NOM, prénom (sans CIN) ; carte PDF OK")
 
-    r = c.post(reverse("inscriptions"), {"coller": "1", "text":
-               "TRABELSI;Mariem;104524\nBEN SALEM;Samia;104523\n"
-               "KHELIFI;Omar;104523\nSANS;Numero"}, follow=True)
-    page = r.content.decode()
-    assert Inscrit.objects.filter(numero="104524", nom="TRABELSI").exists()
-    assert Inscrit.objects.get(numero="104523").nom == "BEN SALEM"   # pas écrasé
-    assert "Bilan de l'import" in page and "N° déjà attribué" in page
-    assert "Sans n° d'inscription" in page
-    r = c.post(reverse("inscriptions"), {"importer": "1", "file": SimpleUploadedFile(
-        "registre.xlsx", _xlsx([("ABDELLATIF", "Mohamed", 104525),
-                                ("GHARBI", "Ines", 104526)]))}, follow=True)
-    assert Inscrit.objects.filter(numero__in=["104525", "104526"]).count() == 2
-    print("  inscription par liste et par Excel : conflits et n° manquants signalés OK")
+    for nom, prenom, numero, cin in (("TRABELSI", "Mariem", "104524", "11110002"),
+                                     ("ABDELLATIF", "Mohamed", "104525", "11110003"),
+                                     ("GHARBI", "Ines", "104526", "11110004")):
+        c.post(url, _fiche(nom, prenom, numero, cin))
+    assert Inscrit.objects.filter(numero__in=["104524", "104525", "104526"]).count() == 3
 
-    r = c.get(reverse("inscriptions") + "?q=salem")
+    # plus d'inscription par liste : ni carte à l'écran, ni envoi accepté
+    page = c.get(url).content.decode()
+    assert "Inscrire depuis une liste" not in page and 'name="coller"' not in page
+    c.post(url, {"coller": "1", "text": "NOUVEAU;Ali;555001"})
+    c.post(url, {"importer": "1", "file": SimpleUploadedFile(
+        "registre.xlsx", _xlsx([("NOUVEAU", "Ali", 555002)]))})
+    assert not Inscrit.objects.filter(numero__in=["555001", "555002"]).exists()
+    print("  « Inscrire depuis une liste » supprimé (envoi direct refusé) OK")
+
+    r = c.get(url + "?q=salem")
     assert r.context["n_trouves"] == 1 and "104523" in r.content.decode()
     print("  recherche dans le registre OK")
 
@@ -127,16 +216,12 @@ def test_verification_import(c, prof):
     print("  liste Excel vérifiée : 1 conforme, 1 nom différent (registre retenu), "
           "1 non inscrit, 1 sans n° OK")
 
-    r = c.post(reverse("class_detail", args=[groupe.pk]), {
-        "import_xlsx": "1", "inscrire_inconnus": "1",
-        "file": SimpleUploadedFile("cand.xlsx", _xlsx(lignes))}, follow=True)
-    assert Inscrit.objects.filter(numero="999999", nom="NOUVEAU").exists()
-    assert groupe.students.get(student_number="999999").inscrit is not None
-    assert r.context["verification"]["decomptes"]["non_inscrit"] == 0
+    page = c.get(reverse("class_detail", args=[groupe.pk])).content.decode()
+    assert "inscrire_inconnus" not in page, "plus d'inscription au registre par liste"
     c.post(reverse("class_detail", args=[groupe.pk]), {"fermer_verification": "1"})
     assert "Vérification par le registre" not in c.get(
         reverse("class_detail", args=[groupe.pk])).content.decode()
-    print("  option « inscrire au registre les inconnus » OK")
+    print("  plus d'inscription au registre depuis une liste de classe OK")
 
 
 def test_ajout_direct(c, prof):
@@ -316,7 +401,8 @@ def main():
     ClassGroup.objects.filter(owner__username__in=noms).delete()
     User.objects.filter(username__in=noms).delete()
     Inscrit.objects.filter(numero__in=["104523", "104524", "104525", "104526",
-                                       "999999"]).delete()
+                                       "999999", "207001", "207002", "207003",
+                                       "207004"]).delete()
     Communique.objects.filter(titre__in=["Convocation au concours",
                                          "Brouillon secret"]).delete()
     prof = enseignant_complet(User.objects.create_user("prof_insc", password="x-pass-123"))
@@ -338,6 +424,8 @@ def main():
     test_scan_et_public(c, prof)
     print("Communiqués :")
     test_communiques(c, prof, autre)
+    print("Identité : CIN, date de naissance, établissement, e-mail :")
+    test_identite(c, prof, autre)
     print("\n✅ TESTS INSCRIPTIONS ET ESPACE PUBLIC RÉUSSIS")
 
 

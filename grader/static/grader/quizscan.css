@@ -405,7 +405,8 @@ form.inline{display:inline}
 .shell label{font-weight:600;font-size:12.5px;display:block;margin:12px 0 5px;
   color:var(--qs-muted)}
 .shell input[type=text],.shell input[type=number],.shell input[type=password],
-.shell input[type=email],.shell input[type=file],.shell select,.shell textarea{
+.shell input[type=email],.shell input[type=date],.shell input[type=file],.shell select,
+.shell textarea{
   border:1px solid var(--qs-field-line);border-radius:var(--qs-r-field);
   padding:9px 11px;font:inherit;font-size:14px;width:100%;
   background:var(--qs-surface);color:var(--qs-ink);
@@ -1800,3 +1801,5 @@ a.chiffre:hover{border-color:var(--qs-blue)}
 .etape-suivante{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0 4px;
   padding:10px 12px;border-radius:12px;background:var(--qs-surface-2)}
 .etape-suivante__titre{font-size:13px;font-weight:600;color:var(--qs-ink)}
+/* Registre : l'établissement sur toute la largeur du formulaire. */
+.form-inscription__large{grid-column:1 / -1}

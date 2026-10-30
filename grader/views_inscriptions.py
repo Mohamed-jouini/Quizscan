@@ -5,17 +5,17 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import droits, importers
+from . import droits
 from . import inscriptions as insc
-from .forms import CandidateFileForm, CommuniqueForm, InscritForm, StudentImportForm
-from .models import Communique, Inscrit
+from .forms import CommuniqueForm, InscritForm
+from .models import Communique, Inscrit, Student
 from .views import (_concours_group_pks, _int_or_none, _my_classes, _my_quizzes,
                     _page)
 
@@ -38,47 +38,43 @@ def _retour(request):
 
 @login_required
 def inscriptions(request):
-    """Registre des inscriptions : inscrire, importer, retrouver, ajouter
-    à un concours ou à une classe, imprimer les cartes."""
-    form = InscritForm()
-    fichier = CandidateFileForm()
-    collage = StudentImportForm()
+    """Registre des inscriptions : inscrire (fiche complète, une par une),
+    retrouver, ajouter à un concours ou à une classe, imprimer les cartes.
+    Plus d'inscription par liste (demande de l'utilisateur, 30 octobre 2026) :
+    une liste ne porte ni CIN ni date de naissance."""
+    # « Modifier » : la fiche d'un inscrit (CIN, date de naissance… à compléter)
+    modifie = None
+    pk_modifie = _int_or_none(request.GET.get("modifier") or request.POST.get("modifier"))
+    if pk_modifie is not None:
+        modifie = get_object_or_404(Inscrit, pk=pk_modifie)
+        if not _peut_retirer(request.user, modifie, "cree_par_id"):
+            raise PermissionDenied("Seul l'auteur de l'inscription ou "
+                                   "l'administrateur peut la modifier.")
+    form = InscritForm(instance=modifie)
     if request.method == "POST":
         if "inscrire" in request.POST:
-            form = InscritForm(request.POST)
+            form = InscritForm(request.POST, instance=modifie)
             if form.is_valid():
                 inscrit = form.save(commit=False)
-                inscrit.cree_par = request.user
+                if modifie is None:
+                    inscrit.cree_par = request.user
                 inscrit.save()
-                insc.rattacher_existants(inscrit)
-                messages.success(request, f"{inscrit.nom_complet} est inscrit(e) "
-                                          f"sous le n° {inscrit.numero}. Sa carte "
-                                          "avec QR code est prête.")
-                return redirect(f"{reverse('inscriptions')}?q={inscrit.numero}")
-        elif "importer" in request.POST or "coller" in request.POST:
-            lignes = None
-            if "importer" in request.POST:
-                fichier = CandidateFileForm(request.POST, request.FILES)
-                if fichier.is_valid():
-                    try:
-                        lignes = fichier.parse()
-                    except importers.ImportError_ as exc:
-                        messages.error(request, str(exc))
-                    except Exception as exc:      # noqa: BLE001 — fichier corrompu
-                        messages.error(request, f"Fichier illisible : {exc}")
-            else:
-                collage = StudentImportForm(request.POST)
-                if collage.is_valid():
-                    lignes = collage.parse()
-            if lignes is not None:
-                if not lignes:
-                    messages.error(request, "Aucun étudiant trouvé dans cette liste.")
+                if modifie is None:
+                    insc.rattacher_existants(inscrit)
+                    messages.success(request, f"{inscrit.nom_complet} est inscrit(e) "
+                                              f"sous le n° {inscrit.numero}. Sa carte "
+                                              "avec QR code est prête.")
                 else:
-                    rapport = insc.importer(lignes, request.user)
-                    request.session["rapport_registre"] = rapport
-                    messages.success(request, f"{len(rapport['crees'])} étudiant(s) "
-                                              "inscrit(s).")
-                return redirect("inscriptions")
+                    # le registre fait foi : les listes de classe et de
+                    # concours reliées à cette inscription suivent
+                    n = (Student.objects.filter(inscrit=inscrit)
+                         .update(last_name=inscrit.nom, first_name=inscrit.prenom,
+                                 student_number=inscrit.numero))
+                    messages.success(request, f"Inscription de {inscrit.nom_complet} "
+                                              "enregistrée"
+                                     + (f" ({n} liste(s) de classe ou de concours "
+                                        "mise(s) à jour)." if n else "."))
+                return redirect(f"{reverse('inscriptions')}?q={inscrit.numero}")
         elif "supprimer" in request.POST:
             inscrit = get_object_or_404(Inscrit, pk=_int_or_none(request.POST["supprimer"]))
             if not _peut_retirer(request.user, inscrit, "cree_par_id"):
@@ -110,12 +106,11 @@ def inscriptions(request):
     concours = set(_concours_group_pks(request))
     groupes = [(g, g.pk in concours) for g in _my_classes(request).order_by("name")]
     return render(request, "grader/inscriptions.html", {
-        "form": form, "fichier": fichier, "collage": collage,
+        "form": form, "modifie": modifie,
         "recherche": recherche, "page_inscrits": _page(request, qs),
         "querystring": urlencode({"q": recherche}) if recherche else "",
         "n_trouves": qs.count(), "total": Inscrit.objects.count(),
         "groupes": groupes,
-        "rapport": request.session.pop("rapport_registre", None),
     })
 
 
