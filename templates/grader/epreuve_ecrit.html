@@ -5,11 +5,13 @@
   <div class="page-head__text">
     <h1>{{ quiz.title }}</h1>
     <p class="page-head__meta"><span class="badge info">Épreuve écrite</span>
-      <span>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b></span></p>
+      <span>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b>{% if etape %} · candidats : admis de « <a href="{% url 'quiz_results' etape.precedente.pk %}">{{ etape.precedente.title }}</a> »{% endif %}</span></p>
   </div>
   <div class="page-head__actions">
     <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
     <a class="btn small secondary" href="{% url 'class_detail' quiz.class_group.pk %}">{% if quiz.auto_enroll %}Candidats{% else %}Étudiants{% endif %} &amp; étiquettes QR</a>
+    {% if quiz.epreuve_precedente_id or quiz.epreuves_suivantes.exists %}
+    <a class="btn small secondary" href="{% url 'quiz_parcours' quiz.pk %}">Résultats du concours</a>{% endif %}
     <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">Résultats</a>
   </div>
 </header>
@@ -18,7 +20,7 @@
 <ol class="etapes">
   <li class="{% if quiz.sujet_texte %}is-fait{% endif %}"><b>Rédigez le sujet</b><span>énoncé, en-tête, durée et barème, ci-dessous.</span></li>
   <li class="{% if quiz.sheet_pdf %}is-fait{% endif %}"><b>Téléchargez et imprimez</b><span>le sujet et les copies (page de garde avec l'identification et le cadre du correcteur).</span></li>
-  <li><b>Corrigez sur papier</b><span>écrivez la note dans le cadre « Réservé au correcteur » et noircissez ses chiffres (dizaines, unités, dixièmes).</span></li>
+  <li><b>Corrigez sur papier</b><span>écrivez la note dans le cadre « Réservé au correcteur » et noircissez ses chiffres (dizaines, unités, dixièmes, centièmes — ex. 15,75 : 1 · 5 · 7 · 5).</span></li>
   <li class="{% if batches %}is-fait{% endif %}"><b>Scannez les pages de garde</b><span>la note et le QR (ou le n°) sont lus, la note est affectée à l'étudiant.</span></li>
 </ol>
 
@@ -72,6 +74,9 @@
         <a class="document" href="{{ quiz.sheet_pdf.url }}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>
           <span><b>Copies</b><small>page de garde + {{ quiz.pages_redaction }} page(s) lignée(s), en A4 à 100 %</small></span></a>
+        {% if quiz.place_anonyme %}<a class="document" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="M15 16l1.5 1.5L19 15"/></svg>
+          <span><b>Liste de placement et d'émargement</b><small>place n° → nom, pour le surveillant (signatures)</small></span></a>{% endif %}
       </div>
       {% else %}<p class="helptext">Enregistrez le sujet puis générez les documents.</p>{% endif %}
       <span class="helptext">Seule la page de garde se scanne ; les pages lignées scannées avec elle sont ignorées.

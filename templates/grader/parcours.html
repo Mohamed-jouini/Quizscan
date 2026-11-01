@@ -1,0 +1,82 @@
+{% extends "grader/base.html" %}
+{% block title %}Résultats du concours — QuizScan{% endblock %}
+{% block content %}
+{% with epreuves=parcours.epreuves %}
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>Résultats du concours</h1>
+    <p class="page-head__meta"><span>{% for q in epreuves %}<b>{{ q.title }}</b>{% if not forloop.last %} → {% endif %}{% endfor %}</span></p>
+    <p class="helptext">Chaque candidat, épreuve par épreuve : les admis d'une étape passent à la suivante. Le résultat final se lit à la dernière étape où il a été convoqué ; « non noté » : absent, ou copie pas encore scannée.</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}">← Résultats de « {{ quiz.title|truncatechars:28 }} »</a>
+    <a class="btn small" href="?format=xlsx">Exporter en Excel</a>
+  </div>
+</header>
+
+<ol class="etapes">
+  {% for e in parcours.etapes %}
+  <li class="{% if e.admis %}is-fait{% endif %}">
+    <b><a href="{% url 'quiz_results' e.quiz.pk %}">{{ e.quiz.title }}</a></b>
+    <span>{% if e.quiz.type_epreuve == "ecrit" %}écrit{% elif e.quiz.type_epreuve == "oral" %}oral{% else %}QCM{% endif %} ·
+      {{ e.convoques }} convoqué{{ e.convoques|pluralize }} · {{ e.presents }} noté{{ e.presents|pluralize }} ·
+      {% if e.seuil is not None %}<strong>{{ e.admis }}</strong> admis (note ≥ {{ e.seuil|floatformat:"-2" }}){% else %}note minimale à fixer{% endif %}</span>
+  </li>
+  {% endfor %}
+</ol>
+
+<div class="parcours-bilan">
+  <span class="badge ok">{{ parcours.n_admis_final }} admis au concours</span>
+  <span class="helptext helptext--serre">sur {{ parcours.candidats|length }} candidat{{ parcours.candidats|length|pluralize }}</span>
+</div>
+
+<form class="recherche-etudiant" method="get" role="search">
+  <div class="recherche-etudiant__champ">
+    <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+    <label for="id_q" class="visually-hidden">Rechercher un candidat</label>
+    <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
+           placeholder="Rechercher un candidat — nom, prénom ou n° d'inscription">
+    {% if recherche %}
+    <a class="recherche-etudiant__effacer" href="?" title="Effacer la recherche" aria-label="Effacer la recherche">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+    {% endif %}
+  </div>
+  <button class="btn" type="submit">Rechercher</button>
+  {% if recherche %}<span class="recherche-etudiant__bilan {% if not n_trouves %}is-vide{% endif %}">{{ n_trouves }} résultat{{ n_trouves|pluralize }}</span>{% endif %}
+</form>
+
+<div class="card">
+  {% include "grader/_pagination.html" with page=candidats_page label="Candidats" querystring=querystring %}
+  <div class="table-wrap">
+    <table>
+      <tr>
+        <th>Candidat</th>
+        {% for q in epreuves %}<th>{{ q.title|truncatechars:26 }}</th>{% endfor %}
+        <th>Résultat final</th>
+      </tr>
+      {% for c in candidats_page %}
+      <tr>
+        <td><b>{{ c.etudiant.full_name }}</b>{% if c.etudiant.student_number %}<span class="helptext">n° {{ c.etudiant.student_number }}</span>{% endif %}</td>
+        {% for case in c.cases %}
+        <td>
+          {% if case.etat == "note" %}
+          <span class="score">{{ case.row.score|floatformat:"-2" }} / {{ case.row.max_score|floatformat:"-2" }}</span>
+          <span class="helptext helptext--serre">{{ case.row.pct }} %</span>
+          {% if case.resultat == "admis" %}<span class="badge ok">Admis</span>
+          {% elif case.resultat == "refuse" %}<span class="badge bad">Non admis</span>
+          {% elif case.resultat == "en_attente" %}<span class="badge warn">En attente</span>{% endif %}
+          {% elif case.etat == "non_note" %}<span class="badge warn" title="Convoqué : absent, ou copie pas encore scannée">Non noté</span>
+          {% else %}<span class="helptext" title="Pas admis à l'étape précédente">— non convoqué</span>{% endif %}
+        </td>
+        {% endfor %}
+        <td><span class="badge {{ c.final_ton }}">{{ c.final }}</span></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="{{ epreuves|length|add:2 }}">{% if recherche %}Aucun candidat ne correspond à « {{ recherche }} ».{% else %}Aucun candidat pour le moment.{% endif %}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% include "grader/_pagination.html" with page=candidats_page label="Candidats" querystring=querystring %}
+</div>
+{% endwith %}
+{% endblock %}

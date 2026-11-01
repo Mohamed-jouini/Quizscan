@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Count
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -12,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import droits
+from . import droits, pieces
 from . import inscriptions as insc
 from .forms import CommuniqueForm, InscritForm
 from .models import Communique, Inscrit, Student
@@ -165,18 +166,21 @@ def communiques(request):
             avis.delete()
             messages.success(request, "Communiqué supprimé.")
             return redirect("communiques")
-        form = CommuniqueForm(request.POST, instance=modifie)
+        form = CommuniqueForm(request.POST, request.FILES, instance=modifie)
         if form.is_valid():
             avis = form.save(commit=False)
             if avis.auteur_id is None:
                 avis.auteur = request.user
-            avis.save()
+            with transaction.atomic():
+                avis.save()
+                form.enregistrer_pieces(avis)
             messages.success(request, "Communiqué enregistré"
                              + (" et publié." if avis.publie else " (brouillon)."))
             return redirect("communiques")
     return render(request, "grader/communiques.html", {
-        "form": form, "modifie": modifie,
-        "page_avis": _page(request, Communique.objects.select_related("auteur")),
+        "form": form, "modifie": modifie, "pieces": pieces,
+        "page_avis": _page(request, Communique.objects.select_related("auteur")
+                           .prefetch_related("pieces")),
     })
 
 

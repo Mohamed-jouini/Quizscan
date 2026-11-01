@@ -6,11 +6,7 @@
   {% if page_avis.object_list %}
   <div class="pub-cartes pub-cartes--liste">
     {% for a in page_avis %}
-    <a class="pub-avis" href="{% url 'public_communique' a.pk %}">
-      <span class="pub-avis__date">{{ a.cree_le|date:"d/m/Y" }}</span>
-      <b class="pub-avis__titre">{{ a.titre }}</b>
-      <span class="pub-avis__texte">{{ a.texte|truncatechars:240 }}</span>
-    </a>
+    {% include "public/_carte_avis.html" with longueur=240 %}
     {% endfor %}
   </div>
   {% include "grader/_pagination.html" with page=page_avis label="Communiqués" %}

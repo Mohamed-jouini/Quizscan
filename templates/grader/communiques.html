@@ -13,11 +13,28 @@
 <div class="grid2">
   <div class="card">
     <h2>{% if modifie %}Modifier le communiqué{% else %}Nouveau communiqué{% endif %}</h2>
-    <form method="post">{% csrf_token %}
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
       {% if modifie %}<input type="hidden" name="modifier" value="{{ modifie.pk }}">{% endif %}
       {{ form.titre.label_tag }}{{ form.titre }}{{ form.titre.errors }}
       {{ form.texte.label_tag }}{{ form.texte }}{{ form.texte.errors }}
-      <span class="helptext">Texte simple ; les retours à la ligne sont conservés.</span>
+      <span class="helptext">Texte simple ; les retours à la ligne sont conservés, les liens (https://…) deviennent cliquables.</span>
+      <label for="{{ form.fichiers.id_for_label }}">Images, vidéos ou documents à joindre :</label>
+      {{ form.fichiers }}{{ form.fichiers.errors }}
+      <span class="helptext">Facultatif. Images JPG, PNG, GIF, WebP (10 Mo) ; vidéos MP4, WebM, MOV (100 Mo) ; documents PDF, Word, Excel, PowerPoint, OpenDocument, texte, ZIP (25 Mo).
+        Plusieurs fichiers à la fois (Ctrl + clic), {{ pieces.MAX_PAR_COMMUNIQUE }} au plus par communiqué. Une longue vidéo : publiez-la sur YouTube et collez son lien dans le texte.</span>
+      {% if modifie %}{% with jointes=modifie.pieces.all %}{% if jointes %}
+      <div class="pieces-jointes">
+        <span class="pieces-jointes__titre">Déjà jointes — cochez celles à retirer :</span>
+        {% for p in jointes %}
+        <label class="piece-jointe">
+          <input type="checkbox" name="retirer" value="{{ p.pk }}">
+          {% if p.genre == "image" %}<img src="{{ p.url }}" alt="">{% else %}<span class="piece-jointe__icone">{% include "grader/_icone_piece.html" with genre=p.genre %}</span>{% endif %}
+          <span class="piece-jointe__nom"><b>{{ p.nom }}</b><small>{{ p.get_genre_display }} · {{ p.taille|filesizeformat }}</small></span>
+        </label>
+        {% endfor %}
+        {{ form.retirer.errors }}
+      </div>
+      {% endif %}{% endwith %}{% endif %}
       <label class="case">{{ form.publie }} Publier sur l'espace public</label>
       <span class="helptext">{{ form.publie.help_text }}</span>
       <p><button class="btn" type="submit">{% if modifie %}Enregistrer{% else %}Publier{% endif %}</button>
@@ -37,6 +54,13 @@
         </div>
         <span class="helptext">{{ a.cree_le|date:"d/m/Y H:i" }}{% if a.auteur %} · {{ a.auteur.get_full_name|default:a.auteur.username }}{% endif %}</span>
         <p class="avis-liste__texte">{{ a.texte|truncatechars:220|linebreaksbr }}</p>
+        {% with jointes=a.pieces.all %}{% if jointes %}
+        <ul class="pieces-mini">
+          {% for p in jointes %}
+          <li><a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ p.get_genre_display }} · {{ p.taille|filesizeformat }}">{% include "grader/_icone_piece.html" with genre=p.genre %}<span>{{ p.nom|truncatechars:34 }}</span></a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}{% endwith %}
         {% if user.is_superuser or a.auteur_id == user.pk %}
         <div class="actions-ligne">
           <a class="btn small secondary" href="?modifier={{ a.pk }}">Modifier</a>

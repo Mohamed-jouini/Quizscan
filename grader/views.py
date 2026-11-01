@@ -27,7 +27,7 @@ from . import layout as layout_mod
 from . import omr
 from . import qr as qr_mod
 from . import services, sheet_pdf
-from .export import results_workbook
+from .export import parcours_workbook, results_workbook
 from .forms import (CONCOURS_ID_MODES, AdminLoginForm, AnswerKeyUploadForm,
                     BulkQcmForm, CandidateFileForm, ClassGroupForm,
                     QuestionBankForm, QuestionForm, QuestionImportForm,
@@ -756,9 +756,12 @@ def quiz_detail(request, pk):
             new_id = request.POST.get("id_mode")
             if new_id in dict(_id_modes(quiz)):
                 quiz.id_mode = new_id
-            # nom sur un talon à découper : copies nominatives à QR imprimé
-            quiz.talon_nom = bool(request.POST.get("talon_nom"))
-            if quiz.talon_nom:
+            # présentation des copies nominatives : nom imprimé, talon à
+            # découper ou copie anonyme à n° de place (QR imprimé)
+            anonymat = request.POST.get("anonymat", "")
+            quiz.talon_nom = anonymat == "talon"
+            quiz.place_anonyme = anonymat == "place"
+            if quiz.copies_nominatives:
                 quiz.id_mode = "qr"
             try:
                 quiz.id_digits = max(3, min(int(request.POST.get(
@@ -776,7 +779,7 @@ def quiz_detail(request, pk):
                 quiz.grading_mode = new_grading
             quiz.save(update_fields=["wrong_penalty", "sheet_mode", "grading_mode",
                                      "id_mode", "id_digits", "entete", "duree",
-                                     "note_admission", "talon_nom"])
+                                     "note_admission", "talon_nom", "place_anonyme"])
             # Le cartouche n'est imprimé que sur le sujet, jamais scanné : on
             # le refait tout de suite, sans toucher à la feuille de réponses.
             if (quiz.entete, quiz.duree) != ancien_cartouche:
@@ -792,7 +795,7 @@ def quiz_detail(request, pk):
             students = list(quiz.class_group.students.all())
             if not quiz.questions.exists():
                 messages.error(request, "Ajoutez d'abord des questions.")
-            elif quiz.id_mode == "qr" and (not quiz.auto_enroll or quiz.talon_nom) \
+            elif quiz.id_mode == "qr" and (not quiz.auto_enroll or quiz.copies_nominatives) \
                     and not students:
                 messages.error(
                     request, "Le mode QR génère une fiche par étudiant : "
@@ -804,7 +807,7 @@ def quiz_detail(request, pk):
                 except layout_mod.TooManyPages as exc:
                     messages.error(request, str(exc))
                     return redirect("quiz_detail", pk=pk)
-                if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.talon_nom:
+                if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.copies_nominatives:
                     try:
                         count = max(1, min(int(request.POST.get("qr_count", 100)), 2000))
                     except ValueError:
@@ -819,12 +822,16 @@ def quiz_detail(request, pk):
                            "« Candidats & étiquettes QR »). Les candidats "
                            "inconnus seront créés automatiquement au scan.")
                 elif quiz.id_mode == "qr":
-                    pdf_bytes = sheet_pdf.generate_sheet_pdf(quiz, layout,
-                                                             students=students)
+                    pdf_bytes, _ = services.copies_nominatives_pdf(quiz, layout)
                     filename = f"fiches_nominatives_quiz_{quiz.pk}.pdf"
                     msg = (f"Fiches nominatives générées : {len(students)} fiches "
                            "avec nom et QR code — distribuez à chaque étudiant la sienne.")
-                    if quiz.talon_nom:
+                    if quiz.place_anonyme:
+                        msg = (f"Copies anonymes générées : {len(students)} copies "
+                               "avec un n° de place et le QR, sans nom. Imprimez "
+                               "aussi la liste de placement et d'émargement pour "
+                               "le surveillant.")
+                    elif quiz.talon_nom:
                         msg = (f"Copies à talon générées : {len(students)} copies, nom et QR "
                                "imprimés. Avant la correction, découpez le "
                                "talon au massicot (trait pointillé) : la "
@@ -1308,20 +1315,36 @@ def quiz_results(request, pk):
         parametres["batch"] = batch.pk
     if recherche:
         parametres["q"] = recherche
-    unmatched = SheetScan.objects.filter(batch__quiz=quiz, student=None)
+    # Pages non identifiées (pas les pages de rédaction d'un écrit, ignorées
+    # exprès au scan). Leur alerte se ferme (« × ») et se rouvre : une page
+    # dont l'alerte est fermée reste « à identifier » dans son lot.
+    unmatched = (SheetScan.objects.filter(batch__quiz=quiz, student=None)
+                 .exclude(status="ignoree"))
     if batch:
         unmatched = unmatched.filter(batch=batch)
+    if request.method == "POST":
+        if "masquer_non_identifiees" in request.POST:
+            unmatched.filter(alerte_masquee=False).update(alerte_masquee=True)
+        elif "reafficher_non_identifiees" in request.POST:
+            unmatched.filter(alerte_masquee=True).update(alerte_masquee=False)
+        return redirect(request.get_full_path())
+    n_masquees = unmatched.filter(alerte_masquee=True).count()
+    unmatched = unmatched.filter(alerte_masquee=False)
     # Les statistiques portent sur toutes les copies ("rows") ; seul le
     # tableau des notes est paginé ("rows_page"), un concours pouvant
     # compter des milliers de candidats.
+    # concours en étapes (QCM -> écrit -> oral) : lien vers les résultats
+    # de tout le concours, cette page ne montrant qu'une épreuve
+    chaine = services.chaine_epreuves(quiz, _my_quizzes(request))
     return render(request, "grader/results.html", {
+        "chaine": chaine if len(chaine) > 1 else [],
         "quiz": quiz, "rows": rows, "rows_page": _page(request, trouves),
         "rows_total": len(rows), "batch": batch,
         "recherche": recherche, "n_trouves": len(trouves),
         # conservés dans les liens de pagination : lot et recherche
         "batch_qs": urlencode(parametres),
         "batches": quiz.batches.all(), "unmatched": unmatched[:200],
-        "unmatched_total": unmatched.count(),
+        "unmatched_total": unmatched.count(), "n_masquees": n_masquees,
         "pending_pages": sum(b.total_pages for b in quiz.batches.filter(status="pending")),
         "stats": services.compute_stats(quiz, rows),
         "admission": admission,
@@ -1362,6 +1385,43 @@ def quiz_admis_pdf(request, pk):
     resp = HttpResponse(data, content_type="application/pdf")
     nom = "liste_admis" if quiz.auto_enroll else "liste_reussites"
     resp["Content-Disposition"] = f'attachment; filename="{nom}_{quiz.pk}.pdf"'
+    return resp
+
+
+@login_required
+def quiz_parcours(request, pk):
+    """Résultats d'un concours en plusieurs étapes (QCM -> écrit -> oral) :
+    chaque candidat, épreuve par épreuve, et son résultat final."""
+    quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    chaine = services.chaine_epreuves(quiz, _my_quizzes(request))
+    parcours = services.parcours_concours(chaine)
+    if request.GET.get("format") == "xlsx":
+        resp = HttpResponse(
+            parcours_workbook(parcours),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        resp["Content-Disposition"] = f'attachment; filename="concours_{chaine[0].pk}.xlsx"'
+        return resp
+    recherche = " ".join(request.GET.get("q", "").split())[:100]
+    trouves = _filtrer_etudiants(parcours["candidats"], recherche)
+    return render(request, "grader/parcours.html", {
+        "quiz": quiz, "parcours": parcours, "recherche": recherche,
+        "n_trouves": len(trouves), "candidats_page": _page(request, trouves),
+        "querystring": urlencode({"q": recherche}) if recherche else "",
+    })
+
+
+@login_required
+def quiz_emargement_pdf(request, pk):
+    """Liste de placement et d'émargement des copies anonymes à n° de place :
+    la seule correspondance place -> nom, pour le surveillant."""
+    quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    lignes = services.liste_emargement(quiz) if quiz.place_anonyme else None
+    if not lignes:
+        messages.error(request, "Générez d'abord les copies anonymes à n° de place.")
+        return redirect("quiz_detail", pk=pk)
+    resp = HttpResponse(bulletin_mod.generate_liste_emargement(quiz, lignes),
+                        content_type="application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="emargement_{quiz.pk}.pdf"'
     return resp
 
 

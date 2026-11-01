@@ -214,6 +214,15 @@ def test_oral(c, groupe):
     # la note illisible se reprend sur la fiche scannée (image sous les yeux)
     cherif = SheetScan.objects.get(batch=lot, student=e["CHERIF"])
     reponse = cherif.answers.get()
+    # résultats : la pastille « note à saisir » mène droit à la fiche
+    page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
+    assert f'href="{reverse("sheet_review", args=[cherif.pk])}" title="Ouvrir la copie pour saisir la note"' in page
+    # sur la fiche, le champ de la note est dans le bloc « Note », hors du
+    # tableau défilant où l'image de la grille le repoussait hors de l'écran
+    revue = c.get(reverse("sheet_review", args=[cherif.pk])).content.decode()
+    bloc = revue.split('class="note-lue note-lue--a-saisir"')[1].split("</form>")[0]
+    assert f'name="points_{reponse.pk}"' in bloc and "Note sur 20" in bloc
+    assert "table-wrap" not in bloc.split(f'name="points_{reponse.pk}"')[0]
     c.post(reverse("sheet_review", args=[cherif.pk]), {f"points_{reponse.pk}": "17"})
     rows = {r["student"].last_name: r["score"] for r in services.compute_results(quiz)}
     assert rows == {"AMRI": 12.25, "CHERIF": 17.0}, rows

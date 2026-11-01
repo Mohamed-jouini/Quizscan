@@ -153,6 +153,33 @@ def test_elimination_et_doublon(teacher):
     assert double.status == "no_match" and double.student is None, double.student
     print("  copie scannée deux fois : reste « à identifier » OK")
 
+    # ---- l'alerte « page(s) non identifiée(s) » des résultats se ferme (×)
+    from grader.models import SheetScan
+    cr = Client()
+    cr.force_login(teacher)
+    url = reverse("quiz_results", args=[quiz.pk])
+    page = cr.get(url).content.decode()
+    assert "1 page(s) non identifiée(s)" in page and 'name="masquer_non_identifiees"' in page
+    # une page de rédaction d'écrit ignorée n'est pas une page perdue
+    SheetScan.objects.create(batch=lot2, status="ignoree", source_name="redaction.jpg")
+    assert "1 page(s) non identifiée(s)" in cr.get(url).content.decode()
+    r = cr.post(url, {"masquer_non_identifiees": "1"}, follow=True)
+    page = r.content.decode()
+    assert "page(s) non identifiée(s) —" not in page.split("masquée")[0]
+    assert "1 page(s) non identifiée(s) masquée(s)" in page
+    assert "non identifiée(s) — leurs notes" not in cr.get(url).content.decode()
+    double.refresh_from_db()
+    assert double.status == "no_match" and double.alerte_masquee   # toujours à identifier
+    # une NOUVELLE page non identifiée rouvre l'alerte, avec elle seule
+    SheetScan.objects.create(batch=lot2, status="no_match", source_name="nouvelle.jpg")
+    page = cr.get(url).content.decode()
+    assert "1 page(s) non identifiée(s) — leurs notes" in page and "nouvelle.jpg" in page
+    assert "rescan" not in page.split("leurs notes")[1].split("</li>")[0]
+    cr.post(url, {"reafficher_non_identifiees": "1"})
+    assert "2 page(s) non identifiée(s) — leurs notes" in cr.get(url).content.decode()
+    print("  alerte des pages non identifiées : fermée (×), rouverte par une "
+          "nouvelle page, « réafficher » OK")
+
     c = Client()
     c.force_login(teacher)
     vrai = pytesseract.image_to_string

@@ -90,7 +90,8 @@ def main():
     assert ecrit.class_group.students.get(last_name="AMRI").student_number == "5500"
     assert "3 admis de « Étapes QCM » ajoutés" in r.content.decode()
     page = c.get(reverse("quiz_detail", args=[ecrit.pk])).content.decode()
-    assert "Candidats : admis de" in page and "Tous sont dans la liste" in page
+    # liste à jour : pas d'encart ni de bouton, l'en-tête rappelle l'origine
+    assert "candidats : admis de" in page and "Mettre à jour la liste" not in page
     print("  écrit : liste des candidats = les 3 admis du QCM OK")
 
     # ---- étape 3 : l'oral (épreuve de classe), admis de l'écrit (≥ 10 / 20)
@@ -121,8 +122,56 @@ def main():
     c.post(reverse("quiz_detail", args=[ecrit.pk]), {"passer_admis": "1"})
     assert ecrit.class_group.students.count() == 4, "doublon"
     page = c.get(reverse("quiz_detail", args=[ecrit.pk])).content.decode()
-    assert "Tous sont dans la liste" in page
+    assert "Mettre à jour la liste" not in page and "nouvel admis" not in page
     print("  note minimale baissée : nouvel admis signalé, ajouté, sans doublon OK")
+
+    # ---- résultats de tout le concours, depuis n'importe quelle étape
+    oral.note_admission = 10
+    oral.save(update_fields=["note_admission"])
+    o = {s.last_name: s for s in oral.class_group.students.all()}
+    _noter(oral, {o["AMRI"]: 15, o["CHERIF"]: 9})
+    attendu = {"AMRI": "Admis au concours", "CHERIF": "Non admis : Étapes oral",
+               "BAKIR": "Non admis : Étapes écrit", "DRISS": "Non noté : Étapes écrit",
+               "ESSID": "Non admis : Étapes QCM", "FERCHICHI": "Non admis : Étapes QCM"}
+    for depart in (qcm, ecrit, oral):
+        r = c.get(reverse("quiz_parcours", args=[depart.pk]))
+        assert r.status_code == 200
+        p = r.context["parcours"]
+        assert [q.pk for q in p["epreuves"]] == [qcm.pk, ecrit.pk, oral.pk]
+        finals = {x["etudiant"].last_name: x["final"] for x in p["candidats"]}
+        assert finals == attendu, finals
+        assert p["n_admis_final"] == 1
+    ordre = [x["etudiant"].last_name for x in p["candidats"]]
+    assert ordre == ["AMRI", "CHERIF", "BAKIR", "DRISS", "ESSID", "FERCHICHI"], ordre
+    page = r.content.decode()
+    assert "Admis au concours" in page and "non convoqué" in page
+    assert [x["etat"] for x in p["candidats"][-1]["cases"]] == ["note", "non_convoque", "non_convoque"]
+    # la recherche filtre, l'export Excel reprend tout
+    r = c.get(reverse("quiz_parcours", args=[ecrit.pk]) + "?q=driss")
+    assert [x["etudiant"].last_name for x in r.context["candidats_page"]] == ["DRISS"]
+    r = c.get(reverse("quiz_parcours", args=[ecrit.pk]) + "?format=xlsx")
+    assert r["Content-Type"].startswith("application/vnd.openxmlformats")
+    import io
+    from openpyxl import load_workbook
+    ws = load_workbook(io.BytesIO(r.content)).active
+    assert ws.cell(row=2, column=ws.max_column).value == "Résultat final"
+    assert ws.cell(row=3, column=1).value == "AMRI"
+    assert ws.cell(row=3, column=ws.max_column).value == "Admis au concours"
+    assert ws.max_row == 2 + len(attendu)
+    # la page des résultats d'une étape mène aux résultats du concours
+    page = c.get(reverse("quiz_results", args=[ecrit.pk])).content.decode()
+    assert "Voir les résultats de tout le concours" in page
+    # retour vers la liste des résultats ; l'épreuve reste à un clic (titre)
+    assert f'href="{reverse("resultats_list")}">← Retour aux résultats' in page
+    assert f'href="{reverse("quiz_detail", args=[ecrit.pk])}" title="Ouvrir l' in page
+    assert reverse("quiz_parcours", args=[ecrit.pk]) in page
+    for q in (ecrit, oral):
+        page = c.get(reverse("quiz_detail", args=[q.pk])).content.decode()
+        assert reverse("quiz_parcours", args=[q.pk]) in page
+    seul = Quiz.objects.create(title="Hors concours", class_group=groupe, owner=prof)
+    page = c.get(reverse("quiz_results", args=[seul.pk])).content.decode()
+    assert "Résultats du concours" not in page
+    print("  résultats du concours : parcours de chaque candidat, résultat final, Excel OK")
 
     # une épreuve d'un collègue n'est pas proposée comme épreuve précédente
     autre = enseignant_complet(User.objects.get_or_create(username="prof_etapes2")[0])
@@ -130,6 +179,7 @@ def main():
     c2.force_login(autre)
     form = c2.get(reverse("quiz_create")).context["form"]
     assert qcm not in form.fields["epreuve_precedente"].queryset
+    assert c2.get(reverse("quiz_parcours", args=[ecrit.pk])).status_code == 404
     print("  épreuve d'un collègue : jamais proposée OK")
     print("\n✅ TEST DES CONCOURS EN PLUSIEURS ÉTAPES RÉUSSI")
 

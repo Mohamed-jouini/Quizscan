@@ -117,3 +117,53 @@ def results_workbook(quiz, rows, stats=None, admission=None):
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+ETATS_CASE = {"admis": "Admis", "refuse": "Non admis", "en_attente": "En attente"}
+
+
+def parcours_workbook(parcours):
+    """Résultats d'un concours en étapes : une ligne par candidat, pour
+    chaque épreuve la note, le pourcentage et le résultat, puis le résultat
+    final (services.parcours_concours)."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Concours"
+    epreuves = parcours["epreuves"]
+    headers = ["Nom", "Prénom", "N° inscription"]
+    for q in epreuves:
+        headers += [f"{q.title} — note", f"{q.title} — %", f"{q.title} — résultat"]
+    headers.append("Résultat final")
+    ws.append([" → ".join(q.title for q in epreuves)])
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+    ws["A1"].font = Font(bold=True, size=13)
+    ws.append(headers)
+    fond = PatternFill("solid", fgColor="1F4E79")
+    for col in range(1, len(headers) + 1):
+        cellule = ws.cell(row=2, column=col)
+        cellule.font = Font(bold=True, color="FFFFFF")
+        cellule.fill = fond
+        cellule.alignment = Alignment(horizontal="center", wrap_text=True)
+    for c in parcours["candidats"]:
+        s = c["etudiant"]
+        ligne = [s.last_name, s.first_name, s.student_number]
+        for case in c["cases"]:
+            if case["etat"] == "note":
+                r = case["row"]
+                ligne += [r["score"], r["pct"] / 100,
+                          ETATS_CASE.get(case["resultat"], "")]
+            elif case["etat"] == "non_note":
+                ligne += [None, None, "Non noté"]
+            else:
+                ligne += [None, None, "Non convoqué"]
+        ligne.append(c["final"])
+        ws.append(ligne)
+        for k in range(len(epreuves)):
+            ws.cell(row=ws.max_row, column=5 + 3 * k).number_format = "0%"
+    for i, largeur in enumerate([22, 18, 14] + [11, 8, 13] * len(epreuves) + [34],
+                                start=1):
+        ws.column_dimensions[get_column_letter(i)].width = largeur
+    ws.freeze_panes = "D3"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

@@ -12,11 +12,12 @@ par adresse pour décourager l'essai de tous les numéros à la suite.
 """
 from django.core.cache import cache
 from django.db.models import Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 
-from . import services
+from . import pieces, services
 from .inscriptions import numero_propre
-from .models import Communique, Quiz, Student
+from .models import Communique, PieceJointe, Quiz, Student
 from .views import _page
 
 LIMITE_RECHERCHES = 30          # par adresse…
@@ -44,7 +45,7 @@ def _epreuves_publiees():
 
 def accueil(request):
     return render(request, "public/accueil.html", {
-        "avis": Communique.objects.filter(publie=True)[:4],
+        "avis": Communique.objects.filter(publie=True).prefetch_related("pieces")[:4],
         "n_avis": Communique.objects.filter(publie=True).count(),
         "epreuves": _epreuves_publiees()[:30],
     })
@@ -111,11 +112,22 @@ def epreuve(request, pk):
 
 def communiques(request):
     return render(request, "public/communiques.html", {
-        "page_avis": _page(request, Communique.objects.filter(publie=True), per_page=10),
+        "page_avis": _page(request, Communique.objects.filter(publie=True)
+                           .prefetch_related("pieces"), per_page=10),
     })
 
 
 def communique(request, pk):
     return render(request, "public/communique.html", {
-        "avis": get_object_or_404(Communique, pk=pk, publie=True),
+        "avis": get_object_or_404(Communique.objects.prefetch_related("pieces"),
+                                  pk=pk, publie=True),
     })
+
+
+def piece_jointe(request, pk, nom=""):
+    """Fichier joint à un communiqué : au public si le communiqué est publié,
+    au personnel connecté même en brouillon (aperçu avant publication)."""
+    piece = get_object_or_404(PieceJointe.objects.select_related("communique"), pk=pk)
+    if not (piece.communique.publie or request.user.is_authenticated):
+        raise Http404("Fichier introuvable")
+    return pieces.servir(request, piece)

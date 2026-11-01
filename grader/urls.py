@@ -21,6 +21,9 @@ urlpatterns = [
     path("quiz/<int:pk>/resultats.xlsx", views.quiz_results_xlsx, name="quiz_results_xlsx"),
     path("quiz/<int:pk>/bulletins.pdf", views.quiz_bulletins_pdf, name="quiz_bulletins_pdf"),
     path("quiz/<int:pk>/admis.pdf", views.quiz_admis_pdf, name="quiz_admis_pdf"),
+    path("quiz/<int:pk>/concours/", views.quiz_parcours, name="quiz_parcours"),
+    path("quiz/<int:pk>/emargement.pdf", views.quiz_emargement_pdf,
+         name="quiz_emargement_pdf"),
     path("lots/<int:pk>/", views.batch_detail, name="batch_detail"),
     path("lots/<int:pk>/supprimer/", views.batch_delete, name="batch_delete"),
     path("copies/<int:pk>/", views.sheet_review, name="sheet_review"),
@@ -36,4 +39,5 @@ urlpatterns = [
     path("public/epreuves/<int:pk>/", vp.epreuve, name="public_epreuve"),
     path("public/communiques/", vp.communiques, name="public_communiques"),
     path("public/communiques/<int:pk>/", vp.communique, name="public_communique"),
+    path("public/communiques/piece/<int:pk>/<str:nom>", vp.piece_jointe, name="public_piece"),
 ]

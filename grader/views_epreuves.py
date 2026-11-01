@@ -54,16 +54,17 @@ def _generer_documents(quiz, nb_exemplaires=100):
     Retourne le message à afficher."""
     services.question_note(quiz)
     layout = layout_mod.build_layout(quiz)
-    students = list(quiz.class_group.students.all())
-    if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.talon_nom:
+    if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.copies_nominatives:
         pdf = sheet_pdf.generate_sheet_pdf(
             quiz, layout, serials=list(range(1, nb_exemplaires + 1)))
         quoi = f"{nb_exemplaires} copies anonymes"
     elif quiz.id_mode == "qr":
-        pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, students=students)
-        quoi = (f"{len(students)} copies à talon (nom à découper avant la "
-                "correction, QR imprimé)" if quiz.talon_nom else
-                f"{len(students)} copies nominatives (nom et QR imprimés)")
+        pdf, n = services.copies_nominatives_pdf(quiz, layout)
+        quoi = (f"{n} copies anonymes à n° de place (et la liste d'émargement)"
+                if quiz.place_anonyme else
+                f"{n} copies à talon (nom à découper avant la correction, "
+                "QR imprimé)" if quiz.talon_nom else
+                f"{n} copies nominatives (nom et QR imprimés)")
     else:
         pdf = sheet_pdf.generate_sheet_pdf(quiz, layout)
         quoi = "la copie (une par étudiant)"
@@ -93,7 +94,7 @@ def _ecrit(request, quiz):
                 messages.success(request, "Épreuve enregistrée.")
                 return redirect("quiz_detail", pk=quiz.pk)
         elif "generer" in request.POST:
-            if quiz.id_mode == "qr" and (not quiz.auto_enroll or quiz.talon_nom) \
+            if quiz.id_mode == "qr" and (not quiz.auto_enroll or quiz.copies_nominatives) \
                     and not quiz.class_group.students.exists():
                 messages.error(request, "Copies nominatives : ajoutez d'abord les "
                                         "étudiants de la classe.")

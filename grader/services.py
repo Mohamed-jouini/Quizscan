@@ -529,14 +529,14 @@ def moderniser_calage(quiz):
         _generer_fiches_orales(quiz)
         return True
     if quiz.type_epreuve == "ecrit":
-        if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.talon_nom:
+        if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.copies_nominatives:
             return False
         from .views_epreuves import _generer_documents
         _generer_documents(quiz)
         return True
     if quiz.id_mode == "qr":
-        if quiz.auto_enroll and not quiz.talon_nom:
-            return False
+        if (quiz.auto_enroll and not quiz.copies_nominatives) or quiz.place_anonyme:
+            return False                # places : se refait par le bouton
         try:
             nouvelle = layout_mod.build_layout(quiz)
         except layout_mod.TooManyPages:
@@ -1028,6 +1028,7 @@ def compute_results(quiz, batch=None, student=None):
                     entry["answered"] += 1
             elif a.question.qtype == "open":
                 entry["pending_open"] += 1
+                entry.setdefault("a_noter", sheet)    # page où saisir la note
 
     max_score = quiz.max_score
     # Une QCM = un point : le résultat se lit en bonnes réponses sur le
@@ -1208,12 +1209,50 @@ MINUTES_PAR_COPIE_A_LA_MAIN = 2
 # ------------------------------------------------ copies anonymes (places)
 
 def places_anonymes(quiz):
-    """Numéros de place des copies anonymes : [(n° de place, étudiant)],
-    par n° d'inscription puis par nom (l'ordre de la liste d'émargement)."""
-    etudiants = sorted(quiz.class_group.students.all(),
-                       key=lambda s: ((s.student_number or "~").zfill(12),
-                                      s.last_name, s.first_name))
-    return list(enumerate(etudiants, start=1))
+    """Numéros de place des copies anonymes : [(n° de place, étudiant)].
+
+    Première génération : par n° d'inscription puis par nom. Ensuite les
+    places déjà attribuées (layout_json["places"]) NE CHANGENT PAS — les
+    copies sont peut-être déjà imprimées — et un étudiant ajouté prend la
+    place suivante. Un étudiant retiré libère sa place sans renuméroter."""
+    def ordre(s):
+        return ((s.student_number or "~").zfill(12), s.last_name, s.first_name)
+    connues = {int(k): v for k, v in
+               ((quiz.layout_json or {}).get("places") or {}).items()}
+    etudiants = list(quiz.class_group.students.all())
+    places = [(connues[s.pk], s) for s in etudiants if s.pk in connues]
+    suivante = max([n for n, _ in places] or [0]) + 1
+    for s in sorted((s for s in etudiants if s.pk not in connues), key=ordre):
+        places.append((suivante, s))
+        suivante += 1
+    return sorted(places, key=lambda p: p[0])
+
+
+def copies_nominatives_pdf(quiz, layout):
+    """PDF d'une copie par étudiant, QR imprimé : nom imprimé (ou sur le
+    talon), ou copie anonyme à n° de place — la correspondance place ->
+    étudiant est alors gardée dans layout["places"] pour la liste
+    d'émargement. Retourne (octets du PDF, nombre de copies)."""
+    if quiz.place_anonyme:
+        places = places_anonymes(quiz)
+        layout["places"] = {str(s.pk): n for n, s in places}
+        pdf = sheet_pdf.generate_sheet_pdf(
+            quiz, layout, students=[s for _, s in places],
+            places={s.pk: n for n, s in places})
+        return pdf, len(places)
+    etudiants = list(quiz.class_group.students.all())
+    return sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants), len(etudiants)
+
+
+def liste_emargement(quiz):
+    """[(n° de place, étudiant)] des copies anonymes imprimées (places
+    gardées à la génération), ou None si elles n'ont pas été générées."""
+    places = (quiz.layout_json or {}).get("places")
+    if not places:
+        return None
+    par_pk = {s.pk: s for s in quiz.class_group.students.all()}
+    return sorted(((n, par_pk[int(k)]) for k, n in places.items() if int(k) in par_pk),
+                  key=lambda p: p[0])
 
 
 # ------------------------------------------- concours en plusieurs étapes
@@ -1254,6 +1293,112 @@ def etat_etape(cible):
                                 and (s.last_name, s.first_name) in presents_nom)))
     return {"precedente": precedente, "n_admis": len(admis), "manquants": manquants,
             "seuil": precedente.note_admission}
+
+
+# ------------------------------------- résultats d'un concours en étapes
+
+def chaine_epreuves(quiz, autorisees=None):
+    """Les épreuves d'un concours en étapes (QCM -> écrit -> oral), de la
+    première à la dernière : on remonte les « épreuve précédente », puis on
+    descend les étapes suivantes (largeur d'abord, par ordre de création).
+    autorisees : queryset des épreuves visibles par l'utilisateur. Une
+    épreuve seule (sans étape) donne une chaîne d'un élément."""
+    vues = {quiz.pk}
+    racine = quiz
+    while racine.epreuve_precedente_id and racine.epreuve_precedente_id not in vues:
+        vues.add(racine.epreuve_precedente_id)
+        racine = racine.epreuve_precedente
+    chaine, a_voir, vus = [], [racine], {racine.pk}
+    while a_voir:
+        q = a_voir.pop(0)
+        chaine.append(q)
+        for s in q.epreuves_suivantes.order_by("pk"):
+            if s.pk not in vus:
+                vus.add(s.pk)
+                a_voir.append(s)
+    if autorisees is not None:
+        visibles = set(autorisees.filter(pk__in=[q.pk for q in chaine])
+                       .values_list("pk", flat=True))
+        chaine = [q for q in chaine if q.pk in visibles]
+    return chaine
+
+
+def _cle_candidat(s):
+    """Même personne d'une étape à l'autre : n° d'inscription (celui du QR,
+    copié d'une étape à la suivante), sinon fiche du registre, sinon nom et
+    prénom."""
+    if (s.student_number or "").strip():
+        return ("n", s.student_number.strip())
+    if s.inscrit_id:
+        return ("i", s.inscrit_id)
+    return ("p", s.last_name.strip().lower(), s.first_name.strip().lower())
+
+
+def parcours_concours(chaine):
+    """Résultats d'un concours épreuve par épreuve, pour chaque candidat.
+
+    Retourne {"epreuves": [...], "etapes": [{quiz, convoques, presents,
+    admis, seuil}], "candidats": [{etudiant, cases: [case par épreuve],
+    final, final_ton, atteinte}]}. Une case : {etat: « note » | « non_note »
+    (convoqué : absent, ou copie pas encore scannée) | « non_convoque », row
+    (compute_results), resultat}. Le résultat final
+    se lit à la dernière étape où le candidat a été convoqué."""
+    etapes, par_epreuve = [], []
+    for quiz in chaine:
+        rows = compute_results(quiz)
+        admissions(quiz, rows)                       # pose row["resultat"]
+        notes = {_cle_candidat(r["student"]): r for r in rows}
+        convoques = {_cle_candidat(s): s for s in quiz.class_group.students.all()}
+        par_epreuve.append((quiz, notes, convoques))
+        etapes.append({"quiz": quiz, "convoques": len(convoques),
+                       "presents": len(notes), "seuil": quiz.note_admission,
+                       "admis": sum(1 for r in rows if r.get("resultat") == "admis")})
+    personnes = {}
+    for _, notes, convoques in par_epreuve:
+        for cle, s in convoques.items():
+            personnes.setdefault(cle, s)
+        for cle, r in notes.items():
+            personnes.setdefault(cle, r["student"])
+    derniere = len(chaine) - 1
+    candidats = []
+    for cle, etudiant in personnes.items():
+        cases, atteinte = [], -1
+        for k, (quiz, notes, convoques) in enumerate(par_epreuve):
+            r = notes.get(cle)
+            if r is not None:
+                cases.append({"etat": "note", "row": r, "resultat": r.get("resultat")})
+                atteinte = k
+            elif cle in convoques:
+                cases.append({"etat": "non_note", "row": None, "resultat": None})
+                atteinte = k
+            else:
+                cases.append({"etat": "non_convoque", "row": None, "resultat": None})
+        final, ton = "—", "grey"
+        if atteinte >= 0:
+            case, titre = cases[atteinte], chaine[atteinte].title
+            if case["etat"] == "non_note":            # absent, ou pas encore scanné
+                final, ton = f"Non noté : {titre}", "warn"
+            elif case["resultat"] == "refuse":
+                final, ton = f"Non admis : {titre}", "bad"
+            elif case["resultat"] == "en_attente":
+                final, ton = f"En attente : {titre}", "warn"
+            elif case["resultat"] == "admis":
+                if atteinte == derniere:
+                    final, ton = "Admis au concours", "ok"
+                else:
+                    final, ton = f"Admis : {titre} — étape suivante à venir", "info"
+            else:
+                final, ton = f"Noté : {titre} (sans note minimale)", "grey"
+        derniere_note = cases[atteinte]["row"]["score"] if (
+            atteinte >= 0 and cases[atteinte]["row"]) else -1
+        candidats.append({"etudiant": etudiant, "student": etudiant,
+                          "cases": cases, "final": final,
+                          "final_ton": ton, "atteinte": atteinte,
+                          "_tri": (-atteinte, ton != "ok", -derniere_note,
+                                   etudiant.last_name.lower(), etudiant.first_name.lower())})
+    candidats.sort(key=lambda c: c["_tri"])
+    return {"epreuves": chaine, "etapes": etapes, "candidats": candidats,
+            "n_admis_final": sum(1 for c in candidats if c["final_ton"] == "ok")}
 
 
 # Tranches de la répartition des résultats (en % du barème).

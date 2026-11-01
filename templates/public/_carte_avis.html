@@ -1,0 +1,9 @@
+{# Carte d'un communiqué (accueil, liste) : première image en vignette,  #}
+{# et le décompte des pièces jointes.                                     #}
+<a class="pub-avis" href="{% url 'public_communique' a.pk %}">
+  {% with image=a.images|first %}{% if image %}<img class="pub-avis__image" src="{{ image.url }}" alt="" loading="lazy">{% endif %}{% endwith %}
+  <span class="pub-avis__date">{{ a.cree_le|date:"d/m/Y" }}</span>
+  <b class="pub-avis__titre">{{ a.titre }}</b>
+  <span class="pub-avis__texte">{{ a.texte|truncatechars:longueur }}</span>
+  {% if a.resume_pieces %}<span class="pub-avis__pieces"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 11.5-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.4 3.4 0 0 1 4.8 4.8l-8.4 8.4a1.8 1.8 0 0 1-2.6-2.6l7.6-7.6"/></svg>{{ a.resume_pieces }}</span>{% endif %}
+</a>

@@ -15,11 +15,7 @@
   {% if avis %}
   <div class="pub-cartes">
     {% for a in avis %}
-    <a class="pub-avis" href="{% url 'public_communique' a.pk %}">
-      <span class="pub-avis__date">{{ a.cree_le|date:"d/m/Y" }}</span>
-      <b class="pub-avis__titre">{{ a.titre }}</b>
-      <span class="pub-avis__texte">{{ a.texte|truncatechars:160 }}</span>
-    </a>
+    {% include "public/_carte_avis.html" with longueur=160 %}
     {% endfor %}
   </div>
   {% else %}<p class="pub-vide">Aucun communiqué publié pour l'instant.</p>{% endif %}

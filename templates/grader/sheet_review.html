@@ -20,10 +20,15 @@
   <div class="card">
     <h2>Image contrôlée</h2>
     <p class="helptext">
+      {% if quiz.type_epreuve == "ecrit" or quiz.type_epreuve == "oral" %}
+      Cercle <b class="t-ok">vert</b> = chiffre de la note lu,
+      cadre <b class="t-warn">orange</b> = ligne illisible (plusieurs cases noircies).
+      {% else %}
       Cercle <b class="t-info">bleu</b> = bonne réponse attendue,
       <b class="t-ok">vert</b> = réponse de l'étudiant correcte,
       <b class="t-bad">rouge</b> = réponse fausse,
       <b class="t-warn">orange</b> = plusieurs cases cochées.
+      {% endif %}
     </p>
     {% if sheet.overlay_image %}
       <a href="{{ sheet.overlay_image.url }}" target="_blank">
@@ -66,17 +71,40 @@
     </div>
 
     <div class="card">
+      {% if quiz.type_epreuve == "ecrit" or quiz.type_epreuve == "oral" %}
+      {# Écrit / oral : la note lue dans la grille. Illisible (plusieurs   #}
+      {# cases sur une ligne, ou au-dessus du barème) : elle se saisit ici, #}
+      {# l'image sous les yeux. L'image suit la largeur de la carte : en    #}
+      {# taille réelle, elle repoussait le champ hors de l'écran.           #}
+      <h2>Note</h2>
+      {% for a in answers %}{% if a.question.qtype == "open" %}
+      <div class="note-lue{% if a.points_awarded is None %} note-lue--a-saisir{% endif %}">
+        <p class="note-lue__etat">
+          {% if a.points_awarded is None %}<span class="badge warn">Note illisible : à saisir</span>
+          {% elif a.manually_set %}<span class="badge ok">Note saisie : {{ a.points_awarded|floatformat:"-2" }} / {{ a.question.points|floatformat:"-2" }}</span>
+          {% else %}<span class="badge ok">Note lue : {{ a.points_awarded|floatformat:"-2" }} / {{ a.question.points|floatformat:"-2" }}</span>{% endif %}
+        </p>
+        <p class="helptext helptext--serre">{% if quiz.type_epreuve == "oral" %}Note noircie par l'examinateur sur la fiche d'évaluation{% else %}Note noircie par le correcteur dans le cadre de la page de garde{% endif %} :
+          {% if a.points_awarded is None %}lisez-la sur l'image et saisissez-la ci-dessous.{% else %}vérifiez-la sur l'image ; corrigez-la au besoin.{% endif %}</p>
+        {% if a.open_crop %}<a class="note-lue__image" href="{{ a.open_crop.url }}" target="_blank" title="Agrandir">
+          <img src="{{ a.open_crop.url }}" alt="Grille de la note sur la copie"></a>{% endif %}
+        <label for="id_points_{{ a.pk }}">Note sur {{ a.question.points|floatformat:"-2" }}</label>
+        <div class="note-lue__saisie">
+          <input id="id_points_{{ a.pk }}" class="champ--note" type="text" inputmode="decimal"
+                 name="points_{{ a.pk }}" value="{{ a.points_awarded|floatformat:'-2'|default_if_none:'' }}"
+                 placeholder="ex. 15,75" autocomplete="off"{% if a.points_awarded is None %} autofocus{% endif %}>
+          <span>/ {{ a.question.points|floatformat:"-2" }}</span>
+        </div>
+      </div>
+      {% endif %}{% empty %}
+      <p class="helptext">Aucune note lue sur cette page.</p>
+      {% endfor %}
+      {% else %}
       <h2>Réponses</h2>
       <p class="helptext helptext--serre">
-        {% if quiz.type_epreuve == "ecrit" or quiz.type_epreuve == "oral" %}
-        {% if quiz.type_epreuve == "oral" %}Épreuve orale : la note noircie par l'examinateur a été lue sur la fiche d'évaluation.{% else %}Épreuve écrite : la note noircie par le correcteur a été lue dans le
-        cadre de la page de garde.{% endif %} Vérifiez-la sur l'image ; si elle était
-        illisible, saisissez-la ici.
-        {% else %}
         Les QCM sont notés par lecture optique : la réponse retenue est le
         constat des cases noircies et ne se modifie pas. Seules les réponses
         manuscrites sont à noter ici.
-        {% endif %}
       </p>
       <div class="table-wrap">
         <table>
@@ -90,9 +118,9 @@
           <td>{{ a.points_awarded|floatformat:"-2"|default:"—" }} / {{ a.question.points|floatformat:"-2" }}</td>
           {% else %}
           <td colspan="2">
-            {% if quiz.type_epreuve == "ecrit" or quiz.type_epreuve == "oral" %}{% if a.points_awarded is None %}<span class="badge warn">Note illisible : à saisir</span>{% else %}Note lue dans le cadre du correcteur :{% endif %}{% else %}Réponse manuscrite :{% endif %}
-            {% if a.open_crop %}<br><a href="{{ a.open_crop.url }}" target="_blank">
-              <img src="{{ a.open_crop.url }}" style="max-width:100%;border:1px solid var(--line);border-radius:4px"></a>{% endif %}
+            Réponse manuscrite :
+            {% if a.open_crop %}<a class="reponse-manuscrite" href="{{ a.open_crop.url }}" target="_blank" title="Agrandir">
+              <img src="{{ a.open_crop.url }}" alt="Réponse manuscrite"></a>{% endif %}
           </td>
           <td class="cellule--serree"><input class="champ--note" type="text" name="points_{{ a.pk }}"
                      value="{{ a.points_awarded|floatformat:'-2'|default_if_none:'' }}"
@@ -102,6 +130,7 @@
         {% endfor %}
       </table>
       </div>
+      {% endif %}
       <p>
         {% if a_enregistrer %}
         {% if next_id %}

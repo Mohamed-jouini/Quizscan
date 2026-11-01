@@ -159,6 +159,9 @@ def layout_signature(quiz):
     }
     if getattr(quiz, "talon_nom", False):
         data["talon"] = True        # seulement si coché : empreintes inchangées
+    if getattr(quiz, "place_anonyme", False):
+        # une copie par étudiant : un étudiant ajouté demande une régénération
+        data["places"] = sorted(quiz.class_group.students.values_list("pk", flat=True))
     if getattr(quiz, "type_epreuve", "qcm") in ("ecrit", "oral"):
         # seulement pour l'écrit et l'oral : les empreintes des fiches QCM
         # existantes ne doivent pas changer (toutes seraient « périmées »)
@@ -533,8 +536,8 @@ def _build_ecrit_layout(quiz):
 def _uses_sticker(quiz):
     """Identification par étiquette autocollante (QR du candidat collé sur
     la copie) : mode « étiquette », ou concours identifié par QR."""
-    if getattr(quiz, "talon_nom", False):
-        return False                # QR imprimé, nom sur le talon
+    if getattr(quiz, "talon_nom", False) or getattr(quiz, "place_anonyme", False):
+        return False                # QR imprimé (nom sur le talon, ou n° de place)
     return (getattr(quiz, "id_mode", "name") == "sticker"
             or getattr(quiz, "auto_enroll", False))
 

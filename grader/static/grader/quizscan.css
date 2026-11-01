@@ -1803,3 +1803,67 @@ a.chiffre:hover{border-color:var(--qs-blue)}
 .etape-suivante__titre{font-size:13px;font-weight:600;color:var(--qs-ink)}
 /* Registre : l'établissement sur toute la largeur du formulaire. */
 .form-inscription__large{grid-column:1 / -1}
+
+/* Alerte fermable (« × ») : pages non identifiées sur la page des résultats. */
+.messages li.messages__fermable{position:relative;padding-right:46px}
+.messages__fermer{position:absolute;top:7px;right:8px;margin:0}
+.messages__fermer button{width:28px;height:28px;border:0;border-radius:8px;cursor:pointer;
+  background:transparent;color:inherit;font-size:20px;line-height:1;opacity:.75}
+.messages__fermer button:hover{background:rgba(0,0,0,.07);opacity:1}
+.masquees{margin:-10px 0 16px}
+/* Bouton de formulaire présenté comme un lien. */
+button.lien{border:0;background:none;padding:0;font:inherit;color:var(--qs-blue);
+  text-decoration:underline;cursor:pointer}
+
+/* Résultats d'un concours en étapes : bilan au-dessus du tableau. */
+.parcours-bilan{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 16px}
+.parcours-bilan .badge{font-size:13px;padding:5px 12px}
+
+/* Vérification d'une copie d'écrit / fiche d'oral : la note lue. L'image
+   de la grille suit la largeur de la carte (en taille réelle, elle
+   repoussait le champ de saisie hors de l'écran). */
+.note-lue{border:1px solid var(--qs-line);border-radius:12px;padding:14px;margin:0 0 14px}
+.note-lue--a-saisir{border-color:var(--qs-warn-line);background:var(--qs-warn-bg)}
+.note-lue__etat{margin:0 0 6px}
+.note-lue__image{display:block;margin:10px 0 12px}
+.note-lue__image img,.reponse-manuscrite img{display:block;width:100%;height:auto;
+  border:1px solid var(--qs-line);border-radius:8px;background:#fff}
+.note-lue__saisie{display:flex;align-items:center;gap:8px}
+.shell .note-lue__saisie input.champ--note{width:130px;margin:0;font-size:18px;font-weight:700;text-align:center}
+.note-lue__saisie span{font-weight:600;color:var(--qs-muted);white-space:nowrap}
+.reponse-manuscrite{display:block;width:260px;max-width:100%;margin-top:6px}
+a.badge{text-decoration:none}
+
+/* Pièces jointes des communiqués (images, vidéos, documents). */
+.pieces-jointes{display:grid;gap:8px;margin:12px 0 4px}
+.pieces-jointes__titre{font-size:13px;font-weight:600;color:var(--qs-ink-soft)}
+.shell .piece-jointe{display:flex;align-items:center;gap:10px;margin:0;padding:8px 10px;cursor:pointer;
+  border:1px solid var(--qs-line);border-radius:10px;font-weight:400}
+.piece-jointe:has(input:checked){border-color:var(--qs-bad-line);background:var(--qs-bad-bg)}
+.piece-jointe:has(input:checked) .piece-jointe__nom b{text-decoration:line-through}
+.piece-jointe img,.piece-jointe__icone{width:44px;height:44px;flex:none;border-radius:8px;object-fit:cover;
+  display:flex;align-items:center;justify-content:center;background:var(--qs-surface-2)}
+.piece-jointe__icone svg,.pieces-mini svg,.pub-avis__pieces svg{width:20px;height:20px;fill:none;
+  stroke:var(--qs-blue);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.piece-jointe__nom{min-width:0}
+.piece-jointe__nom b{display:block;font-size:13.5px;overflow-wrap:anywhere}
+.piece-jointe__nom small{display:block;font-size:12px;color:var(--qs-muted)}
+.pieces-mini{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.pieces-mini a{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 7px;font-size:12.5px;
+  border:1px solid var(--qs-line);border-radius:999px;color:var(--qs-ink-soft);text-decoration:none}
+.pieces-mini a:hover{border-color:var(--qs-blue)}
+.pieces-mini svg{width:15px;height:15px}
+.pub-avis__image{width:calc(100% + 36px);margin:-18px -18px 6px;aspect-ratio:16/9;object-fit:cover;
+  border-radius:var(--qs-r-card) var(--qs-r-card) 0 0}
+.pub-avis__pieces{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--qs-muted)}
+.pub-avis__pieces svg{width:15px;height:15px}
+/* jamais rognées : une affiche ou une convocation se lit en entier */
+.pub-galerie{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;
+  align-items:start;margin:22px 0}
+.pub-galerie--une{grid-template-columns:1fr}
+.pub-galerie a{display:block;border-radius:12px;overflow:hidden;border:1px solid var(--qs-line);background:var(--qs-surface)}
+.pub-galerie img{display:block;width:100%;height:auto}
+.pub-video{margin:22px 0}
+.pub-video video{display:block;width:100%;max-height:70vh;border-radius:12px;background:#000}
+.pub-video figcaption{margin-top:6px;font-size:13px;color:var(--qs-muted);overflow-wrap:anywhere}
+.pub-pieces__titre{font-size:16px;margin:24px 0 8px}

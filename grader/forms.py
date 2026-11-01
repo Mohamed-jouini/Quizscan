@@ -1,9 +1,9 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 
-from . import importers
+from . import importers, pieces
 from .models import (MAX_CHOICES, MAX_OPEN_HEIGHT_MM, POINTS_QCM, ClassGroup,
-                     Communique, Inscrit, Question, Quiz, choice_letter)
+                     Communique, Inscrit, PieceJointe, Question, Quiz, choice_letter)
 
 
 class DecimalField(forms.FloatField):
@@ -107,13 +107,63 @@ class InscritForm(forms.ModelForm):
         return " ".join(self.cleaned_data.get("etablissement", "").split())
 
 
+class EnvoiMultiple(forms.FileInput):
+    allow_multiple_selected = True
+
+
+class FichiersField(forms.FileField):
+    """Plusieurs fichiers dans un seul champ : la liste des fichiers envoyés."""
+    widget = EnvoiMultiple
+
+    def clean(self, data, initial=None):
+        envoyes = data if isinstance(data, (list, tuple)) else ([data] if data else [])
+        return [super(FichiersField, self).clean(f, initial) for f in envoyes]
+
+
 class CommuniqueForm(forms.ModelForm):
-    """Avis publié sur l'espace public."""
+    """Avis publié sur l'espace public, avec ses pièces jointes (images,
+    vidéos, documents : grader/pieces.py)."""
+    fichiers = FichiersField(
+        label="Pièces jointes", required=False,
+        widget=EnvoiMultiple(attrs={"accept": pieces.ACCEPT}))
+    retirer = forms.ModelMultipleChoiceField(
+        label="Retirer", required=False, queryset=PieceJointe.objects.none(),
+        widget=forms.CheckboxSelectMultiple)
 
     class Meta:
         model = Communique
         fields = ["titre", "texte", "publie"]
         widgets = {"texte": forms.Textarea(attrs={"rows": 6})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["retirer"].queryset = self.instance.pieces.all()
+
+    def clean_fichiers(self):
+        fichiers = self.cleaned_data.get("fichiers") or []
+        erreurs = [e for e in (pieces.controler(f) for f in fichiers) if e]
+        if erreurs:
+            raise forms.ValidationError(erreurs)
+        return fichiers
+
+    def clean(self):
+        donnees = super().clean()
+        gardees = (self.instance.pieces.count() if self.instance.pk else 0) \
+            - len(donnees.get("retirer") or [])
+        if gardees + len(donnees.get("fichiers") or []) > pieces.MAX_PAR_COMMUNIQUE:
+            self.add_error("fichiers", f"{pieces.MAX_PAR_COMMUNIQUE} pièces jointes "
+                                       f"au plus par communiqué.")
+        return donnees
+
+    def enregistrer_pieces(self, avis):
+        """Après avis.save() : retire les pièces cochées, ajoute les nouvelles."""
+        for piece in self.cleaned_data.get("retirer") or []:
+            piece.delete()
+        for f in self.cleaned_data.get("fichiers") or []:
+            PieceJointe.objects.create(
+                communique=avis, fichier=f, nom=f.name[:200],
+                genre=pieces.type_de(f.name)[0], taille=f.size)
 
 
 class StudentImportForm(forms.Form):
@@ -212,6 +262,27 @@ class QuestionBankForm(forms.Form):
 CONCOURS_ID_MODES = ["sticker", "grid"]
 
 
+def _champ_anonymat():
+    """Présentation des copies nominatives : nom imprimé, talon à découper
+    (solution 1) ou copie anonyme à n° de place (solution 2)."""
+    return forms.ChoiceField(
+        label="Présentation des copies", choices=Quiz.ANONYMATS, required=False,
+        widget=forms.RadioSelect,
+        help_text="Talon ou n° de place : une copie par étudiant, QR imprimé "
+                  "(identification « QR code », même en concours). N° de place : "
+                  "aucun nom sur la copie, une liste de placement et "
+                  "d'émargement est imprimée pour le surveillant.")
+
+
+def _appliquer_anonymat(form, data):
+    """Reporte le choix sur l'épreuve (deux cases du modèle, exclusives)."""
+    anonymat = data.get("anonymat") or ""
+    form.instance.talon_nom = anonymat == "talon"
+    form.instance.place_anonyme = anonymat == "place"
+    if anonymat:
+        data["id_mode"] = "qr"          # copies nominatives, QR imprimé
+
+
 class QuizForm(forms.ModelForm):
     """Création d'un quiz de classe ou d'un concours.
 
@@ -219,12 +290,14 @@ class QuizForm(forms.ModelForm):
     saisis) ; le mode concours est déterminé par la page d'origine (menu
     « Concours »), pas par une case à cocher."""
 
+    anonymat = _champ_anonymat()
+
     class Meta:
         model = Quiz
         fields = ["title", "type_epreuve", "epreuve_precedente", "class_group",
                   "language", "note_sur",
                   "sheet_mode", "entete", "duree",
-                  "id_mode", "id_digits", "talon_nom", "grading_mode", "wrong_penalty"]
+                  "id_mode", "id_digits", "anonymat", "grading_mode", "wrong_penalty"]
         widgets = {"grading_mode": forms.RadioSelect,
                    "type_epreuve": forms.RadioSelect,
                    "entete": forms.Textarea(attrs={"rows": 3})}
@@ -281,8 +354,7 @@ class QuizForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
-        if data.get("talon_nom"):
-            data["id_mode"] = "qr"      # nom et QR imprimés, nom sur le talon
+        _appliquer_anonymat(self, data)
         return data
 
     def clean_type_epreuve(self):
@@ -295,10 +367,12 @@ class QuizForm(forms.ModelForm):
 class EpreuveEcritForm(forms.ModelForm):
     """Réglages d'une épreuve écrite : sujet, barème, copie à imprimer."""
 
+    anonymat = _champ_anonymat()
+
     class Meta:
         model = Quiz
         fields = ["sujet_texte", "entete", "duree", "note_sur", "id_mode",
-                  "id_digits", "talon_nom", "pages_redaction"]
+                  "id_digits", "anonymat", "pages_redaction"]
         widgets = {"sujet_texte": forms.Textarea(attrs={
                        "rows": 9, "placeholder": "Ex. Racontez un voyage qui vous a "
                                                  "marqué…\n\nVous décrirez les lieux "
@@ -315,11 +389,11 @@ class EpreuveEcritForm(forms.ModelForm):
                 c for c in Quiz.ID_MODES if c[0] in CONCOURS_ID_MODES]
         if self.instance.language == "ar":
             self.fields["sujet_texte"].widget.attrs["dir"] = "rtl"
+        self.fields["anonymat"].initial = self.instance.anonymat
 
     def clean(self):
         data = super().clean()
-        if data.get("talon_nom"):
-            data["id_mode"] = "qr"      # nom et QR imprimés, nom sur le talon
+        _appliquer_anonymat(self, data)
         return data
 
 

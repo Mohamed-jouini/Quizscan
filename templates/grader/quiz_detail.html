@@ -12,6 +12,8 @@
   </div>
   <div class="page-head__actions">
     <a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}">Voir les résultats</a>
+    {% if quiz.epreuve_precedente_id or quiz.epreuves_suivantes.exists %}
+    <a class="btn small secondary" href="{% url 'quiz_parcours' quiz.pk %}">Résultats du concours</a>{% endif %}
     <a class="btn small" href="{% url 'class_detail' quiz.class_group.pk %}">Candidats &amp; étiquettes QR</a>
   </div>
 </header>
@@ -51,9 +53,13 @@
     </select>
   </div>
   <div class="reglages__large">
-    <label class="case"><input type="checkbox" name="talon_nom" value="1" {% if quiz.talon_nom %}checked{% endif %}>
-      Nom sur un talon à découper (copie anonyme)</label>
-    <span class="helptext helptext--serre">Chaque copie porte le nom et le QR de l'étudiant ; le nom est sur un talon en haut de la page, à découper au massicot avant la correction. Impose l'identification « QR code ».</span>
+    <div class="radios">
+      <label>Présentation des copies</label>
+      {% for val, libelle in quiz.ANONYMATS %}
+      <label><input type="radio" name="anonymat" value="{{ val }}" {% if quiz.anonymat == val %}checked{% endif %}> {{ libelle }}</label>
+      {% endfor %}
+    </div>
+    <span class="helptext helptext--serre">Talon : le nom est en haut de la page, découpé au massicot avant la correction. N° de place : aucun nom sur la copie, le surveillant a la liste de placement et d'émargement. Dans les deux cas, une copie par étudiant avec son QR (identification « QR code »).</span>
   </div>
   <div id="row_id_digits">
     <label>Chiffres du n° d'inscription</label>
@@ -285,6 +291,9 @@
       {% if quiz.sheet_pdf %}
         <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">
           {% if quiz.sheet_mode == "split" %}📝 Feuille de réponses{% else %}📄 Télécharger la fiche{% endif %}</a>
+        {% if quiz.place_anonyme %}
+        <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">📋 Liste de placement et d'émargement</a>
+        {% endif %}
       {% endif %}
     </form>
     {% endif %}

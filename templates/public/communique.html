@@ -5,6 +5,32 @@
   <a class="pub-retour" href="{% url 'public_communiques' %}">← Tous les communiqués</a>
   <span class="pub-avis__date">{{ avis.cree_le|date:"d/m/Y à H:i" }}</span>
   <h1>{{ avis.titre }}</h1>
-  <div class="pub-article__texte">{{ avis.texte|linebreaks }}</div>
+  <div class="pub-article__texte">{{ avis.texte|urlize|linebreaks }}</div>
+
+  {% with images=avis.images %}{% if images %}
+  <div class="pub-galerie{% if images|length == 1 %} pub-galerie--une{% endif %}">
+    {% for p in images %}
+    <a href="{{ p.url }}" target="_blank" rel="noopener" title="Agrandir"><img src="{{ p.url }}" alt="{{ p.nom }}" loading="lazy"></a>
+    {% endfor %}
+  </div>
+  {% endif %}{% endwith %}
+
+  {% for p in avis.videos %}
+  <figure class="pub-video">
+    <video controls preload="metadata" playsinline src="{{ p.url }}"></video>
+    <figcaption>{{ p.nom }} · <a href="{{ p.url }}" download>télécharger la vidéo</a> ({{ p.taille|filesizeformat }})</figcaption>
+  </figure>
+  {% endfor %}
+
+  {% with documents=avis.documents %}{% if documents %}
+  <h2 class="pub-pieces__titre">Document{{ documents|length|pluralize }} à télécharger</h2>
+  <div class="documents">
+    {% for p in documents %}
+    <a class="document" href="{{ p.url }}" target="_blank" rel="noopener">
+      {% include "grader/_icone_piece.html" with genre=p.genre %}
+      <span><b>{{ p.nom }}</b><small>{{ p.taille|filesizeformat }}</small></span></a>
+    {% endfor %}
+  </div>
+  {% endif %}{% endwith %}
 </article>
 {% endblock %}

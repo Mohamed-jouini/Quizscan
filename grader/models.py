@@ -1,7 +1,11 @@
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+from django.urls import reverse
 from django.utils.functional import cached_property
+from django.utils.text import get_valid_filename
 
 # Hauteur maximale d'une zone de réponse manuscrite (mm) : au-delà, le bloc
 # ne tient plus dans la zone imprimable d'une page A4 (voir layout.py).
@@ -190,6 +194,14 @@ class Quiz(models.Model):
         help_text="Chaque copie porte le nom et le QR de l'étudiant ; le nom est "
                   "sur un talon à découper (massicot) avant la correction. La "
                   "copie reste lisible au scan, et anonyme pour le correcteur.")
+    # Autre choix (exclusif du talon) : AUCUN nom sur la copie, seulement un
+    # n° de place et le QR ; la liste de placement et d'émargement dit au
+    # surveillant qui s'assoit où (bulletin.generate_liste_emargement).
+    place_anonyme = models.BooleanField(
+        "copie anonyme à n° de place", default=False,
+        help_text="Chaque copie porte un n° de place et le QR de l'étudiant, "
+                  "jamais son nom ; une liste de placement et d'émargement est "
+                  "imprimée pour le surveillant.")
     # Concours en plusieurs étapes (QCM -> écrit -> oral) : les candidats de
     # cette épreuve sont les admis de l'épreuve précédente.
     epreuve_precedente = models.ForeignKey(
@@ -302,6 +314,24 @@ class Quiz(models.Model):
     @property
     def est_qcm(self):
         return self.type_epreuve == "qcm"
+
+    # Présentation des copies nominatives (QR imprimé) : nom imprimé, nom sur
+    # un talon à découper, ou copie anonyme à n° de place.
+    ANONYMATS = [
+        ("", "Standard — selon l'identification choisie"),
+        ("talon", "Nom sur un talon à découper avant la correction"),
+        ("place", "Copie anonyme : n° de place + liste d'émargement"),
+    ]
+
+    @property
+    def anonymat(self):
+        return "talon" if self.talon_nom else "place" if self.place_anonyme else ""
+
+    @property
+    def copies_nominatives(self):
+        """Talon ou n° de place : une copie par étudiant, QR imprimé (même en
+        concours, où l'on imprime sinon des fiches anonymes à étiquette)."""
+        return self.talon_nom or self.place_anonyme
 
     @cached_property
     def a_des_qcm(self):
@@ -474,6 +504,10 @@ class SheetScan(models.Model):
     student = models.ForeignKey(Student, on_delete=models.SET_NULL, null=True, blank=True,
                                 related_name="sheets", verbose_name="étudiant")
     student_confirmed = models.BooleanField("identification confirmée", default=False)
+    # Page non identifiée dont l'alerte a été fermée (« × ») sur la page des
+    # résultats : elle reste « à identifier » dans son lot, elle n'est
+    # simplement plus signalée. Une nouvelle page non identifiée l'est.
+    alerte_masquee = models.BooleanField("alerte masquée", default=False)
     error_message = models.TextField("message d'erreur", blank=True)
     created_at = models.DateTimeField("reçue le", auto_now_add=True)
 
@@ -649,3 +683,72 @@ class Communique(models.Model):
 
     def __str__(self):
         return self.titre
+
+    # Pièces jointes par genre (lues dans pieces.all() : un prefetch_related
+    # sur « pieces » suffit pour toute une liste de communiqués).
+    def _pieces(self, genre):
+        return [p for p in self.pieces.all() if p.genre == genre]
+
+    @property
+    def images(self):
+        return self._pieces("image")
+
+    @property
+    def videos(self):
+        return self._pieces("video")
+
+    @property
+    def documents(self):
+        return self._pieces("document")
+
+    @property
+    def resume_pieces(self):
+        """« 2 images · 1 vidéo · 1 document », ou "" sans pièce jointe."""
+        parts = []
+        for n, un, plusieurs in ((len(self.images), "image", "images"),
+                                 (len(self.videos), "vidéo", "vidéos"),
+                                 (len(self.documents), "document", "documents")):
+            if n:
+                parts.append(f"{n} {un if n == 1 else plusieurs}")
+        return " · ".join(parts)
+
+
+class PieceJointe(models.Model):
+    """Fichier joint à un communiqué : image (affichée dans la page), vidéo
+    (lue dans la page) ou document (à télécharger). Servi par
+    views_public.piece_jointe — au public dès que le communiqué est publié —
+    et jamais par /media/, réservé au personnel (voir grader/pieces.py)."""
+    GENRES = [("image", "image"), ("video", "vidéo"), ("document", "document")]
+    communique = models.ForeignKey(Communique, on_delete=models.CASCADE,
+                                   related_name="pieces", verbose_name="communiqué")
+    fichier = models.FileField("fichier", upload_to="communiques/%Y/%m/", max_length=255)
+    nom = models.CharField("nom du fichier", max_length=200)
+    genre = models.CharField("genre", max_length=10, choices=GENRES)
+    taille = models.PositiveBigIntegerField("taille (octets)", default=0)
+    ajoute_le = models.DateTimeField("ajoutée le", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "pièce jointe"
+        verbose_name_plural = "pièces jointes"
+        ordering = ["pk"]
+
+    def __str__(self):
+        return self.nom
+
+    @property
+    def url(self):
+        """Adresse publique ; le nom n'y est qu'un repère (enregistrer sous)."""
+        try:
+            nom = get_valid_filename(self.nom)
+        except Exception:                     # nom vide ou réduit à « . »
+            nom = "fichier"
+        return reverse("public_piece", args=[self.pk, nom])
+
+
+@receiver(post_delete, sender=PieceJointe)
+def _effacer_piece(sender, instance, **kwargs):
+    """Le fichier part avec sa pièce jointe (retirée, ou communiqué
+    supprimé), une fois la suppression validée."""
+    nom, stockage = instance.fichier.name, instance.fichier.storage
+    if nom:
+        transaction.on_commit(lambda: stockage.delete(nom))

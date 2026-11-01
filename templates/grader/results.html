@@ -4,12 +4,13 @@
   <div class="page-head__text">
     <h1>Résultats</h1>
     <p class="page-head__meta">
-      <b>{{ quiz.title }}</b> · {{ quiz.class_group.name }}
+      <a href="{% url 'quiz_detail' quiz.pk %}" title="Ouvrir l'épreuve"><b>{{ quiz.title }}</b></a> · {{ quiz.class_group.name }}
       {% if batch %}· lot {{ batch }}{% endif %}
     </p>
   </div>
   <div class="page-head__actions">
-    <a class="btn small secondary" href="{% url 'quiz_detail' quiz.pk %}">← Retour au quiz</a>
+    <a class="btn small secondary" href="{% url 'resultats_list' %}">← Retour aux résultats</a>
+    {% if chaine %}<a class="btn small" href="{% url 'quiz_parcours' quiz.pk %}">Résultats du concours</a>{% endif %}
     <a class="btn small" href="{% url 'quiz_results_xlsx' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">
       Exporter en Excel</a>
     <a class="btn small" href="{% url 'quiz_bulletins_pdf' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">
@@ -31,6 +32,16 @@
     {% endif %}
   </div>
 </header>
+
+{% if chaine %}
+<div class="note">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M4 6h4v4H4zM10 14h4v4h-4zM16 6h4v4h-4z"/><path d="M8 8h8M6 10v6h4M18 10v6h-4"/></svg></span>
+  <div class="note__body">Concours en {{ chaine|length }} étapes :
+    {% for q in chaine %}{% if q.pk == quiz.pk %}<b>{{ q.title }}</b>{% else %}<a href="{% url 'quiz_results' q.pk %}">{{ q.title }}</a>{% endif %}{% if not forloop.last %} → {% endif %}{% endfor %}.
+    Cette page ne montre que « {{ quiz.title }} ».
+    <a class="btn small" href="{% url 'quiz_parcours' quiz.pk %}">Voir les résultats de tout le concours</a></div>
+</div>
+{% endif %}
 
 {% if batches|length > 1 %}
 <div class="filtres">
@@ -54,7 +65,12 @@
 </div>
 {% endif %}
 {% if unmatched %}
-<ul class="messages"><li class="error">
+<ul class="messages"><li class="error messages__fermable">
+  <form class="messages__fermer" method="post">{% csrf_token %}
+    <button type="submit" name="masquer_non_identifiees" value="1"
+            title="Masquer ce message (les pages restent à identifier dans leur lot)"
+            aria-label="Masquer ce message">×</button>
+  </form>
   ⚠️ {{ unmatched_total }} page(s) non identifiée(s) — leurs notes ne figurent pas ci-dessous.
   {% for s in unmatched %}
     <a href="{% url 'sheet_review' s.pk %}">{{ s.source_name }}</a>{% if not forloop.last %}, {% endif %}
@@ -63,6 +79,12 @@
     … et {{ unmatched_total|add:"-200" }} autre(s) — voir la liste des pages du lot.
   {% endif %}
 </li></ul>
+{% endif %}
+{% if n_masquees %}
+<form class="masquees" method="post">{% csrf_token %}
+  <span class="helptext helptext--serre">{{ n_masquees }} page(s) non identifiée(s) masquée(s) —
+    <button class="lien" type="submit" name="reafficher_non_identifiees" value="1">réafficher</button></span>
+</form>
 {% endif %}
 
 {% if perms.grader.corriger_copies and not batch %}
@@ -212,7 +234,7 @@
       {% if quiz.note_distincte %}<td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>{% endif %}
       {% if quiz.a_des_qcm %}<td><span class="badge bad">{{ r.wrong }}</span></td>
       <td><span class="badge grey">{{ r.blank }}</span></td>{% endif %}
-      {% if quiz.note_distincte %}<td>{% if r.pending_open %}<span class="badge warn">{{ r.pending_open }}</span>{% else %}—{% endif %}</td>{% endif %}
+      {% if quiz.note_distincte %}<td>{% if r.pending_open %}{% if r.a_noter.image %}<a class="badge warn" href="{% url 'sheet_review' r.a_noter.pk %}" title="Ouvrir la copie pour saisir la note">{% if quiz.a_des_qcm %}{{ r.pending_open }} →{% else %}Saisir la note →{% endif %}</a>{% else %}<span class="badge warn">{{ r.pending_open }}</span>{% endif %}{% else %}—{% endif %}</td>{% endif %}
       <td>
         {% if r.resultat == "admis" %}<span class="badge ok">{% if quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</span>
         {% elif r.resultat == "en_attente" %}<span class="badge warn">En attente</span>

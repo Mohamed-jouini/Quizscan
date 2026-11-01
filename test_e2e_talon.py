@@ -78,7 +78,7 @@ def main():
                                 correct_choice=ord(lettre) - 65)
     c.post(reverse("quiz_detail", args=[quiz.pk]), {
         "update_settings": "1", "title": quiz.title, "sheet_mode": "grid",
-        "id_mode": "grid", "id_digits": "6", "wrong_penalty": "0", "talon_nom": "1"})
+        "id_mode": "grid", "id_digits": "6", "wrong_penalty": "0", "anonymat": "talon"})
     quiz.refresh_from_db()
     assert quiz.talon_nom and quiz.id_mode == "qr", (quiz.talon_nom, quiz.id_mode)
     c.post(reverse("quiz_detail", args=[quiz.pk]), {"generate_pdf": "1"})
@@ -129,7 +129,7 @@ def main():
     r = c.post(reverse("quiz_create") + "?concours=1", {
         "title": "Concours talon", "type_epreuve": "qcm", "language": "fr",
         "sheet_mode": "grid", "id_mode": "sticker", "id_digits": "6",
-        "talon_nom": "on", "grading_mode": "immediate", "wrong_penalty": "0"})
+        "anonymat": "talon", "grading_mode": "immediate", "wrong_penalty": "0"})
     assert r.status_code == 302, r.context["form"].errors
     concours = Quiz.objects.get(title="Concours talon")
     assert concours.talon_nom and concours.id_mode == "qr" and concours.auto_enroll
@@ -147,7 +147,7 @@ def main():
     r = c.post(reverse("quiz_create"), {
         "title": "Rédaction talon", "type_epreuve": "ecrit", "class_group": groupe.pk,
         "language": "fr", "note_sur": "20", "sheet_mode": "grid", "id_mode": "grid",
-        "id_digits": "6", "talon_nom": "on", "wrong_penalty": "0"})
+        "id_digits": "6", "anonymat": "talon", "wrong_penalty": "0"})
     ecrit = Quiz.objects.get(title="Rédaction talon")
     assert ecrit.talon_nom and ecrit.id_mode == "qr"
     c.post(reverse("quiz_detail", args=[ecrit.pk]), {"generer": "1"})
