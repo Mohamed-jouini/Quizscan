@@ -570,7 +570,14 @@ def _dessiner_grille_note(c, draw, g, T, lang):
 #   4 — plus de case « collez ici l'étiquette » dans le cartouche (l'étiquette
 #       va sur la feuille de réponses) ; consignes selon la copie réellement
 #       remise au candidat (étiquette, grille, talon, n° de place, nom).
-SUJET_VERSION = 4
+#   5 — en-tête de l'institut si aucun n'est saisi ; une ligne laissée vide dans
+#       l'en-tête reste un espace dans le cartouche.
+SUJET_VERSION = 5
+
+# QuizScan sert à cet institut : son en-tête s'imprime sur tout sujet dont le champ
+# « En-tête du sujet » est vide. La ligne vide sépare les ministères de l'établissement.
+ENTETE_INSTITUT = ("الجمهورية التونسية\nوزارة العدل\n"
+                   "وزارة التعليم العالي و البحث العلمي\n\nالمعهد الأعلى للمحاماة")
 
 # Textes du sujet. Les consignes sont écrites d'après ce que QuizScan lit
 # réellement : cases à noircir (pas de croix), et une consigne d'identification
@@ -842,15 +849,14 @@ def generate_subject_pdf(quiz, questions=None):
     # ------------------------------------------------------------ cartouche
     def cartouche():
         y0, h = HAUT, CARTOUCHE_H
-        # institutions (en-tête saisi ; à défaut, le nom du groupe)
-        inst = [t.strip() for t in (quiz.entete or "").splitlines() if t.strip()]
-        if not inst and not concours and not titre_a_la_main:
-            inst = [quiz.class_group.name]
+        # institutions : l'en-tête saisi ou, à défaut, celui de l'institut. Une ligne
+        # laissée vide y reste un espace.
+        inst = [t.strip() for t in
+                ((quiz.entete or "").strip() or ENTETE_INSTITUT).splitlines()]
         # Ordre de lecture : institutions | épreuve | identification, de droite
         # à gauche en arabe. Une case sans contenu n'est pas dessinée : elle
         # inviterait le candidat à y écrire ou à y coller quelque chose.
-        cases = [nom for nom, presente in (("inst", inst), ("epreuve", True),
-                                           ("id", nom_sur_sujet)) if presente]
+        cases = ["inst", "epreuve"] + (["id"] if nom_sur_sujet else [])
         wcol = W / len(cases)
         c.setStrokeGray(0.0)
         c.setLineWidth(0.8)
@@ -865,17 +871,20 @@ def generate_subject_pdf(quiz, questions=None):
         def bloc_centre(lignes, x, y_haut, h_case, size=9.5, gras_premiere=False):
             textes = []
             for i, t in enumerate(lignes):
+                if not t:
+                    textes.append(("", False))
+                    continue
                 for morceau in wrap(t, size, wcol - 6.0, bold=gras_premiere and i == 0):
                     textes.append((morceau, gras_premiere and i == 0))
             pas = size * 0.47
             yy = y_haut + (h_case - len(textes) * pas) / 2 + pas - 0.8
             for t, gras in textes:
-                draw(t, x + wcol / 2, yy, size, bold=gras, align="center")
+                if t:
+                    draw(t, x + wcol / 2, yy, size, bold=gras, align="center")
                 yy += pas
 
         # 1. institutions
-        if inst:
-            bloc_centre(inst, x_case["inst"], y0, h, size=9, gras_premiere=True)
+        bloc_centre(inst, x_case["inst"], y0, h, size=9, gras_premiere=True)
 
         # 2. épreuve : titre en haut, nature et durée en bas
         moitie = h / 2

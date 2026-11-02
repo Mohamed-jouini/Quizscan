@@ -111,6 +111,41 @@ def verifier_choix(teacher):
           "choix sous chaque QCM, sans cadre manuscrit (fr, ar)")
 
 
+def verifier_entete(teacher):
+    """Une ligne vide de l'en-tête reste un espace dans le cartouche : sur les sujets
+    de concours, l'établissement est séparé des ministères."""
+    quiz = _concours(teacher, "fr")
+
+    def ecart(entete):
+        quiz.entete = entete
+        with pymupdf.open(stream=sheet_pdf.generate_subject_pdf(quiz), filetype="pdf") as doc:
+            return doc[0].search_for("Institut")[0].y0 - doc[0].search_for("Ministère")[0].y0
+
+    serre = ecart("Ministère de la Justice\nInstitut supérieur")
+    aere = ecart("\nMinistère de la Justice\n\nInstitut supérieur\n\n")
+    assert abs(aere - 2 * serre) < 0.5, f"ligne vide de l'en-tête : {serre} puis {aere}"
+    print("  en-tête du sujet : une ligne vide y reste un espace")
+
+    # Rien de saisi : l'en-tête de l'institut, sur tous les sujets. Saisi : lui seul.
+    # (mots sans lam-alef, voir QUESTIONS : le PDF ne rend pas cette ligature telle quelle)
+    for langue in ("fr", "ar"):
+        quiz = _concours(teacher, langue)
+        quiz.entete = ""
+        for reglages in (dict(type_epreuve="qcm"), dict(type_epreuve="ecrit"),
+                         dict(type_epreuve="qcm", auto_enroll=False, id_mode="name"),
+                         dict(type_epreuve="qcm", auto_enroll=False, id_mode="sticker")):
+            for champ, valeur in reglages.items():
+                setattr(quiz, champ, valeur)
+            texte = _texte(sheet_pdf.generate_subject_pdf(quiz))
+            for mot in ("الجمهورية", "وزارة", "المعهد"):
+                assert unicodedata.normalize("NFKC", mot) in texte, (langue, reglages, mot)
+        quiz.entete = "Académie régionale"
+        texte = _texte(sheet_pdf.generate_subject_pdf(quiz))
+        assert "Académie" in texte and unicodedata.normalize("NFKC", "المعهد") not in texte, \
+            f"{langue} : l'en-tête saisi doit remplacer celui de l'institut"
+    print("  en-tête du sujet : celui de l'institut si rien n'est saisi (fr, ar)")
+
+
 def verifier_tous_les_cas(teacher):
     """Le sujet ne parle que de ce que porte la copie remise au candidat, et son
     cartouche n'a pas de case vide où coller ou écrire quelque chose."""
@@ -149,7 +184,7 @@ def verifier_tous_les_cas(teacher):
     print("  identification consigne selon la copie (étiquette, grille, nom, talon, "
           "n° de place), jamais de case d'étiquette (fr, ar)")
 
-    # Le cartouche : le titre est au milieu de la case « épreuve », seule ou non.
+    # Le cartouche : le titre est au milieu de la case « épreuve », avec 2 ou 3 cases.
     centre = (L.CONTENT_X0 + L.CONTENT_X1) / 2
     largeur = L.CONTENT_X1 - L.CONTENT_X0
     quiz = _concours(teacher, "fr")
@@ -162,7 +197,8 @@ def verifier_tous_les_cas(teacher):
     MM = 72 / 25.4
     assert abs(milieu_titre() - (L.CONTENT_X0 + largeur * 0.75)) < 1, "institutions + épreuve"
     quiz.entete = ""
-    assert abs(milieu_titre() - centre) < 1, "concours sans en-tête : épreuve seule"
+    assert abs(milieu_titre() - (L.CONTENT_X0 + largeur * 0.75)) < 1, \
+        "concours sans en-tête saisi : celui de l'institut + épreuve"
     quiz.auto_enroll, quiz.id_mode = False, "name"
     texte = _texte(sheet_pdf.generate_subject_pdf(quiz))
     assert abs(milieu_titre() - centre) < 1 and "Nom et prénom" in texte, "classe : 3 cases"
@@ -327,6 +363,7 @@ def main():
     User.objects.filter(username="prof_sujet").delete()
     teacher = User.objects.create(username="prof_sujet")
     verifier_choix(teacher)
+    verifier_entete(teacher)
     verifier_tous_les_cas(teacher)
     verifier_ecrit(teacher)
     verifier_mise_a_jour(teacher)

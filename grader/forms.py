@@ -264,6 +264,9 @@ class QuestionBankForm(forms.Form):
 # est importée, chacun reçoit son étiquette QR (ou noircit son n° d'inscription).
 CONCOURS_ID_MODES = ["sticker", "grid"]
 
+AIDE_ENTETE = ("Laissé vide : en-tête de l'institut (المعهد الأعلى للمحاماة). Sinon, une "
+               "ligne par ligne : ministère, établissement… Imprimé dans le cartouche du sujet.")
+
 
 def _champ_anonymat():
     """Présentation des copies nominatives : nom imprimé, talon à découper
@@ -307,7 +310,8 @@ class QuizForm(forms.ModelForm):
         field_classes = {"wrong_penalty": DecimalField, "note_sur": DecimalField}
         labels = {"id_digits": "Nombre de chiffres du n° d'inscription"}
         help_texts = {"id_digits": "Taille de la grille à noircir sur la fiche "
-                                   "(ex. 6 pour un n° comme 104523)."}
+                                   "(ex. 6 pour un n° comme 104523).",
+                      "entete": AIDE_ENTETE}
 
     def __init__(self, *args, user=None, concours=False, precedentes=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -384,6 +388,7 @@ class EpreuveEcritForm(forms.ModelForm):
         field_classes = {"note_sur": DecimalField}
         labels = {"id_digits": "Nombre de chiffres du n° d'inscription",
                   "pages_redaction": "Pages lignées après la page de garde"}
+        help_texts = {"entete": AIDE_ENTETE}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
