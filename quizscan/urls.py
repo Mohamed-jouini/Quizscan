@@ -15,8 +15,11 @@ urlpatterns = [
     # Les seules pages de compte : connexion (essais limités), déconnexion,
     # changement de mot de passe. Pas de réinitialisation par courriel :
     # aucun envoi n'est configuré, c'est l'administrateur qui la fait.
+    # redirect_authenticated_user : la flèche « retour » du navigateur ramène sur
+    # cette page, qui reste dans l'historique après la connexion. Elle affichait le
+    # formulaire à une personne toujours connectée, qui se croyait déconnectée.
     path("comptes/login/", auth_views.LoginView.as_view(
-        authentication_form=ConnexionForm), name="login"),
+        authentication_form=ConnexionForm, redirect_authenticated_user=True), name="login"),
     path("comptes/logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("comptes/password_change/", auth_views.PasswordChangeView.as_view(),
          name="password_change"),

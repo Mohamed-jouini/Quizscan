@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
@@ -753,5 +755,14 @@ def _effacer_piece(sender, instance, **kwargs):
     """Le fichier part avec sa pièce jointe (retirée, ou communiqué
     supprimé), une fois la suppression validée."""
     nom, stockage = instance.fichier.name, instance.fichier.storage
+
+    def effacer():
+        # la suppression est déjà enregistrée : pas d'erreur 500 pour un fichier
+        # impossible à effacer, il reste seulement sur le disque
+        try:
+            stockage.delete(nom)
+        except OSError:
+            logging.getLogger(__name__).warning("Fichier impossible à effacer : %s", nom)
+
     if nom:
-        transaction.on_commit(lambda: stockage.delete(nom))
+        transaction.on_commit(effacer)

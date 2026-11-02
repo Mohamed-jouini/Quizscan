@@ -141,6 +141,29 @@ def main():
     assert "/admin/login/" in r.redirect_chain[-1][0], r.redirect_chain
     print("  enseignant refusé à l'entrée de l'administration OK")
 
+    # ---- 7) flèche « retour » du navigateur : la page de connexion reste dans
+    # l'historique, elle ne doit pas s'afficher à quelqu'un de connecté ------
+    r = cp.get("/comptes/login/?next=/classes/")
+    assert r.status_code == 302 and r["Location"] == "/classes/", r.status_code
+    r = cp.get("/comptes/login/")
+    assert r.status_code == 302 and r["Location"] == "/", r.status_code
+    r = cp.get("/comptes/login/?next=https://exemple.tn/")
+    assert r.status_code == 302 and r["Location"] == "/", "redirection vers un autre site"
+    assert "_auth_user_id" in cp.session, "retour = déconnexion"
+    # un enseignant garde le formulaire de l'administration, qu'il n'a pas le droit d'ouvrir
+    assert cp.get("/comptes/administration/").status_code == 200
+    ca = Client()
+    ca.force_login(admin)
+    r = ca.get("/comptes/administration/?next=/admin/auth/user/")
+    assert r.status_code == 302 and r["Location"] == "/admin/auth/user/"
+    r = ca.get("/comptes/administration/")
+    assert r.status_code == 302 and r["Location"] == "/admin/"
+    # sans compte, et après déconnexion : le formulaire
+    assert Client().get("/comptes/login/").status_code == 200
+    cp.post("/comptes/logout/")
+    assert cp.get("/comptes/login/").status_code == 200
+    print("  flèche retour : pas de page de connexion quand on est connecté OK")
+
     print("\n✅ TEST DE LA GESTION DES COMPTES RÉUSSI")
 
 

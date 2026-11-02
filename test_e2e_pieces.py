@@ -1,6 +1,7 @@
 """Pièces jointes des communiqués : images, vidéos et documents publiés sur
 l'espace public avec le communiqué.
 """
+import gc
 import io
 import os
 import sys
@@ -136,6 +137,7 @@ def main():
     print("  brouillon : pièces jointes cachées au public OK")
 
     # ---- modifier : retirer une pièce (fichier effacé), en ajouter une
+    gc.collect()         # Windows : les réponses du test gardent les fichiers ouverts
     page = c.get(reverse("communiques") + f"?modifier={avis.pk}").content.decode()
     assert f'name="retirer" value="{docx.pk}"' in page
     nom_docx = docx.fichier.name

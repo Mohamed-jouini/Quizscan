@@ -112,7 +112,13 @@ class AdminLoginView(LoginView):
     chemins d'accès présentent le même écran."""
     template_name = "registration/login_admin.html"
     authentication_form = AdminLoginForm
-    redirect_authenticated_user = False
+
+    @property
+    def redirect_authenticated_user(self):
+        """Flèche « retour » : un administrateur connecté ne revoit pas le
+        formulaire. Un enseignant, oui : il n'a pas accès à l'administration, le
+        renvoyer vers elle le ramènerait ici, et le message l'oriente."""
+        return self.request.user.is_staff
 
     def get_default_redirect_url(self):
         return reverse("admin:index")

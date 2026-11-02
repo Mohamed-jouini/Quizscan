@@ -120,7 +120,7 @@ def main():
         vieille = Path(dossier) / "vieille.sqlite3"
         shutil.copy(source, vieille)
         base = sqlite3.connect(vieille)
-        base.execute("DELETE FROM django_migrations WHERE app='grader' AND name LIKE '0028%'")
+        base.execute("DELETE FROM django_migrations WHERE app='grader' AND name >= '0028'")
         base.commit()
         base.close()
         try:
