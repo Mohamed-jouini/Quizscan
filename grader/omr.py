@@ -7,7 +7,7 @@ import unicodedata
 import cv2
 import numpy as np
 import pytesseract
-from rapidfuzz import fuzz, process as rf_process, utils as rf_utils
+from rapidfuzz import fuzz, utils as rf_utils
 
 from . import layout as L
 
@@ -354,9 +354,17 @@ def _decode_qr(detector, img):
     parts = data.split("|")
     # carte d'inscription : « QSI|<n°>|<NOM>|<Prénom> » — le n° identifie
     if len(parts) >= 2 and parts[0] == "QSI" and parts[1].strip():
-        return "QSI", None, "".join(parts[1].split())
+        numero = "".join(parts[1].split())
+        # un n° d'inscription : lettres, chiffres, tiret ; rien d'autre ne
+        # doit entrer dans la base (export Excel, pages) depuis un QR collé
+        if len(numero) <= 40 and all(c.isalnum() or c in "-_/." for c in numero):
+            return "QSI", None, numero
+        return None
+    # longueur bornée : un QR collé par un candidat ne doit pas faire entrer dans
+    # la base un numéro qu'elle refuse (une telle page bloquerait son lot)
     if (len(parts) == 3 and parts[0] in ("QS", "QSA")
-            and parts[1].isdigit() and parts[2].isdigit()):
+            and parts[1].isdigit() and parts[2].isdigit()
+            and len(parts[1]) <= 12 and len(parts[2]) <= 12):
         return parts[0], int(parts[1]), int(parts[2])
     return None
 

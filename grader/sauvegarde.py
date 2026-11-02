@@ -35,7 +35,7 @@ from pathlib import Path, PurePosixPath
 
 from django.conf import settings
 from django.core.management import call_command
-from django.db import connection, connections
+from django.db import connection, connections, transaction
 from django.utils import timezone
 
 PREFIXE = "quizscan-"
@@ -86,6 +86,21 @@ def _effectifs():
 
 # ------------------------------------------------------------------ création
 
+def _sans_sessions(chemin):
+    """Retire de la copie les sessions ouvertes : une archive égarée ne doit
+    pas donner les clés d'une session encore valable (l'export PostgreSQL
+    les exclut déjà). Après restauration, chacun se reconnecte."""
+    base = sqlite3.connect(chemin)
+    try:
+        if base.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                        "AND name='django_session'").fetchone():
+            base.execute("DELETE FROM django_session")
+            base.commit()
+            base.execute("VACUUM")
+    finally:
+        base.close()
+
+
 def creer(dossier=None, *, avec_medias=True, prefixe=PREFIXE):
     """Écrit une archive complète et renvoie son chemin.
 
@@ -94,7 +109,8 @@ def creer(dossier=None, *, avec_medias=True, prefixe=PREFIXE):
     pour la dernière sauvegarde valable.
     """
     dossier = Path(dossier or dossier_par_defaut())
-    dossier.mkdir(parents=True, exist_ok=True)
+    # mots de passe hachés et données des élèves : propriétaire seul
+    dossier.mkdir(mode=0o700, parents=True, exist_ok=True)
     horodatage = timezone.localtime().strftime("%Y%m%d-%H%M%S")
     suffixe = "" if avec_medias else "-base"
     final = dossier / f"{prefixe}{horodatage}{suffixe}.zip"
@@ -112,14 +128,18 @@ def creer(dossier=None, *, avec_medias=True, prefixe=PREFIXE):
             if _sqlite():
                 copie = Path(tmp) / "base.sqlite3"
                 _copier_sqlite(copie)
+                _sans_sessions(copie)
                 zf.write(copie, "base.sqlite3", zipfile.ZIP_DEFLATED)
             else:
                 export = Path(tmp) / "base.json"
-                call_command("dumpdata", natural_foreign=True,
-                             natural_primary=True, indent=None,
-                             exclude=["contenttypes", "auth.permission",
-                                      "sessions", "admin.logentry"],
-                             output=str(export), verbosity=0)
+                # stdout et non output= : dumpdata ouvrirait le fichier dans
+                # l'encodage du système, pas forcément UTF-8
+                with open(export, "w", encoding="utf-8") as sortie:
+                    call_command("dumpdata", natural_foreign=True,
+                                 natural_primary=True, indent=None,
+                                 exclude=["contenttypes", "auth.permission",
+                                          "sessions", "admin.logentry"],
+                                 stdout=sortie, verbosity=0)
                 zf.write(export, "base.json", zipfile.ZIP_DEFLATED)
 
             if avec_medias and medias.is_dir():
@@ -147,6 +167,7 @@ def creer(dossier=None, *, avec_medias=True, prefixe=PREFIXE):
             }
             zf.writestr("manifeste.json",
                         json.dumps(manifeste, ensure_ascii=False, indent=2))
+        os.chmod(provisoire, 0o600)
         os.replace(provisoire, final)
     except BaseException:
         provisoire.unlink(missing_ok=True)
@@ -256,8 +277,10 @@ def restaurer(archive, *, avec_medias=True, filet=True):
         else:
             export = Path(tmp) / "base.json"
             export.write_bytes(zf.read("base.json"))
-            call_command("flush", interactive=False, verbosity=0)
-            call_command("loaddata", str(export), verbosity=0)
+            # tout ou rien : un rechargement qui échoue ne laisse pas la base vide
+            with transaction.atomic():
+                call_command("flush", interactive=False, verbosity=0)
+                call_command("loaddata", str(export), verbosity=0)
 
         if avec_medias and manifeste.get("medias"):
             _restaurer_medias(zf, Path(settings.MEDIA_ROOT))

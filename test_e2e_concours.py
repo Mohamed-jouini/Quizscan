@@ -30,6 +30,7 @@ from django.test import Client
 from grader import layout as L
 from grader import services, sheet_pdf
 from grader.models import ClassGroup, Question, Quiz, Student
+from test_commun import enseignant_complet
 from test_e2e import DPI, mm2px, simulate_scan
 
 KEY = "ABCDAB"
@@ -38,7 +39,9 @@ KEY = "ABCDAB"
 def make_quiz(name, **kwargs):
     Quiz.objects.filter(class_group__name=name).delete()
     ClassGroup.objects.filter(name=name).delete()
-    teacher, _ = User.objects.get_or_create(username="prof_conc")
+    # enseignant en service (droits « créer » et « corriger ») : un compte
+    # sans droit est en lecture seule et n'importe pas de liste
+    teacher = enseignant_complet(User.objects.get_or_create(username="prof_conc")[0])
     group = ClassGroup.objects.create(name=name, owner=teacher)
     quiz = Quiz.objects.create(title=f"Concours {name}", class_group=group,
                                num_choices=4, sheet_mode="grid",

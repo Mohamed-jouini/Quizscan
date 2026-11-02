@@ -62,10 +62,13 @@ def qr_png(inscrit, **kw):
     return qr_mod.qr_png(charge_qr(inscrit), **kw)
 
 
-def rattacher_existants(inscrit):
-    """Relie au registre les étudiants déjà présents dans des classes ou
-    concours sous le même n°."""
-    return (Student.objects.filter(student_number=inscrit.numero, inscrit=None)
+def rattacher_existants(inscrit, groupes):
+    """Relie au registre les étudiants déjà présents sous le même n° dans
+    les classes ou concours donnés — ceux de l'utilisateur : inscrire un n°
+    ne doit pas permettre de s'emparer des candidats d'un collègue (la
+    fiche modifiée renommerait ensuite ses étudiants)."""
+    return (Student.objects.filter(student_number=inscrit.numero, inscrit=None,
+                                   class_group__in=groupes)
             .update(inscrit=inscrit))
 
 

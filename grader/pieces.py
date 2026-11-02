@@ -38,6 +38,7 @@ TYPES = {
 }
 TAILLE_MAX = {IMAGE: 10 * MO, VIDEO: 100 * MO, DOCUMENT: 25 * MO}
 NOMS = {IMAGE: "une image", VIDEO: "une vidéo", DOCUMENT: "un document"}
+FORMATS_IMAGE = ("JPEG", "PNG", "GIF", "WEBP")
 MAX_PAR_COMMUNIQUE = 10
 # ce que le sélecteur de fichiers propose d'emblée
 ACCEPT = ",".join(sorted(TYPES))
@@ -64,7 +65,9 @@ def controler(fichier):
     if genre == IMAGE:
         from PIL import Image
         try:
-            with Image.open(fichier) as img:
+            # seuls les décodeurs de ces formats sont sollicités : d'autres,
+            # exotiques, ont des failles connues (FlashPix, EPS, XBM…)
+            with Image.open(fichier, formats=FORMATS_IMAGE) as img:
                 img.verify()
         except Exception:
             return f"« {fichier.name} » n'est pas une image lisible."
@@ -139,6 +142,8 @@ def servir(request, piece):
                             filename=piece.nom)
     resp["Accept-Ranges"] = "bytes"
     resp["X-Content-Type-Options"] = "nosniff"
-    # court : un communiqué dépublié ne doit pas rester longtemps en cache
-    resp["Cache-Control"] = "max-age=300"
+    # court : un communiqué dépublié ne doit pas rester longtemps en cache.
+    # « private » : jamais dans un cache partagé (une réponse à une personne
+    # connectée peut porter son cookie de session).
+    resp["Cache-Control"] = "private, max-age=300"
     return resp

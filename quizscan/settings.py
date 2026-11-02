@@ -45,6 +45,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "grader.envois.EffacerEnvois",              # avant tout : voir grader/envois.py
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -52,6 +53,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "grader.securite.EntetesSecurite",          # CSP minimale
 ]
 
 ROOT_URLCONF = "quizscan.urls"
@@ -81,9 +83,13 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": DATA_DIR / "db.sqlite3",
-        # la correction des lots tourne en arrière-plan pendant que
-        # l'enseignant navigue : on patiente au lieu d'échouer sur un verrou
-        "OPTIONS": {"timeout": 30},
+        # La correction des lots tourne en arrière-plan pendant que l'enseignant
+        # navigue : on patiente au lieu d'échouer sur un verrou, et le mode WAL
+        # évite presque toute attente. Mesuré à 10 000 copies, avec une correction
+        # et quatre utilisateurs : écriture d'une copie 0,77 s -> 0,02 s, note d'un
+        # visiteur 4,6 s au pire -> 0,04 s. Demande un disque local (data/ sur un
+        # partage réseau ne convient pas).
+        "OPTIONS": {"timeout": 30, "init_command": "PRAGMA journal_mode=WAL;"},
     }
 }
 
@@ -97,6 +103,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 10},
     },
     {
         "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
@@ -131,11 +138,19 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
-DATA_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024
-# Volume de copies sans limite (fiche technique) : Django refuse par défaut
-# tout envoi de plus de 100 fichiers (DATA_UPLOAD_MAX_NUMBER_FILES), et un
-# lot de 150 scans JPEG finissait en erreur 400 sans rien recevoir.
-DATA_UPLOAD_MAX_NUMBER_FILES = None
+# Champs d'un formulaire hors fichiers (les fichiers n'y comptent pas) : un
+# envoi de 200 Mo de texte, même sans compte — le contrôle CSRF lit le
+# formulaire avant tout —, aurait occupé des centaines de Mo de mémoire.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
+# Volume de copies : 10 000 fichiers scannés par envoi, le besoin de
+# l'établissement (Django en refuse par défaut plus de 100 : un lot de 150 scans
+# JPEG finissait en erreur 400). Au-delà, envoi en plusieurs fois (message dans
+# la page, grader/static/grader/pages.js).
+DATA_UPLOAD_MAX_NUMBER_FILES = 10000
+# Fichiers reçus refermés aussitôt écrits : avec le gestionnaire de Django, un
+# fichier reste ouvert par fichier reçu, et 10 000 fichiers plantaient l'envoi.
+FILE_UPLOAD_HANDLERS = ["django.core.files.uploadhandler.MemoryFileUploadHandler",
+                        "grader.envois.EnvoiSurDisque"]
 # Au-delà de 5 Mo, un fichier reçu passe par un fichier temporaire au lieu de
 # rester en mémoire : sans limite de nombre, un gros lot ne doit pas tenir
 # tout entier dans la RAM d'un serveur à 1 Go (services.create_batch le
@@ -201,6 +216,9 @@ if os.environ.get("POSTGRES_DB"):
         "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
         "PORT": os.environ.get("POSTGRES_PORT", "5432"),
         "CONN_MAX_AGE": 60,
+        # connexion vérifiée avant usage : un redémarrage de la base ne donne pas
+        # une erreur 500 à chacun des fils du serveur
+        "CONN_HEALTH_CHECKS": True,
     }
 
 # Sous-chemin (ex. /quizscan) : le proxy retire le préfixe (uri strip_prefix)
@@ -246,6 +264,23 @@ if not DEBUG:
     # Redirection http -> https : assurée par le reverse proxy. Si ce n'est
     # pas le cas chez vous, passez SECURE_SSL_REDIRECT=1.
     SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "0") == "1"
+    # HSTS : le navigateur ne tentera plus jamais http:// pour ce site (un
+    # réseau d'examen piégé ne pourra plus retirer le HTTPS à la première
+    # visite). Envoyé seulement sur les requêtes HTTPS.
+    SECURE_HSTS_SECONDS = 31536000 if HTTPS else 0
+
+# Session : 12 heures sans activité, puis reconnexion (2 semaines par
+# défaut — trop sur un poste partagé de salle des professeurs). Renouvelée
+# par grader.securite.EntetesSecurite.
+SESSION_COOKIE_AGE = 12 * 3600
+
+# Nombre de reverse proxies devant l'application, pour retrouver l'adresse du
+# visiteur dans X-Forwarded-For (grader/securite.py) : 1 par défaut, 2 pour un
+# Caddy d'entrée devant celui du serveur. En accès direct, aucun : l'en-tête
+# viendrait alors du client lui-même.
+_proxys = os.environ.get("PROXYS_DE_CONFIANCE", "")
+PROXYS_DE_CONFIANCE = (int(_proxys) if _proxys.isdigit()
+                       else 0 if os.environ.get("QUIZSCAN_BIND") == "0.0.0.0" else 1)
 
 # Journalisation : la correction tourne en arrière-plan (threads), ses
 # erreurs doivent apparaître dans les journaux du conteneur
@@ -271,7 +306,24 @@ LOGGING = {
 
 # Tests automatiques (test_e2e*.py) : base et documents séparés, pour ne
 # jamais créer de comptes ni de copies de test dans la base de production.
+# Cache commun aux processus gunicorn : le frein aux recherches publiques par
+# n° (views_public) et celui des connexions y comptent les essais. En mémoire
+# de chaque processus, la limite était multipliée par le nombre de processus.
+# MAX_ENTRIES : à 300 (défaut), il suffirait d'essayer 300 identifiants pour
+# que le cache, en se vidant, efface les compteurs.
+CACHES = {"default": {
+    "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+    "LOCATION": str(DATA_DIR / ("cache_test" if os.environ.get("QUIZSCAN_TEST") else "cache")),
+    "OPTIONS": {"MAX_ENTRIES": 20000},
+}}
+
 if os.environ.get("QUIZSCAN_TEST"):
+    # Les tests créent des comptes aux mots de passe écrits en clair dans
+    # leur code : jamais dans une base PostgreSQL qui ne leur est pas dédiée.
+    if (DATABASES["default"]["ENGINE"].endswith("postgresql")
+            and not str(DATABASES["default"]["NAME"]).endswith("_test")):
+        raise ImproperlyConfigured(
+            "Tests : base PostgreSQL non dédiée (son nom doit finir par _test).")
     if DATABASES["default"]["ENGINE"].endswith("sqlite3"):
         DATABASES["default"]["NAME"] = DATA_DIR / "test_db.sqlite3"
     MEDIA_ROOT = BASE_DIR / "media_test"

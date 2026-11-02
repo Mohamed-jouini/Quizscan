@@ -13,6 +13,8 @@
 <div class="grid2">
   <div class="card">
     <h2>{% if modifie %}Modifier le communiqué{% else %}Nouveau communiqué{% endif %}</h2>
+    {% if not perms.grader.creer_epreuve %}<p class="helptext">Votre compte est en lecture seule : demandez le droit « créer des épreuves » à l'administrateur pour publier un communiqué.</p>
+    {% else %}
     <form method="post" enctype="multipart/form-data">{% csrf_token %}
       {% if modifie %}<input type="hidden" name="modifier" value="{{ modifie.pk }}">{% endif %}
       {{ form.titre.label_tag }}{{ form.titre }}{{ form.titre.errors }}
@@ -40,6 +42,7 @@
       <p><button class="btn" type="submit">{% if modifie %}Enregistrer{% else %}Publier{% endif %}</button>
         {% if modifie %}<a class="btn secondary" href="{% url 'communiques' %}">Annuler</a>{% endif %}</p>
     </form>
+    {% endif %}
   </div>
   <div class="card">
     <h2>Communiqués ({{ page_avis.paginator.count }})</h2>
@@ -66,7 +69,7 @@
           <a class="btn small secondary" href="?modifier={{ a.pk }}">Modifier</a>
           <form class="inline" method="post">{% csrf_token %}
             <button class="btn small danger" name="supprimer" value="{{ a.pk }}" type="submit"
-                    onclick="return confirm('Supprimer ce communiqué ?')">Supprimer</button>
+                    data-confirmer="Supprimer ce communiqué ?">Supprimer</button>
           </form>
         </div>
         {% endif %}

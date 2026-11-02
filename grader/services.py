@@ -8,6 +8,7 @@ page par page, et un traitement interrompu (redémarrage du serveur) peut
 être relancé — les pages déjà notées ne sont pas relues.
 """
 import contextlib
+import io
 import logging
 import os
 import threading
@@ -19,7 +20,7 @@ import numpy as np
 import pymupdf
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.db import close_old_connections, connection, transaction
+from django.db import DatabaseError, close_old_connections, connection, transaction
 from django.db.models import Avg, Count, Max, Min, Q, Sum
 
 from . import journal, omr, sheet_pdf
@@ -63,7 +64,10 @@ def create_batch(quiz: Quiz, files, label="", status="processing"):
     used = set()
     for f in files:
         data = f.read()
-        name = base = os.path.basename(f.name) or "scan"
+        # 10 000 fichiers : un seul ouvert à la fois, et la place rendue aussitôt
+        getattr(f, "effacer", f.close)()
+        # la fin du nom, avec son extension : « … (page 1234) » doit tenir en 200
+        name = base = os.path.basename(f.name)[-180:] or "scan"
         k = 2
         while name in used:          # deux fichiers de même nom dans le lot
             name = f"{base} ({k})"
@@ -80,6 +84,18 @@ def create_batch(quiz: Quiz, files, label="", status="processing"):
     batch.total_pages = total
     batch.save(update_fields=["source_files", "total_pages", "updated_at"])
     return batch
+
+
+def _enregistrer_copie(sheet):
+    """Une page ne doit jamais arrêter un lot de 10 000 copies. Si la base refuse
+    sa fiche (donnée trop longue pour PostgreSQL…), la page est signalée en erreur
+    et le lot continue : sinon la reprise retomberait toujours sur elle."""
+    try:
+        sheet.save()
+    except DatabaseError as e:
+        log.exception("Page non enregistrée (%s)", sheet.source_name)
+        SheetScan.objects.create(batch=sheet.batch, source_name=sheet.source_name[:200],
+                                 status="error", error_message=f"Page non enregistrée : {e}")
 
 
 def run_batch(batch_id):
@@ -106,13 +122,14 @@ def run_batch(batch_id):
                 except Exception as e:  # noqa: BLE001 — fichier corrompu
                     if src["name"] not in done:
                         SheetScan.objects.create(
-                            batch=batch, source_name=src["name"], status="error",
+                            batch=batch, source_name=src["name"][:200], status="error",
                             error_message=f"Fichier illisible : {e}")
                         done.add(src["name"])
                         batch.processed_pages = len(done)
                         batch.save(update_fields=["processed_pages", "updated_at"])
                     continue
                 for page_name, render in pages:
+                    page_name = page_name[:200]     # lot envoyé avant la borne de create_batch
                     if page_name in done:
                         continue
                     sheet = SheetScan(batch=batch, source_name=page_name)
@@ -139,7 +156,7 @@ def run_batch(batch_id):
                             log.exception("Page illisible (%s)", page_name)
                             sheet.status = "error"
                             sheet.error_message = f"{type(e).__name__}: {e}"
-                        sheet.save()
+                        _enregistrer_copie(sheet)
                     done.add(page_name)
                     batch.processed_pages = len(done)
                     batch.save(update_fields=["processed_pages", "updated_at"])
@@ -160,6 +177,31 @@ def run_batch(batch_id):
     return batch
 
 
+# Une page A4 à 200 ppp fait 4 millions de pixels, une A3 8 millions. Au-delà
+# de 40 millions, ce n'est plus une copie : un petit fichier piégé (PDF à
+# page géante, PNG très compressé) ferait sinon allouer des gigaoctets.
+MAX_PIXELS_PAGE = 40_000_000
+FORMATS_SCAN = ("JPEG", "PNG", "TIFF", "BMP", "WEBP")
+
+
+def _controler_dimensions(name, data):
+    """Refuse une image démesurée, ou d'un autre format qu'un scan, avant de
+    la décoder (l'en-tête suffit). Le format se lit dans le contenu, pas dans
+    l'extension : sans cette liste, un fichier « .png » atteindrait tous les
+    décodeurs de Pillow et d'OpenCV, y compris ceux de formats exotiques qui
+    ont des failles connues (FlashPix, EPS, XBM…)."""
+    from PIL import Image
+    try:
+        with Image.open(io.BytesIO(data), formats=FORMATS_SCAN) as im:
+            largeur, hauteur = im.size
+    except Image.DecompressionBombError as exc:
+        raise ValueError(f"Image démesurée : {name}") from exc
+    except Exception as exc:  # noqa: BLE001 — quelle qu'en soit la raison
+        raise ValueError(f"Format d'image non reconnu : {name}") from exc
+    if largeur * hauteur > MAX_PIXELS_PAGE:
+        raise ValueError(f"Image démesurée ({largeur} × {hauteur} pixels) : {name}")
+
+
 @contextlib.contextmanager
 def _open_pages(name, data):
     """Gestionnaire de contexte donnant la liste des (nom de page, fonction
@@ -171,6 +213,7 @@ def _open_pages(name, data):
     accumulerait un document ouvert par fichier."""
     if not _is_pdf(name):
         def decode():
+            _controler_dimensions(name, data)
             img = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
             if img is None:
                 raise ValueError(f"Format d'image non reconnu : {name}")
@@ -180,6 +223,11 @@ def _open_pages(name, data):
 
     with pymupdf.open(stream=data, filetype="pdf") as doc:
         def render(i):
+            rect = doc[i].rect
+            if (rect.width / 72 * SCAN_DPI) * (rect.height / 72 * SCAN_DPI) > MAX_PIXELS_PAGE:
+                raise ValueError(f"Page démesurée ({rect.width / 72 * 2.54:.0f} × "
+                                 f"{rect.height / 72 * 2.54:.0f} cm) : une copie se "
+                                 "scanne en A4 ou A3.")
             pix = doc[i].get_pixmap(dpi=SCAN_DPI, colorspace=pymupdf.csRGB)
             img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
                 pix.height, pix.width, 3)
@@ -331,6 +379,12 @@ class _Attendu:
         self.correct_choice = choice
 
 
+# Le corrigé se lit pendant la requête : un PDF de milliers de pages occuperait
+# un des quatre fils du serveur jusqu'à son délai de 10 minutes. Un corrigé tient
+# en quelques pages.
+MAX_PAGES_CORRIGE = 50
+
+
 def read_answer_key(quiz, files, label=""):
     """Lit une fiche d'épreuve remplie avec les bonnes réponses et renseigne
     le corrigé du quiz.
@@ -348,9 +402,13 @@ def read_answer_key(quiz, files, label=""):
     questions = {q.order: q for q in quiz.questions.filter(qtype="qcm")}
 
     pages, ambigues, appliquees = [], [], {}
+    n_pages = 0
     for f in files:
+        if n_pages >= MAX_PAGES_CORRIGE:
+            break
         data = f.read()
-        nom = os.path.basename(f.name) or "corrige"
+        f.close()
+        nom = os.path.basename(f.name)[-180:] or "corrige"
         with contextlib.ExitStack() as stack:
             try:
                 rendus = stack.enter_context(_open_pages(nom, data))
@@ -360,6 +418,14 @@ def read_answer_key(quiz, files, label=""):
                     error_message=f"Fichier illisible : {e}"))
                 continue
             for page_name, render in rendus:
+                n_pages += 1
+                if n_pages > MAX_PAGES_CORRIGE:
+                    pages.append(AnswerKeySheet.objects.create(
+                        quiz=quiz, source_name=page_name, status="error",
+                        error_message=f"Corrigé limité à {MAX_PAGES_CORRIGE} pages : "
+                                      "cette page et les suivantes n'ont pas été lues."))
+                    n_pages = MAX_PAGES_CORRIGE
+                    break
                 feuille = AnswerKeySheet(quiz=quiz, source_name=page_name)
                 try:
                     img = render()
@@ -561,6 +627,7 @@ def moderniser_calage(quiz):
 
 
 def renommer_epreuve(quiz, titre, utilisateur):
+    titre = titre[:200]
     """Change le titre d'une épreuve et en tire les conséquences.
 
     - Concours : sa liste de candidats (« Concours — ancien titre ») suit.
@@ -778,11 +845,11 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
         if kind == "QS":
             student = next((s for s in students if s.pk == value), None)
             if student is not None:
-                sheet.id_read = f"QR {student.student_number or student.pk}"
+                sheet.id_read = f"QR {student.student_number or student.pk}"[:20]
                 sheet.match_score = 100.0
         elif kind == "QSA":
             serial = value
-            sheet.id_read = f"Fiche {value:04d}"
+            sheet.id_read = f"Fiche {value:04d}"[:20]
         elif kind == "QSI":
             # carte d'inscription collée à la place de l'étiquette
             sheet.id_read = f"QR {value}"[:20]
@@ -793,7 +860,7 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
                 sheet.match_score = 100.0
     if student is None and not grid_id and page_layout.get("id_grid"):
         grid_id = omr.read_id_grid(warped, page_layout)
-        sheet.id_read = grid_id or sheet.id_read
+        sheet.id_read = grid_id[:20] or sheet.id_read
         student = omr.match_student_by_id(grid_id, students)
         if student is not None:
             sheet.match_score = 100.0
@@ -968,19 +1035,40 @@ def rescore_sheet(sheet):
             a.save(update_fields=["points_awarded"])
 
 
+class _Reponse:
+    """Une réponse telle que les résultats s'en servent, sans objet Django : à
+    10 000 copies de 40 questions, 400 000 objets complets coûtaient 35 s et
+    600 Mo à chaque affichage des résultats. Mêmes règles que Answer, dont les
+    propriétés sont reprises telles quelles."""
+    __slots__ = ("question", "detected_choice", "is_multiple", "points_awarded")
+    is_blank = Answer.is_blank
+    is_correct = Answer.is_correct
+    detected_letter = Answer.detected_letter
+
+    def __init__(self, question, detected_choice, is_multiple, points_awarded):
+        self.question = question
+        self.detected_choice = detected_choice
+        self.is_multiple = is_multiple
+        self.points_awarded = points_awarded
+
+
 def rescore_quiz(quiz):
     """Recalcule toutes les copies du quiz après une modification du corrigé,
     du barème ou de la pénalité. Retourne le nombre de copies touchées."""
-    answers = list(Answer.objects.filter(
-        sheet__batch__quiz=quiz, question__qtype="qcm", manually_set=False)
-        .select_related("question__quiz"))
+    # Sans objet Django par réponse : à 10 000 copies, ces 400 000 objets
+    # prenaient plus de mémoire que n'en a le serveur, à chaque réglage enregistré.
+    questions = {q.pk: q for q in quiz.questions.filter(qtype="qcm")}
     changed, sheets = [], set()
-    for a in answers:
-        pts = _auto_points(a.question, a)
-        if pts != a.points_awarded:
-            a.points_awarded = pts
-            changed.append(a)
-            sheets.add(a.sheet_id)
+    for pk, sheet_id, question_id, detected, multiple, points in (
+            Answer.objects.filter(sheet__batch__quiz=quiz, question__qtype="qcm",
+                                  manually_set=False)
+            .order_by().values_list("pk", "sheet_id", "question_id", "detected_choice",
+                                    "is_multiple", "points_awarded").iterator()):
+        question = questions[question_id]
+        pts = _auto_points(question, _Reponse(question, detected, multiple, points))
+        if pts != points:
+            changed.append(Answer(pk=pk, points_awarded=pts))
+            sheets.add(sheet_id)
     Answer.objects.bulk_update(changed, ["points_awarded"], batch_size=500)
     return len(sheets)
 
@@ -997,7 +1085,14 @@ def compute_results(quiz, batch=None, student=None):
         sheets = sheets.filter(batch=batch)
     if student is not None:
         sheets = sheets.filter(student=student)
-    sheets = sheets.select_related("student").prefetch_related("answers__question")
+    questions = {q.pk: q for q in quiz.questions.all()}
+    # dans l'ordre des questions (Answer.Meta), copie par copie
+    par_copie = {}
+    for sheet_id, *reponse in (Answer.objects.filter(sheet__in=sheets.values("pk"))
+                               .values_list("sheet_id", "question_id", "detected_choice",
+                                            "is_multiple", "points_awarded").iterator()):
+        par_copie.setdefault(sheet_id, []).append(reponse)
+    sheets = sheets.select_related("student")
 
     per_student = {}
     for sheet in sheets:
@@ -1008,10 +1103,11 @@ def compute_results(quiz, batch=None, student=None):
             "answers": {},
         })
         entry["sheets"].append(sheet)
-        for a in sheet.answers.all():
-            if a.question_id in entry["seen_questions"]:
+        for question_id, detected, multiple, points in par_copie.pop(sheet.pk, ()):
+            if question_id in entry["seen_questions"]:
                 continue  # doublon (page scannée deux fois) : première lecture retenue
-            entry["seen_questions"].add(a.question_id)
+            entry["seen_questions"].add(question_id)
+            a = _Reponse(questions[question_id], detected, multiple, points)
             entry["answers"][a.question.order] = a
             if a.question.qtype == "qcm":
                 if a.is_blank:

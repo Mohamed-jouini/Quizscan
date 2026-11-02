@@ -632,6 +632,9 @@ class Modification(models.Model):
         ("lot_supprime", "Lot de copies supprimé"),
         ("corrige_supprime", "Corrigé scanné supprimé"),
         ("titre", "Titre de l'épreuve"),
+        ("etudiant", "Identité d'un étudiant noté"),
+        ("note_admission", "Note minimale d'admission"),
+        ("publication", "Publication des résultats"),
     ]
     quand = models.DateTimeField("date", auto_now_add=True, db_index=True)
     auteur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,

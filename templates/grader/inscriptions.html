@@ -15,6 +15,7 @@
   </div>
 </header>
 
+{% if perms.grader.creer_epreuve %}
 <div class="card">
   <h2>{% if modifie %}Modifier l'inscription de {{ modifie.nom_complet }}{% else %}Inscrire un étudiant{% endif %}</h2>
   <form method="post" class="form-inscription" id="fiche-inscrit">{% csrf_token %}
@@ -34,6 +35,7 @@
       {% if modifie %}<a class="btn secondary" href="{% url 'inscriptions' %}">Annuler</a>{% endif %}</p>
   </form>
 </div>
+{% endif %}
 
 <form class="recherche-etudiant" method="get" role="search">
   <div class="recherche-etudiant__champ">
@@ -90,7 +92,7 @@
             {% if user.is_superuser or i.cree_par_id == user.pk %}
             <a class="btn small secondary" href="?modifier={{ i.pk }}#fiche-inscrit">Modifier</a>
             <button class="btn small danger" name="supprimer" value="{{ i.pk }}" type="submit"
-                    onclick="return confirm('Retirer {{ i.nom_complet|escapejs }} du registre ? Ses classes et concours le gardent.')">✕</button>
+                    data-confirmer="Retirer {{ i.nom_complet }} du registre ? Ses classes et concours le gardent.">✕</button>
             {% endif %}
           </td>
         </tr>
@@ -99,16 +101,7 @@
     </div>
     {% include "grader/_pagination.html" with page=page_inscrits label="Inscrits" querystring=querystring %}
   </form>
-  <script>
-  document.querySelectorAll(".tout-cocher").forEach(function (maitre) {
-    maitre.addEventListener("change", function () {
-      maitre.closest("table").querySelectorAll('input[name="choix"]').forEach(function (c) {
-        c.checked = maitre.checked;
-      });
-    });
-  });
-  </script>
-  {% elif recherche %}
+    {% elif recherche %}
   <p>Aucun inscrit ne correspond à « {{ recherche }} ».</p>
   {% else %}
   <p>Aucun étudiant inscrit pour l'instant : inscrivez-en un ci-dessus, ou importez une liste.</p>

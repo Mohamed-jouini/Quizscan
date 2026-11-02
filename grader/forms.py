@@ -1,7 +1,9 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth.forms import AuthenticationForm
 
 from . import importers, pieces
+from .securite import FreinConnexion
 from .models import (MAX_CHOICES, MAX_OPEN_HEIGHT_MM, POINTS_QCM, ClassGroup,
                      Communique, Inscrit, PieceJointe, Question, Quiz, choice_letter)
 
@@ -195,11 +197,8 @@ class CandidateFileForm(forms.Form):
                   "candidat ; PDF : une ligne par candidat.")
 
     def clean_file(self):
-        f = self.cleaned_data["file"]
-        if not (f.name or "").lower().endswith(importers.CANDIDATE_EXTS):
-            raise forms.ValidationError(
-                "Formats acceptés : .xlsx, .csv, .docx, .pdf ou .txt.")
-        return f
+        return _controler_import(self.cleaned_data["file"], importers.CANDIDATE_EXTS,
+                                 ".xlsx, .csv, .docx, .pdf ou .txt")
 
     def parse(self):
         """Retourne une liste de tuples (nom, prénom, numéro)."""
@@ -217,6 +216,10 @@ class QuestionImportForm(forms.Form):
         label="Questionnaire (Excel, Word, PDF ou texte)",
         widget=forms.ClearableFileInput(
             attrs={"accept": ",".join(importers.QUESTION_EXTS)}))
+
+    def clean_file(self):
+        return _controler_import(self.cleaned_data["file"], importers.QUESTION_EXTS,
+                                 ", ".join(importers.QUESTION_EXTS))
 
 
 class QuestionBankForm(forms.Form):
@@ -545,28 +548,64 @@ class MultiFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
 
 
+# Scans acceptés (copies, corrigé) : PDF et images. Le fichier d'origine est
+# conservé et resservi : jamais de HTML, de SVG ni d'autre type actif.
+SCAN_EXTS = (".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp")
+TAILLE_MAX_SCAN = 500 * 1024 * 1024        # par fichier (un PDF de tout un lot)
+TAILLE_MAX_IMPORT = 20 * 1024 * 1024       # liste d'étudiants, questionnaire
+
+
+def _controler_import(f, extensions, formats):
+    if not (f.name or "").lower().endswith(extensions):
+        raise forms.ValidationError(f"Formats acceptés : {formats}.")
+    if f.size > TAILLE_MAX_IMPORT:
+        raise forms.ValidationError(
+            f"Fichier trop lourd ({f.size // (1024 * 1024)} Mo) : "
+            f"{TAILLE_MAX_IMPORT // (1024 * 1024)} Mo au plus.")
+    return f
+
+
 class MultiFileField(forms.FileField):
     def __init__(self, *args, **kwargs):
-        kwargs.setdefault("widget", MultiFileInput(attrs={"multiple": True}))
+        kwargs.setdefault("widget", MultiFileInput(
+            attrs={"multiple": True, "accept": ",".join(SCAN_EXTS),
+                   "data-max-fichiers": settings.DATA_UPLOAD_MAX_NUMBER_FILES}))
         super().__init__(*args, **kwargs)
 
     def clean(self, data, initial=None):
         if isinstance(data, (list, tuple)):
-            return [super(MultiFileField, self).clean(d, initial) for d in data]
-        return [super().clean(data, initial)]
+            fichiers = [super(MultiFileField, self).clean(d, initial) for d in data]
+        else:
+            fichiers = [super().clean(data, initial)]
+        for f in fichiers:
+            if f is None:
+                continue
+            if not (f.name or "").lower().endswith(SCAN_EXTS):
+                raise forms.ValidationError(
+                    f"« {f.name} » : seuls les PDF et les images (JPG, PNG, TIFF, "
+                    f"BMP, WebP) sont acceptés.")
+            if f.size > TAILLE_MAX_SCAN:
+                raise forms.ValidationError(
+                    f"« {f.name} » : {f.size // (1024 * 1024)} Mo, au-delà des "
+                    f"{TAILLE_MAX_SCAN // (1024 * 1024)} Mo permis par fichier.")
+        return fichiers
 
 
 class UploadForm(forms.Form):
-    label = forms.CharField(label="Libellé du lot", required=False,
+    label = forms.CharField(label="Libellé du lot", required=False, max_length=120,
                             widget=forms.TextInput(attrs={"placeholder": "Ex. Groupe A — 28/08"}))
     files = MultiFileField(
         label="Fichiers scannés (PDF ou images)",
-        help_text="Vous pouvez sélectionner plusieurs fichiers. "
-                  "Un PDF multi-pages est accepté (une copie par page), sans "
-                  "limite de nombre : la correction démarre dès l'envoi.")
+        help_text="Vous pouvez sélectionner plusieurs fichiers : 10 000 au plus par "
+                  "envoi, 500 Mo au plus chacun. Un PDF multi-pages est accepté (une "
+                  "copie par page). Au-delà, faites plusieurs envois.")
 
 
-class AdminLoginForm(AuthenticationForm):
+class ConnexionForm(FreinConnexion, AuthenticationForm):
+    """Connexion enseignant, essais limités (grader/securite.py)."""
+
+
+class AdminLoginForm(FreinConnexion, AuthenticationForm):
     """Connexion à l'espace d'administration.
 
     Refuse les comptes enseignants ordinaires : sans ce contrôle, un

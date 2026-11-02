@@ -9,6 +9,20 @@
 #     QUIZSCAN_BIND=127.0.0.1
 #     QUIZSCAN_PORT=5011
 #     HTTPS=1
+#
+# Un Caddy d'entrée devant celui-ci (la réponse porte alors deux en-têtes
+# « Via ») ? Sans réglage, tous les visiteurs ont l'adresse du Caddy d'entrée
+# et se partagent les limites de connexion et de recherche par n°. Il faut :
+#   - ici, en tête de fichier, faire confiance au Caddy d'entrée :
+#         {
+#             servers {
+#                 trusted_proxies static <adresse du Caddy d'entrée>
+#             }
+#         }
+#   - dans .env : PROXYS_DE_CONFIANCE=2
+# Contrôle : « docker compose logs quizscan | grep Connexion » doit montrer
+# l'adresse publique des enseignants, pas celle d'un proxy.
+#
 # Vérification : docker compose exec quizscan python manage.py verifier_deploiement
 
 
@@ -18,6 +32,22 @@
 # et redirige http vers https. Rien d'autre à faire.
 # ---------------------------------------------------------------------------
 quiz.mon-etablissement.tn {
+    # Taille des envois : grande pour les scans (10 000 fichiers de 3 Mo au plus
+    # par envoi), 1,1 Go pour un communiqué (10 pièces jointes de 100 Mo au plus),
+    # 50 Mo ailleurs — un envoi géant sur une autre page, même sans compte,
+    # occuperait la mémoire du serveur.
+    @scans path_regexp ^/quiz/[0-9]+/(upload|corrige)/
+    request_body @scans {
+        max_size 30GB
+    }
+    @communiques path /communiques/
+    request_body @communiques {
+        max_size 1100MB
+    }
+    @autres not path_regexp ^/(quiz/[0-9]+/(upload|corrige)|communiques)/
+    request_body @autres {
+        max_size 50MB
+    }
     reverse_proxy 127.0.0.1:5011 {
         header_up X-Real-IP {remote_host}
     }

@@ -1,3 +1,4 @@
+import posixpath
 import unicodedata
 from datetime import timedelta
 from urllib.parse import urlencode
@@ -32,7 +33,7 @@ from .forms import (CONCOURS_ID_MODES, AdminLoginForm, AnswerKeyUploadForm,
                     BulkQcmForm, CandidateFileForm, ClassGroupForm,
                     QuestionBankForm, QuestionForm, QuestionImportForm,
                     QuizForm, StudentImportForm, UploadForm)
-from .models import (ARABIC_LETTERS, Answer, ClassGroup, Communique, Inscrit,
+from .models import (ARABIC_LETTERS, Answer, AnswerKeySheet, ClassGroup, Communique, Inscrit,
                      Question, Quiz, ScanBatch, SheetScan, Student, choice_letter)
 
 
@@ -262,6 +263,9 @@ def _concours_group_pks(request):
 @login_required
 def class_list(request):
     form = ClassGroupForm(request.POST or None)
+    if request.method == "POST":
+        # un compte « lecture seule » (sans droit) ne crée rien
+        droits.exiger(request.user, droits.CREER, "créer une classe")
     if request.method == "POST" and form.is_valid():
         group = form.save(commit=False)
         group.owner = request.user
@@ -284,7 +288,7 @@ def concours_list(request):
     })
 
 
-def _save_candidates(group, rows):
+def _save_candidates(group, rows, utilisateur):
     """Crée / met à jour les candidats à partir de lignes (nom, prénom, n°).
     Un candidat portant déjà le même n° d'inscription est mis à jour.
 
@@ -296,13 +300,15 @@ def _save_candidates(group, rows):
     for r in verifiees:
         inscrit, number = r["inscrit"], r["numero"]
         last, first = ((inscrit.nom, inscrit.prenom) if inscrit
-                       else (r["nom"].upper(), r["prenom"]))
+                       else (r["nom"].upper()[:80], r["prenom"][:80]))
         if number:
             existing = group.students.filter(student_number=number).first()
             if existing:
+                avant = journal.identite(existing)
                 existing.last_name, existing.first_name = last, first
                 existing.inscrit = inscrit
                 existing.save(update_fields=["last_name", "first_name", "inscrit"])
+                journal.etudiant_modifie(utilisateur, existing, avant)
                 updated += 1
                 continue
         _, was_created = Student.objects.get_or_create(
@@ -325,11 +331,13 @@ def class_detail(request, pk):
     import_form = StudentImportForm()
     xlsx_form = CandidateFileForm()
     if request.method == "POST":
+        if "fermer_verification" not in request.POST:
+            droits.exiger(request.user, droits.CREER, "modifier les listes d'étudiants")
         if "import" in request.POST:
             import_form = StudentImportForm(request.POST)
             if import_form.is_valid():
                 rows = import_form.parse()
-                _, updated, rapport = _save_candidates(group, rows)
+                _, updated, rapport = _save_candidates(group, rows, request.user)
                 msg = f"{len(rows)} étudiant(s) importé(s)."
                 if updated:
                     msg += f" ({updated} nom(s) mis à jour par numéro)"
@@ -350,7 +358,7 @@ def class_detail(request, pk):
                 if not rows:
                     messages.error(request, "Aucun candidat trouvé dans ce fichier.")
                     return redirect("class_detail", pk=pk)
-                created, updated, rapport = _save_candidates(group, rows)
+                created, updated, rapport = _save_candidates(group, rows, request.user)
                 messages.success(
                     request,
                     f"{len(rows)} candidat(s) importé(s) "
@@ -410,8 +418,14 @@ def class_detail(request, pk):
             return redirect("class_detail", pk=pk)
         elif "delete_student" in request.POST:
             student_pk = _int_or_none(request.POST.get("delete_student"))
-            if student_pk is not None:
-                Student.objects.filter(pk=student_pk, class_group=group).delete()
+            etudiant = group.students.filter(pk=student_pk).first()
+            if etudiant is not None and etudiant.sheets.exists():
+                # ses copies redeviendraient « non identifiées » et pourraient
+                # être réaffectées à un autre étudiant, avec leur note
+                messages.error(request, f"{etudiant.full_name} a des copies corrigées : "
+                                        "il ne peut pas être supprimé.")
+            elif etudiant is not None:
+                etudiant.delete()
             return redirect("class_detail", pk=pk)
     # Retour : la liste des candidats d'un concours se rejoint depuis la
     # page du concours, on y revient ; une classe, depuis la liste des classes.
@@ -768,6 +782,7 @@ def quiz_detail(request, pk):
                     "id_digits", quiz.id_digits)), 10))
             except (ValueError, TypeError):
                 pass
+            ancienne_note = quiz.note_admission
             if "note_admission" in request.POST:
                 valide, valeur = _lire_note_admission(request.POST["note_admission"])
                 if valide:
@@ -787,6 +802,9 @@ def quiz_detail(request, pk):
             journal.noter(request.user, "penalite", quiz=quiz,
                           objet="Pénalité par mauvaise réponse",
                           avant=ancienne_penalite, apres=quiz.wrong_penalty)
+            journal.noter(request.user, "note_admission", quiz=quiz,
+                          objet="Note minimale d'admission",
+                          avant=ancienne_note, apres=quiz.note_admission)
             services.rescore_quiz(quiz)     # la pénalité a pu changer
             messages.success(request, "Réglages du quiz enregistrés.") if ok else \
                 messages.error(request, "Certaines valeurs étaient invalides.")
@@ -1002,8 +1020,10 @@ def quiz_answer_key(request, pk):
             "case laissée vide ou plusieurs cases noircies sur la fiche. "
             "Renseignez-les à la main dans le tableau des questions, ou "
             "rescannez un corrigé plus net.")
-    for page in echecs:
+    for page in echecs[:10]:
         messages.error(request, f"{page.source_name} : {page.error_message}")
+    if len(echecs) > 10:
+        messages.error(request, f"… et {len(echecs) - 10} autre(s) page(s) illisible(s).")
     if not n_lues and not echecs:
         messages.error(request, "Aucune bonne réponse n'a pu être lue sur "
                                 "cette fiche.")
@@ -1247,6 +1267,9 @@ def quiz_note_admission(request, pk):
         messages.error(request, "Note minimale invalide : saisissez un nombre, "
                                 "par exemple 10 ou 10,5.")
     else:
+        journal.noter(request.user, "note_admission", quiz=quiz,
+                      objet="Note minimale d'admission",
+                      avant=quiz.note_admission, apres=valeur)
         quiz.note_admission = valeur
         quiz.save(update_fields=["note_admission"])
         if valeur is None:
@@ -1323,6 +1346,7 @@ def quiz_results(request, pk):
     if batch:
         unmatched = unmatched.filter(batch=batch)
     if request.method == "POST":
+        droits.exiger(request.user, droits.CORRIGER, "gérer les copies non identifiées")
         if "masquer_non_identifiees" in request.POST:
             unmatched.filter(alerte_masquee=False).update(alerte_masquee=True)
         elif "reafficher_non_identifiees" in request.POST:
@@ -1470,13 +1494,31 @@ def _media_quiz(path):
               .filter(open_crop=path).first())
     if answer is not None:
         return answer.sheet.batch.quiz_id
+    corrige = (AnswerKeySheet.objects.filter(Q(image=path) | Q(overlay_image=path))
+               .values_list("quiz_id", flat=True).first())
+    if corrige is not None:
+        return corrige
     if path.startswith("uploads/lot_"):
         pk = path[len("uploads/lot_"):].split("/", 1)[0]
         if pk.isdigit():
             batch = ScanBatch.objects.filter(pk=pk).first()
-            if batch is not None:
+            # le fichier lui-même doit appartenir au lot, pas seulement le
+            # début du chemin
+            if batch is not None and any(f.get("path") == path
+                                         for f in batch.source_files or []):
                 return batch.quiz_id
     return None
+
+
+def _chemin_media_sain(path):
+    """Chemin relatif propre : ni « .. », ni « . », ni « // », ni barre
+    initiale, ni antislash. Sinon le contrôle d'accès porterait sur un
+    chemin et file_serve, qui normalise après coup, en servirait un autre
+    (« uploads/lot_12/../../sheets/sujet_quiz_40.pdf »)."""
+    if not path or "\\" in path or "\x00" in path or path.startswith("/"):
+        return False
+    return (posixpath.normpath(path) == path
+            and not any(p in ("", ".", "..") for p in path.split("/")))
 
 
 @login_required
@@ -1487,9 +1529,19 @@ def protected_media(request, path):
 
     Même règle que les pages (_filtre_epreuves) : un second enseignant de la
     classe voyait l'épreuve, mais ni sa fiche PDF ni les scans."""
+    if not _chemin_media_sain(path):
+        raise Http404("Document introuvable")
     if not request.user.is_superuser:
         quiz_pk = _media_quiz(path)
         if quiz_pk is None or not Quiz.objects.filter(pk=quiz_pk).filter(
                 _filtre_epreuves(request.user)).exists():
             raise Http404("Document introuvable")
-    return file_serve(request, path, document_root=settings.MEDIA_ROOT)
+    resp = file_serve(request, path, document_root=settings.MEDIA_ROOT)
+    resp["X-Content-Type-Options"] = "nosniff"
+    if path.startswith("uploads/"):
+        # fichier d'origine tel qu'envoyé : téléchargé, jamais affiché par
+        # le navigateur dans le site (un faux « scan » HTML exécuterait du
+        # script avec les droits de celui qui l'ouvre)
+        resp["Content-Type"] = "application/octet-stream"
+        resp["Content-Disposition"] = "attachment"
+    return resp

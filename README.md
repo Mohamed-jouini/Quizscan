@@ -48,14 +48,15 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    étudiant sont regroupées automatiquement.
 3. **Fiche de réponses** : cliquez sur « Générer la fiche PDF » et imprimez-la
    en A4, **sans mise à l'échelle (100 %)** — une copie par étudiant.
-   Les 4 repères ArUco dans les coins permettent le recalage automatique du scan.
+   Le cadre fin imprimé sur la fiche permet le recalage automatique du scan.
 4. **Scan** : après l'épreuve, scannez toutes les copies (200–300 dpi, couleur ou
    niveaux de gris) et téléversez le PDF ou les images sur la page du quiz.
    **La correction démarre dès l'envoi, en arrière-plan** : la page du lot
    affiche un bandeau « N / total copies notées » qui se met à jour tout seul,
-   et les notes déjà calculées sont visibles dans les résultats. Il n'y a pas
-   de limite de volume (un concours de plusieurs milliers de copies se traite
-   page par page) ; si le serveur redémarre en cours de route, un bouton
+   et les notes déjà calculées sont visibles dans les résultats. Un envoi compte
+   jusqu'à 10 000 fichiers de 500 Mo au plus (au-delà, faites plusieurs envois),
+   et les copies se traitent page par page : compter environ 2 s par copie, soit
+   6 h et 25 Go de disque pour 10 000 copies de 40 questions. Si le serveur redémarre en cours de route, un bouton
    « Reprendre la correction » relance le lot sans relire les pages déjà notées.
 5. L'application, pour chaque page :
    - détecte les repères, redresse l'image (rotation/inclinaison corrigées) ;
@@ -248,6 +249,52 @@ remplace l'ancienne ; si un test échoue, la version en service continue de
 tourner et le journal le dit. La même suite se lance à la main avec
 `sh deploy/tests.sh` — c'est le seul endroit où elle passe en entier, car
 l'image embarque Tesseract.
+
+### Passer de SQLite à PostgreSQL
+
+À faire une fois, en dehors de toute correction. L'application est arrêtée pendant
+la copie. Le fichier SQLite n'est jamais modifié, il sert de retour arrière.
+
+**Le plus simple**, une fois cette version déployée, depuis le dossier de QuizScan :
+
+```bash
+sh deploy/passer_a_postgres.sh
+```
+
+Le script vérifie qu'aucune correction n'est en cours, sauvegarde, crée le mot de
+passe, copie les données, contrôle la copie et relance l'application. Au moindre
+problème, il remet `.env` comme avant et relance l'application sur SQLite.
+Refaites ensuite une sauvegarde complète (`manage.py sauvegarde`, avec les fichiers).
+
+**À la main**, les mêmes étapes :
+
+1. Déployez d'abord cette version, puis faites une sauvegarde complète :
+   `docker compose exec quizscan python manage.py sauvegarde`
+2. Ajoutez à `.env` (mot de passe : `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`) :
+   ```
+   COMPOSE_FILE=docker-compose.yml:docker-compose.postgres.yml
+   POSTGRES_DB=quizscan
+   POSTGRES_USER=quizscan
+   POSTGRES_PASSWORD=la-chaine-generee
+   POSTGRES_HOST=db
+   ```
+3. Copiez les données, puis relancez :
+   ```
+   docker compose stop quizscan
+   docker compose up -d db
+   docker compose run --rm quizscan python manage.py passer_a_postgres
+   docker compose up -d --build
+   docker compose exec quizscan python manage.py verifier_deploiement
+   ```
+   La commande recompte chaque table et compare la somme des notes. Sans son
+   message « Copie fidèle », n'allez pas plus loin : retirez ces lignes de `.env`.
+4. Refaites une sauvegarde complète : celles d'avant sont au format SQLite et ne
+   se restaurent pas sur PostgreSQL.
+
+Retour arrière : retirez ces lignes de `.env`, puis
+`docker compose up -d --remove-orphans`. Ce qui a été saisi depuis le passage à
+PostgreSQL n'existe pas dans SQLite. Les données de PostgreSQL sont dans
+`data/postgres` (jamais à copier à chaud : passez par la sauvegarde).
 
 ### Sauvegardes et restauration
 
@@ -443,6 +490,10 @@ python manage.py runserver 0.0.0.0:8000
 ```
 
 Ouvrez ensuite http://localhost:8000
+
+Pour un essai seulement, sur un réseau de confiance : ce serveur de
+développement tourne avec `DEBUG` actif (pages d'erreur détaillées, clé secrète
+publique du dépôt). En service, utilisez Docker, qui pose `DEBUG=0`.
 
 ### Option 3 — Windows (poste de l'enseignant)
 
@@ -718,9 +769,18 @@ python manage.py comptes_demo --supprimer
   **refuse de démarrer** sans `SECRET_KEY` ni `ALLOWED_HOSTS` propres dans
   `.env` : la clé de développement du dépôt est publique, elle signe les
   sessions et les jetons CSRF. Le message d'erreur indique quoi renseigner ;
-- toujours en `DEBUG=0`, les cookies de session et CSRF sont marqués
-  `Secure` + `HttpOnly` (HTTPS assuré par le reverse proxy), avec
-  `X-Frame-Options: DENY` et `nosniff` ;
+- toujours en `DEBUG=0`, les cookies sont marqués `Secure` (HTTPS assuré par le
+  reverse proxy) et celui de session `HttpOnly`, avec `X-Frame-Options: DENY`,
+  `nosniff` et HSTS ;
+- protections communes (`grader/securite.py`) : 5 essais de connexion par compte
+  et par adresse, puis refus 15 minutes ; politique de contenu (CSP) : rien ne se
+  charge d'un autre domaine ; pages du personnel non conservées par le
+  navigateur ; session fermée après 12 h sans activité ;
+- **plusieurs reverse proxies à la suite** : renseignez `PROXYS_DE_CONFIANCE`
+  (voir `deploy/Caddyfile.exemple`), sinon tous les visiteurs ont la même adresse
+  et se partagent les limites de connexion et de recherche par n°. Contrôle :
+  `docker compose logs quizscan | grep Connexion` doit montrer l'adresse publique
+  des enseignants ;
 - servir avec gunicorn/nginx (l'image Docker le fait) ; toutes les pages et
   tous les documents exigent une connexion, et chaque enseignant n'accède
   qu'à **ses propres** fiches PDF, scans, images de contrôle et recadrages
@@ -729,6 +789,3 @@ python manage.py comptes_demo --supprimer
   défaut) : il suffit de renseigner `POSTGRES_DB`, `POSTGRES_USER`,
   `POSTGRES_PASSWORD` (et au besoin `POSTGRES_HOST` / `POSTGRES_PORT`) dans
   `.env`, le pilote est déjà installé dans l'image.
-#   Q u i z s c a n 
- 
- 

@@ -18,6 +18,7 @@ from django.shortcuts import get_object_or_404, render
 from . import pieces, services
 from .inscriptions import numero_propre
 from .models import Communique, PieceJointe, Quiz, Student
+from .securite import adresse_client
 from .views import _page
 
 LIMITE_RECHERCHES = 30          # par adresse…
@@ -25,8 +26,7 @@ FENETRE_S = 10 * 60             # …et par tranche de 10 minutes
 
 
 def _adresse(request):
-    transmise = request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
-    return transmise or request.META.get("REMOTE_ADDR", "")
+    return adresse_client(request)
 
 
 def _trop_de_recherches(request):

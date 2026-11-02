@@ -172,6 +172,12 @@ class StudentAdmin(TitresFrancais, admin.ModelAdmin):
     # liste déroulante les chargerait tous dans la page
     raw_id_fields = ("class_group", "inscrit")
 
+    def save_model(self, request, obj, form, change):
+        avant = journal.identite(Student.objects.get(pk=obj.pk)) if change else None
+        super().save_model(request, obj, form, change)
+        if change:
+            journal.etudiant_modifie(request.user, obj, avant)
+
 
 @admin.register(Inscrit)
 class InscritAdmin(TitresFrancais, admin.ModelAdmin):
@@ -222,13 +228,16 @@ class QuizAdmin(TitresFrancais, admin.ModelAdmin):
     inlines = [QuestionInline]
 
     def save_model(self, request, obj, form, change):
-        avant = Quiz.objects.filter(pk=obj.pk).values_list(
-            "wrong_penalty", flat=True).first() if change else None
+        penalite, note = (Quiz.objects.filter(pk=obj.pk).values_list(
+            "wrong_penalty", "note_admission").first() if change else (None, None))
         super().save_model(request, obj, form, change)
         if change:
             journal.noter(request.user, "penalite", quiz=obj,
                           objet="Pénalité par mauvaise réponse",
-                          avant=avant, apres=obj.wrong_penalty)
+                          avant=penalite, apres=obj.wrong_penalty)
+            journal.noter(request.user, "note_admission", quiz=obj,
+                          objet="Note minimale d'admission",
+                          avant=note, apres=obj.note_admission)
 
     def save_formset(self, request, form, formset, change):
         """Questions modifiées ou supprimées depuis la fiche de l'épreuve."""

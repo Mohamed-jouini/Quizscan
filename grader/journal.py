@@ -5,7 +5,7 @@ d'une copie ou une bonne réponse passe par `noter`. Une seule fonction, pour
 que la règle soit la même partout : on n'écrit que ce qui a réellement
 changé, avec l'auteur, l'ancienne et la nouvelle valeur.
 """
-from .models import Modification, choice_letter
+from .models import Modification, Quiz, choice_letter
 
 
 def texte(valeur):
@@ -32,6 +32,21 @@ def libelle_candidat(etudiant):
     return etudiant.full_name if etudiant else "non attribuée"
 
 
+def identite(etudiant):
+    """Nom et n° : ce qui désigne l'étudiant à qui une note appartient."""
+    numero = (etudiant.student_number or "").strip()
+    return f"{etudiant.full_name} (n° {numero})" if numero else etudiant.full_name
+
+
+def etudiant_modifie(utilisateur, etudiant, avant):
+    """Nom ou n° changé (liste importée, registre, administration) pour un
+    étudiant qui a des copies : ses notes portent désormais une autre identité.
+    Une entrée par épreuve concernée. Sans copie, aucune note n'est en jeu."""
+    for quiz in Quiz.objects.filter(batches__sheets__student=etudiant).distinct():
+        noter(utilisateur, "etudiant", quiz=quiz, objet="Identité d'un étudiant noté",
+              avant=avant, apres=identite(etudiant))
+
+
 def noter(utilisateur, action, *, objet, avant=None, apres=None,
           quiz=None, copie=None):
     """Enregistre une modification, si elle en est une.
@@ -50,7 +65,7 @@ def noter(utilisateur, action, *, objet, avant=None, apres=None,
         nom = utilisateur.get_full_name() or utilisateur.get_username()
     return Modification.objects.create(
         auteur=utilisateur if nom else None,
-        auteur_nom=nom or "système",
+        auteur_nom=(nom or "système")[:150],
         action=action,
         quiz=quiz,
         quiz_titre=quiz.title if quiz else "",

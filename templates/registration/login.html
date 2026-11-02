@@ -14,8 +14,8 @@
 {% if form.errors %}
 <div class="alert" role="alert">
   <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><path d="M12 16h.01"/></svg>
-  <span>Identifiant ou mot de passe incorrect. Vérifiez votre saisie,
-    en tenant compte des majuscules.</span>
+  <span>{% if form.frein %}{{ form.non_field_errors.0 }}{% else %}Identifiant ou mot de passe incorrect. Vérifiez votre saisie,
+    en tenant compte des majuscules.{% endif %}</span>
 </div>
 {% endif %}
 

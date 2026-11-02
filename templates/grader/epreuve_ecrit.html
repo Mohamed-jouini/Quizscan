@@ -115,14 +115,4 @@
   {% include "grader/_journal.html" with entrees=journal %}
 </div>
 {% endif %}
-<script>
-// « Nombre de chiffres du n° » ne concerne que la grille de n° d'inscription
-(function () {
-  var mode = document.getElementById("id_id_mode");
-  var row = document.getElementById("row_id_digits");
-  if (!mode || !row) return;
-  function sync() { row.hidden = mode.value !== "grid"; }
-  mode.addEventListener("change", sync); sync();
-})();
-</script>
 {% endblock %}

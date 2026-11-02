@@ -1,12 +1,15 @@
 # Bornes hautes volontaires : le serveur se reconstruit tout seul
 # (deploy/update.sh) ; sans elles, une nouvelle version majeure d'OpenCV,
 # de ReportLab ou de Django casserait une installation qui fonctionnait.
-Django>=5.2,<6.0
+# Bornes basses : relevées à l'audit du 1er novembre 2026 (base des failles de
+# PyPI). Les relever force aussi Docker à réinstaller les paquets, sinon gardés
+# tels quels dans le cache de construction.
+Django>=5.2.18,<6.0
 opencv-contrib-python-headless>=4.10,<5.0
 numpy>=1.26,<3.0
-Pillow>=10.1,<13.0
+Pillow>=13.0,<14.0
 reportlab>=4.0,<5.0
-PyMuPDF>=1.24,<2.0
+PyMuPDF>=1.24.14,<2.0
 pytesseract>=0.3.10,<0.4
 rapidfuzz>=3.0,<4.0
 openpyxl>=3.1,<4.0

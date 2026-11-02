@@ -9,6 +9,22 @@ from openpyxl.utils import get_column_letter
 RESULTAT = {"admis": "Admis", "en_attente": "En attente", "refuse": "Non admis"}
 
 
+def _sans_formule(ligne):
+    """Un nom ou un n° commençant par « = » (saisi, importé, ou lu dans un QR
+    fabriqué par un candidat) deviendrait une formule active dans Excel :
+    il est écrit comme texte, précédé d'une apostrophe."""
+    return [f"'{v}" if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r")
+            and not _nombre(v) else v for v in ligne]
+
+
+def _nombre(v):
+    try:
+        float(v.replace(",", "."))
+        return True
+    except ValueError:
+        return False
+
+
 def results_workbook(quiz, rows, stats=None, admission=None):
     wb = Workbook()
     ws = wb.active
@@ -37,7 +53,7 @@ def results_workbook(quiz, rows, stats=None, admission=None):
                  r["wrong"], r["blank"], r["pending_open"], r["pct"] / 100]
         if admission:
             ligne.append(RESULTAT.get(r.get("resultat"), ""))
-        ws.append(ligne)
+        ws.append(_sans_formule(ligne))
         ws.cell(row=ws.max_row, column=11).number_format = "0%"
 
     widths = [22, 18, 14, 8, 6, 11, 10, 8, 13, 20, 12, 12]
@@ -157,7 +173,7 @@ def parcours_workbook(parcours):
             else:
                 ligne += [None, None, "Non convoqué"]
         ligne.append(c["final"])
-        ws.append(ligne)
+        ws.append(_sans_formule(ligne))
         for k in range(len(epreuves)):
             ws.cell(row=ws.max_row, column=5 + 3 * k).number_format = "0%"
     for i, largeur in enumerate([22, 18, 14] + [11, 8, 13] * len(epreuves) + [34],

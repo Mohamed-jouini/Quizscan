@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import droits, pieces
+from . import droits, journal, pieces
 from . import inscriptions as insc
 from .forms import CommuniqueForm, InscritForm
 from .models import Communique, Inscrit, Student
@@ -53,6 +53,7 @@ def inscriptions(request):
                                    "l'administrateur peut la modifier.")
     form = InscritForm(instance=modifie)
     if request.method == "POST":
+        droits.exiger(request.user, droits.CREER, "modifier le registre des inscriptions")
         if "inscrire" in request.POST:
             form = InscritForm(request.POST, instance=modifie)
             if form.is_valid():
@@ -61,16 +62,26 @@ def inscriptions(request):
                     inscrit.cree_par = request.user
                 inscrit.save()
                 if modifie is None:
-                    insc.rattacher_existants(inscrit)
+                    insc.rattacher_existants(inscrit, _my_classes(request))
                     messages.success(request, f"{inscrit.nom_complet} est inscrit(e) "
                                               f"sous le n° {inscrit.numero}. Sa carte "
                                               "avec QR code est prête.")
                 else:
                     # le registre fait foi : les listes de classe et de
-                    # concours reliées à cette inscription suivent
-                    n = (Student.objects.filter(inscrit=inscrit)
-                         .update(last_name=inscrit.nom, first_name=inscrit.prenom,
-                                 student_number=inscrit.numero))
+                    # concours reliées à cette inscription suivent — celles
+                    # de l'utilisateur ; toutes pour l'administrateur
+                    lies = Student.objects.filter(inscrit=inscrit)
+                    if not request.user.is_superuser:
+                        lies = lies.filter(class_group__in=_my_classes(request))
+                    n = 0
+                    for etudiant in lies:
+                        avant = journal.identite(etudiant)
+                        etudiant.last_name, etudiant.first_name = inscrit.nom, inscrit.prenom
+                        etudiant.student_number = inscrit.numero
+                        etudiant.save(update_fields=["last_name", "first_name",
+                                                     "student_number"])
+                        journal.etudiant_modifie(request.user, etudiant, avant)
+                        n += 1
                     messages.success(request, f"Inscription de {inscrit.nom_complet} "
                                               "enregistrée"
                                      + (f" ({n} liste(s) de classe ou de concours "
@@ -158,6 +169,7 @@ def communiques(request):
                                    "l'administrateur peut le modifier.")
     form = CommuniqueForm(instance=modifie)
     if request.method == "POST":
+        droits.exiger(request.user, droits.CREER, "publier des communiqués")
         if "supprimer" in request.POST:
             avis = get_object_or_404(Communique, pk=_int_or_none(request.POST["supprimer"]))
             if not _peut_retirer(request.user, avis, "auteur_id"):
@@ -186,12 +198,19 @@ def communiques(request):
 
 # ------------------------------------------------------------ publication
 
+def _etat_publication(quiz):
+    parties = [nom for nom, oui in (("résultats", quiz.resultats_publies),
+                                    ("liste des admis", quiz.admis_publies)) if oui]
+    return " et ".join(parties) or "non publié"
+
+
 @login_required
 @require_POST
 def quiz_publication(request, pk):
     """Publie (ou retire) les résultats d'une épreuve sur l'espace public."""
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     droits.exiger(request.user, droits.CORRIGER, "publier les résultats")
+    avant = _etat_publication(quiz)
     quiz.resultats_publies = bool(request.POST.get("resultats_publies"))
     quiz.admis_publies = bool(request.POST.get("admis_publies"))
     if quiz.admis_publies and quiz.note_admission is None:
@@ -205,4 +224,7 @@ def quiz_publication(request, pk):
         quiz.publie_le = None
         messages.success(request, "Résultats retirés de l'espace public.")
     quiz.save(update_fields=["resultats_publies", "admis_publies", "publie_le"])
+    journal.noter(request.user, "publication", quiz=quiz,
+                  objet="Publication sur l'espace public",
+                  avant=avant, apres=_etat_publication(quiz))
     return redirect(reverse("quiz_results", args=[pk]) + "#publication")

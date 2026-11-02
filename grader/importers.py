@@ -53,6 +53,10 @@ def _cell(v):
 
 # ------------------------------------------------------------------ lecture
 
+MAX_LIGNES = 20000       # au-delà, ce n'est plus une liste de classe
+MAX_COLONNES = 60
+
+
 def _xlsx_rows(data):
     import openpyxl
     try:
@@ -60,8 +64,15 @@ def _xlsx_rows(data):
     except Exception as exc:  # noqa: BLE001
         raise ImportError_(f"Fichier Excel illisible : {exc}") from exc
     ws = wb.active
-    rows = [[_cell(c) for c in r] for r in ws.iter_rows(values_only=True)]
-    return [r for r in rows if any(r)]
+    # Dimensions déclarées par le fichier lui-même : un petit .xlsx peut
+    # annoncer des milliards de cellules, que la lecture remplirait de vide.
+    ws.reset_dimensions()
+    rows = []
+    for r in ws.iter_rows(max_row=MAX_LIGNES, max_col=MAX_COLONNES, values_only=True):
+        ligne = [_cell(c) for c in r]
+        if any(ligne):
+            rows.append(ligne)
+    return rows
 
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -72,6 +83,9 @@ def _docx_blocks(data):
     Retourne une liste d'éléments : str (paragraphe) ou list[str] (ligne)."""
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
+            # taille décompressée vérifiée avant lecture (archive piégée)
+            if z.getinfo("word/document.xml").file_size > 50 * 1024 * 1024:
+                raise ImportError_("Document Word démesuré.")
             root = ET.fromstring(z.read("word/document.xml"))
     except Exception as exc:  # noqa: BLE001
         raise ImportError_(f"Fichier Word illisible : {exc}") from exc

@@ -43,7 +43,7 @@
     <div class="progress"><i style="width:{{ batch.progress_pct }}%"></i></div>
   </div>
 </div>
-<script>setTimeout(function () { location.reload(); }, 3000);</script>
+<span data-recharger="3000" hidden></span>
 {% elif stalled or batch.status == "error" %}
 <div class="note note--bad">
   <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>

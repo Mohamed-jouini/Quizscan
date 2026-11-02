@@ -122,7 +122,7 @@
     <form method="post">{% csrf_token %}
       <button class="btn btn--grand" name="launch_grading" value="1" type="submit"
               {% if sans_corrige %}disabled title="Complétez d'abord le corrigé"{% endif %}
-              onclick="return confirm('Lancer la correction de {{ pending_pages }} page(s) ?')">
+              data-confirmer="Lancer la correction de {{ pending_pages }} page(s) ?">
         Lancer la correction</button>
     </form>
     {% endif %}
@@ -137,7 +137,7 @@
     — cette page se met à jour toute seule.
   </div>
 </div>
-<script>setTimeout(function () { location.reload(); }, 5000);</script>
+<span data-recharger="5000" hidden></span>
 {% endif %}
 
 {% if n_qcm %}
@@ -193,7 +193,7 @@
         {% if perms.grader.creer_epreuve %}
         <form class="inline" method="post">{% csrf_token %}
           <button class="btn small danger" type="submit" name="delete_answer_key" value="{{ k.pk }}"
-                  onclick="return confirm('Supprimer ce corrigé scanné ? Les bonnes réponses déjà enregistrées restent en place.')">Supprimer</button>
+                  data-confirmer="Supprimer ce corrigé scanné ? Les bonnes réponses déjà enregistrées restent en place.">Supprimer</button>
         </form>
         {% endif %}</td>
     </tr>
@@ -238,7 +238,7 @@
             {% if q.qtype == "qcm" %}
             <select name="correct" title="Bonne réponse"
                     {% if q.correct_choice is None %}class="champ--manquant"{% endif %}
-                    onchange="this.form.querySelector('button').hidden=false">
+                    data-montrer-bouton>
               <option value="" {% if q.correct_choice is None %}selected{% endif %}>— à définir —</option>
               {% for i, letter in q.letter_options %}
               <option value="{{ i }}" {% if q.correct_choice == i %}selected{% endif %}>{{ letter }}</option>
@@ -247,13 +247,13 @@
             {% endif %}
             {% if q.qtype == "qcm" %}<span class="helptext" title="Chaque QCM vaut 1 point">1 pt</span>{% else %}
             <input type="text" name="points" value="{{ q.points|floatformat:'-2' }}" title="Barème (points)"
-                   oninput="this.form.querySelector('button').hidden=false"> pt{% endif %}
+                   data-montrer-bouton> pt{% endif %}
             <button class="btn small" name="edit_question" value="{{ q.pk }}" hidden title="Enregistrer — les notes sont recalculées">✓</button>
           </form>
         </td>
         <td><form class="inline" method="post">{% csrf_token %}
           <button class="btn small danger" name="delete_question" value="{{ q.pk }}"
-                  onclick="return confirm('Supprimer la question {{ q.order }} ?')">✕</button>
+                  data-confirmer="Supprimer la question {{ q.order }} ?">✕</button>
         </form></td>
         {% else %}
         {# Sans le droit de modifier l'epreuve : les memes valeurs, en clair. #}
@@ -380,53 +380,8 @@
   </div>
 </div>
 
-<script>
-(function () {
-  var letters = [{% for l in choice_letters_full %}"{{ l }}"{% if not forloop.last %},{% endif %}{% endfor %}];
-  var ta = document.getElementById("id_choices_text");
-  var sel = document.getElementById("id_correct_letter");
-  // Sans texte de choix : le nombre de cases du quiz.
-  var defN = {{ quiz.num_choices|default:4 }};
-  var digitsRow = document.getElementById("row_id_digits");
-  var idMode = document.querySelector("select[name=id_mode]");
-  if (idMode && digitsRow) {
-    var syncDigits = function () { digitsRow.hidden = idMode.value !== "grid"; };
-    idMode.addEventListener("change", syncDigits); syncDigits();
-  }
-  if (!ta || !sel) return;
-  var qtype = document.getElementById("id_qtype");
-  var rows = {};
-  ["choices_text", "correct_letter", "open_height_mm", "points"]
-    .forEach(function (n) { rows[n] = document.getElementById("row_" + n); });
 
-  function rebuild() {
-    var lines = ta.value.split("\n").filter(function (l) { return l.trim() !== ""; });
-    // les choix saisis décident du nombre de cases
-    var n = Math.min(Math.max(lines.length || defN, 2), letters.length);
-
-    // Une question manuscrite n'a ni choix ni bonne réponse ; une QCM n'a pas
-    // de hauteur de zone de réponse.
-    var open = qtype && qtype.value === "open";
-    ["choices_text", "correct_letter"].forEach(function (name) {
-      if (rows[name]) rows[name].hidden = open;
-    });
-    if (rows.open_height_mm) rows.open_height_mm.hidden = !open;
-    if (rows.points) rows.points.hidden = !open;     // une QCM vaut 1 point
-
-    var cur = sel.value;
-    sel.innerHTML = '<option value="">— à définir plus tard —</option>';
-    for (var i = 0; i < n; i++) {
-      var o = document.createElement("option");
-      o.value = i; o.textContent = letters[i];
-      if (String(i) === cur) o.selected = true;
-      sel.appendChild(o);
-    }
-  }
-  ta.addEventListener("input", rebuild);
-  if (qtype) qtype.addEventListener("change", rebuild);
-  rebuild();
-})();
-</script>
+<span hidden data-lettres="{{ choice_letters_full|join:',' }}" data-cases="{{ quiz.num_choices|default:4 }}"></span>
 
 <div class="card">
   <h2>Copies scannées</h2>

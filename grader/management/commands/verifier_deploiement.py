@@ -66,8 +66,21 @@ class Command(BaseCommand):
         if settings.SECRET_KEY == getattr(settings, "INSECURE_DEV_SECRET_KEY", None):
             note(ERREUR, "SECRET_KEY est celle du dépôt",
                  "Renseignez SECRET_KEY dans .env.")
+        elif (settings.SECRET_KEY.startswith("changez-moi")
+              or len(settings.SECRET_KEY) < 40):
+            note(ERREUR, "SECRET_KEY est celle de l'exemple, ou trop courte",
+                 "Générez-en une : python -c \"import secrets; "
+                 "print(secrets.token_urlsafe(50))\" et mettez-la dans .env.")
         else:
             note(OK, "SECRET_KEY propre au serveur")
+
+        from django.contrib.auth import get_user_model
+        demo = list(get_user_model().objects.filter(
+            username__in=["demo_admin", "demo_prof"]).values_list("username", flat=True))
+        if demo and not settings.DEBUG:
+            note(ATTENTION, "Comptes de démonstration présents : " + ", ".join(demo),
+                 "Leurs noms sont connus de tous. Créez vos vrais comptes, puis : "
+                 "python manage.py comptes_demo --supprimer")
 
         if settings.ALLOWED_HOSTS == ["*"]:
             note(ERREUR, "ALLOWED_HOSTS accepte n'importe quel hôte",
@@ -85,6 +98,11 @@ class Command(BaseCommand):
                  "domaine ou sous-domaine dédié, laissez URL_PREFIX vide.")
         else:
             note(OK, "URL_PREFIX vide (application servie à la racine)")
+
+        note(OK, f"Reverse proxies déclarés devant l'application : {settings.PROXYS_DE_CONFIANCE}",
+             "S'il y en a un autre nombre, réglez PROXYS_DE_CONFIANCE (voir "
+             "deploy/Caddyfile.exemple). Contrôle : « docker compose logs quizscan "
+             "| grep Connexion » doit montrer l'adresse publique des enseignants.")
 
         securise = getattr(settings, "SESSION_COOKIE_SECURE", False)
         origines = getattr(settings, "CSRF_TRUSTED_ORIGINS", [])

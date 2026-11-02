@@ -23,7 +23,6 @@ from django.core.management import call_command  # noqa: E402
 call_command("migrate", verbosity=0)
 
 import cv2
-import numpy as np
 import pymupdf
 from django.contrib.auth.models import User
 from django.core.cache import cache
@@ -33,7 +32,7 @@ from django.test.utils import setup_test_environment
 from django.urls import reverse
 
 from grader import services
-from grader.models import ClassGroup, Modification, Quiz, Student
+from grader.models import ClassGroup, Quiz, Student
 from test_commun import enseignant_complet
 from test_e2e import fill_sheet, mm2px, render_page, simulate_scan
 

@@ -64,12 +64,14 @@
   </div>
   <div class="card">
     <h2>Nouvelle classe</h2>
+    {% if perms.grader.creer_epreuve %}
     <form method="post">{% csrf_token %}
       {{ form.name.errors }}
       <label>Nom de la classe</label>{{ form.name }}
       <span class="helptext">Par exemple « 3ème A — Sciences ».</span>
       <p><button class="btn" type="submit">Créer</button></p>
     </form>
+    {% else %}<p class="helptext">Votre compte est en lecture seule : demandez le droit « créer des épreuves » à l'administrateur pour créer une classe.</p>{% endif %}
   </div>
 </div>
 {% endblock %}

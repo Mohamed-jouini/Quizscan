@@ -11,11 +11,12 @@ traîne pas dans un historique de terminal. data/ n'est pas versionné.
 Pour un vrai compte d'administration, utilisez plutôt les commandes de
 Django : « createsuperuser » puis « changepassword ».
 """
+import os
 import secrets
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 COMPTES = [
     ("demo_prof", False, "Enseignant — accède à ses classes et à ses épreuves"),
@@ -50,6 +51,14 @@ class Command(BaseCommand):
             return
 
         mot_de_passe = options["mot_de_passe"] or secrets.token_urlsafe(12)
+        if options["mot_de_passe"]:
+            # mêmes règles que pour un vrai compte (longueur, trop courant…)
+            from django.contrib.auth import password_validation
+            from django.core.exceptions import ValidationError
+            try:
+                password_validation.validate_password(mot_de_passe)
+            except ValidationError as exc:
+                raise CommandError("Mot de passe refusé : " + " ".join(exc.messages))
         lignes = ["Comptes de démonstration QuizScan",
                   "Fichier local, jamais versionné. À supprimer avant la mise "
                   "en service :", "    python manage.py comptes_demo --supprimer",
@@ -67,6 +76,10 @@ class Command(BaseCommand):
                    "Connexion enseignant     : /comptes/login/",
                    "Connexion administration : /comptes/administration/"]
         chemin.write_text("\n".join(lignes) + "\n", encoding="utf-8")
+        try:
+            os.chmod(chemin, 0o600)          # lisible du seul propriétaire
+        except OSError:
+            pass
         self.stdout.write(self.style.SUCCESS(
             f"\nMot de passe écrit dans : {chemin}\n"
             "(il n'est pas affiché ici pour ne pas rester dans l'historique "
