@@ -542,6 +542,13 @@ def _uses_sticker(quiz):
             or getattr(quiz, "auto_enroll", False))
 
 
+def pages_a_etiquette(disposition):
+    """Nombre de pages d'une fiche qui attendent une étiquette collée. Chaque page
+    s'identifie seule au scan : c'est aussi le nombre d'étiquettes par candidat."""
+    return sum(1 for p in (disposition or {}).get("pages", [])
+               if (p.get("qr") or {}).get("sticker"))
+
+
 def _add_qr_zone(page, page_index, sticker=False):
     """Réserve la zone du QR code et du bandeau nominatif (fiches
     pré-imprimées par étudiant). Retourne l'ordonnée de début du contenu.

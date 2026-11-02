@@ -4,7 +4,9 @@ Chaque vignette porte, de gauche à droite : le n° d'inscription, le NOM et le
 prénom du candidat, puis son QR code (format « QS|<groupe>|<id> », lu par le
 scanner). Le bloc nom/numéro sert à savoir à qui remettre quelle étiquette ;
 **seul le QR, entouré de pointillés, est découpé et collé** par le candidat
-dans l'emplacement réservé de sa feuille de réponses.
+dans l'emplacement réservé de sa feuille de réponses. Chaque page de la copie
+s'identifie seule au scan : une feuille de 2 pages demande 2 vignettes par candidat
+(exemplaires), qui se suivent sur la planche.
 
 À imprimer sur papier autocollant A4. Disposition : 2 colonnes × 8 lignes,
 soit 16 candidats par page (voir les constantes STICKER_* de layout.py, qui
@@ -76,9 +78,11 @@ def _ellipsize(text, size, max_w_mm, bold=False):
     return text + "…"
 
 
-def generate_labels_pdf(group, students):
-    """Retourne les octets du PDF de la planche d'étiquettes du concours."""
+def generate_labels_pdf(group, students, exemplaires=1):
+    """Retourne les octets du PDF de la planche d'étiquettes du concours.
+    exemplaires : vignettes par candidat, une par page de sa feuille de réponses."""
     load_fonts()
+    vignettes = [s for s in students for _ in range(exemplaires)]
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
 
@@ -86,7 +90,14 @@ def generate_labels_pdf(group, students):
         return (PAGE_H - mm_from_top) * mm
 
     per_page = COLS * ROWS
-    pages = max(1, -(-len(students) // per_page))   # plafond
+    pages = max(1, -(-len(vignettes) // per_page))   # plafond
+    consigne = ("Découpez chaque QR le long des pointillés et remettez-le au "
+                "candidat dont le nom figure à côté : il le colle lui-même "
+                "dans l'emplacement réservé de sa feuille de réponses."
+                if exemplaires == 1 else
+                f"Découpez chaque QR le long des pointillés : le candidat en reçoit "
+                f"{exemplaires}, un à coller dans l'emplacement réservé de chaque "
+                "page de sa feuille de réponses.")
 
     def entete(page_no):
         """Marge haute : de quelle liste il s'agit et où l'on en est.
@@ -98,14 +109,12 @@ def generate_labels_pdf(group, students):
         _draw_text(c, titre, MARGIN_X * mm, y_top(6.5), 8, bold=True)
         _draw_text(c, f"page {page_no} / {pages}",
                    (PAGE_W - MARGIN_X) * mm, y_top(6.5), 7.5, align="right")
-        _draw_text(c, "Découpez chaque QR le long des pointillés et remettez-le au "
-                      "candidat dont le nom figure à côté : il le colle lui-même "
-                      "dans l'emplacement réservé de sa feuille de réponses.",
-                   (PAGE_W / 2) * mm, y_top(PAGE_H - 5.0), 7.5, align="center")
+        _draw_text(c, consigne, (PAGE_W / 2) * mm, y_top(PAGE_H - 5.0), 7.5, align="center")
         c.setFillGray(0.0)
 
     entete(1)
-    for i, s in enumerate(students):
+    qr_du_candidat = (None, None)
+    for i, s in enumerate(vignettes):
         slot = i % per_page
         if i and slot == 0:
             c.showPage()
@@ -129,8 +138,9 @@ def generate_labels_pdf(group, students):
         c.setDash(2, 2)
         c.rect(qx * mm, y_top(qy + qr_side), qr_side * mm, qr_side * mm)
         c.setDash()
-        qr_img = ImageReader(Image.open(io.BytesIO(qr_mod.student_qr_png(s))))
-        c.drawImage(qr_img, (qx + QR_PAD) * mm, y_top(qy + QR_PAD + QR_MM),
+        if qr_du_candidat[0] is not s:          # ses vignettes se suivent : un seul calcul
+            qr_du_candidat = (s, ImageReader(Image.open(io.BytesIO(qr_mod.student_qr_png(s)))))
+        c.drawImage(qr_du_candidat[1], (qx + QR_PAD) * mm, y_top(qy + QR_PAD + QR_MM),
                     QR_MM * mm, QR_MM * mm)
 
         # ---- Identité à gauche du QR : n° d'inscription, NOM, prénom

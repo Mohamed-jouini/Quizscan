@@ -13,7 +13,7 @@
     <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
     {% if students_total %}
     <a class="btn small" href="{% url 'class_labels_pdf' group.pk %}"
-       target="_blank">Planche d'étiquettes (PDF)</a>
+       target="_blank">Planche d'étiquettes (PDF){% if etiquettes_par_candidat > 1 %} : {{ etiquettes_par_candidat }} par candidat{% endif %}</a>
     {% endif %}
   </div>
 </header>

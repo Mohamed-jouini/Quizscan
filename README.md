@@ -94,7 +94,10 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
     portant le n° d'inscription et le NOM Prénom du candidat à côté de son QR.
     Seul le QR est découpé et collé sur la copie ; le nom reste sur la planche
     et sert à savoir à qui remettre quelle étiquette. Le QR collé est lu
-    automatiquement au scan.
+    automatiquement au scan. Chaque page de la copie s'identifie seule : dès que la
+    feuille fait plusieurs pages, la planche donne une vignette par page à chaque
+    candidat. Une page sans étiquette reste « à identifier », et le candidat apparaît
+    avec une **copie incomplète** tant qu'elle ne lui est pas affectée.
 
   Identification instantanée et infaillible, sans rien écrire. (Nécessite
   d'importer la liste des étudiants avant de générer fiches ou étiquettes.)
@@ -528,6 +531,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_qr.py` | fiches nominatives QR |
 | `test_e2e_concours.py` | mode concours (QR anonyme, grille de n°, import des noms) |
 | `test_e2e_labels.py` | étiquette QR d'un candidat de concours collée sur la copie |
+| `test_e2e_etiquette_pages.py` | feuille à étiquette sur plusieurs pages : une vignette par page, étiquette oubliée signalée (copie incomplète, en attente), présélection d'après l'ordre du scan |
 | `test_e2e_import.py` | import de questionnaires et de candidats (Excel, Word, PDF, CSV), banque de questions |
 | `test_e2e_forms.py` | création d'un concours (sans classe ni case « mode concours ») et d'un quiz, nombre de choix par question jusqu'à la lecture de la copie |
 | `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » |

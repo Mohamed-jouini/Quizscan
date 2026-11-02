@@ -29,7 +29,7 @@
         {% if l.row.resultat == "admis" %}<span class="badge ok pub-note__verdict">{% if l.quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</span>
         {% elif l.row.resultat == "refuse" %}<span class="badge bad pub-note__verdict">{% if l.quiz.auto_enroll %}Non admis{% else %}Non réussi{% endif %}</span>
         {% elif l.row.resultat == "en_attente" %}<span class="badge warn pub-note__verdict">Correction en cours</span>
-        {% elif l.row.pending_open %}<span class="badge warn">Note provisoire : correction en cours</span>{% endif %}
+        {% elif l.row.pending_open or l.row.questions_manquantes %}<span class="badge warn">Note provisoire : correction en cours</span>{% endif %}
         {% if l.quiz.a_des_qcm %}<span class="pub-note__detail">{% if l.quiz.note_distincte %}Note {{ l.row.score|floatformat:"-2" }} / {{ l.row.max_score|floatformat:"-2" }} · {% endif %}{{ l.row.wrong }} fausse(s) · {{ l.row.blank }} sans réponse · 1 point par bonne réponse</span>{% endif %}
       </article>
       {% endfor %}

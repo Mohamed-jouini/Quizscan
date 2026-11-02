@@ -218,10 +218,12 @@ def verifier_tous_les_cas(teacher):
     texte = " ".join(_texte(sheet_pdf.generate_subject_pdf(quiz)).split())
     assert "Pour chaque question, noircissez" in texte and "cadres prévus" not in texte
 
-    # Feuille de réponses en plusieurs pages : chacune est identifiée au scan.
-    # La planche ne porte qu'une étiquette par candidat : pas de consigne avec elle.
+    # Feuille de réponses en plusieurs pages : chacune est identifiée au scan. La
+    # planche porte alors une étiquette par page, le sujet doit le dire.
+    assert "étiquette QR sur chacune" not in _texte(sheet_pdf.generate_subject_pdf(quiz))
     quiz.layout_json = {"pages": [{}, {}]}
-    assert "identifiez-vous sur chacune" not in _texte(sheet_pdf.generate_subject_pdf(quiz))
+    assert "collez une étiquette QR sur chacune" in " ".join(
+        _texte(sheet_pdf.generate_subject_pdf(quiz)).split())
     quiz.id_mode = "grid"
     assert "identifiez-vous sur chacune" in " ".join(
         _texte(sheet_pdf.generate_subject_pdf(quiz)).split())

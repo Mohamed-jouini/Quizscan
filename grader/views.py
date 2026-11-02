@@ -457,6 +457,7 @@ def class_detail(request, pk):
     return render(request, "grader/class_detail.html",
                   {"group": group, "import_form": import_form,
                    "xlsx_form": xlsx_form, "retour": retour,
+                   "etiquettes_par_candidat": services.etiquettes_par_candidat(group),
                    "verification": request.session.get(f"verification_{pk}"),
                    "n_registre": Inscrit.objects.count(),
                    "autres_groupes": (_my_classes(request).exclude(pk=pk)
@@ -485,7 +486,8 @@ def class_labels_pdf(request, pk):
     if not students:
         messages.error(request, "Aucun candidat : importez d'abord la liste.")
         return redirect("class_detail", pk=pk)
-    pdf = labels_mod.generate_labels_pdf(group, students)
+    pdf = labels_mod.generate_labels_pdf(
+        group, students, exemplaires=services.etiquettes_par_candidat(group))
     resp = HttpResponse(pdf, content_type="application/pdf")
     resp["Content-Disposition"] = \
         f'inline; filename="etiquettes_{group.pk}.pdf"'
@@ -921,6 +923,7 @@ def quiz_detail(request, pk):
                   if not services.is_stalled(b)]
     return render(request, "grader/quiz_detail.html", {
         "quiz": quiz, "qform": qform, "bulk_form": bulk_form,
+        "pages_etiquette": layout_mod.pages_a_etiquette(quiz.layout_json),
         "import_form": import_form, "bank_form": bank_form,
         "id_modes": _id_modes(quiz),
         "pending_batches": pending,
@@ -1238,10 +1241,12 @@ def sheet_review(request, pk):
         messages.success(request, "Corrections enregistrées.")
         return redirect("batch_detail", pk=sheet.batch_id)
 
-    propose, ressemblance = services.proposition(sheet, list(students))
+    liste = list(students)
+    suite = services.suite_de_copie(sheet, liste)
+    propose, ressemblance = services.proposition(sheet, liste)
     return render(request, "grader/sheet_review.html", {
         "sheet": sheet, "quiz": quiz, "students": students,
-        "propose": propose, "ressemblance": round(ressemblance),
+        "propose": suite or propose, "suite": suite, "ressemblance": round(ressemblance),
         "identification": _identification(sheet),
         "answers": answers,
         "position": position + 1, "total": len(sheet_ids),
@@ -1388,6 +1393,7 @@ def quiz_results(request, pk):
         "batch_qs": urlencode(parametres),
         "batches": quiz.batches.all(), "unmatched": unmatched[:200],
         "unmatched_total": unmatched.count(), "n_masquees": n_masquees,
+        "n_incompletes": sum(1 for r in rows if r["questions_manquantes"]),
         "pending_pages": sum(b.total_pages for b in quiz.batches.filter(status="pending")),
         "stats": services.compute_stats(quiz, rows),
         "admission": admission,

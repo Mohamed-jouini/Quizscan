@@ -207,6 +207,17 @@
 </div>
 {% endif %}
 
+{% if pages_etiquette > 1 %}
+<ul class="messages"><li class="error">
+  ⚠️ Cette fiche compte {{ pages_etiquette }} pages : chaque candidat doit coller une étiquette QR
+  sur chaque page{% if quiz.id_mode == "grid" %} ou noircir son n° dans la grille de chaque page{% endif %},
+  sinon les réponses de la page restent hors de sa note. La planche en imprime
+  {{ pages_etiquette }} par candidat : réimprimez-la si elle date d'avant cette fiche.
+  {% if quiz.sheet_mode == "full" %}Avec « Sujet séparé + feuille de réponses », bien plus de
+  questions tiennent sur une page.{% endif %}
+</li></ul>
+{% endif %}
+
 {% if layout_stale %}
 <ul class="messages"><li class="error">
   ⚠️ Ce qui est imprimé sur la fiche (titre, questions ou réglages) a changé

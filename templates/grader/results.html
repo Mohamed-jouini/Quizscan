@@ -71,7 +71,7 @@
             title="Masquer ce message (les pages restent à identifier dans leur lot)"
             aria-label="Masquer ce message">×</button>
   </form>
-  ⚠️ {{ unmatched_total }} page(s) non identifiée(s) — leurs notes ne figurent pas ci-dessous.
+  ⚠️ {{ unmatched_total }} page(s) non identifiée(s) — leurs notes ne comptent pas encore ci-dessous.
   {% for s in unmatched %}
     <a href="{% url 'sheet_review' s.pk %}">{{ s.source_name }}</a>{% if not forloop.last %}, {% endif %}
   {% endfor %}
@@ -85,6 +85,13 @@
   <span class="helptext helptext--serre">{{ n_masquees }} page(s) non identifiée(s) masquée(s) —
     <button class="lien" type="submit" name="reafficher_non_identifiees" value="1">réafficher</button></span>
 </form>
+{% endif %}
+{% if n_incompletes %}
+<ul class="messages"><li class="error">
+  ⚠️ {{ n_incompletes }} {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %}(s) à copie incomplète :
+  leur note ne compte pas toutes les questions. Affectez leurs pages non identifiées ; d'ici là,
+  sous la note minimale, ils restent « En attente ».
+</li></ul>
 {% endif %}
 
 {% if perms.grader.corriger_copies and not batch %}
@@ -101,7 +108,7 @@
     <p><button class="btn small" type="submit">Enregistrer la publication</button>
       {% if quiz.resultats_publies or quiz.admis_publies %}<a class="btn small secondary" href="{% url 'public_epreuve' quiz.pk %}" target="_blank" rel="noopener">Voir la page publique</a>{% endif %}</p>
   </form>
-  {% if unmatched_total or pending_pages %}<p class="helptext">Attention : {% if unmatched_total %}{{ unmatched_total }} copie(s) non identifiée(s){% endif %}{% if unmatched_total and pending_pages %} et {% endif %}{% if pending_pages %}{{ pending_pages }} page(s) non corrigée(s){% endif %} — leurs notes manqueront sur l'espace public.</p>{% endif %}
+  {% if unmatched_total or pending_pages %}<p class="helptext">Attention : {% if unmatched_total %}{{ unmatched_total }} copie(s) non identifiée(s){% endif %}{% if unmatched_total and pending_pages %} et {% endif %}{% if pending_pages %}{{ pending_pages }} page(s) non corrigée(s){% endif %} — leurs notes manqueront ou seront incomplètes sur l'espace public.</p>{% endif %}
 </div>
 {% endif %}
 
@@ -228,7 +235,8 @@
     {% for r in rows_page %}
     <tr>
       <td><b>{{ r.student.full_name }}</b>
-          {% if r.student.student_number %}<span class="helptext">n° {{ r.student.student_number }}</span>{% endif %}</td>
+          {% if r.student.student_number %}<span class="helptext">n° {{ r.student.student_number }}</span>{% endif %}
+          {% if r.questions_manquantes %}<span class="badge warn" title="Page non identifiée ou non reçue : ces questions ne comptent pas dans la note">Incomplète : {{ r.questions_manquantes }} question{{ r.questions_manquantes|pluralize }}</span>{% endif %}</td>
       {% if quiz.a_des_qcm %}<td class="score">{{ r.correct }} / {{ r.n_qcm }}</td>{% endif %}
       <td>{% include "grader/_pourcentage.html" with pct=r.pct %}</td>
       {% if quiz.note_distincte %}<td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>{% endif %}

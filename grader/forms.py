@@ -338,6 +338,9 @@ class QuizForm(forms.ModelForm):
             self.fields["id_mode"].choices = [
                 c for c in Quiz.ID_MODES if c[0] in CONCOURS_ID_MODES]
             self.fields["id_mode"].initial = "sticker"
+            # Chaque page demande une étiquette, et le questionnaire complet n'en
+            # loge que 5 QCM : 50 QCM y feraient 10 pages, donc 10 étiquettes.
+            self.fields["sheet_mode"].initial = "split"
         else:
             # quiz de classe : correction toujours immédiate
             del self.fields["grading_mode"]

@@ -60,9 +60,11 @@ def _ligne_resultat(quiz, r, admission):
     if not admission or not r.get("resultat"):
         return None, None
     concours = quiz.auto_enroll
+    attente = ("EN ATTENTE — page de la copie à identifier" if r["questions_manquantes"]
+               else "EN ATTENTE — réponses manuscrites à noter")
     libelle = {"admis": "ADMIS" if concours else "RÉUSSI",
                "refuse": "NON ADMIS" if concours else "NON RÉUSSI",
-               "en_attente": "EN ATTENTE — réponses manuscrites à noter"}[r["resultat"]]
+               "en_attente": attente}[r["resultat"]]
     texte = f"{libelle} — rang {r['rang']} sur {admission['n']}"
     couleur = {"admis": (0.1, 0.5, 0.2), "refuse": (0.75, 0.15, 0.1),
                "en_attente": (0.6, 0.35, 0.0)}[r["resultat"]]
@@ -110,6 +112,8 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
             resume = f"note {r['score']:g} / {r['max_score']:g} — " + resume
         if r["pending_open"]:
             resume += f" — {r['pending_open']} manuscrite(s) non corrigée(s)"
+        if r["questions_manquantes"]:
+            resume += f" — {r['questions_manquantes']} question(s) non lue(s)"
         _draw(c, resume, X1, 62.0, 9.5, align="right", gray=0.25)
         texte, couleur = _ligne_resultat(quiz, r, admission)
         if texte:

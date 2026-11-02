@@ -572,7 +572,8 @@ def _dessiner_grille_note(c, draw, g, T, lang):
 #       remise au candidat (étiquette, grille, talon, n° de place, nom).
 #   5 — en-tête de l'institut si aucun n'est saisi ; une ligne laissée vide dans
 #       l'en-tête reste un espace dans le cartouche.
-SUJET_VERSION = 5
+#   6 — feuille à étiquette en plusieurs pages : consigne d'une étiquette par page.
+SUJET_VERSION = 6
 
 # QuizScan sert à cet institut : son en-tête s'imprime sur tout sujet dont le champ
 # « En-tête du sujet » est vide. La ligne vide sépare les ministères de l'établissement.
@@ -625,6 +626,8 @@ SUJET_TEXTES = {
                    "distinctif.",
         "c_chaque_page": "La feuille de réponses compte {p} pages : "
                          "identifiez-vous sur chacune d'elles.",
+        "c_chaque_page_etiquette": "La feuille de réponses compte {p} pages : "
+                                   "collez une étiquette QR sur chacune d'elles.",
         "c_noircir": "Pour chaque question, noircissez complètement une seule "
                      "case sur la feuille de réponses.",
         "c_noircir_qcm": "Pour chaque question à choix multiples, noircissez "
@@ -680,6 +683,8 @@ SUJET_TEXTES = {
                    "عليها الاسم ولا أي علامة مميِّزة.",
         "c_chaque_page": "تتكوّن ورقة الإجابة من {p}: يُكتب التعريف على كل صفحة "
                          "منها.",
+        "c_chaque_page_etiquette": "تتكوّن ورقة الإجابة من {p}: تُثبَّت لاصقة رمز QR "
+                                   "على كل صفحة منها.",
         "c_noircir": "تُملأ كليًا خانة واحدة لكل سؤال على ورقة الإجابة.",
         "c_noircir_qcm": "تُملأ كليًا خانة واحدة لكل سؤال متعدد الاختيارات على "
                          "ورقة الإجابة.",
@@ -952,10 +957,11 @@ def generate_subject_pdf(quiz, questions=None):
                 remarques.append(S["r_penalite"].format(x=f"{quiz.wrong_penalty:g}"))
         cle = _cle_identification(quiz)
         consignes = [S[cle].format(f=S["feuille"])]
-        # Chaque page de la feuille est identifiée séparément au scan. Pas pour
-        # l'étiquette : la planche n'en porte qu'une par candidat.
+        # Chaque page de la feuille est identifiée séparément au scan.
         nb_feuilles = len((quiz.layout_json or {}).get("pages", []))
-        if nb_feuilles > 1 and cle in ("c_grille", "c_nom"):
+        if nb_feuilles > 1 and cle == "c_etiquette":
+            consignes.append(S["c_chaque_page_etiquette"].format(p=_nb_pages(nb_feuilles, lang)))
+        elif nb_feuilles > 1 and cle in ("c_grille", "c_nom"):
             consignes.append(S["c_chaque_page"].format(p=_nb_pages(nb_feuilles, lang)))
         if a_qcm:
             consignes.append(S["c_noircir_qcm"] if a_redigees else S["c_noircir"])

@@ -784,6 +784,32 @@ def proposition(sheet, students):
     return None, score
 
 
+def suite_de_copie(sheet, students):
+    """Étudiant probable d'une page 2 ou suivante restée sans identification (étiquette
+    oubliée) : celui de la page lue juste avant dans le lot, si c'est bien la page
+    précédente de la fiche et qu'il n'a pas encore celle-ci.
+
+    Simple présélection à l'écran de vérification, jamais une affectation : deux
+    feuilles inversées dans le paquet donneraient à un candidat les réponses d'un autre."""
+    if sheet.student_id is not None or not sheet.page_index or sheet.ocr_name_raw:
+        return None
+    # pages blanches ou illisibles sautées (verso d'une feuille imprimée d'un seul côté)
+    avant = (sheet.batch.sheets.filter(pk__lt=sheet.pk, status__in=("ok", "no_match"))
+             .order_by("-pk").first())
+    if (avant is None or avant.student_id is None
+            or avant.page_index != sheet.page_index - 1
+            or avant.student_id in _deja_identifies(sheet.batch.quiz, sheet)):
+        return None
+    return next((s for s in students if s.pk == avant.student_id), None)
+
+
+def etiquettes_par_candidat(groupe):
+    """Étiquettes à imprimer par candidat sur la planche d'un groupe : autant que de pages
+    à étiquette sur la plus longue de ses fiches (1 tant qu'aucune n'est générée)."""
+    return max([layout_mod.pages_a_etiquette(d) for d in
+                groupe.quizzes.values_list("layout_json", flat=True)] + [1])
+
+
 def reidentifier_lot(batch, utilisateur=None):
     """Seconde chance pour les copies « à identifier » d'un lot : nouvelle
     lecture du nom (sur l'image redressée conservée) et rapprochement, cette
@@ -1079,7 +1105,8 @@ def compute_results(quiz, batch=None, student=None):
 
     Retourne une liste de dicts triée par nom :
     {student, score, max_score, answered, correct, wrong, blank,
-     pending_open (questions manuscrites non corrigées), sheets}
+     pending_open (questions manuscrites non corrigées),
+     questions_manquantes (sans réponse lue : page non identifiée ou non reçue), sheets}
     """
     sheets = SheetScan.objects.filter(batch__quiz=quiz).exclude(student=None)
     if batch is not None:
@@ -1133,7 +1160,9 @@ def compute_results(quiz, batch=None, student=None):
     n_qcm = quiz.questions.filter(qtype="qcm").count()
     rows = []
     for entry in per_student.values():
-        entry.pop("seen_questions")
+        # Page non identifiée ou non reçue : ses questions ne sont ni justes, ni fausses,
+        # ni vides. La note est partielle, et seul ce compte le dit.
+        entry["questions_manquantes"] = max(len(questions) - len(entry.pop("seen_questions")), 0)
         entry["score"] = max(round(entry["score"], 2), 0.0)
         entry["max_score"] = max_score
         entry["n_qcm"] = n_qcm
@@ -1151,7 +1180,10 @@ def admissions(quiz, rows):
     candidat, son résultat :
       - « admis »      : note ≥ seuil ;
       - « en_attente » : sous le seuil, mais des réponses manuscrites restent
-                         à noter — elles peuvent encore le faire passer ;
+                         à noter ou une page de la copie à identifier — elles
+                         peuvent encore le faire passer. Avec une pénalité, une
+                         page manquante peut aussi faire baisser une note au-dessus
+                         du seuil : même résultat ;
       - « refuse »     : sous le seuil, copie entièrement notée.
     Pose aussi row["resultat"] sur chaque ligne, pour le tableau principal.
     Les pages non identifiées n'y figurent pas (elles n'ont pas de candidat)."""
@@ -1161,9 +1193,10 @@ def admissions(quiz, rows):
             r["resultat"] = None
         return None
     for r in rows:
-        if r["score"] >= seuil:
+        manquantes = r["questions_manquantes"]
+        if r["score"] >= seuil and not (manquantes and quiz.wrong_penalty):
             r["resultat"] = "admis"
-        elif r["pending_open"]:
+        elif r["pending_open"] or manquantes:
             r["resultat"] = "en_attente"
         else:
             r["resultat"] = "refuse"

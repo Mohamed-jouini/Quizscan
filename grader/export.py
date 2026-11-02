@@ -32,7 +32,7 @@ def results_workbook(quiz, rows, stats=None, admission=None):
 
     headers = ["Nom", "Prénom", "N° inscription", "Note", "Sur",
                "Répondues", "Correctes", "Fausses", "Sans réponse",
-               "Manuscrites à corriger", "Pourcentage"]
+               "Manuscrites à corriger", "Pourcentage", "Questions non lues"]
     if admission:
         headers.append("Résultat")
     ws.append([f"{quiz.title} — {quiz.class_group.name}"])
@@ -50,13 +50,14 @@ def results_workbook(quiz, rows, stats=None, admission=None):
         s = r["student"]
         ligne = [s.last_name, s.first_name, s.student_number,
                  r["score"], r["max_score"], r["answered"], r["correct"],
-                 r["wrong"], r["blank"], r["pending_open"], r["pct"] / 100]
+                 r["wrong"], r["blank"], r["pending_open"], r["pct"] / 100,
+                 r["questions_manquantes"]]
         if admission:
             ligne.append(RESULTAT.get(r.get("resultat"), ""))
         ws.append(_sans_formule(ligne))
         ws.cell(row=ws.max_row, column=11).number_format = "0%"
 
-    widths = [22, 18, 14, 8, 6, 11, 10, 8, 13, 20, 12, 12]
+    widths = [22, 18, 14, 8, 6, 11, 10, 8, 13, 20, 12, 12, 12]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A3"
