@@ -12,7 +12,29 @@ services:
     env_file: .env
     environment:
       DEBUG: "0"
+      POSTGRES_HOST: db
     volumes:
-      - ./data:/app/data     # base de données SQLite
+      - ./data:/app/data     # cache, sauvegardes
       - ./media:/app/media   # fiches PDF, scans, images de contrôle
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # La base n'est joignable que par l'application : aucun port n'est publié.
+  # Version majeure fixée : la changer demande de migrer data/postgres, une mise
+  # à jour automatique ne doit jamais le faire.
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-quizscan}
+      POSTGRES_USER: ${POSTGRES_USER:-quizscan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?manque dans .env - lancez sh deploy/passer_a_postgres.sh}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
     restart: unless-stopped

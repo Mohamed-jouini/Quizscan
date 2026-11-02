@@ -1,13 +1,11 @@
-"""Copie la base SQLite dans PostgreSQL, une fois, au moment de changer de base.
-
-    docker compose run --rm quizscan python manage.py passer_a_postgres
+"""Copie une ancienne base SQLite dans PostgreSQL, une fois (QuizScan fonctionnait
+sur SQLite avant novembre 2026). Sur un serveur, deploy/passer_a_postgres.sh la lance.
 
 L'application doit être arrêtée : ce qui serait écrit pendant la copie serait
-perdu. Le fichier SQLite n'est jamais modifié (le travail se fait sur une copie) :
-en retirant les réglages POSTGRES_* de .env, on revient à la situation d'avant.
+perdu. Le fichier SQLite n'est jamais modifié : le travail se fait sur une copie.
 
 Après la copie, chaque table est recomptée et la somme des notes comparée : au
-moindre écart, la commande échoue. Sans ce message de succès, ne basculez pas.
+moindre écart, la commande échoue. Sans son message de succès, gardez SQLite.
 """
 import json
 import sqlite3
@@ -19,7 +17,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connection, connections, models
+from django.db import connections, models
+from django.db.migrations import RunPython
 from django.db.migrations.executor import MigrationExecutor
 
 SOURCE = "source_sqlite"
@@ -81,8 +80,6 @@ def _controler(cible, ecrire):
 def transferer(source, cible="default", ecraser=False, ecrire=print):
     """Copie `source` (fichier SQLite) dans la base `cible`. Lève CommandError au
     moindre écart ; renvoie la liste des textes corrigés."""
-    if connections[cible].vendor == "sqlite" and Path(connections[cible].settings_dict["NAME"]) == Path(source):
-        raise CommandError("La base source et la base cible sont le même fichier.")
     corrections = []
     with tempfile.TemporaryDirectory() as dossier:
         copie = Path(dossier) / "source.sqlite3"
@@ -93,16 +90,21 @@ def transferer(source, cible="default", ecraser=False, ecrire=print):
         originale.close()
         _brancher_source(copie)
         try:
-            # Pas de « migrate » sur la source : d'anciennes migrations de données
-            # et un signal écrivent toujours dans la base par défaut, c'est-à-dire
-            # ici la cible. Les deux doivent seulement être au même niveau.
-            executeur = MigrationExecutor(connections[SOURCE])
-            if executeur.migration_plan(executeur.loader.graph.leaf_nodes()):
-                raise CommandError(
-                    "La base SQLite n'est pas à jour. Déployez d'abord cette version sur "
-                    "SQLite (sans les réglages POSTGRES_*), puis recommencez.")
             ecrire("Préparation de la base cible…")
             call_command("migrate", database=cible, interactive=False, verbosity=0)
+            # La copie est mise au niveau de cette version, après la cible : un
+            # signal de fin de migration écrit toujours dans la base par défaut.
+            # Une migration de données écrirait aussi au mauvais endroit : refus.
+            executeur = MigrationExecutor(connections[SOURCE])
+            plan = executeur.migration_plan(executeur.loader.graph.leaf_nodes())
+            if any(isinstance(op, RunPython) for migration, _ in plan
+                   for op in migration.operations):
+                raise CommandError(
+                    "Base SQLite trop ancienne : elle doit d'abord tourner sur une version "
+                    "de QuizScan de novembre 2026 sur SQLite (commit 506bc57).")
+            if plan:
+                ecrire(f"Mise à niveau de la copie ({len(plan)} migration(s))…")
+                call_command("migrate", database=SOURCE, interactive=False, verbosity=0)
             User = get_user_model()
             if not ecraser and (User.objects.using(cible).exists()
                                 or apps.get_model("grader", "Quiz").objects.using(cible).exists()):
@@ -128,7 +130,7 @@ def transferer(source, cible="default", ecraser=False, ecrire=print):
             ecrire("Contrôle :")
             ecarts = _controler(cible, ecrire)
             if ecarts:
-                raise CommandError("La copie n'est pas fidèle, ne basculez pas :\n  "
+                raise CommandError("La copie n'est pas fidèle, gardez SQLite :\n  "
                                    + "\n  ".join(ecarts))
         finally:
             connections[SOURCE].close()
@@ -148,10 +150,6 @@ class Command(BaseCommand):
                             help="Remplace les données déjà présentes dans PostgreSQL.")
 
     def handle(self, *args, source=None, ecraser=False, **options):
-        if connection.vendor != "postgresql":
-            raise CommandError(
-                "PostgreSQL n'est pas configuré : renseignez POSTGRES_DB, POSTGRES_USER, "
-                "POSTGRES_PASSWORD et POSTGRES_HOST dans .env.")
         source = Path(source or settings.DATA_DIR / "db.sqlite3")
         if not source.is_file():
             raise CommandError(f"Fichier SQLite introuvable : {source}")

@@ -89,8 +89,7 @@ def _scenario(medias, archives):
     manifeste = sauvegarde.lire_manifeste(archive)
     with zipfile.ZipFile(archive) as zf:
         noms = set(zf.namelist())
-    attendu = "base.sqlite3" if sauvegarde._sqlite() else "base.json"
-    assert attendu in noms, f"la base manque : {sorted(noms)[:5]}"
+    assert "base.json" in noms, f"la base manque : {sorted(noms)[:5]}"
     assert "medias/scans/copie-témoin.jpg" in noms, (
         "les copies scannées ne sont pas dans l'archive")
     assert manifeste["fichiers_medias"] == 1 and manifeste["medias"], manifeste

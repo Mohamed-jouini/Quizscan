@@ -34,7 +34,7 @@ SCAN_DPI = 200
 # Un lot sans progression depuis ce délai (s) est considéré interrompu
 STALLED_AFTER = 300
 # Sérialise la lecture des pages (création automatique des candidats en
-# mode concours, écritures SQLite) quand plusieurs lots tournent à la fois.
+# mode concours) quand plusieurs lots tournent à la fois dans un même processus.
 _PROCESS_LOCK = threading.Lock()
 
 

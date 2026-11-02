@@ -250,51 +250,39 @@ tourner et le journal le dit. La même suite se lance à la main avec
 `sh deploy/tests.sh` — c'est le seul endroit où elle passe en entier, car
 l'image embarque Tesseract.
 
-### Passer de SQLite à PostgreSQL
+### PostgreSQL et ancienne base SQLite
 
-À faire une fois, en dehors de toute correction. L'application est arrêtée pendant
-la copie. Le fichier SQLite n'est jamais modifié, il sert de retour arrière.
+QuizScan fonctionne sur PostgreSQL : `docker compose` le démarre avec l'application.
+Ses données sont dans `data/postgres`, à ne jamais copier à chaud (passez par la
+sauvegarde). Le mot de passe, `POSTGRES_PASSWORD` dans `.env`, ne se change plus
+une fois la base créée.
 
-**Le plus simple**, une fois cette version déployée, depuis le dossier de QuizScan :
+**Un serveur qui tournait sur SQLite** passe à PostgreSQL une fois, en dehors de
+toute correction, depuis le dossier de QuizScan :
 
 ```bash
 sh deploy/passer_a_postgres.sh
 ```
 
-Le script vérifie qu'aucune correction n'est en cours, sauvegarde, crée le mot de
-passe, copie les données, contrôle la copie et relance l'application. Au moindre
-problème, il remet `.env` comme avant et relance l'application sur SQLite.
-Refaites ensuite une sauvegarde complète (`manage.py sauvegarde`, avec les fichiers).
+Le script crée le mot de passe, garde une copie de secours de SQLite dans
+`data/sauvegardes/avant-postgres/`, copie les données, recompte chaque table,
+compare la somme des notes et démarre l'application. En cas d'échec, il affiche
+l'erreur et `data/db.sqlite3` reste intact. Tant qu'il n'a pas été lancé, la mise
+à jour échoue sur le mot de passe manquant, sans toucher à l'application en place.
 
-**À la main**, les mêmes étapes :
+Vérifiez ensuite le site (comptes, classes, notes), faites une sauvegarde complète,
+puis supprimez l'ancienne base. La commande refuse si le site n'est pas sur
+PostgreSQL :
 
-1. Déployez d'abord cette version, puis faites une sauvegarde complète :
-   `docker compose exec quizscan python manage.py sauvegarde`
-2. Ajoutez à `.env` (mot de passe : `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`) :
-   ```
-   COMPOSE_FILE=docker-compose.yml:docker-compose.postgres.yml
-   POSTGRES_DB=quizscan
-   POSTGRES_USER=quizscan
-   POSTGRES_PASSWORD=la-chaine-generee
-   POSTGRES_HOST=db
-   ```
-3. Copiez les données, puis relancez :
-   ```
-   docker compose stop quizscan
-   docker compose up -d db
-   docker compose run --rm quizscan python manage.py passer_a_postgres
-   docker compose up -d --build
-   docker compose exec quizscan python manage.py verifier_deploiement
-   ```
-   La commande recompte chaque table et compare la somme des notes. Sans son
-   message « Copie fidèle », n'allez pas plus loin : retirez ces lignes de `.env`.
-4. Refaites une sauvegarde complète : celles d'avant sont au format SQLite et ne
-   se restaurent pas sur PostgreSQL.
+```bash
+sh deploy/passer_a_postgres.sh --supprimer-sqlite
+```
 
-Retour arrière : retirez ces lignes de `.env`, puis
-`docker compose up -d --remove-orphans`. Ce qui a été saisi depuis le passage à
-PostgreSQL n'existe pas dans SQLite. Les données de PostgreSQL sont dans
-`data/postgres` (jamais à copier à chaud : passez par la sauvegarde).
+Il n'y a pas de retour automatique à SQLite : pour revenir en arrière avant cette
+suppression, reprenez le commit `506bc57`, la dernière version sur SQLite, et
+retirez `POSTGRES_PASSWORD` de `.env`. Ce qui a été saisi depuis n'existe que dans
+PostgreSQL. Une ancienne sauvegarde au format SQLite se reprend par
+`manage.py passer_a_postgres --source base.sqlite3`.
 
 ### Sauvegardes et restauration
 
@@ -485,6 +473,7 @@ sudo apt install python3-pip python3-venv tesseract-ocr tesseract-ocr-fra tesser
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+# PostgreSQL installé à part : POSTGRES_PASSWORD (et HOST, PORT) dans un fichier .env
 python manage.py migrate
 python manage.py runserver 0.0.0.0:8000
 ```
@@ -555,10 +544,10 @@ paquets de langue (`tesseract-ocr-fra`, `tesseract-ocr-ara`) : `test_e2e_ar.py`,
 `test_e2e_web.py` et la variante « grille » de `test_e2e_concours.py`. Les
 autres, dont `test_e2e_robustesse.py` qui simule l'OCR, tournent sans Tesseract.
 
-Les tests utilisent leur **propre base** (`data/test_db.sqlite3`) et leur propre
-dossier de documents (`media_test/`) : la base de production `data/db.sqlite3`
-ne contient jamais de comptes ni de copies de test. Au premier démarrage elle
-est vide — créez l'administrateur avec `createsuperuser`.
+Les tests utilisent leur **propre base** (`quizscan_test`, à créer une fois sur le
+PostgreSQL du poste) et leur propre dossier de documents (`media_test/`) : la base
+de production ne contient jamais de comptes ni de copies de test. Au premier
+démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
 
 ## Conseils pour une lecture fiable
 
@@ -785,7 +774,6 @@ python manage.py comptes_demo --supprimer
   tous les documents exigent une connexion, et chaque enseignant n'accède
   qu'à **ses propres** fiches PDF, scans, images de contrôle et recadrages
   (l'administrateur voit tout) ;
-- **PostgreSQL** recommandé au-delà d'un usage mono-poste (SQLite par
-  défaut) : il suffit de renseigner `POSTGRES_DB`, `POSTGRES_USER`,
-  `POSTGRES_PASSWORD` (et au besoin `POSTGRES_HOST` / `POSTGRES_PORT`) dans
-  `.env`, le pilote est déjà installé dans l'image.
+- **PostgreSQL** est la base de données : `POSTGRES_PASSWORD` est obligatoire dans
+  `.env` (voir « PostgreSQL et ancienne base SQLite »), `POSTGRES_DB`, `POSTGRES_USER`,
+  `POSTGRES_HOST` et `POSTGRES_PORT` sont facultatifs.

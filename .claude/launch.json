@@ -4,7 +4,7 @@
     {
       "name": "quizscan",
       "runtimeExecutable": "venv/Scripts/python.exe",
-      "runtimeArgs": ["manage.py", "runserver", "8731"],
+      "runtimeArgs": ["-c", "import subprocess as s; s.run(['data\\\\pgsql\\\\bin\\\\pg_ctl.exe', '-D', 'data/postgres', '-l', 'data/postgres.log', '-w', '-o', '-p 55432 -c listen_addresses=127.0.0.1', 'start'], stdin=s.DEVNULL, stdout=s.DEVNULL, stderr=s.DEVNULL); s.call(['venv\\\\Scripts\\\\python.exe', 'manage.py', 'runserver', '8731'])"],
       "port": 8731
     }
   ]

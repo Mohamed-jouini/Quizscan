@@ -191,6 +191,10 @@ class Command(BaseCommand):
                  "Lancez : python manage.py migrate")
         else:
             note(OK, f"Base {moteur} joignable, migrations à jour")
+        if (settings.DATA_DIR / "db.sqlite3").exists():
+            note(ATTENTION, "Ancienne base SQLite encore présente : data/db.sqlite3",
+                 "Elle ne sert plus. Une fois le site vérifié : "
+                 "sh deploy/passer_a_postgres.sh --supprimer-sqlite")
 
     # ------------------------------------------------------------ fichiers
     def _fichiers(self, note):

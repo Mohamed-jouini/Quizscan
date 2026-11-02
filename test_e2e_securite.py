@@ -409,19 +409,15 @@ def main():
     print("  en-têtes : CSP, pages du personnel non conservées ; session de 12 h sans activité OK")
 
     # ---- sauvegarde : sans les sessions ouvertes
-    import sqlite3
     import tempfile
     import zipfile
+    from django.contrib.sessions.models import Session
     from grader import sauvegarde
-    if sauvegarde._sqlite():
-        with tempfile.TemporaryDirectory() as dossier:
-            archive = sauvegarde.creer(dossier, avec_medias=False)
-            with zipfile.ZipFile(archive) as z:
-                z.extract("base.sqlite3", dossier)
-            base = sqlite3.connect(os.path.join(dossier, "base.sqlite3"))
-            n = base.execute("SELECT COUNT(*) FROM django_session").fetchone()[0]
-            base.close()
-            assert n == 0, f"{n} session(s) dans l'archive"
+    assert Session.objects.exists(), "aucune session à exclure : contrôle sans valeur"
+    with tempfile.TemporaryDirectory() as dossier:
+        archive = sauvegarde.creer(dossier, avec_medias=False)
+        with zipfile.ZipFile(archive) as z:
+            assert b"sessions.session" not in z.read("base.json"), "sessions dans l'archive"
     # comptes de démonstration : un mot de passe faible est refusé
     from django.core.management import CommandError
     try:

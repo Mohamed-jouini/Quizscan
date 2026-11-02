@@ -16,7 +16,7 @@ import time
 import django
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "quizscan.settings")
-os.environ["QUIZSCAN_TEST"] = "1"   # base de test séparée (data/test_db.sqlite3)
+os.environ["QUIZSCAN_TEST"] = "1"   # base de test séparée (quizscan_test)
 django.setup()
 from django.core.management import call_command  # noqa: E402
 call_command("migrate", verbosity=0)

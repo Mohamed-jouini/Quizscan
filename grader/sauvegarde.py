@@ -1,14 +1,12 @@
 """Sauvegarde et restauration complètes de QuizScan.
 
-Ce qui faisait défaut avant ce module (deploy/update.sh copiait seulement
-data/db.sqlite3, au moment d'une mise à jour) :
+Ce que ce module apporte :
 
   - **les fichiers** : media/ contient les copies scannées, les images de
     contrôle et les corrigés scannés. Ce sont les pièces qui font foi quand
     un candidat conteste sa note ; elles n'étaient jamais sauvegardées ;
-  - **la cohérence** : copier une base SQLite en service avec ``cp`` peut
-    produire un fichier corrompu si une correction écrit pendant la copie.
-    On passe par l'API de sauvegarde de SQLite, faite pour cela ;
+  - **la cohérence** : copier à chaud les fichiers de PostgreSQL ne donne pas
+    une base utilisable. Les données sont exportées par l'application ;
   - **la régularité** : une sauvegarde par nuit, pas seulement lors d'une
     mise à jour (voir deploy/quizscan-sauvegarde.timer) ;
   - **le second support** : une archive restée sur le disque qu'elle protège
@@ -17,8 +15,7 @@ data/db.sqlite3, au moment d'une mise à jour) :
 Une archive est un fichier ZIP ordinaire, lisible sans QuizScan :
 
     manifeste.json      date, version, moteur, effectifs
-    base.sqlite3        base SQLite (copie cohérente)        — ou —
-    base.json           données exportées (PostgreSQL)
+    base.json           données exportées, sans les sessions ouvertes
     medias/...          arborescence complète de media/
 
 Les commandes ``sauvegarde`` et ``restaurer`` (grader/management/commands)
@@ -27,7 +24,6 @@ ne sont que des façades sur ce module.
 import json
 import os
 import shutil
-import sqlite3
 import tempfile
 import zipfile
 from datetime import datetime, timedelta
@@ -35,7 +31,7 @@ from pathlib import Path, PurePosixPath
 
 from django.conf import settings
 from django.core.management import call_command
-from django.db import connection, connections, transaction
+from django.db import connection, transaction
 from django.utils import timezone
 
 PREFIXE = "quizscan-"
@@ -56,10 +52,6 @@ class ArchiveInvalide(Exception):
 
 def dossier_par_defaut():
     return Path(settings.DATA_DIR) / "sauvegardes"
-
-
-def _sqlite():
-    return connection.vendor == "sqlite"
 
 
 def _version():
@@ -86,21 +78,6 @@ def _effectifs():
 
 # ------------------------------------------------------------------ création
 
-def _sans_sessions(chemin):
-    """Retire de la copie les sessions ouvertes : une archive égarée ne doit
-    pas donner les clés d'une session encore valable (l'export PostgreSQL
-    les exclut déjà). Après restauration, chacun se reconnecte."""
-    base = sqlite3.connect(chemin)
-    try:
-        if base.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
-                        "AND name='django_session'").fetchone():
-            base.execute("DELETE FROM django_session")
-            base.commit()
-            base.execute("VACUUM")
-    finally:
-        base.close()
-
-
 def creer(dossier=None, *, avec_medias=True, prefixe=PREFIXE):
     """Écrit une archive complète et renvoie son chemin.
 
@@ -125,22 +102,17 @@ def creer(dossier=None, *, avec_medias=True, prefixe=PREFIXE):
     try:
         with zipfile.ZipFile(provisoire, "w", allowZip64=True) as zf, \
                 tempfile.TemporaryDirectory() as tmp:
-            if _sqlite():
-                copie = Path(tmp) / "base.sqlite3"
-                _copier_sqlite(copie)
-                _sans_sessions(copie)
-                zf.write(copie, "base.sqlite3", zipfile.ZIP_DEFLATED)
-            else:
-                export = Path(tmp) / "base.json"
-                # stdout et non output= : dumpdata ouvrirait le fichier dans
-                # l'encodage du système, pas forcément UTF-8
-                with open(export, "w", encoding="utf-8") as sortie:
-                    call_command("dumpdata", natural_foreign=True,
-                                 natural_primary=True, indent=None,
-                                 exclude=["contenttypes", "auth.permission",
-                                          "sessions", "admin.logentry"],
-                                 stdout=sortie, verbosity=0)
-                zf.write(export, "base.json", zipfile.ZIP_DEFLATED)
+            export = Path(tmp) / "base.json"
+            # stdout et non output= : dumpdata ouvrirait le fichier dans
+            # l'encodage du système, pas forcément UTF-8. Sans les sessions : une
+            # archive égarée ne doit pas donner les clés d'une session valable.
+            with open(export, "w", encoding="utf-8") as sortie:
+                call_command("dumpdata", natural_foreign=True,
+                             natural_primary=True, indent=None,
+                             exclude=["contenttypes", "auth.permission",
+                                      "sessions", "admin.logentry"],
+                             stdout=sortie, verbosity=0)
+            zf.write(export, "base.json", zipfile.ZIP_DEFLATED)
 
             if avec_medias and medias.is_dir():
                 for chemin in sorted(medias.rglob("*")):
@@ -173,16 +145,6 @@ def creer(dossier=None, *, avec_medias=True, prefixe=PREFIXE):
         provisoire.unlink(missing_ok=True)
         raise
     return final
-
-
-def _copier_sqlite(destination):
-    """Copie cohérente d'une base SQLite en service (API de sauvegarde)."""
-    connection.ensure_connection()
-    cible = sqlite3.connect(str(destination))
-    try:
-        connection.connection.backup(cible)
-    finally:
-        cible.close()
 
 
 def rotation(dossier=None, garder=GARDER_PAR_DEFAUT, prefixe=PREFIXE):
@@ -247,7 +209,11 @@ def lire_manifeste(archive):
         raise ArchiveInvalide(f"archive illisible : {exc}") from exc
     if manifeste.get("application") != "QuizScan":
         raise ArchiveInvalide("ce n'est pas une sauvegarde QuizScan")
-    if not ({"base.sqlite3", "base.json"} & noms):
+    if "base.sqlite3" in noms and "base.json" not in noms:
+        raise ArchiveInvalide(
+            "ancienne sauvegarde au format SQLite. Extrayez-en base.sqlite3, puis : "
+            "manage.py passer_a_postgres --source base.sqlite3")
+    if "base.json" not in noms:
         raise ArchiveInvalide("la base de données manque dans l'archive")
     return manifeste
 
@@ -265,39 +231,16 @@ def restaurer(archive, *, avec_medias=True, filet=True):
                     if filet else None)
 
     with zipfile.ZipFile(archive) as zf, tempfile.TemporaryDirectory() as tmp:
-        noms = zf.namelist()
-        if "base.sqlite3" in noms:
-            if not _sqlite():
-                raise ArchiveInvalide("archive SQLite, serveur sur "
-                                      f"{connection.vendor} : restauration "
-                                      "impossible telle quelle")
-            source = Path(tmp) / "base.sqlite3"
-            source.write_bytes(zf.read("base.sqlite3"))
-            _restaurer_sqlite(source)
-        else:
-            export = Path(tmp) / "base.json"
-            export.write_bytes(zf.read("base.json"))
-            # tout ou rien : un rechargement qui échoue ne laisse pas la base vide
-            with transaction.atomic():
-                call_command("flush", interactive=False, verbosity=0)
-                call_command("loaddata", str(export), verbosity=0)
+        export = Path(tmp) / "base.json"
+        export.write_bytes(zf.read("base.json"))
+        # tout ou rien : un rechargement qui échoue ne laisse pas la base vide
+        with transaction.atomic():
+            call_command("flush", interactive=False, verbosity=0)
+            call_command("loaddata", str(export), verbosity=0)
 
         if avec_medias and manifeste.get("medias"):
             _restaurer_medias(zf, Path(settings.MEDIA_ROOT))
     return manifeste, filet_chemin
-
-
-def _restaurer_sqlite(source):
-    """Recopie une base SQLite DANS la base en service, par l'API de
-    sauvegarde : pas de fichier remplacé sous les pieds d'une connexion
-    ouverte (ce que Windows refuse d'ailleurs)."""
-    connection.ensure_connection()
-    origine = sqlite3.connect(str(source))
-    try:
-        origine.backup(connection.connection)
-    finally:
-        origine.close()
-    connections.close_all()          # les connexions repartiront de zéro
 
 
 def _restaurer_medias(zf, racine):

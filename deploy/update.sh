@@ -31,18 +31,11 @@ if [ ! -f .env ]; then
 fi
 
 # Sauvegarde de la base avant les migrations éventuelles. Par la commande
-# de l'application : copie cohérente même si une correction écrit au même
-# moment (un « cp » de la base en service peut donner un fichier corrompu).
+# de l'application : export cohérent même si une correction écrit au même moment.
 # Base seule, pour aller vite ; la sauvegarde complète est celle de la nuit.
 if ! docker compose exec -T quizscan python manage.py sauvegarde --sans-medias \
         --dossier data/sauvegardes/avant-mise-a-jour --garder "$KEEP_BACKUPS"; then
-    # Conteneur arrêté, ou version trop ancienne pour connaître la commande.
-    if [ -f data/db.sqlite3 ]; then
-        log "Sauvegarde par la commande impossible : simple copie de la base"
-        mkdir -p data/backups
-        cp data/db.sqlite3 "data/backups/db-$(date +%Y%m%d-%H%M%S)-$LOCAL.sqlite3"
-        ls -1t data/backups/db-*.sqlite3 | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
-    fi
+    log "ATTENTION : sauvegarde d'avant mise à jour impossible (conteneur arrêté ?)"
 fi
 
 git reset --hard --quiet "origin/$BRANCH"

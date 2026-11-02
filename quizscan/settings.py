@@ -15,7 +15,7 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Données persistantes (base SQLite) — montées en volume sous Docker
+# Données persistantes (cache, sauvegardes, PostgreSQL) — montées en volume sous Docker
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -74,24 +74,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "quizscan.wsgi.application"
-
-
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": DATA_DIR / "db.sqlite3",
-        # La correction des lots tourne en arrière-plan pendant que l'enseignant
-        # navigue : on patiente au lieu d'échouer sur un verrou, et le mode WAL
-        # évite presque toute attente. Mesuré à 10 000 copies, avec une correction
-        # et quatre utilisateurs : écriture d'une copie 0,77 s -> 0,02 s, note d'un
-        # visiteur 4,6 s au pire -> 0,04 s. Demande un disque local (data/ sur un
-        # partage réseau ne convient pas).
-        "OPTIONS": {"timeout": 30, "init_command": "PRAGMA journal_mode=WAL;"},
-    }
-}
 
 
 # Password validation
@@ -169,11 +151,21 @@ LOGOUT_REDIRECT_URL = "login"
 #   CSRF_TRUSTED_ORIGINS origines https de confiance, séparées par des virgules
 #   URL_PREFIX           sous-chemin derrière le reverse proxy (ex. /quizscan)
 #   HTTPS                "0" si l'application est jointe en http:// (réseau local)
-#   POSTGRES_*           base PostgreSQL au lieu de SQLite (usage intensif)
+#   POSTGRES_PASSWORD    mot de passe de la base PostgreSQL (obligatoire si DEBUG=0)
+#   POSTGRES_DB, _USER, _HOST, _PORT   facultatifs : quizscan, quizscan, localhost, 5432
 # ---------------------------------------------------------------------------
 import os  # noqa: E402
 
 from django.core.exceptions import ImproperlyConfigured  # noqa: E402
+
+# Poste de travail : réglages lus dans .env. Sur le serveur, ce fichier n'entre pas
+# dans l'image : docker compose les passe en variables d'environnement.
+_env = BASE_DIR / ".env"
+if _env.is_file():
+    for _ligne in _env.read_text(encoding="utf-8").splitlines():
+        _cle, _egal, _valeur = _ligne.strip().partition("=")
+        if _egal and not _cle.startswith("#"):
+            os.environ.setdefault(_cle.strip(), _valeur.strip())
 
 INSECURE_DEV_SECRET_KEY = SECRET_KEY
 SECRET_KEY = os.environ.get("SECRET_KEY") or INSECURE_DEV_SECRET_KEY
@@ -203,14 +195,12 @@ if not DEBUG and ALLOWED_HOSTS == ["*"]:
         "(ex. ALLOWED_HOSTS=mon-domaine.tn,192.168.1.10).")
 
 # ---------------------------------------------------------------------------
-# Base de données : SQLite (fichier unique sous data/) par défaut, ou
-# PostgreSQL pour un usage intensif — il suffit de renseigner POSTGRES_DB,
-# POSTGRES_USER et POSTGRES_PASSWORD (POSTGRES_HOST/PORT facultatifs).
+# Base de données : PostgreSQL.
 # ---------------------------------------------------------------------------
-if os.environ.get("POSTGRES_DB"):
-    DATABASES["default"] = {
+DATABASES = {
+    "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ["POSTGRES_DB"],
+        "NAME": os.environ.get("POSTGRES_DB", "quizscan"),
         "USER": os.environ.get("POSTGRES_USER", "quizscan"),
         "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
         "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
@@ -220,6 +210,11 @@ if os.environ.get("POSTGRES_DB"):
         # une erreur 500 à chacun des fils du serveur
         "CONN_HEALTH_CHECKS": True,
     }
+}
+if not DEBUG and not DATABASES["default"]["PASSWORD"]:
+    raise ImproperlyConfigured(
+        "POSTGRES_PASSWORD n'est pas définie : lancez une fois "
+        "« sh deploy/passer_a_postgres.sh », qui la crée et copie les données.")
 
 # Sous-chemin (ex. /quizscan) : le proxy retire le préfixe (uri strip_prefix)
 # et FORCE_SCRIPT_NAME le rajoute dans toutes les URLs générées par Django.
@@ -318,12 +313,8 @@ CACHES = {"default": {
 }}
 
 if os.environ.get("QUIZSCAN_TEST"):
-    # Les tests créent des comptes aux mots de passe écrits en clair dans
-    # leur code : jamais dans une base PostgreSQL qui ne leur est pas dédiée.
-    if (DATABASES["default"]["ENGINE"].endswith("postgresql")
-            and not str(DATABASES["default"]["NAME"]).endswith("_test")):
-        raise ImproperlyConfigured(
-            "Tests : base PostgreSQL non dédiée (son nom doit finir par _test).")
-    if DATABASES["default"]["ENGINE"].endswith("sqlite3"):
-        DATABASES["default"]["NAME"] = DATA_DIR / "test_db.sqlite3"
+    # Les tests créent des comptes aux mots de passe écrits en clair dans leur
+    # code, et en vident parfois la base : jamais celle de l'application.
+    if not DATABASES["default"]["NAME"].endswith("_test"):
+        DATABASES["default"]["NAME"] += "_test"
     MEDIA_ROOT = BASE_DIR / "media_test"
