@@ -95,10 +95,11 @@ def main():
     assert "découper" in doc[0].get_text() and "COPIE ANONYME" not in doc[0].get_text()
     # le titre au centre : sur le talon, et seul dans la bande grise
     bande = quiz.layout_json["pages"][0]["qr"]["band"]
-    titres = doc[0].search_for(quiz.title)
-    assert len(titres) == 2, titres
-    for r, milieu in zip(sorted(titres, key=lambda r: r.y0),
-                         (L.PAGE_W / 2, bande[0] + bande[2] / 2)):
+    sur_talon = doc[0].search_for(f"{quiz.title} — {quiz.class_group.name}")
+    dans_bande = [r for r in doc[0].search_for(quiz.title)
+                  if bande[1] <= r.y0 / PT_PAR_MM <= bande[1] + bande[3]]
+    assert len(sur_talon) == 1 and len(dans_bande) == 1, (sur_talon, dans_bande)
+    for r, milieu in ((sur_talon[0], L.PAGE_W / 2), (dans_bande[0], bande[0] + bande[2] / 2)):
         assert abs((r.x0 + r.x1) / 2 / PT_PAR_MM - milieu) < 1.5, (r, milieu)
     print("  copies à talon : nom et n° seulement au-dessus du trait de coupe OK")
 

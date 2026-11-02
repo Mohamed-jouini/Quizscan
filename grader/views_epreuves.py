@@ -69,6 +69,7 @@ def _generer_documents(quiz, nb_exemplaires=100):
         pdf = sheet_pdf.generate_sheet_pdf(quiz, layout)
         quoi = "la copie (une par étudiant)"
     layout["signature"] = layout_mod.layout_signature(quiz)
+    layout["sujet_version"] = sheet_pdf.SUJET_VERSION
     quiz.layout_json = layout
     quiz.sheet_pdf.save(f"copies_ecrit_{quiz.pk}.pdf", ContentFile(pdf), save=False)
     quiz.subject_pdf.save(f"sujet_ecrit_{quiz.pk}.pdf",

@@ -567,10 +567,15 @@ def _dessiner_grille_note(c, draw, g, T, lang):
 #   2 — concours : les choix des QCM sont imprimés (avant : intitulés seuls).
 #   3 — présentation des sujets de concours tunisiens : cartouche à trois
 #       cases, page de garde « Remarques / Consignes », pagination n/N.
-SUJET_VERSION = 3
+#   4 — plus de case « collez ici l'étiquette » dans le cartouche (l'étiquette
+#       va sur la feuille de réponses) ; consignes selon la copie réellement
+#       remise au candidat (étiquette, grille, talon, n° de place, nom).
+SUJET_VERSION = 4
 
 # Textes du sujet. Les consignes sont écrites d'après ce que QuizScan lit
-# réellement : cases à noircir (pas de croix), étiquette QR ou grille de n°.
+# réellement : cases à noircir (pas de croix), et une consigne d'identification
+# par présentation de la copie (voir _cle_identification). {f} : le document
+# que le candidat remplit, « feuille » ou « copie » (épreuve écrite).
 SUJET_TEXTES = {
     "fr": {
         "epreuve_ecrite": "Épreuve écrite — note sur {n}",
@@ -578,8 +583,10 @@ SUJET_TEXTES = {
                            "le cadre réservé au correcteur.",
         "epreuve": "Épreuve à choix multiples",
         "epreuve_mixte": "Questions à choix multiples et rédigées",
+        "epreuve_redigee": "Questions rédigées",
+        "feuille": "feuille de réponses",
+        "copie": "copie",
         "duree": "Durée : {d}",
-        "etiquette": "Collez ici l'étiquette portant votre nom",
         "nom": "Nom et prénom :",
         "classe": "Classe : {c}",
         "titre_main": "Intitulé de l'épreuve :",
@@ -594,14 +601,32 @@ SUJET_TEXTES = {
         "r_penalite": "Chaque réponse fausse retire {x} point(s) ; une question "
                       "sans réponse ne retire rien.",
         "c_etiquette": "Collez l'étiquette QR qui vous a été remise dans "
-                       "l'emplacement réservé de la feuille de réponses.",
-        "c_grille": "Écrivez votre numéro d'inscription sur la feuille de "
-                    "réponses et noircissez les chiffres correspondants dans "
-                    "la grille.",
+                       "l'emplacement réservé de la {f}.",
+        "c_grille": "Si une étiquette QR vous a été remise, collez-la dans le "
+                    "cadre prévu de la {f} ; sinon, écrivez votre numéro "
+                    "d'inscription et noircissez les chiffres correspondants "
+                    "dans la grille.",
+        "c_nom": "Écrivez lisiblement votre nom et votre prénom dans les cases "
+                 "prévues de la {f}.",
+        "c_nominative": "Vérifiez que le nom et le numéro imprimés sur la {f} "
+                        "reçue sont bien les vôtres.",
+        "c_talon": "Vérifiez le nom et le numéro imprimés sur le talon en haut "
+                   "de la {f}. Ne découpez pas ce talon : il sera retiré avant "
+                   "la correction. N'écrivez votre nom nulle part ailleurs.",
+        "c_place": "Vérifiez que le numéro imprimé sur la {f} est bien celui de "
+                   "votre place. N'y écrivez ni votre nom ni aucun signe "
+                   "distinctif.",
+        "c_chaque_page": "La feuille de réponses compte {p} pages : "
+                         "identifiez-vous sur chacune d'elles.",
         "c_noircir": "Pour chaque question, noircissez complètement une seule "
                      "case sur la feuille de réponses.",
-        "c_brouillon": "Une seule feuille de réponses est remise par candidat : "
-                       "préparez vos réponses sur ce sujet avant de les reporter.",
+        "c_noircir_qcm": "Pour chaque question à choix multiples, noircissez "
+                         "complètement une seule case sur la feuille de réponses.",
+        "c_redigees": "Rédigez les réponses aux questions rédigées dans les "
+                      "cadres prévus de la feuille de réponses.",
+        "c_brouillon": "Un seul exemplaire de la feuille de réponses est remis par "
+                       "candidat : préparez vos réponses sur ce sujet avant de "
+                       "les reporter.",
         "c_stylo": "Utilisez un stylo à bille noir ou bleu, à l'exclusion de "
                    "toute autre couleur.",
         "c_blanco": "N'utilisez pas de correcteur (blanco) et ne raturez pas la "
@@ -617,8 +642,10 @@ SUJET_TEXTES = {
                            "الإطار المخصّص للمصحّح.",
         "epreuve": "اختبار في الأسئلة متعددة الاختيارات",
         "epreuve_mixte": "أسئلة متعددة الاختيارات وأسئلة تحريرية",
+        "epreuve_redigee": "أسئلة تحريرية",
+        "feuille": "ورقة الإجابة",
+        "copie": "ورقة التحرير",
         "duree": "المدة : {d}",
-        "etiquette": "ألصق هنا اللاصقة الحاملة للاسم واللقب",
         "nom": "الاسم واللقب :",
         "classe": "القسم : {c}",
         "titre_main": "عنوان الاختبار :",
@@ -632,12 +659,28 @@ SUJET_TEXTES = {
         "r_penalite": "تُطرح {x} نقطة عن كل إجابة خاطئة، ولا يُطرح شيء عن "
                       "السؤال الذي لم تتم الإجابة عنه.",
         "c_etiquette": "تُثبَّت لاصقة رمز QR المسلَّمة إليك في المكان المخصص لها "
-                       "على ورقة الإجابة.",
-        "c_grille": "يُكتب رقم التسجيل على ورقة الإجابة وتُملأ الأرقام المطابقة "
+                       "على {f}.",
+        "c_grille": "إن سُلِّمت إليك لاصقة رمز QR تُثبَّت في الإطار المخصص لها "
+                    "على {f}، وإلا يُكتب رقم التسجيل وتُملأ الأرقام المطابقة "
                     "له في الشبكة.",
+        "c_nom": "يُكتب اللقب والاسم بخط واضح في الخانات المخصصة لهما على {f}.",
+        "c_nominative": "يُتثبَّت من أن الاسم واللقب والرقم المطبوعة على {f} "
+                        "تخصّك.",
+        "c_talon": "يُتثبَّت من الاسم واللقب والرقم المطبوعة على القسيمة أعلى {f}. "
+                   "لا تُقصّ هذه القسيمة، فهي تُزال قبل الإصلاح، ولا يُكتب الاسم "
+                   "في أي مكان آخر.",
+        "c_place": "يُتثبَّت من أن الرقم المطبوع على {f} هو رقم مكانك. لا يُكتب "
+                   "عليها الاسم ولا أي علامة مميِّزة.",
+        "c_chaque_page": "تتكوّن ورقة الإجابة من {p}: يُكتب التعريف على كل صفحة "
+                         "منها.",
         "c_noircir": "تُملأ كليًا خانة واحدة لكل سؤال على ورقة الإجابة.",
-        "c_brouillon": "لا تُسلَّم إلا ورقة إجابة واحدة لكل مترشح، ويُستحسن "
-                       "تحضير الإجابة على ورقة الأسئلة قبل نقلها إلى ورقة الإجابة.",
+        "c_noircir_qcm": "تُملأ كليًا خانة واحدة لكل سؤال متعدد الاختيارات على "
+                         "ورقة الإجابة.",
+        "c_redigees": "تُحرَّر الإجابة عن الأسئلة التحريرية في الإطارات المخصصة "
+                      "لها على ورقة الإجابة.",
+        "c_brouillon": "لا تُسلَّم إلا نسخة واحدة من ورقة الإجابة لكل مترشح، "
+                       "ويُستحسن تحضير الإجابة على ورقة الأسئلة قبل نقلها إلى "
+                       "ورقة الإجابة.",
         "c_stylo": "يُستعمل القلم الجاف الأسود أو الأزرق دون سواهما.",
         "c_blanco": "يُمنع استعمال الماحي (Blanco) والتشطيب على ورقة الإجابة.",
         "c_plier": "عدم طيّ ورقة الإجابة.",
@@ -661,15 +704,31 @@ def _nb_pages(p, lang):
     return f"{p} صفحة"
 
 
+def _cle_identification(quiz):
+    """Consigne d'identification : ce que le candidat a à faire sur SA copie,
+    d'après ce qui y est imprimé (mêmes conditions que layout.build_layout)."""
+    if getattr(quiz, "talon_nom", False):
+        return "c_talon"
+    if getattr(quiz, "place_anonyme", False):
+        return "c_place"
+    id_mode = getattr(quiz, "id_mode", "name")
+    if id_mode == "grid":
+        return "c_grille"
+    if id_mode == "name":
+        return "c_nom"
+    return "c_etiquette" if L._uses_sticker(quiz) else "c_nominative"
+
+
 def generate_subject_pdf(quiz, questions=None):
     """PDF du SUJET (questions seules, sans cases à noircir) — à distribuer
     aux étudiants ; la grille de réponses est un document séparé (sheet_pdf).
     Aucun repère ArUco : ce document n'est pas scanné.
 
-    Présentation des sujets de concours : cartouche à trois cases en tête de
-    la première page (institutions | intitulé et durée | identification),
-    puis, pour un concours, une page de garde « Remarques / Consignes » ; les
-    questions suivent, chaque choix sur sa ligne, pages numérotées n/N."""
+    Présentation des sujets de concours : cartouche en tête de la première
+    page (institutions | intitulé et durée | nom du candidat, chaque case
+    seulement si elle a un contenu), puis, pour un concours, une page de garde
+    « Remarques / Consignes » ; les questions suivent, chaque choix sur sa
+    ligne, pages numérotées n/N."""
     load_fonts()
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
@@ -716,6 +775,10 @@ def generate_subject_pdf(quiz, questions=None):
     # Titre écrit à la main (mode étiquette hors concours) : le même sujet
     # peut servir à plusieurs épreuves, il ne porte ni titre ni classe.
     titre_a_la_main = sticker and not concours and not ecrit
+    # Case « Nom et prénom » : pas sur le sujet d'un concours, d'une épreuve à
+    # étiquette (elle va sur la feuille de réponses) ni d'une copie anonyme.
+    nom_sur_sujet = not (concours or sticker or getattr(quiz, "talon_nom", False)
+                         or getattr(quiz, "place_anonyme", False))
 
     def fmt_pts(points):
         unit = (T["pt"] if points <= 1 else T["pts"])
@@ -731,6 +794,7 @@ def generate_subject_pdf(quiz, questions=None):
         paragraphes = [p.strip() for p in
                        (quiz.sujet_texte or "").replace("\r", "").split("\n\n")
                        if p.strip()]
+        paragraphes.append(S[_cle_identification(quiz)].format(f=S["copie"]))
         paragraphes.append(S.get("consigne_ecrite", ""))
         for p in paragraphes:
             lignes_p = []
@@ -749,6 +813,8 @@ def generate_subject_pdf(quiz, questions=None):
         h = (len(tete) * 6.0 + 1.5 + sum(len(b) * 5.6 for b in choix)
              + (cadre + 3.0 if cadre else 0.0) + 6.0)
         blocs.append((q, tete, choix, cadre, h))
+    a_qcm = any(q.qtype == "qcm" for q in qs)
+    a_redigees = any(q.qtype != "qcm" for q in qs)
 
     CARTOUCHE_H = 36.0
     debut_questions_p1 = HAUT + CARTOUCHE_H + 10.0
@@ -776,17 +842,25 @@ def generate_subject_pdf(quiz, questions=None):
     # ------------------------------------------------------------ cartouche
     def cartouche():
         y0, h = HAUT, CARTOUCHE_H
-        wcol = W / 3
+        # institutions (en-tête saisi ; à défaut, le nom du groupe)
+        inst = [t.strip() for t in (quiz.entete or "").splitlines() if t.strip()]
+        if not inst and not concours and not titre_a_la_main:
+            inst = [quiz.class_group.name]
+        # Ordre de lecture : institutions | épreuve | identification, de droite
+        # à gauche en arabe. Une case sans contenu n'est pas dessinée : elle
+        # inviterait le candidat à y écrire ou à y coller quelque chose.
+        cases = [nom for nom, presente in (("inst", inst), ("epreuve", True),
+                                           ("id", nom_sur_sujet)) if presente]
+        wcol = W / len(cases)
         c.setStrokeGray(0.0)
         c.setLineWidth(0.8)
         c.rect(X0 * mm, (L.PAGE_H - (y0 + h)) * mm, W * mm, h * mm)
-        for k in (1, 2):
+        for k in range(1, len(cases)):
             x = X0 + k * wcol
             c.line(x * mm, (L.PAGE_H - y0) * mm, x * mm, (L.PAGE_H - (y0 + h)) * mm)
-        # Ordre de lecture : institutions | épreuve | identification,
-        # de droite à gauche en arabe.
-        cases = [X0 + 2 * wcol, X0 + wcol, X0] if rtl else [X0, X0 + wcol, X0 + 2 * wcol]
-        x_inst, x_epr, x_id = cases
+        x_case = {nom: (X1 - (k + 1) * wcol) if rtl else (X0 + k * wcol)
+                  for k, nom in enumerate(cases)}
+        x_epr = x_case["epreuve"]
 
         def bloc_centre(lignes, x, y_haut, h_case, size=9.5, gras_premiere=False):
             textes = []
@@ -799,12 +873,9 @@ def generate_subject_pdf(quiz, questions=None):
                 draw(t, x + wcol / 2, yy, size, bold=gras, align="center")
                 yy += pas
 
-        # 1. institutions (en-tête saisi ; à défaut, le nom du groupe)
-        inst = [t.strip() for t in (quiz.entete or "").splitlines() if t.strip()]
-        if not inst and not concours and not titre_a_la_main:
-            inst = [quiz.class_group.name]
+        # 1. institutions
         if inst:
-            bloc_centre(inst, x_inst, y0, h, size=9, gras_premiere=True)
+            bloc_centre(inst, x_case["inst"], y0, h, size=9, gras_premiere=True)
 
         # 2. épreuve : titre en haut, nature et durée en bas
         moitie = h / 2
@@ -822,16 +893,15 @@ def generate_subject_pdf(quiz, questions=None):
         if ecrit:
             bas = [S.get("epreuve_ecrite", "{n}").format(n=f"{quiz.note_sur:g}")]
         else:
-            bas = [S["epreuve"] if all(q.qtype == "qcm" for q in qs)
-                   else S["epreuve_mixte"]]
+            bas = [S["epreuve"] if not a_redigees
+                   else S["epreuve_mixte"] if a_qcm else S["epreuve_redigee"]]
         if quiz.duree:
             bas.append(S["duree"].format(d=quiz.duree))
         bloc_centre(bas, x_epr, y0 + moitie, moitie, size=9, gras_premiere=True)
 
         # 3. identification
-        if concours or sticker:
-            bloc_centre([S["etiquette"]], x_id, y0, h, size=9.5, gras_premiere=True)
-        else:
+        if nom_sur_sujet:
+            x_id = x_case["id"]
             draw(S["nom"], (x_id + wcol - 3) if rtl else (x_id + 3), y0 + 7.5, 9,
                  bold=True, align="right" if rtl else "left")
             c.setDash(1, 2)
@@ -865,19 +935,25 @@ def generate_subject_pdf(quiz, questions=None):
 
     def page_de_garde():
         n_q = len(qs)
-        tous_qcm = all(q.qtype == "qcm" for q in qs)
         remarques = [S["r_pages"].format(p=_nb_pages(len(pages), lang), n=n_q),
-                     S["r_nombre"].format(n=n_q),
-                     S["r_unique"] if tous_qcm else S["r_unique_qcm"]]
-        if quiz.wrong_penalty:
-            remarques.append(S["r_penalite"].format(x=f"{quiz.wrong_penalty:g}"))
-        consignes = []
-        if quiz.id_mode == "grid":
-            consignes.append(S["c_grille"])
-        else:
-            consignes.append(S["c_etiquette"])
-        consignes += [S["c_noircir"], S["c_brouillon"], S["c_stylo"],
-                      S["c_blanco"], S["c_plier"], S["c_rendre"]]
+                     S["r_nombre"].format(n=n_q)]
+        if a_qcm:
+            remarques.append(S["r_unique_qcm"] if a_redigees else S["r_unique"])
+            if quiz.wrong_penalty:
+                remarques.append(S["r_penalite"].format(x=f"{quiz.wrong_penalty:g}"))
+        cle = _cle_identification(quiz)
+        consignes = [S[cle].format(f=S["feuille"])]
+        # Chaque page de la feuille est identifiée séparément au scan. Pas pour
+        # l'étiquette : la planche n'en porte qu'une par candidat.
+        nb_feuilles = len((quiz.layout_json or {}).get("pages", []))
+        if nb_feuilles > 1 and cle in ("c_grille", "c_nom"):
+            consignes.append(S["c_chaque_page"].format(p=_nb_pages(nb_feuilles, lang)))
+        if a_qcm:
+            consignes.append(S["c_noircir_qcm"] if a_redigees else S["c_noircir"])
+        if a_redigees:
+            consignes.append(S["c_redigees"])
+        consignes += [S["c_brouillon"], S["c_stylo"], S["c_blanco"], S["c_plier"],
+                      S["c_rendre"]]
         y = debut_questions_p1 - 4.0
         y = liste_numerotee(S["remarques"], remarques, y)
         y = liste_numerotee(S["consignes"], consignes, y + 6.0)

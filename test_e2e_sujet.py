@@ -111,6 +111,106 @@ def verifier_choix(teacher):
           "choix sous chaque QCM, sans cadre manuscrit (fr, ar)")
 
 
+def verifier_tous_les_cas(teacher):
+    """Le sujet ne parle que de ce que porte la copie remise au candidat, et son
+    cartouche n'a pas de case vide où coller ou écrire quelque chose."""
+    assert set(sheet_pdf.SUJET_TEXTES["fr"]) == set(sheet_pdf.SUJET_TEXTES["ar"])
+    # Mots propres à une seule consigne d'identification, en français et en
+    # arabe (sans lam-alef, voir QUESTIONS, ni voyelles : le PDF ne les garde pas).
+    MARQUES = {"c_etiquette": ("emplacement réservé", "المكان"),
+               "c_grille": ("dans la grille", "الشبكة"),
+               "c_nom": ("cases prévues", "الخانات"),
+               "c_nominative": ("sont bien les vôtres", "تخصك"),
+               "c_talon": ("sur le talon", "القسيمة"),
+               "c_place": ("signe distinctif", "مكانك")}
+    CAS = [("c_etiquette", dict(id_mode="sticker", auto_enroll=True)),
+           ("c_etiquette", dict(id_mode="qr", auto_enroll=True)),
+           ("c_grille", dict(id_mode="grid", auto_enroll=True)),
+           ("c_nom", dict(id_mode="name", auto_enroll=True)),
+           ("c_nominative", dict(id_mode="qr")),
+           ("c_talon", dict(id_mode="qr", auto_enroll=True, talon_nom=True)),
+           ("c_place", dict(id_mode="qr", auto_enroll=True, place_anonyme=True))]
+    for indice, langue in enumerate(("fr", "ar")):
+        quiz = _concours(teacher, langue)
+        for cle, reglages in CAS:
+            base = dict(id_mode="name", auto_enroll=False, talon_nom=False,
+                        place_anonyme=False, type_epreuve="qcm")
+            for champ, valeur in {**base, **reglages}.items():
+                setattr(quiz, champ, valeur)
+            # hors concours, un sujet de QCM n'a pas de page de consignes
+            for type_epreuve in ("qcm", "ecrit") if quiz.auto_enroll else ("ecrit",):
+                quiz.type_epreuve = type_epreuve
+                texte = " ".join(_texte(sheet_pdf.generate_subject_pdf(quiz)).split())
+                for autre, marques in MARQUES.items():
+                    marque = unicodedata.normalize("NFKC", marques[indice])
+                    assert (marque in texte) == (autre == cle), \
+                        (langue, cle, autre, type_epreuve)
+                assert "Collez ici" not in texte and "الحاملة" not in texte, (langue, cle)
+    print("  identification consigne selon la copie (étiquette, grille, nom, talon, "
+          "n° de place), jamais de case d'étiquette (fr, ar)")
+
+    # Le cartouche : le titre est au milieu de la case « épreuve », seule ou non.
+    centre = (L.CONTENT_X0 + L.CONTENT_X1) / 2
+    largeur = L.CONTENT_X1 - L.CONTENT_X0
+    quiz = _concours(teacher, "fr")
+
+    def milieu_titre():
+        page = pymupdf.open(stream=sheet_pdf.generate_subject_pdf(quiz), filetype="pdf")[0]
+        cadre = [r for r in page.search_for(quiz.title) if r.y0 / MM < 60][0]
+        return (cadre.x0 + cadre.x1) / 2 / MM
+
+    MM = 72 / 25.4
+    assert abs(milieu_titre() - (L.CONTENT_X0 + largeur * 0.75)) < 1, "institutions + épreuve"
+    quiz.entete = ""
+    assert abs(milieu_titre() - centre) < 1, "concours sans en-tête : épreuve seule"
+    quiz.auto_enroll, quiz.id_mode = False, "name"
+    texte = _texte(sheet_pdf.generate_subject_pdf(quiz))
+    assert abs(milieu_titre() - centre) < 1 and "Nom et prénom" in texte, "classe : 3 cases"
+    quiz.id_mode, quiz.talon_nom = "qr", True
+    assert "Nom et prénom" not in _texte(sheet_pdf.generate_subject_pdf(quiz)), "copie anonyme"
+
+    # Types de questions : pas de consigne de cases s'il n'y a rien à noircir.
+    quiz = _concours(teacher, "fr")
+    texte = " ".join(_texte(sheet_pdf.generate_subject_pdf(quiz)).split())
+    assert "chaque question à choix multiples, noircissez" in texte and "cadres prévus" in texte
+    assert "Questions à choix multiples et rédigées" in texte
+    quiz.questions.filter(qtype="qcm").delete()
+    texte = " ".join(_texte(sheet_pdf.generate_subject_pdf(quiz)).split())
+    assert "noircissez" not in texte and "Questions rédigées" in texte and "retire" not in texte
+    quiz = _concours(teacher, "fr")
+    quiz.questions.filter(qtype="open").delete()
+    texte = " ".join(_texte(sheet_pdf.generate_subject_pdf(quiz)).split())
+    assert "Pour chaque question, noircissez" in texte and "cadres prévus" not in texte
+
+    # Feuille de réponses en plusieurs pages : chacune est identifiée au scan.
+    # La planche ne porte qu'une étiquette par candidat : pas de consigne avec elle.
+    quiz.layout_json = {"pages": [{}, {}]}
+    assert "identifiez-vous sur chacune" not in _texte(sheet_pdf.generate_subject_pdf(quiz))
+    quiz.id_mode = "grid"
+    assert "identifiez-vous sur chacune" in " ".join(
+        _texte(sheet_pdf.generate_subject_pdf(quiz)).split())
+    print("  cartouche sans case vide ; consignes selon les questions et les pages")
+
+
+def verifier_ecrit(teacher):
+    """Le sujet d'une épreuve écrite (jamais en « sujet séparé ») suit les mises à
+    jour comme les autres : il portait aussi la case d'étiquette."""
+    enseignant_complet(teacher)
+    quiz = _concours(teacher, "fr")
+    quiz.questions.all().delete()
+    quiz.type_epreuve, quiz.sheet_mode, quiz.sujet_texte = "ecrit", "grid", "Racontez."
+    services.question_note(quiz)
+    quiz.layout_json = L.build_layout(quiz)
+    quiz.subject_pdf.save("ancien_sujet.pdf", ContentFile(b"%PDF-1.4 ancien"), save=False)
+    quiz.sheet_pdf.save("copies.pdf", ContentFile(b"%PDF-1.4"), save=False)
+    quiz.save()
+    assert services.actualiser_sujet(quiz), "sujet d'écrit non refait"
+    quiz.refresh_from_db()
+    assert "Racontez" in _texte(quiz.subject_pdf.read())
+    assert not services.actualiser_sujet(quiz), "refait une seconde fois"
+    print("  écrit          ancien sujet refait, une seule fois")
+
+
 def verifier_mise_a_jour(teacher):
     enseignant_complet(teacher)
     quiz = _concours(teacher, "fr")
@@ -227,6 +327,8 @@ def main():
     User.objects.filter(username="prof_sujet").delete()
     teacher = User.objects.create(username="prof_sujet")
     verifier_choix(teacher)
+    verifier_tous_les_cas(teacher)
+    verifier_ecrit(teacher)
     verifier_mise_a_jour(teacher)
     verifier_renommage(teacher)
     print("\n✅ TEST DU SUJET AVEC SES CHOIX RÉUSSI")

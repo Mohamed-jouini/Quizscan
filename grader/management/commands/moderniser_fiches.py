@@ -27,8 +27,8 @@ class Command(BaseCommand):
                 faites += services.moderniser_fiche_grille(quiz)
                 # carrés noirs des coins -> cadre fin (29 octobre 2026)
                 faites += services.moderniser_calage(quiz)
-                # Sujets (mode « sujet séparé ») dessinés par une version
-                # antérieure, ex. concours sans les choix des QCM.
+                # Sujets (mode « sujet séparé », épreuves écrites) dessinés par
+                # une version antérieure, ex. concours sans les choix des QCM.
                 sujets += services.actualiser_sujet(quiz)
             except Exception as exc:  # noqa: BLE001 — une fiche ne bloque pas les autres
                 self.stderr.write(f"quiz {quiz.pk} : {type(exc).__name__}: {exc}")

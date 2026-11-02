@@ -619,8 +619,8 @@ def quiz_detail(request, pk):
         messages.info(request, "Fiche mise à jour : les carrés noirs des coins sont remplacés par un "
                                "cadre fin. Les copies déjà imprimées restent lisibles.")
     if request.method == "GET" and services.actualiser_sujet(quiz):
-        messages.info(request, "Sujet mis à jour : chaque question QCM affiche "
-                               "maintenant ses choix de réponse.")
+        messages.info(request, "Sujet mis à jour : sa présentation et ses consignes "
+                               "suivent maintenant le type de copie choisi.")
 
     if request.method == "POST":
         # Deux droits distincts se croisent ici : modifier l'epreuve, et

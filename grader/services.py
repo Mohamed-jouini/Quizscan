@@ -716,14 +716,15 @@ def nettoyer_controle(sheet):
 
 
 def actualiser_sujet(quiz, forcer=False):
-    """Refait le SUJET (document des questions, mode « sujet séparé ») s'il a
-    été dessiné par une version antérieure — par exemple un sujet de concours
-    sans les choix des QCM. Le sujet n'est jamais scanné : le refaire ne
-    touche ni à la feuille de réponses ni à la lecture des copies.
+    """Refait le SUJET (document des questions : mode « sujet séparé » ou
+    épreuve écrite) s'il a été dessiné par une version antérieure — par exemple
+    un sujet de concours sans les choix des QCM. Le sujet n'est jamais scanné :
+    le refaire ne touche ni à la feuille de réponses ni à la lecture des copies.
     forcer : refaire même à jour (en-tête ou durée modifiés).
     Retourne True si le sujet a été remplacé."""
     disposition = quiz.layout_json
-    if quiz.sheet_mode != "split" or not quiz.subject_pdf or not disposition:
+    a_un_sujet = quiz.sheet_mode == "split" or quiz.type_epreuve == "ecrit"
+    if not a_un_sujet or not quiz.subject_pdf or not disposition:
         return False
     if not forcer and disposition.get("sujet_version") == sheet_pdf.SUJET_VERSION:
         return False
