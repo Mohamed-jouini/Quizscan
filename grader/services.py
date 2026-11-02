@@ -42,11 +42,23 @@ def _is_pdf(name):
     return name.lower().endswith(".pdf")
 
 
+def _images_tiff(data):
+    """Nombre d'images d'un TIFF (1 pour tout autre format). Un scanner à chargeur peut
+    réunir tout un paquet dans un seul TIFF : OpenCV n'en lit que la première image, sans
+    rien signaler, et le lot se terminait « sans erreur », amputé de toutes les autres."""
+    from PIL import Image
+    try:
+        with Image.open(io.BytesIO(data), formats=("TIFF",)) as im:
+            return im.n_frames
+    except Exception:  # noqa: BLE001 — pas un TIFF, ou illisible : signalé au traitement
+        return 1
+
+
 def _page_count(name, data):
     if _is_pdf(name):
         with pymupdf.open(stream=data, filetype="pdf") as doc:
             return doc.page_count
-    return 1
+    return _images_tiff(data)
 
 
 def _save_jpg(field, img_bgr, filename, quality=82):
@@ -149,6 +161,11 @@ def run_batch(batch_id):
                                     "Page sans repères : page de rédaction, "
                                     "ignorée. Si c'est une page de garde, "
                                     "rescannez-la bien à plat.")
+                            elif omr.page_blanche(img):
+                                # sinon, en recto-verso, un paquet de 500 feuilles
+                                # imprimées d'un seul côté donne 500 pages en erreur
+                                sheet.status = "ignoree"
+                                sheet.error_message = "Page blanche : verso vide, ignoré."
                             else:
                                 sheet.status = "no_markers"
                                 sheet.error_message = str(e)
@@ -210,8 +227,23 @@ def _open_pages(name, data):
     Le PDF n'est ouvert qu'une fois et chaque page n'est rendue qu'à la
     demande (un lot de plusieurs milliers de pages ne tient pas en mémoire) ;
     le document est refermé à la sortie du bloc, sans quoi un gros lot
-    accumulerait un document ouvert par fichier."""
+    accumulerait un document ouvert par fichier. Même chose pour un TIFF multipage."""
     if not _is_pdf(name):
+        nb_images = _images_tiff(data)
+        if nb_images > 1:
+            from PIL import Image
+            with Image.open(io.BytesIO(data), formats=("TIFF",)) as tiff:
+                def image_tiff(i):
+                    tiff.seek(i)
+                    # seule la première image passe par _controler_dimensions
+                    largeur, hauteur = tiff.size
+                    if largeur * hauteur > MAX_PIXELS_PAGE:
+                        raise ValueError(f"Image démesurée ({largeur} × {hauteur} pixels) : {name}")
+                    return cv2.cvtColor(np.array(tiff.convert("RGB")), cv2.COLOR_RGB2BGR)
+                yield [(f"{name} (page {i + 1})", (lambda i=i: image_tiff(i)))
+                       for i in range(nb_images)]
+            return
+
         def decode():
             _controler_dimensions(name, data)
             img = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)

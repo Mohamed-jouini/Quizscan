@@ -33,6 +33,16 @@ def _mm(v):
     return int(round(v * L.PX_PER_MM))
 
 
+def page_blanche(image_bgr):
+    """Verso vide d'une feuille imprimée d'un seul côté, passée au scanner en recto-verso.
+    Bords exclus (ombre du chargeur). Seuil de gris bas : le recto vu par transparence est
+    gris clair. Une page imprimée dépasse largement cette part d'encre, ne serait-ce que
+    par son cadre, ou par la moitié noire d'un QR collé."""
+    h, w = image_bgr.shape[:2]
+    gris = cv2.cvtColor(image_bgr[h // 30:h - h // 30, w // 30:w - w // 30], cv2.COLOR_BGR2GRAY)
+    return np.count_nonzero(gris < 110) < 0.002 * gris.size
+
+
 # ---------------------------------------------------------------- recalage
 
 def detect_and_warp(image_bgr):
@@ -387,6 +397,11 @@ def read_qr(warped_bgr, page_layout):
                 found = _decode_qr(detector, img)
                 if found:
                     return found
+            # L'autre détecteur d'OpenCV : scanner réglé en noir et blanc à 300 ppp, le
+            # premier ratait jusqu'à 2 étiquettes sur 5, celui-ci les lit toutes (20 ms).
+            found = _decode_qr(cv2.QRCodeDetectorAruco(), crop)
+            if found:
+                return found
     # secours : l'étiquette a pu être collée de travers, on balaie la page
     found = _decode_qr(detector, warped_bgr)
     return found or (None, None, None)

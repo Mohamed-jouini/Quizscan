@@ -96,7 +96,7 @@
         {% if s.status == "ok" %}<span class="badge ok">Lu</span>
         {% elif s.status == "no_match" %}<span class="badge warn">À identifier</span>
         {% elif s.status == "no_markers" %}<span class="badge bad">Repères non détectés</span>
-        {% elif s.status == "ignoree" %}<span class="badge grey">Page de rédaction</span>
+        {% elif s.status == "ignoree" %}<span class="badge grey">{% if "blanche" in s.error_message %}Page blanche{% else %}Page de rédaction{% endif %}</span>
         {% else %}<span class="badge bad">{{ s.get_status_display }}</span>{% endif %}
         {% if s.error_message %}<span class="helptext">{{ s.error_message }}</span>{% endif %}
       </td>

@@ -605,8 +605,8 @@ class UploadForm(forms.Form):
     files = MultiFileField(
         label="Fichiers scannés (PDF ou images)",
         help_text="Vous pouvez sélectionner plusieurs fichiers : 10 000 au plus par "
-                  "envoi, 500 Mo au plus chacun. Un PDF multi-pages est accepté (une "
-                  "copie par page). Au-delà, faites plusieurs envois.")
+                  "envoi, 500 Mo au plus chacun. Un PDF ou un TIFF multi-pages est "
+                  "accepté (une copie par page). Au-delà, faites plusieurs envois.")
 
 
 class ConnexionForm(FreinConnexion, AuthenticationForm):
