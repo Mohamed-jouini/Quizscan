@@ -92,7 +92,14 @@ def main():
         mots = doc[k].get_text("words")
         ys = [w[1] / PT_PAR_MM for w in mots if w[4] in (nom, num)]
         assert ys and all(y < L.TALON_COUPE for y in ys), (nom, ys)
-    assert "COPIE ANONYME" in doc[0].get_text() and "découper" in doc[0].get_text()
+    assert "découper" in doc[0].get_text() and "COPIE ANONYME" not in doc[0].get_text()
+    # le titre au centre : sur le talon, et seul dans la bande grise
+    bande = quiz.layout_json["pages"][0]["qr"]["band"]
+    titres = doc[0].search_for(quiz.title)
+    assert len(titres) == 2, titres
+    for r, milieu in zip(sorted(titres, key=lambda r: r.y0),
+                         (L.PAGE_W / 2, bande[0] + bande[2] / 2)):
+        assert abs((r.x0 + r.x1) / 2 / PT_PAR_MM - milieu) < 1.5, (r, milieu)
     print("  copies à talon : nom et n° seulement au-dessus du trait de coupe OK")
 
     # ---- la copie de BAKIR, remplie, talon découpé : à qui ? quelles réponses ?

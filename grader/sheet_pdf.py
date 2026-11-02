@@ -75,10 +75,6 @@ LABELS = {
         "place": "PLACE N° {n}",
         "talon_coupe": "Talon à découper avant la correction : il porte votre nom. "
                        "La copie reste identifiée par son QR code.",
-        "talon_copie": "COPIE ANONYME après découpe du talon — n'écrivez "
-                       "votre nom nulle part.",
-        "anonyme": "COPIE ANONYME — asseyez-vous à la place indiquée. "
-                   "N'écrivez votre nom nulle part sur cette copie.",
         "writename": "Écrivez votre nom et votre prénom dans les cases ci-dessus.",
         "fiche": "Fiche",
         "sticker": "Emplacement réservé — collez ici le QR code qui vous a été remis",
@@ -113,10 +109,6 @@ LABELS = {
         "place": "المكان رقم {n}",
         "talon_coupe": "قسيمة تُقصّ قبل الإصلاح: تحمل اسمك. تبقى الورقة معرّفة "
                        "برمز QR.",
-        "talon_copie": "ورقة مجهولة الهوية بعد قصّ القسيمة — لا تكتب اسمك "
-                       "في أي موضع.",
-        "anonyme": "ورقة مجهولة الهوية — اجلس في المكان المبيّن. "
-                   "لا تكتب اسمك في أي موضع من الورقة.",
         "writename": "اكتب لقبك واسمك بخط واضح في الخانات أعلاه.",
         "fiche": "بطاقة",
         "sticker": "مكان مخصّص — ألصق هنا رمز QR الذي سُلّم إليك",
@@ -322,34 +314,33 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
             c.roundRect(bx_ * mm, _y(by_, bh_), bw_ * mm, bh_ * mm, 2 * mm,
                         stroke=0, fill=1)
             c.setFillGray(0.0)
+            sub_txt = num_txt = ""
             if talon:
                 # le nom est sur le talon découpé : dans le cadre, rien
                 # qui identifie l'étudiant à l'œil
                 title_txt = quiz.title
-                sub_txt = T["talon_copie"]
-                num_txt = ""
             elif places is not None:
                 # copie anonyme : le n° de place, ni nom ni n° d'inscription
                 title_txt = T["place"].format(n=places.get(student.pk, "—"))
-                sub_txt = T["anonyme"]
-                num_txt = ""
             else:
                 title_txt = f"{student.last_name} {student.first_name}"
                 sub_txt = T["personal"]
                 num_txt = (f"N° {student.student_number}"
                            if student.student_number else "")
-            if lang == "ar":
+            if not sub_txt:
+                # seul dans la bande : centré
+                draw(title_txt, bx_ + bw_ / 2, _y(by_ + bh_ / 2 + 1.7), 14,
+                     bold=True, align="center")
+            elif lang == "ar":
                 draw(title_txt, bx_ + bw_ - 5, _y(by_ + 9.0), 14,
                      bold=True, align="right")
-                if sub_txt:
-                    draw(sub_txt, bx_ + bw_ - 5, _y(by_ + 15.5), 8,
-                         align="right", gray=0.4)
+                draw(sub_txt, bx_ + bw_ - 5, _y(by_ + 15.5), 8,
+                     align="right", gray=0.4)
                 if num_txt:
                     draw(num_txt, bx_ + 5, _y(by_ + 15.5), 8, gray=0.4)
             else:
                 draw(title_txt, bx_ + 5, _y(by_ + 9.0), 14, bold=True)
-                if sub_txt:
-                    draw(sub_txt, bx_ + 5, _y(by_ + 15.5), 8, gray=0.4)
+                draw(sub_txt, bx_ + 5, _y(by_ + 15.5), 8, gray=0.4)
                 if num_txt:
                     draw(num_txt, bx_ + bw_ - 5, _y(by_ + 15.5), 8,
                          align="right", gray=0.4)
@@ -508,7 +499,7 @@ def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang):
     draw(nom, debut, _y(11.5), 16, bold=True, align=sens_debut)
     if num:
         draw(num, fin, _y(11.5), 12, bold=True, align=sens_fin)
-    draw(titre, debut, _y(18.0), 9.5, align=sens_debut, gray=0.3)
+    draw(titre, L.PAGE_W / 2, _y(18.0), 9.5, align="center", gray=0.3)
     draw(page_txt, fin, _y(18.0), 8, align=sens_fin, gray=0.4)
     draw(consigne, debut, _y(23.5), 8, align=sens_debut, gray=0.35)
     # trait de coupe, pointillé, sur toute la largeur

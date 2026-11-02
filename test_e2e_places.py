@@ -89,8 +89,12 @@ def main():
     pdf = open(quiz.sheet_pdf.path, "rb").read()
     pages = textes(pdf)
     assert len(pages) == 3
+    # le n° de place, seul, au centre de la bande grise
+    bande = quiz.layout_json["pages"][0]["qr"]["band"]
+    r = pymupdf.open(stream=pdf, filetype="pdf")[0].search_for("PLACE N° 1")[0]
+    assert abs((r.x0 + r.x1) / 2 * 25.4 / 72 - (bande[0] + bande[2] / 2)) < 1.5, r
     for k, t in enumerate(pages, start=1):
-        assert f"PLACE N° {k}" in t and "COPIE ANONYME" in t
+        assert f"PLACE N° {k}" in t and "COPIE ANONYME" not in t
         assert not any(n in t for n, _, num in ETUDIANTS for n in (n, num)), \
             f"un nom ou un n° figure sur la copie {k}"
     page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
