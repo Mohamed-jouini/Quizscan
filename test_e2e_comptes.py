@@ -141,15 +141,19 @@ def main():
     assert "/admin/login/" in r.redirect_chain[-1][0], r.redirect_chain
     print("  enseignant refusé à l'entrée de l'administration OK")
 
-    # ---- 7) flèche « retour » du navigateur : la page de connexion reste dans
-    # l'historique, elle ne doit pas s'afficher à quelqu'un de connecté ------
-    r = cp.get("/comptes/login/?next=/classes/")
-    assert r.status_code == 302 and r["Location"] == "/classes/", r.status_code
-    r = cp.get("/comptes/login/")
-    assert r.status_code == 302 and r["Location"] == "/", r.status_code
-    r = cp.get("/comptes/login/?next=https://exemple.tn/")
-    assert r.status_code == 302 and r["Location"] == "/", "redirection vers un autre site"
+    # ---- 7) la page de connexion mène toujours au tableau de bord : flèche
+    # « retour » du navigateur (elle reste dans l'historique) et connexion ---
+    for adresse in ("/comptes/login/", "/comptes/login/?next=/classes/",
+                    "/comptes/login/?next=https://exemple.tn/"):
+        r = cp.get(adresse)
+        assert r.status_code == 302 and r["Location"] == "/", (adresse, r.status_code)
     assert "_auth_user_id" in cp.session, "retour = déconnexion"
+    User.objects.create_user("cpt_retour", password=ANCIEN)
+    for donnees in ({}, {"next": "/classes/"}):
+        r = Client().post("/comptes/login/?next=/classes/",
+                          dict(donnees, username="cpt_retour", password=ANCIEN))
+        assert r.status_code == 302 and r["Location"] == "/", (donnees, r.status_code)
+    assert 'name="next"' not in Client().get("/comptes/login/?next=/classes/").content.decode()
     # un enseignant garde le formulaire de l'administration, qu'il n'a pas le droit d'ouvrir
     assert cp.get("/comptes/administration/").status_code == 200
     ca = Client()
@@ -162,7 +166,7 @@ def main():
     assert Client().get("/comptes/login/").status_code == 200
     cp.post("/comptes/logout/")
     assert cp.get("/comptes/login/").status_code == 200
-    print("  flèche retour : pas de page de connexion quand on est connecté OK")
+    print("  page de connexion : toujours le tableau de bord, connecté ou à la connexion OK")
 
     print("\n✅ TEST DE LA GESTION DES COMPTES RÉUSSI")
 

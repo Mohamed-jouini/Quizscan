@@ -1,6 +1,6 @@
 {# Connexion de l'espace enseignant. Palette verte (decor « papier decoupe »). #}
-{# Vue : django.contrib.auth.views.LoginView — le formulaire est poste sur    #}
-{# l'URL courante, « next » est repris tel quel.                              #}
+{# Vue : grader.views.ConnexionView — le formulaire est poste sur l'URL        #}
+{# courante, et on en sort toujours sur le tableau de bord.                   #}
 {% extends "registration/auth_base.html" %}
 
 {% block title %}Connexion — QuizScan{% endblock %}
@@ -41,7 +41,6 @@
     </div>
   </div>
 
-  <input type="hidden" name="next" value="{{ next }}">
   <button class="submit" type="submit">Se connecter</button>
 </form>
 

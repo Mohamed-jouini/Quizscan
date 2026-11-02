@@ -30,7 +30,7 @@ from . import qr as qr_mod
 from . import services, sheet_pdf
 from .export import parcours_workbook, results_workbook
 from .forms import (CONCOURS_ID_MODES, AdminLoginForm, AnswerKeyUploadForm,
-                    BulkQcmForm, CandidateFileForm, ClassGroupForm,
+                    BulkQcmForm, CandidateFileForm, ClassGroupForm, ConnexionForm,
                     QuestionBankForm, QuestionForm, QuestionImportForm,
                     QuizForm, StudentImportForm, UploadForm)
 from .models import (ARABIC_LETTERS, Answer, AnswerKeySheet, ClassGroup, Communique, Inscrit,
@@ -102,6 +102,19 @@ def _my_sheets(request):
         qs = qs.filter(
             _filtre_epreuves(request.user, "batch__quiz__")).distinct()
     return qs
+
+
+class ConnexionView(LoginView):
+    """Page de connexion de l'espace enseignant. On en sort toujours sur le tableau
+    de bord, jamais sur la page demandée avant (« next ») : juste après la connexion
+    comme pour qui est déjà connecté. La flèche « retour » du navigateur ramène ici,
+    la page restant dans l'historique : elle affichait le formulaire à une personne
+    toujours connectée, qui se croyait déconnectée."""
+    authentication_form = ConnexionForm
+    redirect_authenticated_user = True
+
+    def get_redirect_url(self):
+        return ""
 
 
 class AdminLoginView(LoginView):
