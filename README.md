@@ -533,6 +533,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_labels.py` | étiquette QR d'un candidat de concours collée sur la copie |
 | `test_e2e_etiquette_pages.py` | feuille à étiquette sur plusieurs pages : une vignette par page, étiquette oubliée signalée (copie incomplète, en attente), présélection d'après l'ordre du scan |
 | `test_e2e_scanner.py` | sorties d'un scanner à chargeur : TIFF multipage lu en entier, versos blancs ignorés, étiquettes lues en noir et blanc |
+| `test_e2e_a3.py` | copies d'écrit et sujet de QCM en A3 recto-verso plié : ordre des pages, sans carrés noirs, page de garde lue sur la feuille A3 dans tous les sens, A4 inchangé |
 | `test_e2e_import.py` | import de questionnaires et de candidats (Excel, Word, PDF, CSV), banque de questions |
 | `test_e2e_forms.py` | création d'un concours (sans classe ni case « mode concours ») et d'un quiz, nombre de choix par question jusqu'à la lecture de la copie |
 | `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » |
@@ -562,6 +563,10 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
 - Scanner à chargeur (Canon DR-G2110 à l'institut) : **PDF, niveaux de gris, 200 dpi**. Un
   paquet de 500 feuilles en recto-verso reste alors sous les 500 Mo permis par fichier. Le
   recto-verso convient : les versos blancs sont ignorés.
+- Copies d'écrit en A3 (réglage « Format des copies » de l'épreuve) : imprimez recto-verso sur
+  le bord court, à 100 %, et pliez au milieu ; le sujet d'un QCM peut prendre le même format,
+  sa feuille de réponses reste en A4. Au scan, passez les feuilles dépliées, en A3, recto seul :
+  la page de garde est retrouvée sur la feuille dans n'importe quel sens, le reste n'est pas lu.
 - Si les questions changent après impression, **régénérez la fiche** avant de
   scanner (la disposition est figée dans la fiche PDF).
 - L'OCR d'un nom manuscrit n'est jamais parfait : les copies non identifiées

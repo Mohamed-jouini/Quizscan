@@ -188,6 +188,13 @@ class Quiz(models.Model):
         validators=[MaxValueValidator(6)],
         help_text="Écrit : feuilles lignées imprimées après la page de garde "
                   "(0 à 6). Elles ne se scannent pas.")
+    # Une feuille A3 pliée au milieu porte quatre pages A4 : les copies d'un écrit,
+    # le sujet d'un QCM. La feuille de réponses d'un QCM reste en A4 : sur une feuille
+    # A3 de deux pages à lire, le scan n'en retrouverait qu'une.
+    FORMATS = [("a4", "A4"), ("a3", "A3 recto-verso, plié au milieu")]
+    format_impression = models.CharField(
+        "format d'impression", max_length=2, choices=FORMATS, default="a4",
+        help_text="Écrit : les copies. QCM : le sujet.")
     # Copie nominative dont le nom est imprimé sur un TALON, en haut de la
     # page, hors du cadre de lecture : découpé avant la correction, il rend
     # la copie anonyme ; le QR (dans le cadre) identifie toujours l'étudiant.

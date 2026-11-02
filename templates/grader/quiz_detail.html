@@ -98,6 +98,15 @@
     <input id="id_duree" class="champ--duree" type="text" name="duree" maxlength="60"
            value="{{ quiz.duree }}" placeholder="1 h 30">
   </div>
+  <div class="reglages__large">
+    <label for="id_format_impression">Format du sujet</label>
+    <select id="id_format_impression" name="format_impression">
+      {% for val, label in quiz.FORMATS %}
+      <option value="{{ val }}" {% if quiz.format_impression == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <span class="helptext helptext--serre">La feuille de réponses reste en A4.</span>
+  </div>
   {% endif %}
   <button class="btn small" name="update_settings" value="1" type="submit">Enregistrer les réglages</button>
   <span class="helptext reglages__aide">
@@ -312,7 +321,10 @@
       {% if quiz.sheet_mode == "split" %}
         <b>Sujet</b> : les questions et leurs choix, à distribuer (non scanné).
         <b>Feuille de réponses</b> : la grille de cases à imprimer, faire remplir
-        puis scanner. Imprimez les deux en A4 à 100 %.
+        puis scanner.
+        {% if quiz.format_impression == "a3" %}Imprimez le sujet en A3 recto-verso sur le bord
+        court, à 100 %, puis pliez-le au milieu ; la feuille de réponses en A4 à 100 %.
+        {% else %}Imprimez les deux en A4 à 100 %.{% endif %}
       {% elif quiz.id_mode == "qr" %}
         Mode QR : le PDF contient une fiche <b>nominative</b> par étudiant (nom
         pré-imprimé + QR code). Imprimez en A4 à 100 % et distribuez à chacun la sienne.

@@ -166,6 +166,8 @@ def layout_signature(quiz):
         # seulement pour l'écrit et l'oral : les empreintes des fiches QCM
         # existantes ne doivent pas changer (toutes seraient « périmées »)
         data["ecrit"] = [quiz.note_sur, quiz.pages_redaction]
+        if quiz.type_epreuve == "ecrit" and quiz.format_impression == "a3":
+            data["format"] = "a3"   # seulement si choisi : empreintes inchangées
         if quiz.type_epreuve == "oral":
             data["oral"] = [s.pk for s in quiz.class_group.students.all()]
     raw = json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
@@ -464,6 +466,8 @@ def _build_full_layout(quiz):
 # ---------------------------------------------------------------------------
 
 NOTE_LIGNE = 8.0       # interligne de la zone de rédaction (mm)
+A3_LIGNE = 9.0         # interligne d'une copie A3 (Quiz.format_impression)
+A3_HAUT = 18.0         # première ligne d'une page lignée A3, depuis le haut (mm)
 
 
 def _note_rows(note_sur):
@@ -528,9 +532,23 @@ def _build_ecrit_layout(quiz):
                           "pas": NOTE_LIGNE, "titre": "observations"}
         return _checked({"mode": "oral", "num_choices": 0, "pages": [page],
                          "pages_redaction": 0})
+    n_lignees = int(getattr(quiz, "pages_redaction", 1) or 0)
+    if getattr(quiz, "format_impression", "a4") == "a3":
+        # Rien de ce qui est lu ne bouge par rapport à l'A4. Feuilles entières :
+        # 3 pages lignées sur la feuille de la page de garde, 4 sur une suivante.
+        page["lignes"] = lignes_a3(round(y + 12.0, 2), getattr(quiz, "language", "fr"))
+        return _checked({"mode": "ecrit", "num_choices": 0, "pages": [page], "format": "a3",
+                         "pages_redaction": (n_lignees + 4) // 4 * 4 - 1})
     page["lignes"] = {"y0": round(y + 12.0, 2), "y1": CONTENT_Y1, "pas": NOTE_LIGNE}
     return _checked({"mode": "ecrit", "num_choices": 0, "pages": [page],
-                     "pages_redaction": int(getattr(quiz, "pages_redaction", 1) or 0)})
+                     "pages_redaction": n_lignees})
+
+
+def lignes_a3(y0, langue):
+    """Lignes d'une page de copie A3 : celles du modèle de l'institut, à marge du
+    côté où l'écriture commence. Hors des zones lues."""
+    return {"y0": y0, "y1": PAGE_H - A3_HAUT, "pas": A3_LIGNE, "x0": 14.0, "x1": PAGE_W - 14.0,
+            "marge": PAGE_W - 20.0 if langue == "ar" else 20.0}
 
 
 def _uses_sticker(quiz):

@@ -10,9 +10,10 @@ import functools
 import io
 
 import cv2
+import pymupdf
 import qrcode
 from PIL import Image
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A3, A4, landscape
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
@@ -99,6 +100,7 @@ LABELS = {
         "redaction": "Copie — page de rédaction",
         "ne_pas_scanner": "Ne pas scanner cette page : seule la page de garde "
                           "est lue.",
+        "pli": "pli au milieu",
     },
     "ar": {
         "last": "اللقب", "first": "الاسم",
@@ -129,6 +131,7 @@ LABELS = {
         "observations": "ملاحظات الممتحن",
         "redaction": "ورقة التحرير",
         "ne_pas_scanner": "لا تُمسح هذه الصفحة ضوئيا: تُقرأ صفحة الغلاف فقط.",
+        "pli": "طيّ في الوسط",
     },
 }
 
@@ -456,6 +459,16 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
         if mode == "ecrit" and pidx == len(layout["pages"]) - 1:
             n = int(layout.get("pages_redaction", 0) or 0)
             for k in range(n):
+                if layout.get("format") == "a3":
+                    # Même feuille que la page de garde : elle passe au scanner avec.
+                    # Le massicot coupe toute la largeur : rien à écrire au-dessus du
+                    # trait du talon, quelle que soit la page.
+                    _dessiner_lignes(c, L.lignes_a3(
+                        L.TALON_COUPE + L.A3_LIGNE if talon else L.A3_HAUT, lang))
+                    draw(f"{quiz.title} — page {k + 2}", L.PAGE_W / 2,
+                         _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
+                    c.showPage()
+                    continue
                 draw(f"{T['redaction']} {k + 2} / {n + 1} — {quiz.title}",
                      L.PAGE_W / 2, _y(16.0), 9, bold=True, align="center")
                 draw(T["ne_pas_scanner"], L.PAGE_W / 2, _y(21.0), 7.5,
@@ -465,7 +478,65 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
                 c.showPage()
 
     c.save()
+    if layout.get("format") == "a3":
+        return _imposer_a3(buf.getvalue(), lang,
+                           len(layout["pages"]) + int(layout.get("pages_redaction", 0)))
     return buf.getvalue()
+
+
+def _cotes_a3(nb_pages, rtl):
+    """Cahier plié au milieu : (page de gauche, page de droite) de chaque côté de
+    feuille, recto puis verso, feuilles emboîtées. Pages numérotées depuis 1, complétées
+    à un multiple de 4. La page 1 est sur le dessus du cahier plié : à droite du pli en
+    français, à gauche en arabe, où le cahier s'ouvre de l'autre côté."""
+    nb = (nb_pages + 3) // 4 * 4
+    cotes = []
+    for f in range(nb // 4):
+        for g, d in ((nb - 2 * f, 1 + 2 * f), (2 + 2 * f, nb - 1 - 2 * f)):
+            cotes.append((d, g) if rtl else (g, d))
+    return cotes
+
+
+def _calque_pli(lang):
+    """Page A3 transparente : le pointillé du pli, hors du cadre de lecture."""
+    largeur, hauteur = landscape(A3)
+    texte = LABELS.get(lang, LABELS["fr"])["pli"]
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=(largeur, hauteur))
+    c.setStrokeGray(0.78)
+    c.setLineWidth(0.6)
+    c.setDash(2, 3)
+    c.line(largeur / 2, 7 * mm, largeur / 2, hauteur - 7 * mm)
+    c.setFillGray(0.55)
+    if has_arabic(texte):
+        _draw_mixed(c, shape(texte), largeur / 2, hauteur - 5 * mm, 6, False, "center")
+    else:
+        c.setFont(font_for(texte, False), 6)
+        c.drawCentredString(largeur / 2, hauteur - 5 * mm, texte)
+    c.save()
+    return buf.getvalue()
+
+
+def _imposer_a3(pdf, lang, par_exemplaire=None):
+    """Pose les pages A4 du PDF sur des feuilles A3 paysage, à imprimer recto-verso sur
+    le bord court puis à plier. Les pages restent celles de l'A4, au trait près : ce qui
+    est lu au scan ne bouge pas. par_exemplaire : pages d'un cahier (copies répétées)."""
+    largeur, hauteur = landscape(A3)
+    moities = (pymupdf.Rect(0, 0, largeur / 2, hauteur),
+               pymupdf.Rect(largeur / 2, 0, largeur, hauteur))
+    with pymupdf.open(stream=pdf, filetype="pdf") as source, \
+            pymupdf.open(stream=_calque_pli(lang), filetype="pdf") as calque, \
+            pymupdf.open() as sortie:
+        par_exemplaire = par_exemplaire or source.page_count
+        cotes = _cotes_a3(par_exemplaire, lang == "ar")
+        for debut in range(0, source.page_count, par_exemplaire):
+            for cote in cotes:
+                feuille = sortie.new_page(width=largeur, height=hauteur)
+                for moitie, n in zip(moities, cote):
+                    if n <= par_exemplaire:     # sinon : page laissée blanche
+                        feuille.show_pdf_page(moitie, source, debut + n - 1)
+                feuille.show_pdf_page(feuille.rect, calque, 0)
+        return sortie.tobytes(garbage=1, deflate=True)
 
 
 def _dessiner_cadre(c, page_index, haut=L.CADRE_MARGE, talon=False):
@@ -522,10 +593,13 @@ def _dessiner_lignes(c, zone):
     elles sont hors des zones lues)."""
     c.setStrokeGray(0.78)
     c.setLineWidth(0.4)
+    x0, x1 = zone.get("x0", L.CONTENT_X0), zone.get("x1", L.CONTENT_X1)
     y = zone["y0"]
     while y <= zone["y1"]:
-        c.line(L.CONTENT_X0 * mm, _y(y), L.CONTENT_X1 * mm, _y(y))
+        c.line(x0 * mm, _y(y), x1 * mm, _y(y))
         y += zone["pas"]
+    if zone.get("marge"):
+        c.line(zone["marge"] * mm, _y(zone["y0"]), zone["marge"] * mm, _y(y - zone["pas"]))
     c.setStrokeGray(0.0)
 
 
@@ -1013,4 +1087,8 @@ def generate_subject_pdf(quiz, questions=None):
 
     pied_page()
     c.save()
+    # Écrit : le format choisi est celui des copies, l'énoncé reste en A4 (souvent une
+    # seule page : la feuille A3 serait à moitié vide).
+    if not ecrit and getattr(quiz, "format_impression", "a4") == "a3":
+        return _imposer_a3(buf.getvalue(), lang)
     return buf.getvalue()

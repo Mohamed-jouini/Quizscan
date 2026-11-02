@@ -104,17 +104,19 @@ def main():
         # ---- ancienne base en retard de quelques migrations : mise à niveau de la copie
         tardive = Path(dossier) / "tardive.sqlite3"
         shutil.copy(source, tardive)
+        # (une migration qui change les tables s'ajoute ici : retirer ce qu'elle a créé)
         base = sqlite3.connect(tardive)
         base.execute("DROP TABLE grader_piecejointe")
-        base.execute("DELETE FROM django_migrations WHERE app='grader' AND "
-                     "(name LIKE '0035%' OR name LIKE '0036%')")
+        base.execute("ALTER TABLE grader_quiz DROP COLUMN format_impression")
+        base.execute("DELETE FROM django_migrations WHERE app='grader' AND name >= '0035'")
         base.commit()
         base.close()
         reference = _empreinte(tardive)
         transferer(tardive, ecraser=True, ecrire=muet)
         assert _empreinte(tardive) == reference, "le fichier en retard a été modifié"
         assert Answer.objects.get().points_awarded == 1.5
-        print("  base en retard de deux migrations : copie mise à niveau, original intact OK")
+        assert Quiz.objects.get().format_impression == "a4"
+        print("  base en retard de trois migrations : copie mise à niveau, original intact OK")
 
         # ---- trop ancienne : une migration de données irait dans la mauvaise base
         vieille = Path(dossier) / "vieille.sqlite3"

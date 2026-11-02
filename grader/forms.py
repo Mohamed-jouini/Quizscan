@@ -382,7 +382,7 @@ class EpreuveEcritForm(forms.ModelForm):
     class Meta:
         model = Quiz
         fields = ["sujet_texte", "entete", "duree", "note_sur", "id_mode",
-                  "id_digits", "anonymat", "pages_redaction"]
+                  "id_digits", "anonymat", "pages_redaction", "format_impression"]
         widgets = {"sujet_texte": forms.Textarea(attrs={
                        "rows": 9, "placeholder": "Ex. Racontez un voyage qui vous a "
                                                  "marqué…\n\nVous décrirez les lieux "
@@ -390,17 +390,27 @@ class EpreuveEcritForm(forms.ModelForm):
                    "entete": forms.Textarea(attrs={"rows": 3})}
         field_classes = {"note_sur": DecimalField}
         labels = {"id_digits": "Nombre de chiffres du n° d'inscription",
-                  "pages_redaction": "Pages lignées après la page de garde"}
-        help_texts = {"entete": AIDE_ENTETE}
+                  "pages_redaction": "Pages lignées après la page de garde",
+                  "format_impression": "Format des copies"}
+        help_texts = {"entete": AIDE_ENTETE,
+                      "format_impression": "A3 : la page de garde et 3 pages lignées sur une "
+                                           "feuille, imprimée recto-verso sur le bord court, à "
+                                           "100 %, puis pliée au milieu. Les pages lignées "
+                                           "vont jusqu'à la fin de la feuille."}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # facultatif à l'envoi : les formulaires d'avant ce choix gardent le format actuel
+        self.fields["format_impression"].required = False
         if self.instance.auto_enroll:
             self.fields["id_mode"].choices = [
                 c for c in Quiz.ID_MODES if c[0] in CONCOURS_ID_MODES]
         if self.instance.language == "ar":
             self.fields["sujet_texte"].widget.attrs["dir"] = "rtl"
         self.fields["anonymat"].initial = self.instance.anonymat
+
+    def clean_format_impression(self):
+        return self.cleaned_data.get("format_impression") or self.instance.format_impression
 
     def clean(self):
         data = super().clean()
