@@ -4,7 +4,7 @@ Paramètres : e (étape), g (son groupe), resultats.
 {% endcomment %}
 {% if not resultats %}
 <dl class="chiffres-epreuve">
-  <div><dt>Candidats</dt><dd>{{ e.quiz.n_candidats }}</dd></div>
+  <div><dt>{% if g.concours %}Candidats{% else %}Étudiants{% endif %}</dt><dd>{{ e.quiz.n_candidats }}</dd></div>
   {% if e.quiz.type_epreuve == "qcm" %}
   <div><dt>Questions</dt><dd>{{ e.quiz.n_questions }}</dd></div>
   {% else %}

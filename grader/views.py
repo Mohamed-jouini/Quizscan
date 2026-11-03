@@ -282,6 +282,14 @@ def _concours_group_pks(request):
                 .values_list("class_group_id", flat=True))
 
 
+def _epreuves_chiffrees(request):
+    """Épreuves avec les chiffres de _groupes_epreuves.html, sans requête par épreuve."""
+    return (_my_quizzes(request).select_related("class_group")
+            .annotate(n_candidats=Count("class_group__students", distinct=True),
+                      n_questions=Count("questions", distinct=True),
+                      n_lots=Count("batches", distinct=True)))
+
+
 @login_required
 def class_list(request):
     form = ClassGroupForm(request.POST or None)
@@ -294,9 +302,12 @@ def class_list(request):
         group.save()          # devient aussi l'un de ses enseignants (modèle)
         return redirect("class_list")
     conc = _concours_group_pks(request)
+    groupes = services.groupes_epreuves(_epreuves_chiffrees(request))
     return render(request, "grader/class_list.html", {
-        "classes": _my_classes(request).exclude(pk__in=conc),
-        "quizzes": _my_quizzes(request).filter(auto_enroll=False),
+        "classes": (_my_classes(request).exclude(pk__in=conc).order_by("name")
+                    .annotate(n_etudiants=Count("students", distinct=True),
+                              n_quiz=Count("quizzes", distinct=True))),
+        "quizzes": [g for g in groupes if not g["concours"]],
         "form": form,
     })
 
@@ -304,12 +315,9 @@ def class_list(request):
 @login_required
 def concours_list(request):
     conc = _concours_group_pks(request)
-    epreuves = (_my_quizzes(request).select_related("class_group")
-                .annotate(n_candidats=Count("class_group__students", distinct=True),
-                          n_questions=Count("questions", distinct=True),
-                          n_lots=Count("batches", distinct=True)))
+    groupes = services.groupes_epreuves(_epreuves_chiffrees(request))
     return render(request, "grader/concours_list.html", {
-        "concours": [g for g in services.groupes_epreuves(epreuves) if g["concours"]],
+        "concours": [g for g in groupes if g["concours"]],
         "groups": _my_classes(request).filter(pk__in=conc),
     })
 

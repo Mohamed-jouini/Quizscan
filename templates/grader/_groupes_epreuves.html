@@ -3,7 +3,7 @@
 étapes QCM -> écrit -> oral à l'intérieur, au lieu d'une ligne par étape. Chaque épreuve est
 un bouton (.carte-bouton) : un clic n'importe où dans le bloc ouvre l'épreuve, ou ses résultats.
 Paramètres : groupes, libelle (nom de la liste), resultats (vrai : page Résultats, avec
-copies notées, moyenne et admis ; faux : page Concours, avec candidats et questions).
+copies notées, moyenne et admis ; faux : pages Concours et Classes, avec candidats et questions).
 {% endcomment %}
 <div class="groupes" tabindex="0" role="region" aria-label="{{ libelle }}">
   {% for g in groupes %}
@@ -28,7 +28,7 @@ copies notées, moyenne et admis ; faux : page Concours, avec candidats et quest
         </div>
         <div class="groupe__bas">
           {% include "grader/_chiffres_epreuve.html" %}
-          {% if not resultats %}<a class="btn small secondary" href="{% url 'class_detail' e.quiz.class_group.pk %}">Candidats &amp; QR</a>{% endif %}
+          {% if not resultats %}<a class="btn small secondary" href="{% url 'class_detail' e.quiz.class_group.pk %}">{% if g.concours %}Candidats{% else %}Étudiants{% endif %} &amp; QR</a>{% endif %}
         </div>
       </li>
       {% endfor %}
@@ -48,7 +48,7 @@ copies notées, moyenne et admis ; faux : page Concours, avec candidats et quest
     </header>
     <div class="groupe__bas">
       {% include "grader/_chiffres_epreuve.html" %}
-      {% if not resultats %}<a class="btn small secondary" href="{% url 'class_detail' e.quiz.class_group.pk %}">Candidats &amp; QR</a>{% endif %}
+      {% if not resultats %}<a class="btn small secondary" href="{% url 'class_detail' e.quiz.class_group.pk %}">{% if g.concours %}Candidats{% else %}Étudiants{% endif %} &amp; QR</a>{% endif %}
     </div>
   </article>
   {% endwith %}

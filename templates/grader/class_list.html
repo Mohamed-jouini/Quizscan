@@ -5,25 +5,60 @@
     <h1>Classes</h1>
     <p class="page-head__meta">
       <b>{{ classes|length }}</b> classe(s) · <b>{{ quizzes|length }}</b> quiz
+      — cliquez sur un bouton pour l'ouvrir.
     </p>
   </div>
 </header>
 
 <div class="card">
+  <div class="card__head">
+    <h2>Mes classes ({{ classes|length }})</h2>
+    {% if perms.grader.creer_epreuve %}
+    <form class="nouvelle-classe" method="post">{% csrf_token %}
+      {{ form.name }}
+      <button class="btn" type="submit">Créer la classe</button>
+    </form>
+    {% endif %}
+  </div>
+  {{ form.name.errors }}
+  {% if not perms.grader.creer_epreuve %}
+  <p class="helptext">Votre compte est en lecture seule : demandez le droit « créer des épreuves » à l'administrateur pour créer une classe.</p>
+  {% endif %}
+  {% if classes %}
+  <div class="groupes" tabindex="0" role="region" aria-label="Mes classes">
+    {% for c in classes %}
+    <article class="groupe carte-bouton">
+      <header class="groupe__tete">
+        <span class="carte-bouton__icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 19.5a6.5 6.5 0 0 1 13 0"/><circle cx="9.5" cy="8" r="3.5"/><path d="M17 11.5a4.5 4.5 0 0 1 4 4.5"/><circle cx="17.5" cy="6.5" r="2.5"/></svg></span>
+        <div class="groupe__nom">
+          <h3 class="groupe__titre"><a class="carte-bouton__lien" href="{% url 'class_detail' c.pk %}">{{ c.name }}</a></h3>
+        </div>
+        <span class="carte-bouton__fleche" aria-hidden="true"></span>
+      </header>
+      <div class="groupe__bas">
+        <dl class="chiffres-epreuve">
+          <div><dt>Étudiants</dt><dd>{{ c.n_etudiants }}</dd></div>
+          <div><dt>Quiz</dt><dd>{{ c.n_quiz }}</dd></div>
+        </dl>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <span class="empty__icon">
+      <svg viewBox="0 0 24 24"><path d="M3 19.5a6.5 6.5 0 0 1 13 0"/><circle cx="9.5" cy="8" r="3.5"/><path d="M17 11.5a4.5 4.5 0 0 1 4 4.5"/><circle cx="17.5" cy="6.5" r="2.5"/></svg>
+    </span>
+    <span class="empty__title">Aucune classe pour le moment</span>
+    <p>Créez-en une ci-dessus, puis importez ses étudiants.</p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
   <h2>Quiz de classe ({{ quizzes|length }})</h2>
   {% if quizzes %}
-  <div class="table-wrap">
-    <table>
-    <tr><th>Titre</th><th>Classe</th><th>Questions</th></tr>
-    {% for q in quizzes %}
-    <tr>
-      <td><a href="{% url 'quiz_detail' q.pk %}">{{ q.title }}</a></td>
-      <td>{{ q.class_group.name }}</td>
-      <td>{{ q.questions.count }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  </div>
+  {% include "grader/_groupes_epreuves.html" with groupes=quizzes libelle="Quiz de classe" resultats=False %}
   {% else %}
   <div class="empty">
     <span class="empty__icon">
@@ -37,41 +72,5 @@
     {% endif %}
   </div>
   {% endif %}
-</div>
-
-<div class="grid2">
-  <div class="card">
-    <h2>Mes classes ({{ classes|length }})</h2>
-    {% if classes %}
-    <div class="table-wrap">
-      <table>
-      <tr><th>Classe</th><th>Étudiants</th></tr>
-      {% for c in classes %}
-      <tr><td><a href="{% url 'class_detail' c.pk %}">{{ c.name }}</a></td>
-          <td>{{ c.students.count }}</td></tr>
-      {% endfor %}
-    </table>
-    </div>
-    {% else %}
-    <div class="empty">
-      <span class="empty__icon">
-        <svg viewBox="0 0 24 24"><path d="M3 19.5a6.5 6.5 0 0 1 13 0"/><circle cx="9.5" cy="8" r="3.5"/><path d="M17 11.5a4.5 4.5 0 0 1 4 4.5"/><circle cx="17.5" cy="6.5" r="2.5"/></svg>
-      </span>
-      <span class="empty__title">Aucune classe pour le moment</span>
-      <p>Créez-en une ci-contre, puis importez ses étudiants.</p>
-    </div>
-    {% endif %}
-  </div>
-  <div class="card">
-    <h2>Nouvelle classe</h2>
-    {% if perms.grader.creer_epreuve %}
-    <form method="post">{% csrf_token %}
-      {{ form.name.errors }}
-      <label>Nom de la classe</label>{{ form.name }}
-      <span class="helptext">Par exemple « 3ème A — Sciences ».</span>
-      <p><button class="btn" type="submit">Créer</button></p>
-    </form>
-    {% else %}<p class="helptext">Votre compte est en lecture seule : demandez le droit « créer des épreuves » à l'administrateur pour créer une classe.</p>{% endif %}
-  </div>
 </div>
 {% endblock %}

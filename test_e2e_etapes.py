@@ -233,6 +233,26 @@ def main():
     concours_seul.delete()
     print("  listes : chaque épreuve est un bouton, tout le bloc cliquable OK")
 
+    # ---- page Classes : les mêmes boutons, pour les classes et leurs quiz
+    derniere = ClassGroup.objects.create(name="Boutons Z", owner=prof)
+    premiere = ClassGroup.objects.create(name="Boutons A", owner=prof)
+    Student.objects.create(class_group=premiere, last_name="UN", first_name="U", student_number="901")
+    quiz_classe = Quiz.objects.create(title="Quiz boutons", class_group=premiere, owner=prof)
+    page = c.get(reverse("class_list")).content.decode()
+    assert f'<a class="carte-bouton__lien" href="/classes/{premiere.pk}/">Boutons A</a>' in page
+    assert f'<a class="carte-bouton__lien" href="/quiz/{quiz_classe.pk}/">Quiz boutons</a>' in page
+    assert "Étudiants &amp; QR" in page and "<table" not in page
+    assert page.index(">Boutons A<") < page.index(">Boutons Z<"), "classes par ordre alphabétique"
+    blocs = re.findall(r'class="[^"]*\bcarte-bouton\b[^"]*"', page)
+    assert blocs and len(blocs) == page.count("carte-bouton__lien")
+    # un concours garde son libellé, une classe n'en a pas d'autre ; créer une classe marche toujours
+    assert "Candidats &amp; QR" in c.get(reverse("concours_list")).content.decode()
+    r = c.post(reverse("class_list"), {"name": "Boutons créée"})
+    assert r.status_code == 302 and ClassGroup.objects.filter(name="Boutons créée", owner=prof).exists()
+    quiz_classe.delete()
+    ClassGroup.objects.filter(name__startswith="Boutons ", owner=prof).delete()
+    print("  page Classes : classes et quiz en boutons, création d'une classe OK")
+
     # une épreuve d'un collègue n'est pas proposée comme épreuve précédente
     autre = enseignant_complet(User.objects.get_or_create(username="prof_etapes2")[0])
     c2 = Client()

@@ -32,6 +32,9 @@ class ClassGroupForm(forms.ModelForm):
     class Meta:
         model = ClassGroup
         fields = ["name"]
+        widgets = {"name": forms.TextInput(attrs={
+            "placeholder": "Nouvelle classe, ex. 3ème A — Sciences",
+            "aria-label": "Nom de la nouvelle classe"})}
 
 
 class InscritForm(forms.ModelForm):

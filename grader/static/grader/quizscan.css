@@ -1760,6 +1760,9 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .groupe__classe{flex-basis:100%;font-size:12.5px;color:var(--qs-muted);overflow-wrap:anywhere}
 .groupe__bas{margin-top:auto;display:flex;flex-wrap:wrap;align-items:flex-end;
   justify-content:space-between;gap:8px}
+/* Creer une classe : une ligne dans l'en-tete de la liste, a droite du titre. */
+.nouvelle-classe{flex:1 1 300px;max-width:480px;margin-left:auto;display:flex;flex-wrap:wrap;gap:8px}
+.shell .nouvelle-classe input[type=text]{flex:1 1 220px;width:auto;min-width:0}
 .groupe__etapes{flex:1;display:flex;flex-wrap:wrap;gap:12px 26px;margin:0;padding:0;list-style:none}
 .tuile-etape{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:10px;padding:12px 14px}
 .tuile-etape + .tuile-etape::before{content:"";position:absolute;left:-18px;top:50%;width:9px;
