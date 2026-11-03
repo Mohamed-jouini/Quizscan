@@ -182,6 +182,7 @@ def main():
     assert f'href="/quiz/{quiz.pk}/resultats/"' in concours_bloc, \
         "le concours n'est pas listé dans « Résultats »"
     assert ">3 / 6<" in concours_bloc, "nombre d'admis absent ou différent de la page"
+    assert 'class="groupes"' in concours_bloc, "la liste des concours doit défiler"
     assert re.search(r'nav__item is-active" href="/resultats/"', menu), \
         "entrée de menu « Résultats » absente ou inactive"
     assert re.search(r'nav__item is-active" href="/resultats/"',

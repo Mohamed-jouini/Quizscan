@@ -378,8 +378,9 @@ a.tile:hover{border-color:var(--qs-line-strong)}
 .table-wrap table{min-width:100%;width:max-content}
 .table--espacee{margin-top:14px}
 /* Listes de resultats : elles defilent aussi en hauteur dans leur cadre, leur
-   ligne de titres restant visible. A l'impression, toute la liste. */
-.table-wrap--defile{max-height:max(60vh,320px);overflow-y:auto}
+   ligne de titres restant visible. La barre reste affichee meme pour une liste
+   courte, a la demande de l'utilisateur. A l'impression, toute la liste. */
+.table-wrap--defile{max-height:360px;overflow-y:scroll}
 .shell .table-wrap--defile table tr:first-child > th{position:sticky;top:0;z-index:1}
 @media print{.table-wrap--defile{max-height:none;overflow:visible}}
 
@@ -1746,6 +1747,44 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .etapes li.is-fait::before{content:"✓";background:var(--qs-accent);color:var(--qs-accent-ink)}
 .etapes b{display:block;font-size:14px}
 .etapes span{display:block;font-size:12.5px;color:var(--qs-muted);margin-top:2px}
+/* Listes Concours et Resultats : un bloc par concours, ses etapes a l'interieur.
+   Une epreuve seule tient sur une colonne, un concours en etapes sur toute la largeur. */
+.groupes{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr));
+  grid-auto-flow:dense;gap:14px;max-height:560px;overflow:hidden scroll;padding-right:6px}
+.groupe{display:flex;flex-direction:column;gap:12px;min-width:0;padding:14px;
+  border:1px solid var(--qs-line);border-radius:var(--qs-r-card);background:var(--qs-surface)}
+.groupe--etapes{grid-column:1/-1}
+.groupe__tete{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.groupe__nom{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;min-width:0}
+.groupe__titre{margin:0;font-size:15px;overflow-wrap:anywhere}
+.groupe__titre a{color:var(--qs-ink);text-decoration:none}
+.groupe__titre a:hover{color:var(--qs-blue);text-decoration:underline}
+.groupe__etapes{flex:1;display:flex;flex-wrap:wrap;gap:12px 26px;margin:0;padding:0;list-style:none}
+.tuile-etape{position:relative;flex:1 1 200px;min-width:0;display:flex;flex-direction:column;
+  align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid transparent;
+  border-radius:12px;background:var(--qs-surface-2);transition:border-color .15s}
+.tuile-etape:hover,.tuile-etape:focus-within{border-color:var(--qs-blue)}
+.tuile-etape + .tuile-etape::before{content:"";position:absolute;left:-18px;top:50%;width:9px;
+  height:9px;border:solid var(--qs-line-strong);border-width:2px 2px 0 0;
+  transform:translateY(-50%) rotate(45deg)}
+.tuile-etape__tete{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.tuile-etape__num{width:24px;height:24px;flex:none;display:flex;align-items:center;
+  justify-content:center;border-radius:50%;font-size:12.5px;font-weight:700;
+  background:var(--qs-track);color:var(--qs-muted)}
+.tuile-etape.is-fait .tuile-etape__num{background:var(--qs-accent);color:var(--qs-accent-ink)}
+.tuile-etape__nom{font-size:14px;font-weight:700;color:var(--qs-ink);text-decoration:none}
+/* toute la tuile est cliquable ; le bouton « Candidats & QR » passe au-dessus */
+.tuile-etape__nom::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.tuile-etape__intitule{font-size:12.5px;color:var(--qs-muted);overflow-wrap:anywhere}
+.tuile-etape__action{position:relative;z-index:1}
+.chiffres-epreuve{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0}
+.chiffres-epreuve dt{font-size:11.5px;color:var(--qs-muted);white-space:nowrap}
+.chiffres-epreuve dd{margin:2px 0 0;font-size:14px;font-weight:700;color:var(--qs-ink);
+  white-space:nowrap}
+.chiffres-epreuve__manque{display:block;max-width:72px;font-size:12px;font-weight:400;
+  color:var(--qs-muted);white-space:normal}
+.chiffres-epreuve__vide{margin:0;font-size:13px;color:var(--qs-muted)}
+@media (max-width:1100px){.tuile-etape + .tuile-etape::before{display:none}}
 .documents{display:grid;gap:10px;margin:6px 0 10px}
 .document{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;
   border:1px solid var(--qs-line);text-decoration:none;color:var(--qs-ink);

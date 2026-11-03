@@ -1,0 +1,22 @@
+{% comment %}
+Chiffres d'une épreuve dans _groupes_epreuves.html.
+Paramètres : e (étape), g (son groupe), resultats.
+{% endcomment %}
+{% if not resultats %}
+<dl class="chiffres-epreuve">
+  <div><dt>Candidats</dt><dd>{{ e.quiz.n_candidats }}</dd></div>
+  {% if e.quiz.type_epreuve == "qcm" %}
+  <div><dt>Questions</dt><dd>{{ e.quiz.n_questions }}</dd></div>
+  {% else %}
+  <div><dt>Note sur</dt><dd>{{ e.quiz.note_sur|floatformat:"-2" }}</dd></div>
+  {% endif %}
+</dl>
+{% elif e.resume %}
+<dl class="chiffres-epreuve">
+  <div><dt>Copies notées</dt><dd>{{ e.resume.n }}</dd></div>
+  <div><dt>Moyenne</dt><dd>{{ e.resume.moyenne|floatformat:"-2" }} / {{ e.resume.bareme|floatformat:"-2" }}</dd></div>
+  <div><dt>{% if g.concours %}Admis{% else %}Réussite{% endif %}</dt><dd>{% if e.resume.admis is not None %}<span class="badge ok">{{ e.resume.admis }} / {{ e.resume.n }}</span>{% else %}<span class="chiffres-epreuve__manque">pas de note minimale</span>{% endif %}</dd></div>
+</dl>
+{% else %}
+<p class="chiffres-epreuve__vide">Aucune copie notée</p>
+{% endif %}

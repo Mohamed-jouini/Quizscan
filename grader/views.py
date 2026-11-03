@@ -304,8 +304,12 @@ def class_list(request):
 @login_required
 def concours_list(request):
     conc = _concours_group_pks(request)
+    epreuves = (_my_quizzes(request).select_related("class_group")
+                .annotate(n_candidats=Count("class_group__students", distinct=True),
+                          n_questions=Count("questions", distinct=True),
+                          n_lots=Count("batches", distinct=True)))
     return render(request, "grader/concours_list.html", {
-        "quizzes": _my_quizzes(request).filter(auto_enroll=True),
+        "concours": [g for g in services.groupes_epreuves(epreuves) if g["concours"]],
         "groups": _my_classes(request).filter(pk__in=conc),
     })
 
@@ -512,10 +516,12 @@ def quiz_create(request):
     if precedente_pk is not None:
         prec = _my_quizzes(request).filter(pk=precedente_pk).first()
         if prec is not None:
+            # le titre part de celui du concours : « jhjh — oral », pas « jhjh — écrit — oral »
+            racine = services.chaine_epreuves(prec, _my_quizzes(request))[0]
             initial = {"epreuve_precedente": prec.pk, "language": prec.language,
                        "type_epreuve": request.GET.get("type", "ecrit"),
                        "note_sur": 20, "entete": prec.entete,
-                       "title": f"{prec.title} — "
+                       "title": f"{racine.title} — "
                                 f"{'oral' if request.GET.get('type') == 'oral' else 'écrit'}"}
     form = QuizForm(request.POST or None, user=request.user, concours=is_concours,
                     precedentes=_my_quizzes(request), initial=initial)
@@ -1338,13 +1344,15 @@ def _filtrer_etudiants(rows, recherche):
 def resultats_list(request):
     """Menu « Résultats » : toutes les épreuves accessibles, concours et quiz
     de classe, avec leur effectif noté, leur moyenne et, si une note
-    minimale est réglée, le nombre d'admis. Un clic ouvre les résultats."""
-    epreuves = (_my_quizzes(request).select_related("class_group")
-                .order_by("-pk"))
-    lignes = [{"quiz": q, "resume": services.resume_epreuve(q)} for q in epreuves]
+    minimale est réglée, le nombre d'admis. Un concours en plusieurs étapes
+    n'est qu'un bloc ; un clic sur une étape ouvre ses résultats."""
+    groupes = services.groupes_epreuves(_my_quizzes(request).select_related("class_group"))
+    for groupe in groupes:
+        for etape in groupe["etapes"]:
+            etape["resume"] = services.resume_epreuve(etape["quiz"])
     return render(request, "grader/resultats_list.html", {
-        "concours": [l for l in lignes if l["quiz"].auto_enroll],
-        "classes": [l for l in lignes if not l["quiz"].auto_enroll],
+        "concours": [g for g in groupes if g["concours"]],
+        "classes": [g for g in groupes if not g["concours"]],
     })
 
 

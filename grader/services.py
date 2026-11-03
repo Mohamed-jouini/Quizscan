@@ -1485,6 +1485,49 @@ def chaine_epreuves(quiz, autorisees=None):
     return chaine
 
 
+def groupes_epreuves(epreuves):
+    """Regroupe des épreuves par concours, pour les listes : QCM -> écrit -> oral
+    forment un seul groupe et non trois lignes, sans requête par épreuve. Une
+    épreuve seule forme un groupe d'une étape ; celle dont la précédente n'est pas
+    dans « epreuves » (épreuve d'un collègue) ouvre son propre groupe.
+
+    Un groupe : racine, titre, multi (plusieurs étapes), concours, et etapes, chacune
+    {quiz, numero, intitule}. L'intitulé n'est rempli que si le titre de l'étape dit
+    autre chose que celui du concours (« jhjh — écrit » pour « jhjh » : non).
+    Le groupe le plus récent vient d'abord."""
+    par_pk = {q.pk: q for q in epreuves}
+    ordre = sorted(par_pk.values(), key=lambda q: q.pk)
+    suivantes = {}
+    racines = []
+    for q in ordre:
+        if q.epreuve_precedente_id in par_pk:
+            suivantes.setdefault(q.epreuve_precedente_id, []).append(q)
+        else:
+            racines.append(q)
+    groupes, vus = [], set()
+    # après les racines : ce qui reste n'arrive que par une boucle de liens
+    # (possible depuis l'Administration), et ne doit pas disparaître de la liste
+    for depart in racines + ordre:
+        etapes, a_voir = [], [depart]
+        while a_voir:
+            q = a_voir.pop(0)
+            if q.pk not in vus:
+                vus.add(q.pk)
+                etapes.append(q)
+                a_voir.extend(suivantes.get(q.pk, []))
+        if etapes:
+            racine = etapes[0]
+            groupes.append({
+                "racine": racine, "titre": racine.title, "multi": len(etapes) > 1,
+                "concours": any(q.auto_enroll for q in etapes),
+                "etapes": [{"quiz": q, "numero": n,
+                            "intitule": "" if q.title.startswith(racine.title) else q.title}
+                           for n, q in enumerate(etapes, start=1)],
+            })
+    groupes.sort(key=lambda g: max(e["quiz"].pk for e in g["etapes"]), reverse=True)
+    return groupes
+
+
 def _cle_candidat(s):
     """Même personne d'une étape à l'autre : n° d'inscription (celui du QR,
     copié d'une étape à la suivante), sinon fiche du registre, sinon nom et

@@ -184,6 +184,34 @@ def main():
     assert "Résultats du concours" not in page
     print("  résultats du concours : parcours de chaque candidat, résultat final, Excel OK")
 
+    # ---- listes Concours et Résultats : un seul bloc par concours, ses étapes dedans
+    for nom in ("concours_list", "resultats_list"):
+        r = c.get(reverse(nom))
+        blocs = [g for g in r.context["concours"]
+                 if {qcm.pk, ecrit.pk, oral.pk} & {e["quiz"].pk for e in g["etapes"]}]
+        assert len(blocs) == 1, (nom, len(blocs))
+        assert blocs[0]["titre"] == "Étapes QCM" and blocs[0]["multi"]
+        assert [e["quiz"].pk for e in blocs[0]["etapes"]] == [qcm.pk, ecrit.pk, oral.pk]
+        # un titre qui dit autre chose que celui du concours reste affiché
+        assert [e["intitule"] for e in blocs[0]["etapes"]] == ["", "Étapes écrit", "Étapes oral"]
+        page = r.content.decode()
+        assert "3 étapes" in page and "Résultats du concours" in page, nom
+        assert page.count(f'title="{qcm.title}"') == 1, nom
+    page = c.get(reverse("resultats_list")).content.decode()
+    assert f'href="/quiz/{oral.pk}/resultats/"' in page and "Copies notées" in page
+    page = c.get(reverse("concours_list")).content.decode()
+    assert f'href="/classes/{ecrit.class_group_id}/"' in page and "Candidats &amp; QR" in page
+    # une boucle de liens (Administration) ne fait disparaître aucune épreuve
+    boucle = [Quiz(pk=1, title="a", epreuve_precedente_id=2), Quiz(pk=2, title="b", epreuve_precedente_id=1),
+              Quiz(pk=3, title="seule")]
+    groupes = services.groupes_epreuves(boucle)
+    assert sorted(e["quiz"].pk for g in groupes for e in g["etapes"]) == [1, 2, 3]
+    assert groupes[0]["titre"] == "seule" and not groupes[0]["multi"]
+    # le titre proposé part de celui du concours, pas de l'étape précédente
+    form = c.get(reverse("quiz_create") + f"?precedente={ecrit.pk}&type=oral").context["form"]
+    assert form.initial["title"] == "Étapes QCM — oral", form.initial["title"]
+    print("  listes : un bloc par concours, ses étapes dedans, titre « concours — oral » OK")
+
     # une épreuve d'un collègue n'est pas proposée comme épreuve précédente
     autre = enseignant_complet(User.objects.get_or_create(username="prof_etapes2")[0])
     c2 = Client()

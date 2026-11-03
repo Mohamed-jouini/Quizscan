@@ -337,6 +337,11 @@ class Quiz(models.Model):
         return "talon" if self.talon_nom else "place" if self.place_anonyme else ""
 
     @property
+    def type_court(self):
+        """Nom court du type d'épreuve : une étape dans la liste des concours."""
+        return {"qcm": "QCM", "ecrit": "Écrit", "oral": "Oral"}.get(self.type_epreuve, "")
+
+    @property
     def copies_nominatives(self):
         """Talon ou n° de place : une copie par étudiant, QR imprimé (même en
         concours, où l'on imprime sinon des fiches anonymes à étiquette)."""
