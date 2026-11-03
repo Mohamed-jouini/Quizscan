@@ -158,6 +158,10 @@ def main():
     for table in ("Étudiants", "Questions", "Utilisateurs"):
         assert f">{table}</a>" in accueil, \
             f"la page d'accueil de l'administration ne propose pas « {table} »"
+    # Chaque table est un bouton : tout le bloc ouvre la liste, un seul lien l'étend.
+    blocs = re.findall(r'class="[^"]*\bcarte-bouton\b[^"]*"', accueil)
+    assert blocs and len(blocs) == accueil.count("carte-bouton__lien"), \
+        "une table de l'administration n'est pas un bouton"
     for url in administration:
         corps = menu(c.get(url).content.decode())
         liens = re.findall(r'href="(/admin/\w+/\w+/)"', corps)

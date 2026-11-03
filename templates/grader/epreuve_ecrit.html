@@ -20,7 +20,7 @@
 {% if perimee %}
 <div class="note note--warn">
   <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
-  <div class="note__body">Le barème, le format ou l'identification ont changé depuis l'impression : <b>régénérez les documents</b> avant de distribuer de nouvelles copies.</div>
+  <div class="note__body">Le barème, le format, l'identification{% if quiz.copies_nominatives %} ou la liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% endif %} ont changé depuis l'impression : <b>régénérez les documents</b> avant de distribuer de nouvelles copies.</div>
 </div>
 {% endif %}
 
@@ -51,9 +51,11 @@
       <h2>2. Documents à imprimer</h2>
       {% if perms.grader.creer_epreuve %}
       <form method="post">{% csrf_token %}
-        {% if quiz.id_mode == "qr" and quiz.auto_enroll %}
+        {% if quiz.exemplaires_anonymes %}
         <label for="id_nb">Nombre de copies anonymes</label>
         <input id="id_nb" class="champ--court" type="number" name="nb" value="100" min="1" max="2000">
+        {% else %}
+        {% include "grader/_nombre_copies.html" %}
         {% endif %}
         <p><button class="btn" name="generer" value="1" type="submit">
           {% if quiz.sheet_pdf %}Régénérer les documents{% else %}Générer le sujet et les copies{% endif %}</button></p>
@@ -66,7 +68,9 @@
           <span><b>Sujet</b><small>énoncé à distribuer (non scanné)</small></span></a>{% endif %}
         <a class="document" href="{{ quiz.sheet_pdf.url }}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>
-          <span><b>Copies</b><small>{% if quiz.layout_json.format == "a3" %}page de garde + {{ quiz.layout_json.pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à plier au milieu{% else %}page de garde + {{ quiz.pages_redaction }} page(s) lignée(s), en A4 à 100 %{% endif %}</small></span></a>
+          <span><b>Copies</b>
+            {% with n=quiz.layout_json.nb_copies p=quiz.layout_json.nb_pages %}{% if n %}<small>{{ n }} copie{{ n|pluralize }}, soit {{ p }} page{{ p|pluralize }} dans le PDF{% if quiz.layout_json.format == "a3" %} (recto et verso de chaque feuille){% endif %}</small>{% endif %}{% endwith %}
+            <small>{% if quiz.layout_json.format == "a3" %}page de garde + {{ quiz.layout_json.pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à plier au milieu{% else %}page de garde + {{ quiz.pages_redaction }} page(s) lignée(s), en A4 à 100 %{% endif %}</small></span></a>
         {% if quiz.place_anonyme %}<a class="document" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="M15 16l1.5 1.5L19 15"/></svg>
           <span><b>Liste de placement et d'émargement</b><small>place n° → nom, pour le surveillant (signatures)</small></span></a>{% endif %}

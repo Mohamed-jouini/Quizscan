@@ -54,10 +54,10 @@ def _generer_documents(quiz, nb_exemplaires=100):
     Retourne le message à afficher."""
     services.question_note(quiz)
     layout = layout_mod.build_layout(quiz)
-    if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.copies_nominatives:
-        pdf = sheet_pdf.generate_sheet_pdf(
-            quiz, layout, serials=list(range(1, nb_exemplaires + 1)))
-        quoi = f"{nb_exemplaires} copies anonymes"
+    if quiz.exemplaires_anonymes:
+        n = nb_exemplaires
+        pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, serials=list(range(1, n + 1)))
+        quoi = f"{n} copies anonymes"
     elif quiz.id_mode == "qr":
         pdf, n = services.copies_nominatives_pdf(quiz, layout)
         quoi = (f"{n} copies anonymes à n° de place (et la liste d'émargement)"
@@ -66,8 +66,11 @@ def _generer_documents(quiz, nb_exemplaires=100):
                 "QR imprimé)" if quiz.talon_nom else
                 f"{n} copies nominatives (nom et QR imprimés)")
     else:
+        n = 1
         pdf = sheet_pdf.generate_sheet_pdf(quiz, layout)
         quoi = "la copie (une par étudiant)"
+    layout["nb_copies"] = n
+    layout["nb_pages"] = sheet_pdf.nombre_de_pages(pdf)
     layout["signature"] = layout_mod.layout_signature(quiz)
     layout["sujet_version"] = sheet_pdf.SUJET_VERSION
     quiz.layout_json = layout
@@ -76,7 +79,8 @@ def _generer_documents(quiz, nb_exemplaires=100):
                           ContentFile(sheet_pdf.generate_subject_pdf(quiz)), save=False)
     quiz.save()
     msg = f"Documents prêts : le sujet et {quoi}."
-    if quiz.id_mode in ("sticker", "grid") or quiz.auto_enroll:
+    # talon ou n° de place : le QR est déjà imprimé sur la copie, rien à coller
+    if not quiz.copies_nominatives and (quiz.id_mode in ("sticker", "grid") or quiz.auto_enroll):
         msg += (" Imprimez aussi la planche d'étiquettes QR (page de la classe "
                 "ou des candidats) : chaque étudiant colle la sienne sur sa copie.")
     return msg
@@ -95,7 +99,7 @@ def _ecrit(request, quiz):
                 messages.success(request, "Épreuve enregistrée.")
                 return redirect("quiz_detail", pk=quiz.pk)
         elif "generer" in request.POST:
-            if quiz.id_mode == "qr" and (not quiz.auto_enroll or quiz.copies_nominatives) \
+            if quiz.id_mode == "qr" and not quiz.exemplaires_anonymes \
                     and not quiz.class_group.students.exists():
                 messages.error(request, "Copies nominatives : ajoutez d'abord les "
                                         "étudiants de la classe.")

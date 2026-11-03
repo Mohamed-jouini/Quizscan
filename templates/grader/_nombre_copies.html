@@ -1,0 +1,17 @@
+{% comment %}
+Nombre de copies quand il ne se choisit pas (voir Quiz.exemplaires_anonymes). Mode QR : une copie
+par étudiant, à son QR, donc ni plus ni moins que la liste. Autres modes : un seul exemplaire,
+le même pour tous, à imprimer autant de fois qu'il le faut. Paramètre : quiz.
+{% endcomment %}
+{% with n=quiz.class_group.students.count qui=quiz.auto_enroll|yesno:"candidat,étudiant" %}
+<p class="helptext">
+  {% if quiz.id_mode != "qr" %}
+  <b>Un seul exemplaire</b> dans le PDF, le même pour tous : imprimez-en un par {{ qui }}{% if n %} ({{ n }} en tout){% endif %}.
+  {% elif n %}
+  <b>{{ n }} copie{{ n|pluralize }}</b> : une par {{ qui }}, avec son {% if quiz.place_anonyme %}n° de place{% else %}nom{% endif %} et son QR.
+  Ce nombre suit la <a href="{% url 'class_detail' quiz.class_group.pk %}">liste des {{ qui }}s</a>.
+  {% else %}
+  Aucun {{ qui }} pour le moment : une copie sera imprimée pour chacun.
+  {% endif %}
+</p>
+{% endwith %}

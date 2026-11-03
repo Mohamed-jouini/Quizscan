@@ -484,6 +484,11 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
     return buf.getvalue()
 
 
+def nombre_de_pages(pdf):
+    with pymupdf.open(stream=pdf, filetype="pdf") as doc:
+        return doc.page_count
+
+
 def _cotes_a3(nb_pages, rtl):
     """Cahier plié au milieu : (page de gauche, page de droite) de chaque côté de
     feuille, recto puis verso, feuilles emboîtées. Pages numérotées depuis 1, complétées

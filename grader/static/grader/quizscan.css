@@ -1128,26 +1128,22 @@ body.dashboard #content{width:auto;max-width:none}
   font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;
   color:var(--qs-muted);margin:0 0 12px;
 }
-.qs-table{gap:12px}
+.qs-table{gap:12px;padding:14px 16px}
 .qs-table__top{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.qs-table__icon{
-  width:38px;height:38px;border-radius:12px;flex:none;
-  display:flex;align-items:center;justify-content:center;
-  background:var(--qs-grad);color:#fff;
-}
-.qs-table__icon svg{
-  width:20px;height:20px;fill:none;stroke:currentColor;
-  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;
-}
 .qs-table__n{font-size:25px;font-weight:700;line-height:1;color:var(--qs-ink)}
-/* Le titre de la carte EST le lien vers la table : il garde la couleur de
-   lien de l administration, seul le poids le distingue du reste. */
+/* La carte est un bouton (.carte-bouton) : son titre est le lien vers la table,
+   il garde la couleur de lien de l administration. */
+.qs-table__nom{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .qs-table__name{font-size:15px;font-weight:600;text-decoration:none}
-.qs-table__name:hover{text-decoration:underline}
-.qs-table__links{
-  display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;
-  margin-top:auto;padding-top:4px;border-top:1px solid var(--qs-line);
-}
+.qs-table__links{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
+/* Ajouter, Modification : de petits boutons, l icone de Django gardee a gauche
+   (background-color et non background, qui l effacerait). */
+.qs-table__links a{position:relative;z-index:1;flex:1 1 auto;padding:5px 8px 5px 24px;
+  font-size:12.5px;font-weight:600;line-height:18px;text-decoration:none;white-space:nowrap;
+  border:1px solid var(--qs-line-strong);border-radius:8px;
+  background-color:var(--qs-surface);background-position:7px center;
+  transition:border-color .15s,background-color .15s}
+.qs-table__links a:hover{border-color:var(--qs-blue);background-color:var(--qs-surface-2)}
 
 .qs-journal .actionlist{margin:0;padding:0;list-style:none}
 .qs-journal .actionlist li{
@@ -1750,34 +1746,59 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 /* Listes Concours et Resultats : un bloc par concours, ses etapes a l'interieur.
    Une epreuve seule tient sur une colonne, un concours en etapes sur toute la largeur. */
 .groupes{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr));
-  grid-auto-flow:dense;gap:14px;max-height:560px;overflow:hidden scroll;padding-right:6px}
+  grid-auto-flow:dense;gap:14px;max-height:560px;overflow:hidden scroll;padding:2px 6px 5px 2px}
 .groupe{display:flex;flex-direction:column;gap:12px;min-width:0;padding:14px;
   border:1px solid var(--qs-line);border-radius:var(--qs-r-card);background:var(--qs-surface)}
-.groupe--etapes{grid-column:1/-1}
-.groupe__tete{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.groupe__nom{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;min-width:0}
+.groupe--etapes{grid-column:1/-1;background:var(--qs-surface-2)}
+.groupe__tete{display:flex;align-items:center;gap:10px}
+.groupe--etapes .groupe__tete{justify-content:space-between;flex-wrap:wrap}
+.groupe--etapes .groupe__nom{flex-basis:200px}
+.groupe--etapes .groupe__titre a:hover{text-decoration:underline}
+.groupe__nom{flex:1;display:flex;align-items:center;gap:4px 10px;flex-wrap:wrap;min-width:0}
 .groupe__titre{margin:0;font-size:15px;overflow-wrap:anywhere}
-.groupe__titre a{color:var(--qs-ink);text-decoration:none}
-.groupe__titre a:hover{color:var(--qs-blue);text-decoration:underline}
+.groupe__titre a{color:var(--qs-blue);text-decoration:none}
+.groupe__classe{flex-basis:100%;font-size:12.5px;color:var(--qs-muted);overflow-wrap:anywhere}
+.groupe__bas{margin-top:auto;display:flex;flex-wrap:wrap;align-items:flex-end;
+  justify-content:space-between;gap:8px}
 .groupe__etapes{flex:1;display:flex;flex-wrap:wrap;gap:12px 26px;margin:0;padding:0;list-style:none}
-.tuile-etape{position:relative;flex:1 1 200px;min-width:0;display:flex;flex-direction:column;
-  align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid transparent;
-  border-radius:12px;background:var(--qs-surface-2);transition:border-color .15s}
-.tuile-etape:hover,.tuile-etape:focus-within{border-color:var(--qs-blue)}
+.tuile-etape{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:10px;padding:12px 14px}
 .tuile-etape + .tuile-etape::before{content:"";position:absolute;left:-18px;top:50%;width:9px;
   height:9px;border:solid var(--qs-line-strong);border-width:2px 2px 0 0;
   transform:translateY(-50%) rotate(45deg)}
-.tuile-etape__tete{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.tuile-etape__tete{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;padding-right:32px}
 .tuile-etape__num{width:24px;height:24px;flex:none;display:flex;align-items:center;
   justify-content:center;border-radius:50%;font-size:12.5px;font-weight:700;
   background:var(--qs-track);color:var(--qs-muted)}
 .tuile-etape.is-fait .tuile-etape__num{background:var(--qs-accent);color:var(--qs-accent-ink)}
-.tuile-etape__nom{font-size:14px;font-weight:700;color:var(--qs-ink);text-decoration:none}
-/* toute la tuile est cliquable ; le bouton « Candidats & QR » passe au-dessus */
-.tuile-etape__nom::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.tuile-etape__nom{font-size:14px;font-weight:700;color:var(--qs-blue)}
 .tuile-etape__intitule{font-size:12.5px;color:var(--qs-muted);overflow-wrap:anywhere}
-.tuile-etape__action{position:relative;z-index:1}
-.chiffres-epreuve{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0}
+.tuile-etape .carte-bouton__fleche{position:absolute;top:12px;right:14px}
+/* Un bloc qui est un bouton : relief, survol et enfoncement d'un bouton, et tout le bloc cliquable
+   (le lien s'etend dessus). Les vrais boutons qu'il contient passent au-dessus. */
+.carte-bouton{position:relative;border:1px solid var(--qs-line-strong);
+  border-radius:var(--qs-r-card);background:var(--qs-surface);
+  box-shadow:0 3px 0 var(--qs-line-strong);
+  transition:border-color .15s,box-shadow .15s,background-color .15s,transform .08s}
+.carte-bouton:hover{border-color:var(--qs-blue);background:var(--qs-surface-2);
+  box-shadow:0 3px 0 var(--qs-blue)}
+.carte-bouton:has(.carte-bouton__lien:active){transform:translateY(3px);box-shadow:0 0 0 var(--qs-blue)}
+.carte-bouton__lien,.carte-bouton__lien:hover{text-decoration:none}
+.carte-bouton__lien::after{content:"";position:absolute;inset:-1px;border-radius:var(--qs-r-card)}
+.carte-bouton__lien:focus-visible{outline:none}
+.carte-bouton__lien:focus-visible::after{outline:2px solid var(--qs-blue);outline-offset:1px}
+.carte-bouton .btn{position:relative;z-index:1}
+.carte-bouton__icone{width:38px;height:38px;border-radius:12px;flex:none;display:flex;
+  align-items:center;justify-content:center;background:var(--qs-grad);color:#fff}
+.carte-bouton__icone svg{width:20px;height:20px;fill:none;stroke:currentColor;
+  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+/* La fleche du bouton : claire au repos, pleine au survol du bloc. */
+.carte-bouton__fleche{width:26px;height:26px;flex:none;display:flex;align-items:center;
+  justify-content:center;border-radius:50%;background:var(--qs-track);color:var(--qs-blue);
+  transition:background-color .15s,color .15s}
+.carte-bouton__fleche::before{content:"";width:7px;height:7px;margin-left:-3px;
+  border:solid currentColor;border-width:2px 2px 0 0;transform:rotate(45deg)}
+.carte-bouton:hover .carte-bouton__fleche{background:var(--qs-btn-bg);color:#fff}
+.chiffres-epreuve{display:flex;flex-wrap:wrap;gap:8px 12px;margin:0}
 .chiffres-epreuve dt{font-size:11.5px;color:var(--qs-muted);white-space:nowrap}
 .chiffres-epreuve dd{margin:2px 0 0;font-size:14px;font-weight:700;color:var(--qs-ink);
   white-space:nowrap}

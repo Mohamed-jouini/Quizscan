@@ -627,13 +627,13 @@ def moderniser_calage(quiz):
         _generer_fiches_orales(quiz)
         return True
     if quiz.type_epreuve == "ecrit":
-        if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.copies_nominatives:
+        if quiz.exemplaires_anonymes:
             return False
         from .views_epreuves import _generer_documents
         _generer_documents(quiz)
         return True
     if quiz.id_mode == "qr":
-        if (quiz.auto_enroll and not quiz.copies_nominatives) or quiz.place_anonyme:
+        if quiz.exemplaires_anonymes or quiz.place_anonyme:
             return False                # places : se refait par le bouton
         try:
             nouvelle = layout_mod.build_layout(quiz)

@@ -174,6 +174,73 @@ def main():
     rows = {r["student"].last_name: r["score"] for r in services.compute_results(ecrit)}
     assert rows == {"CHERIF": 13.5}, rows
     print("  écrit à talon : talon découpé, note 13,5 lue et affectée à CHERIF OK")
+
+    # ---- nombre de copies : il suit la liste, le champ n'apparaît que s'il agit
+    def page(q):
+        return c.get(reverse("quiz_detail", args=[q.pk])).content.decode()
+
+    def nb_pages(q):
+        q.refresh_from_db()
+        return len(pymupdf.open(stream=open(q.sheet_pdf.path, "rb").read(), filetype="pdf"))
+
+    assert 'name="qr_count"' not in page(concours) and "2 copies</b>" in page(concours)
+    c.post(reverse("quiz_detail", args=[concours.pk]), {"generate_pdf": "1", "qr_count": "100"})
+    assert nb_pages(concours) == 2, "QCM à talon : le nombre demandé ne compte pas"
+
+    r = c.post(reverse("quiz_create") + "?concours=1", {
+        "title": "Écrit concours talon", "type_epreuve": "ecrit", "language": "fr",
+        "note_sur": "20", "sheet_mode": "grid", "id_mode": "sticker", "id_digits": "6",
+        "anonymat": "talon", "grading_mode": "immediate", "wrong_penalty": "0"})
+    assert r.status_code == 302, r.context["form"].errors
+    ecrit_c = Quiz.objects.get(title="Écrit concours talon")
+    assert ecrit_c.talon_nom and ecrit_c.auto_enroll
+    ecrit_c.format_impression = "a3"
+    ecrit_c.save()
+    for nom, prenom, num in ETUDIANTS[:2]:
+        Student.objects.create(class_group=ecrit_c.class_group, last_name=nom,
+                               first_name=prenom, student_number=num)
+    texte = page(ecrit_c)
+    assert 'name="nb"' not in texte and "2 copies</b>" in texte, "le champ est revenu"
+    r = c.post(reverse("quiz_detail", args=[ecrit_c.pk]), {"generer": "1", "nb": "100"}, follow=True)
+    texte = r.content.decode()
+    assert nb_pages(ecrit_c) == 4, "A3 : 2 copies, recto et verso"
+    assert ecrit_c.layout_json["nb_copies"] == 2 and ecrit_c.layout_json["nb_pages"] == 4
+    assert "2 copies, soit 4 pages dans le PDF" in texte
+    assert "colle la sienne" not in texte, "talon : le QR est imprimé, aucune étiquette à coller"
+
+    # candidat ajouté (admis de l'étape précédente) : il n'a pas de copie, la page le dit
+    assert "régénérez les documents" not in texte
+    Student.objects.create(class_group=ecrit_c.class_group, last_name=ETUDIANTS[2][0],
+                           first_name=ETUDIANTS[2][1], student_number=ETUDIANTS[2][2])
+    texte = page(ecrit_c)
+    assert "régénérez les documents" in texte and "3 copies</b>" in texte
+    c.post(reverse("quiz_detail", args=[ecrit_c.pk]), {"generer": "1"})
+    assert nb_pages(ecrit_c) == 6 and "régénérez les documents" not in page(ecrit_c)
+
+    # ancien concours en « qr », sans talon : là, le nombre demandé est respecté
+    anonymes = Quiz.objects.create(title="Fiches anonymes", class_group=ecrit_c.class_group,
+                                   owner=prof, auto_enroll=True, id_mode="qr",
+                                   type_epreuve="ecrit")
+    assert 'name="nb"' in page(anonymes)
+    r = c.post(reverse("quiz_detail", args=[anonymes.pk]), {"generer": "1", "nb": "3"}, follow=True)
+    assert nb_pages(anonymes) == 3 * (1 + anonymes.pages_redaction)
+    assert anonymes.layout_json["nb_copies"] == 3 and "colle la sienne" in r.content.decode()
+    qcm_anonymes = Quiz.objects.create(title="QCM anonymes", class_group=ecrit_c.class_group,
+                                       owner=prof, auto_enroll=True, id_mode="qr")
+    Question.objects.create(quiz=qcm_anonymes, order=1, qtype="qcm", correct_choice=0)
+    assert 'name="qr_count"' in page(qcm_anonymes)
+    c.post(reverse("quiz_detail", args=[qcm_anonymes.pk]), {"generate_pdf": "1", "qr_count": "3"})
+    assert nb_pages(qcm_anonymes) == 3
+
+    # étiquette à coller : un seul exemplaire, à imprimer autant de fois qu'il le faut
+    etiquette = Quiz.objects.create(title="Écrit étiquette", class_group=ecrit_c.class_group,
+                                    owner=prof, auto_enroll=True, id_mode="sticker",
+                                    type_epreuve="ecrit")
+    assert 'name="nb"' not in page(etiquette) and "3 en tout" in page(etiquette)
+    r = c.post(reverse("quiz_detail", args=[etiquette.pk]), {"generer": "1", "nb": "100"}, follow=True)
+    assert nb_pages(etiquette) == 1 + etiquette.pages_redaction
+    assert etiquette.layout_json["nb_copies"] == 1 and "colle la sienne" in r.content.decode()
+    print("  nombre de copies : suit la liste, champ seulement s'il agit, ajout signalé OK")
     print("\n✅ TEST DES COPIES À TALON RÉUSSI")
 
 

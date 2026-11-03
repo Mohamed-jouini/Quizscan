@@ -159,7 +159,7 @@ def layout_signature(quiz):
     }
     if getattr(quiz, "talon_nom", False):
         data["talon"] = True        # seulement si coché : empreintes inchangées
-    if getattr(quiz, "place_anonyme", False):
+    if getattr(quiz, "copies_nominatives", False):
         # une copie par étudiant : un étudiant ajouté demande une régénération
         data["places"] = sorted(quiz.class_group.students.values_list("pk", flat=True))
     if getattr(quiz, "type_epreuve", "qcm") in ("ecrit", "oral"):

@@ -347,6 +347,12 @@ class Quiz(models.Model):
         concours, où l'on imprime sinon des fiches anonymes à étiquette)."""
         return self.talon_nom or self.place_anonyme
 
+    @property
+    def exemplaires_anonymes(self):
+        """Fiches anonymes en nombre choisi (ancien concours en « qr ») : c'est le seul cas
+        où le nombre se choisit. Les autres modes QR impriment une copie par étudiant."""
+        return self.id_mode == "qr" and self.auto_enroll and not self.copies_nominatives
+
     @cached_property
     def a_des_qcm(self):
         """Des QCM à afficher en « bonnes réponses » ? (pas à l'écrit ni à

@@ -2,6 +2,7 @@
 admis à l'écrit passent à l'oral.
 """
 import os
+import re
 import sys
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -211,6 +212,26 @@ def main():
     form = c.get(reverse("quiz_create") + f"?precedente={ecrit.pk}&type=oral").context["form"]
     assert form.initial["title"] == "Étapes QCM — oral", form.initial["title"]
     print("  listes : un bloc par concours, ses étapes dedans, titre « concours — oral » OK")
+
+    # ---- chaque épreuve est un bouton : tout le bloc mène à l'épreuve ou à ses résultats
+    concours_seul = Quiz.objects.create(title="Concours seul", class_group=groupe, owner=prof,
+                                        auto_enroll=True)
+    page = c.get(reverse("concours_list")).content.decode()
+    assert (f'<a class="carte-bouton__lien" href="/quiz/{concours_seul.pk}/">Concours seul</a>'
+            in page)
+    assert f'href="/classes/{groupe.pk}/"' in page, "« Candidats & QR » a disparu du bouton"
+    resultats = c.get(reverse("resultats_list")).content.decode()
+    for q in (concours_seul, seul):
+        assert (f'<a class="carte-bouton__lien" href="/quiz/{q.pk}/resultats/">{q.title}</a>'
+                in resultats), q.title
+    assert "Voir les résultats" not in resultats, "un bouton dans le bouton"
+    # une étape aussi, et un seul lien par bloc : c'est lui qui s'étend sur tout le bloc
+    assert f'carte-bouton__lien" title="{qcm.title}" href="/quiz/{qcm.pk}/resultats/"' in resultats
+    for texte in (page, resultats):
+        blocs = re.findall(r'class="[^"]*\bcarte-bouton\b[^"]*"', texte)
+        assert blocs and len(blocs) == texte.count("carte-bouton__lien")
+    concours_seul.delete()
+    print("  listes : chaque épreuve est un bouton, tout le bloc cliquable OK")
 
     # une épreuve d'un collègue n'est pas proposée comme épreuve précédente
     autre = enseignant_complet(User.objects.get_or_create(username="prof_etapes2")[0])

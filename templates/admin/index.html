@@ -20,9 +20,9 @@
     <h2 class="qs-section__title">{{ app.name }}</h2>
     <div class="tiles">
       {% for table in app.models %}
-      <div class="tile qs-table">
+      <div class="tile qs-table{% if table.admin_url %} carte-bouton{% endif %}">
         <span class="qs-table__top">
-          <span class="qs-table__icon" aria-hidden="true">
+          <span class="carte-bouton__icone" aria-hidden="true">
             <svg viewBox="0 0 24 24"><use href="#ic-{{ table.icone }}"/></svg>
           </span>
           {# grader/admin.py ne compte que les tables consultables ;       #}
@@ -34,7 +34,10 @@
         </span>
 
         {% if table.admin_url %}
-          <a class="qs-table__name" href="{{ table.admin_url }}">{{ table.name }}</a>
+          <span class="qs-table__nom">
+            <a class="qs-table__name carte-bouton__lien" href="{{ table.admin_url }}">{{ table.name }}</a>
+            <span class="carte-bouton__fleche" aria-hidden="true"></span>
+          </span>
         {% else %}
           <span class="qs-table__name">{{ table.name }}</span>
         {% endif %}

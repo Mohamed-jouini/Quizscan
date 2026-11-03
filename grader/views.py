@@ -846,8 +846,7 @@ def quiz_detail(request, pk):
             students = list(quiz.class_group.students.all())
             if not quiz.questions.exists():
                 messages.error(request, "Ajoutez d'abord des questions.")
-            elif quiz.id_mode == "qr" and (not quiz.auto_enroll or quiz.copies_nominatives) \
-                    and not students:
+            elif quiz.id_mode == "qr" and not quiz.exemplaires_anonymes and not students:
                 messages.error(
                     request, "Le mode QR génère une fiche par étudiant : "
                              "importez d'abord la liste des étudiants de la classe "
@@ -858,7 +857,7 @@ def quiz_detail(request, pk):
                 except layout_mod.TooManyPages as exc:
                     messages.error(request, str(exc))
                     return redirect("quiz_detail", pk=pk)
-                if quiz.id_mode == "qr" and quiz.auto_enroll and not quiz.copies_nominatives:
+                if quiz.exemplaires_anonymes:
                     try:
                         count = max(1, min(int(request.POST.get("qr_count", 100)), 2000))
                     except ValueError:

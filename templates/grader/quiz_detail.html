@@ -229,7 +229,7 @@
 
 {% if layout_stale %}
 <ul class="messages"><li class="error">
-  ⚠️ Ce qui est imprimé sur la fiche (titre, questions ou réglages) a changé
+  ⚠️ Ce qui est imprimé sur la fiche (titre, questions, réglages{% if quiz.copies_nominatives %}, liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% endif %}) a changé
   depuis la génération du PDF. Régénérez la fiche avant d'imprimer et de scanner.
 </li></ul>
 {% endif %}
@@ -294,13 +294,15 @@
     </h2>
     {% if perms.grader.creer_epreuve %}
     <form method="post">{% csrf_token %}
-      {% if quiz.id_mode == "qr" and quiz.auto_enroll %}
+      {% if quiz.exemplaires_anonymes %}
         <label>Nombre d'exemplaires de la fiche anonyme</label>
         <input type="number" name="qr_count" value="100" min="1" max="2000"
                style="width:120px;margin-bottom:8px">
         <span class="helptext" style="margin-bottom:8px">Les exemplaires sont
           identiques : l'identification vient de l'étiquette QR du candidat,
           collée dans l'emplacement réservé de sa copie.</span>
+      {% else %}
+        {% include "grader/_nombre_copies.html" %}
       {% endif %}
       <button class="btn" name="generate_pdf" value="1" type="submit">
         {% if quiz.sheet_pdf %}Régénérer les PDF{% else %}Générer les PDF{% endif %}
@@ -325,9 +327,8 @@
         {% if quiz.format_impression == "a3" %}Imprimez le sujet en A3 recto-verso sur le bord
         court, à 100 %, puis pliez-le au milieu ; la feuille de réponses en A4 à 100 %.
         {% else %}Imprimez les deux en A4 à 100 %.{% endif %}
-      {% elif quiz.id_mode == "qr" %}
-        Mode QR : le PDF contient une fiche <b>nominative</b> par étudiant (nom
-        pré-imprimé + QR code). Imprimez en A4 à 100 % et distribuez à chacun la sienne.
+      {% elif quiz.id_mode == "qr" and not quiz.exemplaires_anonymes %}
+        Imprimez en A4 à 100 % et distribuez à chacun la sienne.
       {% elif quiz.id_mode == "grid" %}
         Imprimez cette fiche en A4 (100 %, sans mise à l'échelle) : une copie par étudiant.
         Chacun colle son étiquette QR dans le cadre en haut à droite

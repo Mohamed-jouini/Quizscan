@@ -1,0 +1,2 @@
+{% comment %}Icône du type d'épreuve : micro pour l'oral, stylo pour l'écrit, liste cochée pour le QCM. Paramètre : quiz.{% endcomment %}
+<svg viewBox="0 0 24 24">{% if quiz.type_epreuve == "oral" %}<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>{% elif quiz.type_epreuve == "ecrit" %}<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>{% else %}<path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 6l1.2 1.2L7.4 5M4 12l1.2 1.2L7.4 11M4 18l1.2 1.2L7.4 17"/>{% endif %}</svg>
