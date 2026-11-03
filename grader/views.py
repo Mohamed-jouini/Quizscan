@@ -54,6 +54,9 @@ def _int_or_none(value):
 # page qui affiche tout deviendrait inutilisable — la liste des candidats
 # déclenche en plus une requête par QR code affiché.
 PAGE_SIZE = 100
+# Listes de résultats : elles défilent dans leur cadre, donc une page peut être
+# longue. Au-delà, un concours de plusieurs milliers de candidats reste en pages.
+PAGE_RESULTATS = 1000
 
 
 def _page(request, items, per_page=PAGE_SIZE):
@@ -1389,7 +1392,7 @@ def quiz_results(request, pk):
     chaine = services.chaine_epreuves(quiz, _my_quizzes(request))
     return render(request, "grader/results.html", {
         "chaine": chaine if len(chaine) > 1 else [],
-        "quiz": quiz, "rows": rows, "rows_page": _page(request, trouves),
+        "quiz": quiz, "rows": rows, "rows_page": _page(request, trouves, PAGE_RESULTATS),
         "rows_total": len(rows), "batch": batch,
         "recherche": recherche, "n_trouves": len(trouves),
         # conservés dans les liens de pagination : lot et recherche
@@ -1457,7 +1460,7 @@ def quiz_parcours(request, pk):
     trouves = _filtrer_etudiants(parcours["candidats"], recherche)
     return render(request, "grader/parcours.html", {
         "quiz": quiz, "parcours": parcours, "recherche": recherche,
-        "n_trouves": len(trouves), "candidats_page": _page(request, trouves),
+        "n_trouves": len(trouves), "candidats_page": _page(request, trouves, PAGE_RESULTATS),
         "querystring": urlencode({"q": recherche}) if recherche else "",
     })
 

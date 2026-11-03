@@ -30,24 +30,10 @@
   <span class="helptext helptext--serre">sur {{ parcours.candidats|length }} candidat{{ parcours.candidats|length|pluralize }}</span>
 </div>
 
-<form class="recherche-etudiant" method="get" role="search">
-  <div class="recherche-etudiant__champ">
-    <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-    <label for="id_q" class="visually-hidden">Rechercher un candidat</label>
-    <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
-           placeholder="Rechercher un candidat — nom, prénom ou n° d'inscription">
-    {% if recherche %}
-    <a class="recherche-etudiant__effacer" href="?" title="Effacer la recherche" aria-label="Effacer la recherche">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
-    {% endif %}
-  </div>
-  <button class="btn" type="submit">Rechercher</button>
-  {% if recherche %}<span class="recherche-etudiant__bilan {% if not n_trouves %}is-vide{% endif %}">{{ n_trouves }} résultat{{ n_trouves|pluralize }}</span>{% endif %}
-</form>
-
-<div class="card">
-  {% include "grader/_pagination.html" with page=candidats_page label="Candidats" querystring=querystring %}
-  <div class="table-wrap">
+<div class="card" id="liste-candidats">
+  {% include "grader/_recherche_liste.html" with ancre="liste-candidats" champ="id_q" sujet="candidat" n=n_trouves %}
+  {% include "grader/_pagination.html" with page=candidats_page label="Candidats" querystring=querystring ancre="liste-candidats" %}
+  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Résultats des candidats, épreuve par épreuve">
     <table>
       <tr>
         <th>Candidat</th>
@@ -76,7 +62,7 @@
       {% endfor %}
     </table>
   </div>
-  {% include "grader/_pagination.html" with page=candidats_page label="Candidats" querystring=querystring %}
+  {% include "grader/_pagination.html" with page=candidats_page label="Candidats" querystring=querystring ancre="liste-candidats" %}
 </div>
 {% endwith %}
 {% endblock %}

@@ -8,6 +8,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+import importlib
 import logging
 
 import django
@@ -19,6 +20,7 @@ from django.core.management import call_command  # noqa: E402
 call_command("migrate", verbosity=0)
 
 from django.contrib.auth.models import User
+from django.db import connection
 from django.test import Client
 from django.test.utils import setup_test_environment
 from django.urls import reverse
@@ -71,8 +73,8 @@ def main():
     _noter(qcm, {cands[n]: v for n, v in CANDIDATS.items()})
     assert [s.last_name for s in services.admis_de(qcm)] == ["AMRI", "BAKIR", "CHERIF"]
     page = c.get(reverse("quiz_results", args=[qcm.pk])).content.decode()
-    assert "Créer l'écrit des 3 admis" in page and "Créer l'oral des 3 admis" in page
-    print("  QCM : 3 admis ; « Créer l'écrit des 3 admis » sur la page des résultats OK")
+    assert "Créer l'écrit des 3 admis" in page and "Créer l'oral" not in page
+    print("  QCM : 3 admis ; « Créer l'écrit des 3 admis » seul sur la page des résultats OK")
 
     # ---- étape 2 : l'écrit, créé depuis ce bouton (formulaire prérempli)
     url = reverse("quiz_create") + f"?concours=1&precedente={qcm.pk}&type=ecrit"
@@ -99,6 +101,8 @@ def main():
     ecrit.note_admission = 10
     ecrit.save(update_fields=["note_admission"])
     _noter(ecrit, {e["AMRI"]: 14.5, e["BAKIR"]: 8.0, e["CHERIF"]: 12.25})
+    page = c.get(reverse("quiz_results", args=[ecrit.pk])).content.decode()
+    assert "Créer l'oral des 2 admis" in page and "Créer l'écrit" not in page
     r = c.post(reverse("quiz_create") + f"?precedente={ecrit.pk}&type=oral",
                {"title": "Étapes oral", "type_epreuve": "oral",
                 "epreuve_precedente": ecrit.pk, "language": "fr", "note_sur": "20",
@@ -130,6 +134,9 @@ def main():
     oral.save(update_fields=["note_admission"])
     o = {s.last_name: s for s in oral.class_group.students.all()}
     _noter(oral, {o["AMRI"]: 15, o["CHERIF"]: 9})
+    # dernière étape : rien à créer après l'oral
+    page = c.get(reverse("quiz_results", args=[oral.pk])).content.decode()
+    assert "Créer l'" not in page and "Étape suivante" not in page
     attendu = {"AMRI": "Admis au concours", "CHERIF": "Non admis : Étapes oral",
                "BAKIR": "Non admis : Étapes écrit", "DRISS": "Non noté : Étapes écrit",
                "ESSID": "Non admis : Étapes QCM", "FERCHICHI": "Non admis : Étapes QCM"}
@@ -149,6 +156,10 @@ def main():
     # la recherche filtre, l'export Excel reprend tout
     r = c.get(reverse("quiz_parcours", args=[ecrit.pk]) + "?q=driss")
     assert [x["etudiant"].last_name for x in r.context["candidats_page"]] == ["DRISS"]
+    page = r.content.decode()
+    assert 'action="#liste-candidats"' in page and "table-wrap--defile" in page
+    assert "1 résultat pour « driss »" in page
+    assert r.context["candidats_page"].paginator.per_page == 1000
     r = c.get(reverse("quiz_parcours", args=[ecrit.pk]) + "?format=xlsx")
     assert r["Content-Type"].startswith("application/vnd.openxmlformats")
     import io
@@ -181,6 +192,40 @@ def main():
     assert qcm not in form.fields["epreuve_precedente"].queryset
     assert c2.get(reverse("quiz_parcours", args=[ecrit.pk])).status_code == 404
     print("  épreuve d'un collègue : jamais proposée OK")
+
+    # ---- QCM -> écrit -> oral : un QCM ne suit aucune épreuve, chaque type a la sienne
+    for titre, type_epreuve, precedente in (("QCM relié", "qcm", qcm),
+                                            ("Écrit après écrit", "ecrit", ecrit),
+                                            ("Écrit après oral", "ecrit", oral),
+                                            ("Oral après QCM", "oral", qcm)):
+        r = c.post(reverse("quiz_create") + "?concours=1",
+                   {"title": titre, "type_epreuve": type_epreuve,
+                    "epreuve_precedente": precedente.pk, "language": "fr", "note_sur": "20",
+                    "sheet_mode": "grid", "id_mode": "sticker", "id_digits": "6",
+                    "grading_mode": "immediate", "wrong_penalty": "0"})
+        assert r.status_code == 200, (titre, r.status_code)
+        assert "epreuve_precedente" in r.context["form"].errors, titre
+        assert not Quiz.objects.filter(title=titre).exists(), titre
+    # le type de chaque épreuve est dans la page : pages.js filtre la liste
+    page = c.get(reverse("quiz_create")).content.decode()
+    assert f'value="{qcm.pk}" data-type="qcm"' in page
+    assert f'value="{ecrit.pk}" data-type="ecrit"' in page
+    assert 'id="row_epreuve_precedente"' in page
+
+    # la migration retire le lien des QCM déjà reliés, candidats gardés, et rien d'autre
+    relie = Quiz.objects.create(title="QCM déjà relié", class_group=groupe, owner=prof,
+                                epreuve_precedente=qcm)
+    migration = importlib.import_module("grader.migrations.0038_qcm_sans_epreuve_precedente")
+    avant = groupe.students.count()
+    with connection.cursor() as curseur:
+        curseur.execute(migration.Migration.operations[0].sql)
+    relie.refresh_from_db()
+    ecrit.refresh_from_db()
+    oral.refresh_from_db()
+    assert relie.epreuve_precedente_id is None and groupe.students.count() == avant
+    assert ecrit.epreuve_precedente_id == qcm.pk and oral.epreuve_precedente_id == ecrit.pk
+    assert [q.pk for q in services.chaine_epreuves(relie)] == [relie.pk]
+    print("  étapes : un QCM ne suit aucune épreuve, écrit après QCM, oral après écrit OK")
     print("\n✅ TEST DES CONCOURS EN PLUSIEURS ÉTAPES RÉUSSI")
 
 

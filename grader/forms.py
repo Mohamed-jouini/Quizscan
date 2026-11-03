@@ -289,6 +289,22 @@ def _appliquer_anonymat(form, data):
         data["id_mode"] = "qr"          # copies nominatives, QR imprimé
 
 
+# Étapes d'un concours : QCM -> écrit -> oral. Le type qui précède chacune ; un
+# QCM ouvre le concours, il ne suit aucune épreuve.
+ETAPE_PRECEDENTE = {"ecrit": "qcm", "oral": "ecrit"}
+
+
+class ChoixEpreuvePrecedente(forms.Select):
+    """Chaque option porte le type de son épreuve : pages.js ne propose que
+    l'étape qui précède le type choisi."""
+
+    def create_option(self, name, value, *args, **kwargs):
+        option = super().create_option(name, value, *args, **kwargs)
+        if value:
+            option["attrs"]["data-type"] = value.instance.type_epreuve
+        return option
+
+
 class QuizForm(forms.ModelForm):
     """Création d'un quiz de classe ou d'un concours.
 
@@ -306,6 +322,7 @@ class QuizForm(forms.ModelForm):
                   "id_mode", "id_digits", "anonymat", "grading_mode", "wrong_penalty"]
         widgets = {"grading_mode": forms.RadioSelect,
                    "type_epreuve": forms.RadioSelect,
+                   "epreuve_precedente": ChoixEpreuvePrecedente,
                    "entete": forms.Textarea(attrs={"rows": 3})}
         field_classes = {"wrong_penalty": DecimalField, "note_sur": DecimalField}
         labels = {"id_digits": "Nombre de chiffres du n° d'inscription"}
@@ -325,9 +342,8 @@ class QuizForm(forms.ModelForm):
         prec.required = False
         prec.empty_label = "— aucune : tous les étudiants de la liste —"
         prec.label = "Candidats : admis de l'épreuve"
-        prec.help_text = ("Concours en plusieurs étapes : seuls les admis de cette "
-                          "épreuve passent à celle-ci (ex. admis au QCM -> écrit, "
-                          "admis à l'écrit -> oral).")
+        prec.help_text = ("Concours en plusieurs étapes : les admis du QCM passent "
+                          "à l'écrit, les admis de l'écrit passent à l'oral.")
         # Facultatifs à l'envoi : QCM sur 20 par défaut (formulaires et
         # scripts d'avant les épreuves écrites et orales).
         self.fields["type_epreuve"].required = False
@@ -365,6 +381,12 @@ class QuizForm(forms.ModelForm):
     def clean(self):
         data = super().clean()
         _appliquer_anonymat(self, data)
+        precedente = data.get("epreuve_precedente")
+        if precedente is not None and (precedente.type_epreuve
+                                       != ETAPE_PRECEDENTE.get(data.get("type_epreuve"))):
+            self.add_error("epreuve_precedente",
+                           "Un QCM ne suit aucune épreuve, un écrit suit un QCM, "
+                           "un oral suit un écrit.")
         return data
 
     def clean_type_epreuve(self):

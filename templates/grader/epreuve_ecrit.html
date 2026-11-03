@@ -17,13 +17,6 @@
 </header>
 {% include "grader/_etape_precedente.html" %}
 
-<ol class="etapes">
-  <li class="{% if quiz.sujet_texte %}is-fait{% endif %}"><b>Rédigez le sujet</b><span>énoncé, en-tête, durée et barème, ci-dessous.</span></li>
-  <li class="{% if quiz.sheet_pdf %}is-fait{% endif %}"><b>Téléchargez et imprimez</b><span>le sujet et les copies (page de garde avec l'identification et le cadre du correcteur).</span></li>
-  <li><b>Corrigez sur papier</b><span>écrivez la note dans le cadre « Réservé au correcteur » et noircissez ses chiffres (dizaines, unités, dixièmes, centièmes — ex. 15,75 : 1 · 5 · 7 · 5).</span></li>
-  <li class="{% if batches %}is-fait{% endif %}"><b>Scannez les pages de garde</b><span>la note et le QR (ou le n°) sont lus, la note est affectée à l'étudiant.</span></li>
-</ol>
-
 {% if perimee %}
 <div class="note note--warn">
   <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>

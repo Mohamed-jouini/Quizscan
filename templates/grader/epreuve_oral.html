@@ -16,12 +16,6 @@
 </header>
 {% include "grader/_etape_precedente.html" %}
 
-<ol class="etapes">
-  <li class="{% if quiz.sheet_pdf %}is-fait{% endif %}"><b>Imprimez les fiches</b><span>une fiche d'évaluation par étudiant, nom et QR déjà imprimés.</span></li>
-  <li><b>Notez pendant l'oral</b><span>l'examinateur écrit la note dans le cadre et noircit ses chiffres (ex. 15,75 : 1 · 5 · 7 · 5).</span></li>
-  <li class="{% if batches %}is-fait{% endif %}"><b>Scannez les fiches</b><span>chaque note est affectée automatiquement à son étudiant.</span></li>
-</ol>
-
 {% if perimee %}
 <div class="note note--warn">
   <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>

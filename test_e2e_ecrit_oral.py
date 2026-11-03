@@ -70,7 +70,7 @@ def test_ecrit(c, prof, groupe):
     q = quiz.questions.get()
     assert (q.qtype, q.points) == ("open", 20.0)
     page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
-    assert "1. Le sujet" in page and "Réservé au correcteur" in page
+    assert "1. Le sujet" in page and 'class="etapes"' not in page
     print("  création : épreuve écrite, question « Note » sur 20 OK")
 
     r = c.post(reverse("quiz_detail", args=[quiz.pk]), {
@@ -175,7 +175,7 @@ def test_oral(c, groupe):
     quiz = Quiz.objects.get(title="Oral d'anglais", class_group=groupe)
     page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
     assert "Notes de l'oral" in page and "AMRI Sana" in page
-    assert "pas encore scannée" in page
+    assert "pas encore scannée" in page and 'class="etapes"' not in page
     e = {s.last_name: s for s in groupe.students.all()}
     assert f'name="note_{e["AMRI"].pk}"' not in page
     assert "Enregistrer les notes" not in page

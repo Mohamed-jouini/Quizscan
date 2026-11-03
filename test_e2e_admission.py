@@ -220,6 +220,18 @@ def main():
     print("  recherche      nom, n°, mots dans le désordre ; filtre les deux "
           "tableaux, rangs et décomptes réels")
 
+    # chaque liste a sa recherche, juste au-dessus d'elle, et défile dans son cadre
+    html = client.get(f"/quiz/{quiz.pk}/resultats/").content.decode()
+    assert html.count('name="q"') == 2
+    for ancre in ("liste-admis", "liste-notes"):
+        assert f'action="#{ancre}"' in html and f'id="{ancre}"' in html, ancre
+    assert html.count("table-wrap--defile") >= 2
+    avant_table = html.split('id="liste-notes"', 1)[1].split("<table", 1)[0]
+    assert 'name="q"' in avant_table
+    assert "Effacer la recherche" not in html
+    assert "#liste-notes" in tableaux("chaab")[0]
+    print("  listes         recherche au-dessus de chacune, défilement dans le cadre")
+
     # ----------------------------------------------------- 5. export Excel
     wb = load_workbook(BytesIO(client.get(
         f"/quiz/{quiz.pk}/resultats.xlsx").content))

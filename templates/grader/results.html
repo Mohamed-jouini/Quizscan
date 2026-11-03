@@ -112,29 +112,6 @@
 </div>
 {% endif %}
 
-{% if rows %}
-{# Recherche : filtre la liste des admis ET le tableau des notes. #}
-<form class="recherche-etudiant" method="get" role="search">
-  {% if batch %}<input type="hidden" name="batch" value="{{ batch.pk }}">{% endif %}
-  <div class="recherche-etudiant__champ">
-    <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-    <label for="id_q" class="visually-hidden">Rechercher un {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %}</label>
-    <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
-           placeholder="Rechercher un {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} — nom, prénom ou n° d'inscription">
-    {% if recherche %}
-    <a class="recherche-etudiant__effacer" href="?{% if batch %}batch={{ batch.pk }}{% endif %}"
-       title="Effacer la recherche" aria-label="Effacer la recherche">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
-    {% endif %}
-  </div>
-  <button class="btn" type="submit">Rechercher</button>
-  {% if recherche %}
-  <span class="recherche-etudiant__bilan {% if not n_trouves %}is-vide{% endif %}">
-    {{ n_trouves }} résultat{{ n_trouves|pluralize }} pour « {{ recherche }} »</span>
-  {% endif %}
-</form>
-{% endif %}
-
 {% if admission %}
 <div class="card admission" id="admission">
   <div class="card__head">
@@ -167,21 +144,27 @@
     {% endif %}
   </div>
   {% if admission.n_admis and perms.grader.creer_epreuve %}
+  {% if quiz.type_epreuve != "oral" or quiz.epreuves_suivantes.exists %}
   <div class="etape-suivante">
     <span class="etape-suivante__titre">Étape suivante du concours :</span>
     {% for suivante in quiz.epreuves_suivantes.all %}
     <a class="btn small secondary" href="{% url 'quiz_detail' suivante.pk %}">{{ suivante.title|truncatechars:40 }}</a>
     {% endfor %}
+    {% if quiz.type_epreuve == "qcm" %}
     <a class="btn small" href="{% url 'quiz_create' %}?{% if quiz.auto_enroll %}concours=1&amp;{% endif %}precedente={{ quiz.pk }}&amp;type=ecrit">Créer l'écrit des {{ admission.n_admis }} admis</a>
+    {% elif quiz.type_epreuve == "ecrit" %}
     <a class="btn small" href="{% url 'quiz_create' %}?{% if quiz.auto_enroll %}concours=1&amp;{% endif %}precedente={{ quiz.pk }}&amp;type=oral">Créer l'oral des {{ admission.n_admis }} admis</a>
+    {% endif %}
   </div>
   {% endif %}
+  {% endif %}
   {% if admission.admis %}
-  <div class="admission__entete-liste">
+  <div class="admission__entete-liste" id="liste-admis">
     <h3 class="admission__titre">{% if quiz.auto_enroll %}Liste des admis{% else %}Liste des étudiants ayant réussi{% endif %}, par ordre de mérite</h3>
     <a class="btn small secondary" href="{% url 'quiz_admis_pdf' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">Exporter la liste (PDF)</a>
   </div>
-  <div class="table-wrap">
+  {% include "grader/_recherche_liste.html" with ancre="liste-admis" champ="id_q_admis" sujet=quiz.auto_enroll|yesno:"admis,étudiant ayant réussi" n=admission.admis_affiches|length %}
+  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Liste par ordre de mérite">
     <table>
     <tr><th>Rang</th><th>Nom et prénom</th><th>N° d'inscription</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>Pourcentage</th>{% if quiz.note_distincte %}<th>Note</th>{% endif %}</tr>
     {% for r in admission.admis_affiches %}
@@ -221,9 +204,12 @@
 </div>
 {% endif %}
 
-<div class="card">
-  {% include "grader/_pagination.html" with page=rows_page label="Étudiants" querystring=batch_qs %}
-  <div class="table-wrap">
+<div class="card" id="liste-notes">
+  {% if rows %}
+  {% include "grader/_recherche_liste.html" with ancre="liste-notes" champ="id_q_notes" sujet=quiz.auto_enroll|yesno:"candidat,étudiant" n=n_trouves %}
+  {% endif %}
+  {% include "grader/_pagination.html" with page=rows_page label="Étudiants" querystring=batch_qs ancre="liste-notes" %}
+  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Notes de tous les étudiants">
     <table>
     <tr>
       <th>Étudiant</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>Pourcentage</th>
@@ -260,7 +246,7 @@
     {% endfor %}
   </table>
   </div>
-  {% include "grader/_pagination.html" with page=rows_page label="Étudiants" querystring=batch_qs %}
+  {% include "grader/_pagination.html" with page=rows_page label="Étudiants" querystring=batch_qs ancre="liste-notes" %}
 </div>
 
 {% if stats.suspectes %}
@@ -312,7 +298,7 @@
   {% if quiz.a_des_qcm %}
   <div class="card">
     <h2>Réussite par question</h2>
-    <div class="table-wrap">
+    <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Réussite par question">
       <table>
       <tr><th>Q</th><th>Réussite</th><th>Justes</th><th>Fausses</th><th>Vides</th>
           <th>Discrimination</th></tr>
@@ -353,7 +339,7 @@
     fausses ne dit pas vers quoi. Si presque toutes se portent sur la même
     case, c'est soit un bon distracteur, soit un énoncé ambigu, soit une
     bonne réponse erronée.</p>
-  <div class="table-wrap">
+  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Répartition des copies par case">
     <table class="table--espacee">
     <tr><th>Q</th><th>Répartition des copies par case</th></tr>
     {% for s in stats.questions %}{% if s.repartition %}

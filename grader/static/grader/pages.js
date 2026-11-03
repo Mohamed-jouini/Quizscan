@@ -91,6 +91,16 @@
       cacher("entete", !sujet);
       cacher("duree", !sujet);
       cacher("id_digits", oral || !idmode || idmode.value !== "grid");
+      // QCM -> écrit -> oral : un QCM ne suit aucune épreuve, un écrit suit un
+      // QCM, un oral suit un écrit
+      cacher("epreuve_precedente", qcm);
+      if (precSel) {
+        precSel.querySelectorAll("option[data-type]").forEach(function (o) {
+          o.hidden = o.disabled = qcm || o.dataset.type !== (oral ? "ecrit" : "qcm");
+        });
+        var choisie = precSel.selectedOptions[0];
+        if (choisie && choisie.disabled) precSel.value = "";
+      }
       // admis d'une épreuve précédente : la liste est créée, pas de classe
       cacher("class_group", !!(precSel && precSel.value));
       var aide = document.getElementById("aide_qcm");
