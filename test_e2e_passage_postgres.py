@@ -108,7 +108,7 @@ def main():
         base = sqlite3.connect(tardive)
         base.execute("DROP TABLE grader_piecejointe")
         base.execute("ALTER TABLE grader_quiz DROP COLUMN format_impression")
-        base.execute("ALTER TABLE grader_quiz DROP COLUMN date_heure")
+        base.execute("ALTER TABLE grader_quiz DROP COLUMN date_epreuve")
         base.execute("DELETE FROM django_migrations WHERE app='grader' AND name >= '0035'")
         base.commit()
         base.close()
@@ -116,7 +116,7 @@ def main():
         transferer(tardive, ecraser=True, ecrire=muet)
         assert _empreinte(tardive) == reference, "le fichier en retard a été modifié"
         assert Answer.objects.get().points_awarded == 1.5
-        assert Quiz.objects.get().format_impression == "a4" and Quiz.objects.get().date_heure is None
+        assert Quiz.objects.get().format_impression == "a4" and Quiz.objects.get().date_epreuve is None
         print("  base en retard de plusieurs migrations : copie mise à niveau, original intact OK")
 
         # ---- trop ancienne : une migration de données irait dans la mauvaise base

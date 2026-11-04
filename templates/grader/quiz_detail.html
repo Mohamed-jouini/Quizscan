@@ -99,10 +99,9 @@
            value="{{ quiz.duree }}" placeholder="1 h 30">
   </div>
   <div>
-    <label for="id_date_heure">Date et heure de l'épreuve</label>
-    <input id="id_date_heure" class="champ--date-heure" type="datetime-local" name="date_heure"
-           min="2000-01-01T00:00" max="9999-12-31T23:59"
-           value="{{ quiz.date_heure|date:'Y-m-d\TH:i' }}">
+    <label for="id_date_epreuve">Date de l'épreuve</label>
+    <input id="id_date_epreuve" class="champ--date" type="date" name="date_epreuve"
+           min="2000-01-01" max="9999-12-31" value="{{ quiz.date_epreuve|date:'Y-m-d' }}">
   </div>
   <div class="reglages__large">
     <label for="id_format_impression">Format du sujet</label>

@@ -86,11 +86,11 @@
       cacher("id_mode", oral);
       cacher("anonymat", oral);
       cacher("grading_mode", oral);
-      // en-tête, durée, date et heure : imprimés sur le sujet (QCM « sujet séparé », écrit)
+      // en-tête, durée et date : imprimés sur le sujet (QCM « sujet séparé », écrit)
       var sujet = t === "ecrit" || (qcm && sheet && sheet.value === "split");
       cacher("entete", !sujet);
       cacher("duree", !sujet);
-      cacher("date_heure", !sujet);
+      cacher("date_epreuve", !sujet);
       cacher("id_digits", oral || !idmode || idmode.value !== "grid");
       // QCM -> écrit -> oral : un QCM ne suit aucune épreuve, un écrit suit un
       // QCM, un oral suit un écrit

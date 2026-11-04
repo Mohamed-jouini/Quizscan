@@ -12,7 +12,6 @@ import io
 import cv2
 import pymupdf
 import qrcode
-from django.utils import timezone
 from PIL import Image
 from reportlab.lib.pagesizes import A3, A4, landscape
 from reportlab.lib.units import mm
@@ -653,7 +652,8 @@ def _dessiner_grille_note(c, draw, g, T, lang):
 #   5 — en-tête de l'institut si aucun n'est saisi ; une ligne laissée vide dans
 #       l'en-tête reste un espace dans le cartouche.
 #   6 — feuille à étiquette en plusieurs pages : consigne d'une étiquette par page.
-SUJET_VERSION = 6
+#   7 — avec une date : la durée passe sous elle ; plus d'heure dans le cartouche.
+SUJET_VERSION = 7
 
 # QuizScan sert à cet institut : son en-tête s'imprime sur tout sujet dont le champ
 # « En-tête du sujet » est vide. La ligne vide sépare les ministères de l'établissement.
@@ -676,7 +676,7 @@ SUJET_TEXTES = {
         "copie": "copie",
         "duree": "Durée : {d}",
         "date": "Date",
-        "heure": "Heure",
+        "duree_seule": "Durée",
         "nom": "Nom et prénom :",
         "classe": "Classe : {c}",
         "titre_main": "Intitulé de l'épreuve :",
@@ -739,7 +739,7 @@ SUJET_TEXTES = {
         "copie": "ورقة التحرير",
         "duree": "المدة : {d}",
         "date": "التاريخ",
-        "heure": "الساعة",
+        "duree_seule": "المدة",
         "nom": "الاسم واللقب :",
         "classe": "القسم : {c}",
         "titre_main": "عنوان الاختبار :",
@@ -821,8 +821,9 @@ def generate_subject_pdf(quiz, questions=None):
     Aucun repère ArUco : ce document n'est pas scanné.
 
     Présentation des sujets de concours : cartouche en tête de la première
-    page (institutions | intitulé et durée | date et heure | nom du candidat, chaque
-    case seulement si elle a un contenu), puis, pour un concours, une page de garde
+    page (institutions | intitulé | date et durée | nom du candidat, chaque case
+    seulement si elle a un contenu ; sans date, la durée reste sous l'intitulé),
+    puis, pour un concours, une page de garde
     « Remarques / Consignes » ; les questions suivent, chaque choix sur sa
     ligne, pages numérotées n/N."""
     load_fonts()
@@ -945,10 +946,8 @@ def generate_subject_pdf(quiz, questions=None):
         # Ordre de lecture : institutions | épreuve | date | identification, de
         # droite à gauche en arabe. Une case sans contenu n'est pas dessinée : elle
         # inviterait le candidat à y écrire ou à y coller quelque chose.
-        quand = getattr(quiz, "date_heure", None)
-        if quand and timezone.is_aware(quand):
-            quand = timezone.localtime(quand)   # l'heure saisie, pas celle du serveur
-        cases = (["inst", "epreuve"] + (["date"] if quand else [])
+        jour = getattr(quiz, "date_epreuve", None)
+        cases = (["inst", "epreuve"] + (["date"] if jour else [])
                  + (["id"] if nom_sur_sujet else []))
         wcol = W / len(cases)
         c.setStrokeGray(0.0)
@@ -1002,20 +1001,24 @@ def generate_subject_pdf(quiz, questions=None):
         else:
             bas = [S["epreuve"] if not a_redigees
                    else S["epreuve_mixte"] if a_qcm else S["epreuve_redigee"]]
-        if quiz.duree:
+        if quiz.duree and not jour:     # avec une date, la durée va sous elle
             bas.append(S["duree"].format(d=quiz.duree))
         bloc_centre(bas, x_epr, y0 + moitie, moitie, size=9, gras_premiere=True)
 
-        # 3. date et heure : chacune sur sa ligne, les chiffres hors d'une ligne arabe
-        if quand:
+        # 3. date, et durée dessous : la valeur sur sa propre ligne, car dans une ligne
+        # arabe l'ordre des mots latins s'inverse (« 2 h » s'y lit « h 2 »)
+        if jour:
             x_date = x_case["date"]
-            c.setLineWidth(0.6)
-            c.line(x_date * mm, (L.PAGE_H - (y0 + moitie)) * mm,
-                   (x_date + wcol) * mm, (L.PAGE_H - (y0 + moitie)) * mm)
-            bloc_centre([S["date"], quand.strftime("%d/%m/%Y")], x_date, y0, moitie,
-                        size=9, gras_premiere=True)
-            bloc_centre([S["heure"], quand.strftime("%H:%M")], x_date, y0 + moitie, moitie,
-                        size=9, gras_premiere=True)
+            valeur_date = [S["date"], jour.strftime("%d/%m/%Y")]
+            if quiz.duree:
+                c.setLineWidth(0.6)
+                c.line(x_date * mm, (L.PAGE_H - (y0 + moitie)) * mm,
+                       (x_date + wcol) * mm, (L.PAGE_H - (y0 + moitie)) * mm)
+                bloc_centre(valeur_date, x_date, y0, moitie, size=9, gras_premiere=True)
+                bloc_centre([S["duree_seule"], quiz.duree], x_date, y0 + moitie, moitie,
+                            size=9, gras_premiere=True)
+            else:
+                bloc_centre(valeur_date, x_date, y0, h, size=9, gras_premiere=True)
 
         # 4. identification
         if nom_sur_sujet:

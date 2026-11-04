@@ -784,7 +784,7 @@ def quiz_detail(request, pk):
         elif "update_settings" in request.POST:
             ok = True
             ancienne_penalite = quiz.wrong_penalty
-            ancien_sujet = (quiz.entete, quiz.duree, quiz.date_heure, quiz.format_impression)
+            ancien_sujet = (quiz.entete, quiz.duree, quiz.date_epreuve, quiz.format_impression)
             # Renommer : la liste de candidats d'un concours suit, le sujet et
             # (si rien de ce qui est lu ne bouge) la feuille sont refaits.
             if request.POST.get("title", "").strip():
@@ -798,10 +798,10 @@ def quiz_detail(request, pk):
                 quiz.entete = request.POST["entete"].strip()[:2000]
             if "duree" in request.POST:
                 quiz.duree = request.POST["duree"].strip()[:60]
-            if "date_heure" in request.POST:
-                valide, valeur = _lire_date_heure(request.POST["date_heure"])
+            if "date_epreuve" in request.POST:
+                valide, valeur = _lire_date_epreuve(request.POST["date_epreuve"])
                 if valide:
-                    quiz.date_heure = valeur
+                    quiz.date_epreuve = valeur
                 else:
                     ok = False
             if request.POST.get("format_impression") in dict(Quiz.FORMATS):
@@ -840,12 +840,12 @@ def quiz_detail(request, pk):
             if quiz.auto_enroll and new_grading in dict(Quiz.GRADING_MODES):
                 quiz.grading_mode = new_grading
             quiz.save(update_fields=["wrong_penalty", "sheet_mode", "grading_mode",
-                                     "id_mode", "id_digits", "entete", "duree", "date_heure",
+                                     "id_mode", "id_digits", "entete", "duree", "date_epreuve",
                                      "note_admission", "talon_nom", "place_anonyme",
                                      "format_impression"])
             # Le cartouche et le format ne concernent que le sujet, jamais scanné : on
             # le refait tout de suite, sans toucher à la feuille de réponses.
-            if (quiz.entete, quiz.duree, quiz.date_heure, quiz.format_impression) != ancien_sujet:
+            if (quiz.entete, quiz.duree, quiz.date_epreuve, quiz.format_impression) != ancien_sujet:
                 services.actualiser_sujet(quiz, forcer=True)
             journal.noter(request.user, "penalite", quiz=quiz,
                           objet="Pénalité par mauvaise réponse",
@@ -1284,10 +1284,10 @@ def sheet_review(request, pk):
 
 # ------------------------------------------------------------ résultats
 
-def _lire_date_heure(texte):
-    """Date et heure du champ du navigateur, ou vide (aucune) -> (valide, valeur)."""
+def _lire_date_epreuve(texte):
+    """Date du champ du navigateur, ou vide (aucune) -> (valide, valeur)."""
     try:
-        return True, Quiz._meta.get_field("date_heure").formfield().clean(texte)
+        return True, Quiz._meta.get_field("date_epreuve").formfield().clean(texte)
     except ValidationError:
         return False, None
 

@@ -286,9 +286,9 @@ class Quiz(models.Model):
     duree = models.CharField(
         "durée de l'épreuve", max_length=60, blank=True,
         help_text="Ex. « 1 h 30 » ou « ساعة ونصف ».")
-    date_heure = models.DateTimeField(
-        "date et heure de l'épreuve", null=True, blank=True,
-        help_text="Imprimées dans le cartouche du sujet.")
+    date_epreuve = models.DateField(
+        "date de l'épreuve", null=True, blank=True,
+        help_text="Imprimée dans le cartouche du sujet, la durée dessous.")
     # Espace public : chaque étudiant y consulte sa note avec son
     # n° d'inscription ; la liste des admis peut y être affichée en plus.
     resultats_publies = models.BooleanField(
