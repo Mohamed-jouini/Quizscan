@@ -28,16 +28,18 @@ from django.core.management import call_command  # noqa: E402
 call_command("migrate", verbosity=0)
 
 import logging  # noqa: E402
+from datetime import datetime, timezone as dt_timezone  # noqa: E402
 from io import StringIO  # noqa: E402
 
 import pymupdf  # noqa: E402
 from django.contrib.auth.models import User  # noqa: E402
 from django.core.files.base import ContentFile  # noqa: E402
 from django.test import Client  # noqa: E402
+from django.utils import timezone  # noqa: E402
 
 from grader import layout as L  # noqa: E402
 from grader import services, sheet_pdf  # noqa: E402
-from grader.models import ClassGroup, Question, Quiz  # noqa: E402
+from grader.models import ClassGroup, Question, Quiz, Student  # noqa: E402
 from test_commun import enseignant_complet  # noqa: E402
 
 QUESTIONS = {
@@ -308,6 +310,104 @@ def verifier_mise_a_jour(teacher):
           "commande, feuille de réponses intacte")
 
 
+def verifier_date_heure(teacher):
+    """Date et heure de l'épreuve : une case de plus dans le cartouche, seulement si elles
+    sont saisies ; l'heure imprimée est celle saisie, et le sujet suit sans régénérer."""
+    enseignant_complet(teacher)
+    client = Client()
+    client.force_login(teacher)
+
+    def cases(pdf):
+        """Largeur des cases du cartouche : ses traits verticaux, et le bloc de texte de la date."""
+        with pymupdf.open(stream=pdf, filetype="pdf") as doc:
+            page = doc[0]
+            cadre = next(d["rect"] for d in page.get_drawings()
+                         if d["rect"].height > 80 and d["rect"].width > 300)
+            date = page.search_for("12/11/2026")
+            heure = page.search_for("09:00")
+            return cadre, date, heure
+
+    for langue in ("fr", "ar"):
+        quiz = _concours(teacher, langue)
+        pdf = sheet_pdf.generate_subject_pdf(quiz)
+        libelle = {"fr": "Date", "ar": "التاريخ"}[langue]
+        assert libelle not in _texte(pdf), "case de date dessinée sans date"
+        assert quiz.date_heure is None
+
+        quiz.date_heure = datetime(2026, 11, 12, 8, 0, tzinfo=dt_timezone.utc)  # 9 h à Tunis
+        pdf = sheet_pdf.generate_subject_pdf(quiz)
+        assert libelle in _texte(pdf), f"{langue} : libellé de la date absent"
+        cadre, date, heure = cases(pdf)
+        assert date and heure, f"{langue} : date ou heure absente, ou heure non locale"
+        # à gauche en arabe, comme le sens de lecture le veut ; à droite en français
+        milieu = (cadre.x0 + cadre.x1) / 2
+        assert (date[0].x0 < milieu) == (langue == "ar"), (langue, date[0], milieu)
+        for rect in date + heure:
+            assert cadre.contains(rect), f"{langue} : déborde du cartouche {rect}"
+        assert date[0].y1 <= heure[0].y0, "la date au-dessus de l'heure"
+
+        # avec le nom du candidat, quatre cases : tout tient encore dans le cadre
+        classe = ClassGroup.objects.create(name=f"SUJET date {langue}", owner=teacher)
+        devoir = Quiz.objects.create(title="Devoir", class_group=classe, owner=teacher,
+                                     sheet_mode="split", id_mode="name", language=langue,
+                                     date_heure=quiz.date_heure)
+        cadre, date, heure = cases(sheet_pdf.generate_subject_pdf(devoir))
+        assert date and heure and cadre.contains(date[0]) and cadre.contains(heure[0])
+        devoir.delete()
+        classe.delete()
+
+    # Réglages d'un QCM : le champ, l'heure saisie telle quelle, le sujet refait aussitôt
+    quiz = _concours(teacher, "fr")
+    assert client.post(f"/quiz/{quiz.pk}/", {"generate_pdf": "1"}).status_code == 302
+    reglages = {"update_settings": "1", "sheet_mode": "split", "id_mode": quiz.id_mode,
+                "id_digits": quiz.id_digits, "wrong_penalty": "0.5",
+                "grading_mode": quiz.grading_mode, "entete": quiz.entete, "duree": quiz.duree}
+    page = client.get(f"/quiz/{quiz.pk}/").content.decode()
+    assert 'name="date_heure"' in page and 'type="datetime-local"' in page
+    assert 'max="9999-12-31T23:59"' in page, "sans max, l'année déborde au clavier"
+    client.post(f"/quiz/{quiz.pk}/", {**reglages, "date_heure": "2026-11-12T09:00"})
+    quiz.refresh_from_db()
+    assert timezone.localtime(quiz.date_heure).strftime("%d/%m/%Y %H:%M") == "12/11/2026 09:00"
+    assert "12/11/2026" in _texte(quiz.subject_pdf.read()), "sujet non refait après la date"
+    page = client.get(f"/quiz/{quiz.pk}/").content.decode()
+    assert 'value="2026-11-12T09:00"' in page, "le champ ne rend pas la date saisie"
+    # une valeur fausse ne touche à rien et le dit ; vide : plus de date, plus de case
+    r = client.post(f"/quiz/{quiz.pk}/", {**reglages, "date_heure": "n'importe quoi"}, follow=True)
+    quiz.refresh_from_db()
+    assert quiz.date_heure is not None and "Certaines valeurs" in r.content.decode()
+    client.post(f"/quiz/{quiz.pk}/", {**reglages, "date_heure": ""})
+    quiz.refresh_from_db()
+    assert quiz.date_heure is None and "12/11/2026" not in _texte(quiz.subject_pdf.read())
+
+    # Écrit : le sujet existant suit dès l'enregistrement (avant : seulement à la régénération)
+    classe = ClassGroup.objects.create(name="SUJET date écrit", owner=teacher)
+    Student.objects.create(class_group=classe, last_name="AMRI", first_name="Sana",
+                           student_number="104501")
+    ecrit = Quiz.objects.create(title="Écrit daté", class_group=classe, owner=teacher,
+                                type_epreuve="ecrit", id_mode="qr", talon_nom=True, language="fr")
+    client.post(f"/quiz/{ecrit.pk}/", {"generer": "1"})
+    ecrit.refresh_from_db()
+    assert "Date" not in _texte(ecrit.subject_pdf.read())
+    copies = ecrit.sheet_pdf.name
+    page = client.get(f"/quiz/{ecrit.pk}/").content.decode()
+    assert 'name="date_heure"' in page and 'type="datetime-local"' in page
+    assert 'max="9999-12-31T23:59"' in page, "sans max, l'année déborde au clavier"
+    client.post(f"/quiz/{ecrit.pk}/", {
+        "reglages": "1", "title": ecrit.title, "sujet_texte": "Racontez.", "note_sur": "20",
+        "id_mode": "sticker", "id_digits": "6", "anonymat": "talon", "pages_redaction": "1",
+        "date_heure": "2026-11-12T09:00"})
+    ecrit.refresh_from_db()
+    texte = _texte(ecrit.subject_pdf.read())
+    assert "12/11/2026" in texte and "09:00" in texte and "Racontez." in texte, texte
+    assert ecrit.sheet_pdf.name == copies, "les copies ne devaient pas bouger"
+    ecrit.delete()
+    classe.delete()
+
+    # À la création aussi
+    assert 'name="date_heure"' in client.get("/quiz/nouveau/?concours=1").content.decode()
+    print("  date et heure  case du cartouche si saisies (fr, ar), heure locale, sujet refait")
+
+
 def verifier_renommage(teacher):
     """Renommer un concours depuis ses réglages : le titre, sa liste de
     candidats, et les PDF qui l'impriment suivent ; le geste est tracé."""
@@ -369,6 +469,7 @@ def main():
     verifier_tous_les_cas(teacher)
     verifier_ecrit(teacher)
     verifier_mise_a_jour(teacher)
+    verifier_date_heure(teacher)
     verifier_renommage(teacher)
     print("\n✅ TEST DU SUJET AVEC SES CHOIX RÉUSSI")
 

@@ -411,7 +411,8 @@ form.inline{display:inline}
 .shell label{font-weight:600;font-size:12.5px;display:block;margin:12px 0 5px;
   color:var(--qs-muted)}
 .shell input[type=text],.shell input[type=number],.shell input[type=password],
-.shell input[type=email],.shell input[type=date],.shell input[type=file],.shell select,
+.shell input[type=email],.shell input[type=date],.shell input[type=datetime-local],
+.shell input[type=file],.shell select,
 .shell textarea{
   border:1px solid var(--qs-field-line);border-radius:var(--qs-r-field);
   padding:9px 11px;font:inherit;font-size:14px;width:100%;
@@ -636,6 +637,9 @@ input:focus,select:focus,textarea:focus{
 .identite-copie__meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
   margin-top:3px;font-size:12.5px;color:var(--qs-muted)}
 .champ--duree{width:170px}
+.champ--date-heure{width:210px}
+/* le navigateur y ajoute 2 px de haut : meme hauteur que les autres champs */
+.shell input[type=datetime-local]{padding-top:8px;padding-bottom:8px}
 .shell input.champ--titre{max-width:560px}
 .shell textarea.champ--entete{max-width:560px}
 .champ--note{width:70px}

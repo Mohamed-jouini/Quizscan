@@ -12,6 +12,7 @@ import io
 import cv2
 import pymupdf
 import qrcode
+from django.utils import timezone
 from PIL import Image
 from reportlab.lib.pagesizes import A3, A4, landscape
 from reportlab.lib.units import mm
@@ -674,6 +675,8 @@ SUJET_TEXTES = {
         "feuille": "feuille de réponses",
         "copie": "copie",
         "duree": "Durée : {d}",
+        "date": "Date",
+        "heure": "Heure",
         "nom": "Nom et prénom :",
         "classe": "Classe : {c}",
         "titre_main": "Intitulé de l'épreuve :",
@@ -735,6 +738,8 @@ SUJET_TEXTES = {
         "feuille": "ورقة الإجابة",
         "copie": "ورقة التحرير",
         "duree": "المدة : {d}",
+        "date": "التاريخ",
+        "heure": "الساعة",
         "nom": "الاسم واللقب :",
         "classe": "القسم : {c}",
         "titre_main": "عنوان الاختبار :",
@@ -816,8 +821,8 @@ def generate_subject_pdf(quiz, questions=None):
     Aucun repère ArUco : ce document n'est pas scanné.
 
     Présentation des sujets de concours : cartouche en tête de la première
-    page (institutions | intitulé et durée | nom du candidat, chaque case
-    seulement si elle a un contenu), puis, pour un concours, une page de garde
+    page (institutions | intitulé et durée | date et heure | nom du candidat, chaque
+    case seulement si elle a un contenu), puis, pour un concours, une page de garde
     « Remarques / Consignes » ; les questions suivent, chaque choix sur sa
     ligne, pages numérotées n/N."""
     load_fonts()
@@ -937,10 +942,14 @@ def generate_subject_pdf(quiz, questions=None):
         # laissée vide y reste un espace.
         inst = [t.strip() for t in
                 ((quiz.entete or "").strip() or ENTETE_INSTITUT).splitlines()]
-        # Ordre de lecture : institutions | épreuve | identification, de droite
-        # à gauche en arabe. Une case sans contenu n'est pas dessinée : elle
+        # Ordre de lecture : institutions | épreuve | date | identification, de
+        # droite à gauche en arabe. Une case sans contenu n'est pas dessinée : elle
         # inviterait le candidat à y écrire ou à y coller quelque chose.
-        cases = ["inst", "epreuve"] + (["id"] if nom_sur_sujet else [])
+        quand = getattr(quiz, "date_heure", None)
+        if quand and timezone.is_aware(quand):
+            quand = timezone.localtime(quand)   # l'heure saisie, pas celle du serveur
+        cases = (["inst", "epreuve"] + (["date"] if quand else [])
+                 + (["id"] if nom_sur_sujet else []))
         wcol = W / len(cases)
         c.setStrokeGray(0.0)
         c.setLineWidth(0.8)
@@ -982,7 +991,12 @@ def generate_subject_pdf(quiz, questions=None):
             c.line((x_epr + 5) * mm, (L.PAGE_H - (y0 + 13.5)) * mm,
                    (x_epr + wcol - 5) * mm, (L.PAGE_H - (y0 + 13.5)) * mm)
         else:
-            bloc_centre([quiz.title], x_epr, y0, moitie, size=11, gras_premiere=True)
+            # un titre long se resserre pour rester dans sa moitié de case
+            taille = 11.0
+            while (taille > 7 and moitie - 2
+                   < len(wrap(quiz.title, taille, wcol - 6.0, bold=True)) * taille * 0.47):
+                taille -= 0.5
+            bloc_centre([quiz.title], x_epr, y0, moitie, size=taille, gras_premiere=True)
         if ecrit:
             bas = [S.get("epreuve_ecrite", "{n}").format(n=f"{quiz.note_sur:g}")]
         else:
@@ -992,7 +1006,18 @@ def generate_subject_pdf(quiz, questions=None):
             bas.append(S["duree"].format(d=quiz.duree))
         bloc_centre(bas, x_epr, y0 + moitie, moitie, size=9, gras_premiere=True)
 
-        # 3. identification
+        # 3. date et heure : chacune sur sa ligne, les chiffres hors d'une ligne arabe
+        if quand:
+            x_date = x_case["date"]
+            c.setLineWidth(0.6)
+            c.line(x_date * mm, (L.PAGE_H - (y0 + moitie)) * mm,
+                   (x_date + wcol) * mm, (L.PAGE_H - (y0 + moitie)) * mm)
+            bloc_centre([S["date"], quand.strftime("%d/%m/%Y")], x_date, y0, moitie,
+                        size=9, gras_premiere=True)
+            bloc_centre([S["heure"], quand.strftime("%H:%M")], x_date, y0 + moitie, moitie,
+                        size=9, gras_premiere=True)
+
+        # 4. identification
         if nom_sur_sujet:
             x_id = x_case["id"]
             draw(S["nom"], (x_id + wcol - 3) if rtl else (x_id + 3), y0 + 7.5, 9,

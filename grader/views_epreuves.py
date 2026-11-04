@@ -96,6 +96,9 @@ def _ecrit(request, quiz):
                 _renommer(request, quiz)
                 form.save()
                 services.question_note(quiz)
+                # Le sujet n'est jamais scanné : on le refait tout de suite, comme pour un QCM.
+                if form.has_changed():
+                    services.actualiser_sujet(quiz, forcer=True)
                 messages.success(request, "Épreuve enregistrée.")
                 return redirect("quiz_detail", pk=quiz.pk)
         elif "generer" in request.POST:

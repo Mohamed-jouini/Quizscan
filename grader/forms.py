@@ -269,6 +269,11 @@ CONCOURS_ID_MODES = ["sticker", "grid"]
 
 AIDE_ENTETE = ("Laissé vide : en-tête de l'institut (المعهد الأعلى للمحاماة). Sinon, une "
                "ligne par ligne : ministère, établissement… Imprimé dans le cartouche du sujet.")
+# Le champ de date et d'heure du navigateur n'accepte que ce format. Sans max, Chrome
+# laisse 6 chiffres à l'année : au clavier, « 2026 » suivi de l'heure donne l'année 202609.
+SAISIE_DATE_HEURE = forms.DateTimeInput(
+    attrs={"type": "datetime-local", "min": "2000-01-01T00:00", "max": "9999-12-31T23:59"},
+    format="%Y-%m-%dT%H:%M")
 
 
 def _champ_anonymat():
@@ -321,12 +326,13 @@ class QuizForm(forms.ModelForm):
         model = Quiz
         fields = ["title", "type_epreuve", "epreuve_precedente", "class_group",
                   "language", "note_sur",
-                  "sheet_mode", "entete", "duree",
+                  "sheet_mode", "entete", "duree", "date_heure",
                   "id_mode", "id_digits", "anonymat", "grading_mode", "wrong_penalty"]
         widgets = {"grading_mode": forms.RadioSelect,
                    "type_epreuve": forms.RadioSelect,
                    "epreuve_precedente": ChoixEpreuvePrecedente,
-                   "entete": forms.Textarea(attrs={"rows": 3})}
+                   "entete": forms.Textarea(attrs={"rows": 3}),
+                   "date_heure": SAISIE_DATE_HEURE}
         field_classes = {"wrong_penalty": DecimalField, "note_sur": DecimalField}
         labels = {"id_digits": "Nombre de chiffres du n° d'inscription"}
         help_texts = {"id_digits": "Taille de la grille à noircir sur la fiche "
@@ -406,13 +412,14 @@ class EpreuveEcritForm(forms.ModelForm):
 
     class Meta:
         model = Quiz
-        fields = ["sujet_texte", "entete", "duree", "note_sur", "id_mode",
+        fields = ["sujet_texte", "entete", "duree", "date_heure", "note_sur", "id_mode",
                   "id_digits", "anonymat", "pages_redaction", "format_impression"]
         widgets = {"sujet_texte": forms.Textarea(attrs={
                        "rows": 9, "placeholder": "Ex. Racontez un voyage qui vous a "
                                                  "marqué…\n\nVous décrirez les lieux "
                                                  "et vos impressions."}),
-                   "entete": forms.Textarea(attrs={"rows": 3})}
+                   "entete": forms.Textarea(attrs={"rows": 3}),
+                   "date_heure": SAISIE_DATE_HEURE}
         field_classes = {"note_sur": DecimalField}
         labels = {"id_digits": "Nombre de chiffres du n° d'inscription",
                   "pages_redaction": "Pages lignées après la page de garde",

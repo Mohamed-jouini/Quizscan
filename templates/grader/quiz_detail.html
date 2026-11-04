@@ -98,6 +98,12 @@
     <input id="id_duree" class="champ--duree" type="text" name="duree" maxlength="60"
            value="{{ quiz.duree }}" placeholder="1 h 30">
   </div>
+  <div>
+    <label for="id_date_heure">Date et heure de l'épreuve</label>
+    <input id="id_date_heure" class="champ--date-heure" type="datetime-local" name="date_heure"
+           min="2000-01-01T00:00" max="9999-12-31T23:59"
+           value="{{ quiz.date_heure|date:'Y-m-d\TH:i' }}">
+  </div>
   <div class="reglages__large">
     <label for="id_format_impression">Format du sujet</label>
     <select id="id_format_impression" name="format_impression">
