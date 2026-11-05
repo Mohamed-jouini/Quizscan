@@ -12,10 +12,15 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    Ajouter). Chaque enseignant ne voit que ses propres classes et quiz et crée
    ses QCM lui-même ; l'administrateur voit tout.
 1. **Classes** : créez une classe et importez la liste des étudiants, soit par
-   **fichier** (Excel `.xlsx`, CSV, Word `.docx` ou PDF — colonnes Nom, Prénom,
-   N° d'inscription, voir `modele_candidats.xlsx`), soit par **copier-coller**
-   (une ligne par étudiant : `NOM;Prénom;N°` ou `NOM Prénom N°`). Le numéro est
-   optionnel mais nécessaire pour la grille d'identification.
+   **fichier** (Excel `.xlsx`, CSV, Word `.docx` ou PDF), soit par
+   **copier-coller** (une ligne par étudiant : `NOM;Prénom;N°` ou `NOM Prénom N°`).
+   Le numéro est optionnel mais nécessaire pour la grille d'identification.
+   Les colonnes se reconnaissent à leur intitulé. La liste officielle de
+   l'institut (voir `modele_candidats.xlsx`, aussi à télécharger depuis
+   l'application) donne `عدد الترسيم`, `الاسم و اللقب`, `عدد ب ت و`, `مكانها`,
+   `تاريخ الإصدار`, `تاريخ الولادة`, `المركز`, `القاعة` : une telle ligne crée
+   aussi la fiche de son n° au registre des inscriptions. Une liste qui ne donne
+   que Nom, Prénom et N° n'inscrit personne au registre.
 2. **Quiz** : créez un quiz en choisissant le **type de fiche** :
    - **Sujet séparé + feuille de réponses** : deux documents — un PDF
      « Sujet » avec les questions et leurs choix (à distribuer, non scanné)
@@ -112,7 +117,7 @@ classe à choisir ni de case à cocher, chaque concours a sa propre liste de
 candidats. Deux modes d'identification :
 
 - **QR code — étiquette autocollante** (par défaut) : importez la liste des
-  candidats (Excel : Nom, Prénom, N° d'inscription), imprimez la planche
+  candidats (Excel, voir `modele_candidats.xlsx`), imprimez la planche
   d'étiquettes sur papier autocollant, **découpez chaque QR le long des
   pointillés** — le n° et le nom imprimés à côté indiquent à qui le remettre —
   et remettez-le au candidat, qui le colle dans l'emplacement réservé de sa

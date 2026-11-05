@@ -109,8 +109,8 @@ def main():
     cand_a = Student.objects.create(class_group=ga, last_name="AMRI", first_name="Sami",
                                     student_number="990001")
     fiche = {"numero": "990001", "nom": "INTRUS", "prenom": "Faux", "cin": "SEC990001",
-             "date_naissance": "2005-01-02", "etablissement": "Lycée X",
-             "email": "intrus@exemple.tn", "inscrire": "1"}
+             "cin_lieu": "Tunis", "cin_date": "2023-02-01", "date_naissance": "2005-01-02",
+             "etablissement": "Lycée X", "email": "intrus@exemple.tn", "inscrire": "1"}
     cb.post(reverse("inscriptions"), fiche)
     inscrit = Inscrit.objects.get(numero="990001")
     cand_a.refresh_from_db()

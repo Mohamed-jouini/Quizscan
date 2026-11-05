@@ -109,6 +109,8 @@ def main():
         base.execute("DROP TABLE grader_piecejointe")
         base.execute("ALTER TABLE grader_quiz DROP COLUMN format_impression")
         base.execute("ALTER TABLE grader_quiz DROP COLUMN date_epreuve")
+        for colonne in ("cin_lieu", "cin_date", "centre", "salle"):
+            base.execute(f"ALTER TABLE grader_inscrit DROP COLUMN {colonne}")
         base.execute("DELETE FROM django_migrations WHERE app='grader' AND name >= '0035'")
         base.commit()
         base.close()

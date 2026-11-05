@@ -45,11 +45,13 @@ def test_identite(c, prof, autre):
     import datetime
     url = reverse("inscriptions")
     page = c.get(url).content.decode()
-    for champ in ("id_cin", "id_date_naissance", "id_email", "id_etablissement"):
+    for champ in ("id_cin", "id_cin_lieu", "id_cin_date", "id_date_naissance", "id_centre",
+                  "id_salle", "id_email", "id_etablissement"):
         assert f'id="{champ}"' in page, champ
     r = c.post(url, {"inscrire": "1", "nom": "Khelifi", "prenom": "Omar",
-                     "numero": "207001", "cin": " 0987 6543 ",
-                     "date_naissance": "2006-03-15", "email": "omar.k@exemple.tn",
+                     "numero": "207001", "cin": " 0987 6543 ", "cin_lieu": "Sfax",
+                     "cin_date": "2024-01-10", "date_naissance": "2006-03-15",
+                     "email": "omar.k@exemple.tn",
                      "etablissement": "  Lycée  pilote de Sfax "}, follow=True)
     i = Inscrit.objects.get(numero="207001")
     assert (i.cin, i.date_naissance, i.email, i.etablissement) == (
@@ -75,7 +77,8 @@ def test_identite(c, prof, autre):
     page = c.get(url + f"?modifier={i.pk}").content.decode()
     assert "Modifier l'inscription de KHELIFI Omar" in page and 'value="09876543"' in page
     c.post(url, {"inscrire": "1", "modifier": i.pk, "nom": "KHELIFI", "prenom": "Omar Ali",
-                 "numero": "207001", "cin": "09876543", "date_naissance": "2006-03-15",
+                 "numero": "207001", "cin": "09876543", "cin_lieu": "Sfax",
+                 "cin_date": "2024-01-10", "date_naissance": "2006-03-15",
                  "email": "omar@exemple.tn", "etablissement": "Lycée pilote de Sfax"})
     i.refresh_from_db()
     assert i.prenom == "Omar Ali" and i.email == "omar@exemple.tn"
@@ -136,23 +139,25 @@ def _messages(r):
 
 
 def _fiche(nom, prenom, numero, cin, **autres):
-    """Envoi complet du formulaire d'inscription (tous les champs obligatoires)."""
+    """Envoi complet du formulaire d'inscription."""
     return dict({"inscrire": "1", "nom": nom, "prenom": prenom, "numero": numero,
-                 "cin": cin, "date_naissance": "2005-06-01",
+                 "cin": cin, "cin_lieu": "Tunis", "cin_date": "2023-02-01",
+                 "date_naissance": "2005-06-01",
                  "email": f"{prenom.lower()}.{cin}@exemple.tn",
                  "etablissement": "Lycée pilote"}, **autres)
 
 
 def test_registre(c, prof):
     url = reverse("inscriptions")
-    # nom, prénom et n° seuls ne suffisent plus : tout est obligatoire
+    # nom, prénom et n° seuls ne suffisent pas : l'identité de la liste officielle
+    # est obligatoire ; le centre, la salle, l'e-mail et l'établissement non
     r = c.post(url, {"inscrire": "1", "nom": "BEN SALEM", "prenom": "Samia",
                      "numero": "104523"})
     assert r.status_code == 200 and r.content.decode().count("Champ obligatoire.") == 4
     assert not Inscrit.objects.filter(numero="104523").exists()
     page = c.get(url).content.decode()
-    assert "Tous les champs sont obligatoires" in page
-    print("  inscription incomplète refusée : CIN, naissance, e-mail, établissement "
+    assert "Facultatifs : centre, salle, e-mail et établissement" in page
+    print("  inscription incomplète refusée : CIN, lieu et date de délivrance, naissance "
           "obligatoires OK")
 
     r = c.post(url, _fiche(" ben  salem ", "Samia", "104 523", "11110001"), follow=True)
@@ -180,14 +185,17 @@ def test_registre(c, prof):
         c.post(url, _fiche(nom, prenom, numero, cin))
     assert Inscrit.objects.filter(numero__in=["104524", "104525", "104526"]).count() == 3
 
-    # plus d'inscription par liste : ni carte à l'écran, ni envoi accepté
+    # une liste simple (nom, prénom, n°) n'inscrit personne : ni le copier-coller
+    # supprimé, ni un fichier. La liste officielle : test_e2e_liste_officielle.
     page = c.get(url).content.decode()
     assert "Inscrire depuis une liste" not in page and 'name="coller"' not in page
     c.post(url, {"coller": "1", "text": "NOUVEAU;Ali;555001"})
     c.post(url, {"importer": "1", "file": SimpleUploadedFile(
         "registre.xlsx", _xlsx([("NOUVEAU", "Ali", 555002)]))})
+    c.post(url, {"importer_liste": "1", "file": SimpleUploadedFile(
+        "registre.xlsx", _xlsx([("NOUVEAU", "Ali", 555002)]))})
     assert not Inscrit.objects.filter(numero__in=["555001", "555002"]).exists()
-    print("  « Inscrire depuis une liste » supprimé (envoi direct refusé) OK")
+    print("  une liste simple n'inscrit personne (copier-coller retiré, fichier refusé) OK")
 
     r = c.get(url + "?q=salem")
     assert r.context["n_trouves"] == 1 and "104523" in r.content.decode()
@@ -206,8 +214,8 @@ def test_verification_import(c, prof):
     page = r.content.decode()
     assert "Vérification par le registre des inscriptions" in page
     d = r.context["verification"]["decomptes"]
-    assert d == {"conforme": 1, "nom_different": 1, "non_inscrit": 1,
-                 "sans_numero": 1}, d
+    assert d == {"conforme": 1, "ajoute": 0, "nom_different": 1, "non_inscrit": 1,
+                 "sans_numero": 1, "doublon": 0, "a_completer": 0}, d
     trab = groupe.students.get(student_number="104524")
     assert trab.last_name == "TRABELSI" and trab.inscrit.numero == "104524"
     assert groupe.students.get(student_number="104523").inscrit is not None
@@ -217,11 +225,11 @@ def test_verification_import(c, prof):
           "1 non inscrit, 1 sans n° OK")
 
     page = c.get(reverse("class_detail", args=[groupe.pk])).content.decode()
-    assert "inscrire_inconnus" not in page, "plus d'inscription au registre par liste"
+    assert "inscrire_inconnus" not in page, "plus de case « inscrire au registre »"
     c.post(reverse("class_detail", args=[groupe.pk]), {"fermer_verification": "1"})
     assert "Vérification par le registre" not in c.get(
         reverse("class_detail", args=[groupe.pk])).content.decode()
-    print("  plus d'inscription au registre depuis une liste de classe OK")
+    print("  une liste de classe simple n'inscrit personne au registre OK")
 
 
 def test_ajout_direct(c, prof):

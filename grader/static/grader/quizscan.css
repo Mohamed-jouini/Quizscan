@@ -384,6 +384,9 @@ a.tile:hover{border-color:var(--qs-line-strong)}
    le document ne defilant pas lateralement pour autant. */
 .table-wrap{overflow-x:auto}
 .table-wrap table{min-width:100%;width:max-content}
+/* Beaucoup de colonnes : les cellules vont à la ligne avant que le cadre défile,
+   pour garder les boutons de la ligne à l'écran. */
+.table-wrap--ajuste table{width:100%}
 .table--espacee{margin-top:14px}
 /* Listes de resultats : elles defilent aussi en hauteur dans leur cadre, leur
    ligne de titres restant visible. La barre reste affichee meme pour une liste
@@ -1637,6 +1640,16 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .verif__chiffre--alerte{background:var(--qs-warn-bg);color:var(--qs-warn)}
 .form-inscription__champs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
   gap:0 12px}
+/* Colonnes de la liste officielle, intitulé arabe à gauche de son sens. */
+.colonnes-liste{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  gap:4px 14px;margin:10px 0 0;font-size:12.5px}
+.colonnes-liste div{display:flex;align-items:baseline;gap:8px;min-width:0}
+.colonnes-liste dt{font-weight:600;color:var(--qs-ink);white-space:nowrap}
+.colonnes-liste dd{margin:0;color:var(--qs-muted)}
+/* Les formulaires d'import, repliés dès que la liste a des candidats. */
+.plie-carte summary{cursor:pointer;font-size:15px;font-weight:700;color:var(--qs-ink)}
+.plie-carte__contenu{margin-top:14px}
+.sous-carte + .sous-carte{margin-top:18px;padding-top:16px;border-top:1px solid var(--qs-line)}
 .plie{margin-top:8px}
 .plie summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--qs-blue)}
 .barre-choix{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -1957,8 +1970,9 @@ p.bord-note{display:block}
 .etape-suivante{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0 4px;
   padding:10px 12px;border-radius:12px;background:var(--qs-surface-2)}
 .etape-suivante__titre{font-size:13px;font-weight:600;color:var(--qs-ink)}
-/* Registre : l'établissement sur toute la largeur du formulaire. */
-.form-inscription__large{grid-column:1 / -1}
+/* Registre : l'établissement à côté de l'e-mail, seul sur sa ligne au téléphone. */
+.form-inscription__large{grid-column:span 2}
+@media (max-width:720px){.form-inscription__large{grid-column:auto}}
 
 /* Alerte fermable (« × ») : pages non identifiées sur la page des résultats. */
 .messages li.messages__fermable{position:relative;padding-right:46px}

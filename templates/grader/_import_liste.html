@@ -1,0 +1,19 @@
+{# Formulaire d'import d'une liste : le fichier, puis les colonnes qu'il peut porter. #}
+{# Variables : champ (le champ de fichier), bouton (nom du bouton), libelle (son texte). #}
+<form method="post" enctype="multipart/form-data">{% csrf_token %}
+  {{ champ.errors }}
+  {{ champ }}
+  <p><button class="btn" name="{{ bouton }}" value="1" type="submit">{{ libelle }}</button></p>
+</form>
+<p class="helptext">{{ champ.help_text }}
+  <a href="{% url 'modele_candidats' %}">Télécharger le modèle Excel</a></p>
+<dl class="colonnes-liste">
+  <div><dt dir="rtl">عدد الترسيم</dt><dd>N° d'inscription</dd></div>
+  <div><dt dir="rtl">الاسم و اللقب</dt><dd>Nom et prénom</dd></div>
+  <div><dt dir="rtl">عدد ب ت و</dt><dd>N° de CIN</dd></div>
+  <div><dt dir="rtl">مكانها</dt><dd>Lieu de délivrance</dd></div>
+  <div><dt dir="rtl">تاريخ الإصدار</dt><dd>Date de délivrance</dd></div>
+  <div><dt dir="rtl">تاريخ الولادة</dt><dd>Date de naissance</dd></div>
+  <div><dt dir="rtl">المركز</dt><dd>Centre</dd></div>
+  <div><dt dir="rtl">القاعة</dt><dd>Salle</dd></div>
+</dl>

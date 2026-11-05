@@ -13,9 +13,9 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import droits, journal, pieces
+from . import droits, importers, journal, pieces
 from . import inscriptions as insc
-from .forms import CommuniqueForm, InscritForm
+from .forms import CandidateFileForm, CommuniqueForm, InscritForm
 from .models import Communique, Inscrit, Student
 from .views import (_concours_group_pks, _int_or_none, _my_classes, _my_quizzes,
                     _page)
@@ -37,12 +37,55 @@ def _retour(request):
     return redirect(f"{url}?q={q}" if q else url)
 
 
+CLE_VERIFICATION = "verification_registre"
+
+
+def _importer_au_registre(request, fichier):
+    """La liste officielle de l'institut remplit le registre, sans toucher aux
+    classes ni aux concours (sinon pour relier ceux de l'utilisateur à leur
+    fiche). Le rapport reste en session pour la page, comme après un import
+    dans une classe."""
+    try:
+        lignes = fichier.parse()
+    except importers.ImportError_ as exc:
+        messages.error(request, str(exc))
+        return
+    except Exception as exc:      # noqa: BLE001 — fichier corrompu
+        messages.error(request, f"Fichier illisible : {exc}")
+        return
+    if not lignes:
+        messages.error(request, "Aucune ligne trouvée dans ce fichier.")
+        return
+    if not any(insc._porte_une_fiche(ligne) for ligne in lignes):
+        messages.error(request, "Ce fichier ne donne que des noms et des n° : il n'inscrit "
+                                "personne au registre. Il lui faut aussi la CIN ou la date de "
+                                "naissance. Une liste simple s'importe dans une classe ou un "
+                                "concours (page Candidats).")
+        return
+    resultat, decomptes, nouvelles = insc.rapprocher(lignes, request.user)
+    insc.rattacher_nouvelles(nouvelles, _my_classes(request))
+    request.session[CLE_VERIFICATION] = insc.rapport_session(resultat, decomptes)
+    messages.success(request, f"{len(nouvelles)} fiche(s) ajoutée(s) au registre, "
+                              f"sur {len(lignes)} ligne(s) lue(s).")
+
+
+@login_required
+def modele_candidats(request):
+    """La liste modèle à remplir, aux colonnes que l'import reconnaît."""
+    reponse = HttpResponse(
+        importers.modele_candidats_xlsx(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    reponse["Content-Disposition"] = 'attachment; filename="modele_candidats.xlsx"'
+    return reponse
+
+
 @login_required
 def inscriptions(request):
-    """Registre des inscriptions : inscrire (fiche complète, une par une),
-    retrouver, ajouter à un concours ou à une classe, imprimer les cartes.
-    Plus d'inscription par liste (demande de l'utilisateur, 30 octobre 2026) :
-    une liste ne porte ni CIN ni date de naissance."""
+    """Registre des inscriptions : inscrire (fiche complète, une par une, ou
+    la liste officielle de l'institut), retrouver, ajouter à un concours ou à
+    une classe, imprimer les cartes. Une liste simple (nom, prénom, n°) n'inscrit
+    personne (demande de l'utilisateur, 30 octobre 2026) : seule une liste qui
+    porte la CIN, la date de naissance ou la salle remplit le registre (5 novembre)."""
     # « Modifier » : la fiche d'un inscrit (CIN, date de naissance… à compléter)
     modifie = None
     pk_modifie = _int_or_none(request.GET.get("modifier") or request.POST.get("modifier"))
@@ -52,9 +95,18 @@ def inscriptions(request):
             raise PermissionDenied("Seul l'auteur de l'inscription ou "
                                    "l'administrateur peut la modifier.")
     form = InscritForm(instance=modifie)
+    fichier = CandidateFileForm()
     if request.method == "POST":
         droits.exiger(request.user, droits.CREER, "modifier le registre des inscriptions")
-        if "inscrire" in request.POST:
+        if "importer_liste" in request.POST:
+            fichier = CandidateFileForm(request.POST, request.FILES)
+            if fichier.is_valid():
+                _importer_au_registre(request, fichier)
+                return redirect("inscriptions")
+        elif "fermer_verification" in request.POST:
+            request.session.pop(CLE_VERIFICATION, None)
+            return redirect("inscriptions")
+        elif "inscrire" in request.POST:
             form = InscritForm(request.POST, instance=modifie)
             if form.is_valid():
                 inscrit = form.save(commit=False)
@@ -118,7 +170,8 @@ def inscriptions(request):
     concours = set(_concours_group_pks(request))
     groupes = [(g, g.pk in concours) for g in _my_classes(request).order_by("name")]
     return render(request, "grader/inscriptions.html", {
-        "form": form, "modifie": modifie,
+        "form": form, "modifie": modifie, "fichier": fichier,
+        "verification": request.session.get(CLE_VERIFICATION),
         "recherche": recherche, "page_inscrits": _page(request, qs),
         "querystring": urlencode({"q": recherche}) if recherche else "",
         "n_trouves": qs.count(), "total": Inscrit.objects.count(),

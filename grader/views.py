@@ -341,41 +341,63 @@ def concours_list(request):
     })
 
 
-def _save_candidates(group, rows, utilisateur):
-    """Crée / met à jour les candidats à partir de lignes (nom, prénom, n°).
-    Un candidat portant déjà le même n° d'inscription est mis à jour.
+@transaction.atomic
+def _save_candidates(request, group, rows):
+    """Crée / met à jour les candidats à partir des lignes d'une liste. Un
+    candidat portant déjà le même n° d'inscription est mis à jour.
 
-    Chaque ligne est d'abord vérifiée contre le registre des inscriptions
-    (inscriptions.verifier) : un n° inscrit prend l'identité du registre et
-    y est relié. Retourne (créés, mis à jour, rapport de vérification)."""
-    verifiees, decomptes = inscriptions_mod.verifier(rows)
-    created = updated = 0
-    for r in verifiees:
+    Chaque ligne passe d'abord par le registre (inscriptions.rapprocher) : un
+    n° inscrit prend l'identité du registre et y est relié, une ligne de la
+    liste officielle y crée sa fiche. Sans une requête par ligne : une liste
+    de concours compte des milliers de candidats. Le rapport de vérification
+    reste en session pour la page de la classe. Retourne (créés, mis à jour,
+    fiches ajoutées au registre)."""
+    lignes, decomptes, nouvelles = inscriptions_mod.rapprocher(rows, request.user)
+    inscriptions_mod.rattacher_nouvelles(nouvelles, _my_classes(request))
+    presents = list(group.students.all())
+    par_numero = {s.student_number: s for s in presents if s.student_number}
+    par_nom = {(s.last_name, s.first_name): s for s in presents}
+    a_creer = []
+    updated = 0
+    for r in lignes:
+        if r["etat"] == "doublon":
+            continue
         inscrit, number = r["inscrit"], r["numero"]
-        last, first = ((inscrit.nom, inscrit.prenom) if inscrit
+        last, first = ((inscrit.nom, inscrit.prenom) if inscrit and inscrit.nom_complet
                        else (r["nom"].upper()[:80], r["prenom"][:80]))
-        if number:
-            existing = group.students.filter(student_number=number).first()
-            if existing:
-                avant = journal.identite(existing)
-                existing.last_name, existing.first_name = last, first
-                existing.inscrit = inscrit
-                existing.save(update_fields=["last_name", "first_name", "inscrit"])
-                journal.etudiant_modifie(utilisateur, existing, avant)
-                updated += 1
-                continue
-        _, was_created = Student.objects.get_or_create(
-            class_group=group, last_name=last, first_name=first,
-            defaults={"student_number": number, "inscrit": inscrit})
-        created += was_created
-    return created, updated, inscriptions_mod.rapport_session(verifiees, decomptes)
-
-
-def _apres_import(request, group, rows, rapport):
-    """Garde le rapport de vérification pour la page de la classe. (Plus
-    d'inscription au registre depuis une liste : l'inscription se fait fiche
-    par fiche, avec CIN et date de naissance.)"""
-    request.session[f"verification_{group.pk}"] = rapport
+        existing = par_numero.get(number) if number else None
+        if existing is None and (last or first):
+            # Même nom : la même personne si l'une des deux lignes n'a pas de
+            # n°. Avec deux n° différents, ce sont deux homonymes.
+            homonyme = par_nom.get((last, first))
+            if homonyme is not None and not (number and homonyme.student_number):
+                existing = homonyme
+        if existing is None:
+            nouveau = Student(class_group=group, last_name=last, first_name=first,
+                              student_number=number, inscrit=inscrit)
+            a_creer.append(nouveau)
+            if number:
+                par_numero[number] = nouveau
+            if last or first:
+                par_nom[(last, first)] = nouveau
+            continue
+        if existing.pk is None:      # sans n°, deux fois le même nom dans le fichier
+            continue
+        updated += 1
+        numero = number or existing.student_number
+        lien = inscrit.pk if inscrit else (None if number else existing.inscrit_id)
+        if ((existing.last_name, existing.first_name, existing.student_number,
+             existing.inscrit_id) != (last, first, numero, lien)):
+            avant = journal.identite(existing)
+            existing.last_name, existing.first_name = last, first
+            existing.student_number, existing.inscrit_id = numero, lien
+            existing.save(update_fields=["last_name", "first_name", "student_number",
+                                         "inscrit"])
+            journal.etudiant_modifie(request.user, existing, avant)
+    Student.objects.bulk_create(a_creer, batch_size=1000)
+    request.session[f"verification_{group.pk}"] = inscriptions_mod.rapport_session(
+        lignes, decomptes)
+    return len(a_creer), updated, len(nouvelles)
 
 
 @login_required
@@ -390,12 +412,11 @@ def class_detail(request, pk):
             import_form = StudentImportForm(request.POST)
             if import_form.is_valid():
                 rows = import_form.parse()
-                _, updated, rapport = _save_candidates(group, rows, request.user)
+                _, updated, _ = _save_candidates(request, group, rows)
                 msg = f"{len(rows)} étudiant(s) importé(s)."
                 if updated:
                     msg += f" ({updated} nom(s) mis à jour par numéro)"
                 messages.success(request, msg)
-                _apres_import(request, group, rows, rapport)
                 return redirect("class_detail", pk=pk)
         elif "import_xlsx" in request.POST:
             xlsx_form = CandidateFileForm(request.POST, request.FILES)
@@ -411,13 +432,13 @@ def class_detail(request, pk):
                 if not rows:
                     messages.error(request, "Aucun candidat trouvé dans ce fichier.")
                     return redirect("class_detail", pk=pk)
-                created, updated, rapport = _save_candidates(group, rows, request.user)
-                messages.success(
-                    request,
-                    f"{len(rows)} candidat(s) importé(s) "
-                    f"({created} créé(s), {updated} mis à jour). "
-                    "Un QR code est disponible pour chacun.")
-                _apres_import(request, group, rows, rapport)
+                created, updated, fiches = _save_candidates(request, group, rows)
+                msg = (f"{created + updated} candidat(s) importé(s) "
+                       f"({created} créé(s), {updated} mis à jour). "
+                       "Un QR code est disponible pour chacun.")
+                if fiches:
+                    msg += f" {fiches} fiche(s) ajoutée(s) au registre des inscriptions."
+                messages.success(request, msg)
                 return redirect("class_detail", pk=pk)
         elif "ajouter_inscrits" in request.POST:
             trouves, inconnus = inscriptions_mod.chercher(
@@ -498,7 +519,8 @@ def class_detail(request, pk):
                                       .annotate(n=Count("students"))
                                       .filter(n__gt=0).order_by("name")),
                    "est_concours": concours is not None,
-                   "students_page": _page(request, group.students.all()),
+                   "students_page": _page(request, group.students.select_related("inscrit")),
+                   "avec_fiches": group.students.filter(inscrit__isnull=False).exists(),
                    "students_total": group.students.count()})
 
 

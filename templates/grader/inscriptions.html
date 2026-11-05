@@ -15,25 +15,38 @@
   </div>
 </header>
 
+{% if verification %}{% include "grader/_verification.html" %}{% endif %}
+
 {% if perms.grader.creer_epreuve %}
-<div class="card">
-  <h2>{% if modifie %}Modifier l'inscription de {{ modifie.nom_complet }}{% else %}Inscrire un étudiant{% endif %}</h2>
-  <form method="post" class="form-inscription" id="fiche-inscrit">{% csrf_token %}
-    {% if modifie %}<input type="hidden" name="modifier" value="{{ modifie.pk }}">{% endif %}
-    {{ form.non_field_errors }}
-    <div class="form-inscription__champs">
-      <div>{{ form.nom.label_tag }}{{ form.nom }}{{ form.nom.errors }}</div>
-      <div>{{ form.prenom.label_tag }}{{ form.prenom }}{{ form.prenom.errors }}</div>
-      <div>{{ form.numero.label_tag }}{{ form.numero }}{{ form.numero.errors }}</div>
-      <div>{{ form.cin.label_tag }}{{ form.cin }}{{ form.cin.errors }}</div>
-      <div>{{ form.date_naissance.label_tag }}{{ form.date_naissance }}{{ form.date_naissance.errors }}</div>
-      <div>{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>
-      <div class="form-inscription__large">{{ form.etablissement.label_tag }}{{ form.etablissement }}{{ form.etablissement.errors }}</div>
-    </div>
-    <span class="helptext"><b>Tous les champs sont obligatoires.</b> CIN : 8 chiffres (ou n° de passeport). Le QR code de la carte contient le n° d'inscription, le nom et le prénom — jamais la CIN.</span>
-    <p><button class="btn" name="inscrire" value="1" type="submit">{% if modifie %}Enregistrer{% else %}Inscrire et créer son QR code{% endif %}</button>
-      {% if modifie %}<a class="btn secondary" href="{% url 'inscriptions' %}">Annuler</a>{% endif %}</p>
-  </form>
+<div class="grid2 grid2--large">
+  <div class="card">
+    <h2>{% if modifie %}Modifier l'inscription de {{ modifie.nom_complet|default:modifie.numero }}{% else %}Inscrire un étudiant{% endif %}</h2>
+    <form method="post" class="form-inscription" id="fiche-inscrit">{% csrf_token %}
+      {% if modifie %}<input type="hidden" name="modifier" value="{{ modifie.pk }}">{% endif %}
+      {{ form.non_field_errors }}
+      <div class="form-inscription__champs">
+        <div>{{ form.numero.label_tag }}{{ form.numero }}{{ form.numero.errors }}</div>
+        <div>{{ form.nom.label_tag }}{{ form.nom }}{{ form.nom.errors }}</div>
+        <div>{{ form.prenom.label_tag }}{{ form.prenom }}{{ form.prenom.errors }}</div>
+        <div>{{ form.cin.label_tag }}{{ form.cin }}{{ form.cin.errors }}</div>
+        <div>{{ form.cin_lieu.label_tag }}{{ form.cin_lieu }}{{ form.cin_lieu.errors }}</div>
+        <div>{{ form.cin_date.label_tag }}{{ form.cin_date }}{{ form.cin_date.errors }}</div>
+        <div>{{ form.date_naissance.label_tag }}{{ form.date_naissance }}{{ form.date_naissance.errors }}</div>
+        <div>{{ form.centre.label_tag }}{{ form.centre }}{{ form.centre.errors }}</div>
+        <div>{{ form.salle.label_tag }}{{ form.salle }}{{ form.salle.errors }}</div>
+        <div>{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>
+        <div class="form-inscription__large">{{ form.etablissement.label_tag }}{{ form.etablissement }}{{ form.etablissement.errors }}</div>
+      </div>
+      <span class="helptext"><b>Facultatifs : centre, salle, e-mail et établissement.</b> CIN : 8 chiffres (ou n° de passeport). Le QR code de la carte contient le n° d'inscription, le nom et le prénom — jamais la CIN.</span>
+      <p><button class="btn" name="inscrire" value="1" type="submit">{% if modifie %}Enregistrer{% else %}Inscrire et créer son QR code{% endif %}</button>
+        {% if modifie %}<a class="btn secondary" href="{% url 'inscriptions' %}">Annuler</a>{% endif %}</p>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Importer la liste Excel</h2>
+    {% include "grader/_import_liste.html" with champ=fichier.file bouton="importer_liste" libelle="Remplir le registre" %}
+    <p class="helptext">Chaque ligne crée la fiche de son n°, ou complète celle qui existe. Une liste qui ne donne que des noms et des n° n'inscrit personne.</p>
+  </div>
 </div>
 {% endif %}
 
@@ -42,7 +55,7 @@
     <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
     <label for="id_q" class="visually-hidden">Rechercher un inscrit</label>
     <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
-           placeholder="Rechercher — nom, prénom, n° d'inscription, CIN, établissement ou e-mail">
+           placeholder="Rechercher — nom, prénom, n° d'inscription, CIN, centre, salle ou e-mail">
     {% if recherche %}
     <a class="recherche-etudiant__effacer" href="{% url 'inscriptions' %}"
        title="Effacer la recherche" aria-label="Effacer la recherche">
@@ -72,27 +85,29 @@
     </div>
     {% if not groupes %}<p class="helptext">Créez d'abord une classe ou un concours pour y ajouter des inscrits.</p>{% endif %}
     {% include "grader/_pagination.html" with page=page_inscrits label="Inscrits" querystring=querystring %}
-    <div class="table-wrap">
+    <div class="table-wrap table-wrap--ajuste">
       <table>
         <tr><th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="Tout cocher"></th>
-          <th>N° d'inscription</th><th>Nom et prénom</th><th>CIN</th><th>Né(e) le</th><th>Établissement</th><th>Classes / concours</th><th>QR</th><th></th></tr>
+          <th>N°</th><th>Nom et prénom</th><th>CIN</th><th>Lieu</th><th>Délivrée le</th><th>Né(e) le</th><th>Centre</th><th>Salle</th><th>Listes</th><th>QR</th><th></th></tr>
         {% for i in page_inscrits %}
         <tr class="ligne-lien">
-          <td class="col-choix"><input type="checkbox" name="choix" value="{{ i.pk }}" aria-label="Choisir {{ i.nom_complet }}"></td>
+          <td class="col-choix"><input type="checkbox" name="choix" value="{{ i.pk }}" aria-label="Choisir {{ i.nom_complet|default:i.numero }}"></td>
           <td>{% if user.is_superuser or i.cree_par_id == user.pk %}<a class="ligne-lien__cible ligne-lien__nom" href="?modifier={{ i.pk }}#fiche-inscrit"><b>{{ i.numero }}</b></a>{% else %}<b>{{ i.numero }}</b>{% endif %}</td>
-          <td><b>{{ i.nom }}</b> {{ i.prenom }}{% if i.email %}<span class="helptext">{{ i.email }}</span>{% endif %}
-            {% if not i.fiche_complete %}<span class="badge warn" title="Inscrit avant : CIN, date de naissance, e-mail ou établissement manquant">fiche à compléter</span>{% endif %}</td>
+          <td><b>{{ i.nom|default:"—" }}</b> {{ i.prenom }}{% if i.email %}<span class="helptext">{{ i.email }}</span>{% endif %}{% if i.etablissement %}<span class="helptext">{{ i.etablissement }}</span>{% endif %}
+            {% if not i.fiche_complete %}<span class="badge warn" title="Nom, CIN, lieu ou date de délivrance, ou date de naissance manquant">fiche à compléter</span>{% endif %}</td>
           <td>{{ i.cin|default:"—" }}</td>
+          <td>{{ i.cin_lieu|default:"—" }}</td>
+          <td>{{ i.cin_date|date:"d/m/Y"|default:"—" }}</td>
           <td>{{ i.date_naissance|date:"d/m/Y"|default:"—" }}</td>
-          <td>{{ i.etablissement|default:"—" }}</td>
-          <td>{% if i.n_places %}{{ i.n_places }}{% else %}<span class="helptext">—</span>{% endif %}</td>
+          <td>{{ i.centre|default:"—" }}</td>
+          <td class="cellule--serree">{{ i.salle|default:"—" }}</td>
+          <td title="Classes et concours où figure cet étudiant">{% if i.n_places %}{{ i.n_places }}{% else %}<span class="helptext">—</span>{% endif %}</td>
           <td><img class="qr-mini" src="{% url 'inscrit_qr' i.pk %}" alt="QR {{ i.nom_complet }}" width="46" height="46" loading="lazy"></td>
           <td class="actions-ligne">
             <a class="btn small secondary" href="{% url 'inscriptions_cartes' %}?choix={{ i.pk }}" target="_blank">Carte</a>
             {% if user.is_superuser or i.cree_par_id == user.pk %}
-            <a class="btn small secondary" href="?modifier={{ i.pk }}#fiche-inscrit">Modifier</a>
             <button class="btn small danger" name="supprimer" value="{{ i.pk }}" type="submit"
-                    data-confirmer="Retirer {{ i.nom_complet }} du registre ? Ses classes et concours le gardent.">✕</button>
+                    data-confirmer="Retirer {{ i.nom_complet|default:i.numero }} du registre ? Ses classes et concours le gardent.">✕</button>
             {% endif %}
           </td>
         </tr>
@@ -104,7 +119,7 @@
     {% elif recherche %}
   <p>Aucun inscrit ne correspond à « {{ recherche }} ».</p>
   {% else %}
-  <p>Aucun étudiant inscrit pour l'instant : inscrivez-en un ci-dessus, ou importez une liste.</p>
+  <p>Aucun étudiant inscrit pour l'instant : inscrivez-en un ci-dessus, ou importez la liste Excel.</p>
   {% endif %}
 </div>
 {% endblock %}

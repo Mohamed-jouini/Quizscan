@@ -1,0 +1,40 @@
+{# Rapport de la dernière liste importée, sur la page d'une classe et sur celle du registre. #}
+{% with d=verification.decomptes %}
+<div class="card verif">
+  <div class="card__head">
+    <h2>Vérification par le registre des inscriptions</h2>
+    <form class="inline" method="post">{% csrf_token %}
+      <button class="btn small secondary" name="fermer_verification" value="1" type="submit">Fermer</button>
+    </form>
+  </div>
+  <p class="helptext helptext--serre">Dernière liste importée : {{ verification.total }} ligne(s), comparées par n° d'inscription au registre.</p>
+  <div class="verif__chiffres">
+    {% if d.ajoute %}<span class="verif__chiffre verif__chiffre--ok"><b>{{ d.ajoute }}</b> ajoutée(s) au registre</span>{% endif %}
+    <span class="verif__chiffre verif__chiffre--ok"><b>{{ d.conforme }}</b> conforme(s)</span>
+    {% if d.a_completer %}<span class="verif__chiffre verif__chiffre--alerte"><b>{{ d.a_completer }}</b> fiche(s) à compléter</span>{% endif %}
+    <span class="verif__chiffre verif__chiffre--alerte"><b>{{ d.nom_different }}</b> nom différent</span>
+    <span class="verif__chiffre verif__chiffre--alerte"><b>{{ d.non_inscrit }}</b> non inscrit(s)</span>
+    <span class="verif__chiffre"><b>{{ d.sans_numero }}</b> sans n°</span>
+    {% if d.doublon %}<span class="verif__chiffre verif__chiffre--alerte"><b>{{ d.doublon }}</b> n° en double</span>{% endif %}
+  </div>
+  {% if verification.anomalies %}
+  <div class="table-wrap">
+    <table>
+      <tr><th>N°</th><th>Dans le fichier</th><th>Au registre</th><th>Constat</th></tr>
+      {% for a in verification.anomalies %}
+      <tr>
+        <td>{{ a.numero|default:"—" }}</td>
+        <td>{% if a.nom or a.prenom %}{{ a.nom }} {{ a.prenom }}{% else %}—{% endif %}</td>
+        <td>{{ a.registre|default:"—" }}</td>
+        <td>{% if a.etat == "nom_different" %}<span class="badge warn">Nom différent — identité du registre retenue</span>{% elif a.etat == "non_inscrit" %}<span class="badge bad">N° absent du registre</span>{% elif a.etat == "sans_numero" %}<span class="badge">Sans n° : non vérifiable</span>{% elif a.etat == "doublon" %}<span class="badge warn">N° en double</span>{% elif a.etat == "ajoute" %}<span class="badge ok">Ajoutée au registre</span>{% endif %}
+          {% for remarque in a.remarques %}<span class="helptext helptext--serre">{{ remarque }}</span>{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% if verification.n_anomalies > verification.anomalies|length %}<p class="helptext">… et {{ verification.n_anomalies|add:"-500" }} autre(s).</p>{% endif %}
+  {% else %}
+  <p><span class="badge ok">Tous les candidats figurent au registre, sous le même nom.</span></p>
+  {% endif %}
+</div>
+{% endwith %}

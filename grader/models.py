@@ -72,7 +72,13 @@ class Inscrit(models.Model):
     cin = models.CharField("n° de CIN", max_length=20, blank=True, db_index=True,
                            help_text="Carte d'identité nationale (8 chiffres) ou "
                                      "n° de passeport.")
+    cin_lieu = models.CharField("lieu de délivrance de la CIN", max_length=80, blank=True)
+    cin_date = models.DateField("date de délivrance de la CIN", null=True, blank=True)
     date_naissance = models.DateField("date de naissance", null=True, blank=True)
+    # Là où il compose : remplacés par chaque nouvelle liste importée.
+    centre = models.CharField("centre", max_length=150, blank=True,
+                              help_text="Centre d'examen.")
+    salle = models.CharField("salle", max_length=60, blank=True)
     etablissement = models.CharField("établissement", max_length=150, blank=True,
                                      help_text="Établissement d'origine.")
     email = models.EmailField("adresse e-mail", blank=True)
@@ -88,13 +94,16 @@ class Inscrit(models.Model):
 
     @property
     def nom_complet(self):
-        return f"{self.nom} {self.prenom}"
+        return f"{self.nom} {self.prenom}".strip()
 
     @property
     def fiche_complete(self):
-        """Tous les champs de l'inscription renseignés (obligatoires depuis
-        le 30 octobre 2026 ; une fiche plus ancienne se complète)."""
-        return all((self.cin, self.date_naissance, self.email, self.etablissement))
+        """L'identité de la liste officielle renseignée : le nom, la CIN avec
+        son lieu et sa date de délivrance, la date de naissance. Le centre et
+        la salle peuvent venir plus tard ; l'e-mail et l'établissement ne sont
+        pas dans cette liste (facultatifs depuis le 5 novembre 2026)."""
+        return all((self.nom, self.prenom, self.cin, self.cin_lieu, self.cin_date,
+                    self.date_naissance))
 
     def __str__(self):
         return f"{self.numero} — {self.nom_complet}"
@@ -118,7 +127,7 @@ class Student(models.Model):
 
     @property
     def full_name(self):
-        return f"{self.last_name} {self.first_name}"
+        return f"{self.last_name} {self.first_name}".strip()
 
     def __str__(self):
         return self.full_name

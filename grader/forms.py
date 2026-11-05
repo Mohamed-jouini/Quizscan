@@ -37,41 +37,54 @@ class ClassGroupForm(forms.ModelForm):
             "aria-label": "Nom de la nouvelle classe"})}
 
 
+def _texte(exemple, **attrs):
+    """Champ de texte du registre : sens d'écriture suivi de ce qui est saisi
+    (les noms et les lieux s'écrivent souvent en arabe)."""
+    return forms.TextInput(attrs={"placeholder": exemple, "autocomplete": "off",
+                                  "dir": "auto", **attrs})
+
+
+def _date_passee():
+    # « max » : sans lui, Chrome laisse six chiffres à l'année au clavier.
+    return forms.DateInput(attrs={"type": "date", "min": "1900-01-01", "max": "9999-12-31"},
+                           format="%Y-%m-%d")
+
+
 class InscritForm(forms.ModelForm):
-    """Inscription d'un étudiant au registre de l'établissement."""
+    """Inscription d'un étudiant au registre de l'établissement : les colonnes
+    de la liste officielle de l'institut (voir importers.modele_candidats_xlsx)."""
 
     class Meta:
         model = Inscrit
-        fields = ["nom", "prenom", "numero", "cin", "date_naissance", "email",
-                  "etablissement"]
+        fields = ["numero", "nom", "prenom", "cin", "cin_lieu", "cin_date",
+                  "date_naissance", "centre", "salle", "email", "etablissement"]
+        labels = {"cin_lieu": "Lieu de délivrance", "cin_date": "Date de délivrance"}
         widgets = {
-            "nom": forms.TextInput(attrs={"placeholder": "BEN SALEM",
-                                          "autocomplete": "off"}),
-            "prenom": forms.TextInput(attrs={"placeholder": "Samia",
-                                             "autocomplete": "off"}),
-            "numero": forms.TextInput(attrs={"placeholder": "104523",
-                                             "autocomplete": "off"}),
-            "cin": forms.TextInput(attrs={"placeholder": "09876543",
-                                          "autocomplete": "off",
-                                          "inputmode": "numeric"}),
-            "date_naissance": forms.DateInput(attrs={"type": "date"},
-                                              format="%Y-%m-%d"),
+            "numero": _texte("104523"),
+            "nom": _texte("BEN SALEM"),
+            "prenom": _texte("Samia"),
+            "cin": _texte("09876543", inputmode="numeric"),
+            "cin_lieu": _texte("Tunis"),
+            "cin_date": _date_passee(),
+            "date_naissance": _date_passee(),
+            "centre": _texte("Lycée pilote de Sfax"),
+            "salle": _texte("Salle 12"),
             "email": forms.EmailInput(attrs={"placeholder": "prenom.nom@exemple.tn",
                                              "autocomplete": "off"}),
-            "etablissement": forms.TextInput(attrs={"placeholder": "Lycée pilote de Sfax",
-                                                    "autocomplete": "off"}),
+            "etablissement": _texte("Faculté de droit de Tunis"),
         }
-        help_texts = {"cin": "", "etablissement": ""}
+        help_texts = {"cin": "", "centre": "", "etablissement": ""}
         error_messages = {"numero": {
             "unique": "Ce n° d'inscription est déjà attribué (voir la liste)."}}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Inscription complète obligatoire (demande de l'utilisateur, 30
-        # octobre 2026) : nom, prénom, n°, CIN, date de naissance, e-mail et
-        # établissement. Le modèle les garde facultatifs pour les fiches
+        # L'identité de la liste officielle est obligatoire (demande de
+        # l'utilisateur, 5 novembre 2026 ; e-mail et établissement l'étaient
+        # depuis le 30 octobre). Le centre et la salle viennent souvent après
+        # l'inscription. Le modèle garde tout facultatif pour les fiches
         # inscrites avant, qui se complètent par « Modifier ».
-        for nom in ("cin", "date_naissance", "email", "etablissement"):
+        for nom in ("cin", "cin_lieu", "cin_date", "date_naissance"):
             self.fields[nom].required = True
             self.fields[nom].error_messages["required"] = "Champ obligatoire."
 
@@ -91,8 +104,9 @@ class InscritForm(forms.ModelForm):
     def clean_cin(self):
         """CIN (8 chiffres) ou passeport : lettres et chiffres, sans espaces ;
         une même CIN ne peut appartenir qu'à un seul inscrit."""
-        cin = "".join(self.cleaned_data.get("cin", "").split()).upper()
-        if not cin.isalnum() or not 6 <= len(cin) <= 20:
+        from .inscriptions import cin_propre, cin_valide
+        cin = cin_propre(self.cleaned_data.get("cin", ""))
+        if not cin_valide(cin):
             raise forms.ValidationError(
                 "N° de CIN invalide : 8 chiffres (ou n° de passeport).")
         autre = Inscrit.objects.filter(cin=cin).exclude(pk=self.instance.pk).first()
@@ -101,15 +115,28 @@ class InscritForm(forms.ModelForm):
                 f"Cette CIN est déjà celle de {autre.nom_complet} (n° {autre.numero}).")
         return cin
 
-    def clean_date_naissance(self):
+    def _date_vraisemblable(self, champ, libelle):
         import datetime
-        date = self.cleaned_data.get("date_naissance")
+        date = self.cleaned_data.get(champ)
         if date and not datetime.date(1900, 1, 1) <= date <= datetime.date.today():
-            raise forms.ValidationError("Date de naissance invraisemblable.")
+            raise forms.ValidationError(f"{libelle} invraisemblable.")
         return date
 
-    def clean_etablissement(self):
-        return " ".join(self.cleaned_data.get("etablissement", "").split())
+    def clean_date_naissance(self):
+        return self._date_vraisemblable("date_naissance", "Date de naissance")
+
+    def clean_cin_date(self):
+        return self._date_vraisemblable("cin_date", "Date de délivrance")
+
+    def clean(self):
+        donnees = super().clean()
+        for champ in ("cin_lieu", "centre", "salle", "etablissement"):
+            if donnees.get(champ):
+                donnees[champ] = " ".join(donnees[champ].split())
+        naissance, delivrance = donnees.get("date_naissance"), donnees.get("cin_date")
+        if naissance and delivrance and delivrance < naissance:
+            self.add_error("cin_date", "La délivrance ne peut pas précéder la naissance.")
+        return donnees
 
 
 class EnvoiMultiple(forms.FileInput):
@@ -183,30 +210,29 @@ class StudentImportForm(forms.Form):
                   "(les mots en MAJUSCULES forment le nom). Le n° est optionnel.")
 
     def parse(self):
-        return [importers.split_name_line(line)
+        return [importers.fiche_simple(*importers.split_name_line(line))
                 for line in self.cleaned_data["text"].splitlines() if line.strip()]
 
 
 class CandidateFileForm(forms.Form):
-    """Import d'une liste de candidats depuis un fichier existant
-    (Excel, CSV, Word ou PDF) — colonnes Nom, Prénom, N° d'inscription."""
+    """Import d'une liste de candidats depuis un fichier existant : la liste
+    officielle de l'institut (Excel), ou Excel, CSV, Word, PDF à colonnes
+    Nom, Prénom, N° d'inscription."""
     file = forms.FileField(
         label="Fichier (Excel, CSV, Word ou PDF)",
         widget=forms.ClearableFileInput(
             attrs={"accept": ",".join(importers.CANDIDATE_EXTS)}),
-        help_text="Colonnes attendues : Nom, Prénom, N° d'inscription (voir "
-                  "modele_candidats.xlsx). La première ligne peut être un en-tête "
-                  "(détecté automatiquement). Word : un tableau, ou une ligne par "
-                  "candidat ; PDF : une ligne par candidat.")
+        help_text="Les colonnes se reconnaissent à leur intitulé, dans n'importe quel "
+                  "ordre. Un titre peut précéder la ligne d'intitulés.")
 
     def clean_file(self):
         return _controler_import(self.cleaned_data["file"], importers.CANDIDATE_EXTS,
                                  ".xlsx, .csv, .docx, .pdf ou .txt")
 
     def parse(self):
-        """Retourne une liste de tuples (nom, prénom, numéro)."""
+        """Retourne les lignes du fichier : voir importers.rows_to_fiches."""
         f = self.cleaned_data["file"]
-        return importers.parse_candidates_file(f.name, f.read())
+        return importers.parse_fiches_file(f.name, f.read())
 
 
 # Ancien nom (import Excel seul) conservé pour compatibilité

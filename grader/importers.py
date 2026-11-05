@@ -19,6 +19,7 @@ astérisque ou donnée sur une ligne « Réponse : B » :
 Une question sans choix est importée comme question manuscrite.
 """
 import csv
+import datetime
 import io
 import re
 import unicodedata
@@ -156,27 +157,116 @@ def _ext(name):
 
 # ------------------------------------------------------------------ candidats
 
-_LAST = {"nom", "lastname", "last name", "last", "nom de famille", "اللقب"}
-_FIRST = {"prenom", "firstname", "first name", "first", "الاسم"}
-_NUM = {"numero", "numero d inscription", "n", "n inscription", "no", "num",
-        "matricule", "inscription", "numero inscription", "id", "identifiant",
-        "n d inscription", "رقم التسجيل", "الرقم"}
-# Colonnes facultatives du registre des inscriptions. Une colonne « CIN »
-# seule (sans colonne de n° d'inscription) reste lue comme le n° : c'était
-# le cas avant que la CIN ait son propre champ, les fichiers existants
-# donnent le même résultat.
-_CIN = {"cin", "n cin", "numero cin", "num cin", "cin n", "carte d identite",
-        "n carte d identite", "numero de cin", "رقم بطاقة التعريف", "بطاقة التعريف"}
-_NAISSANCE = {"date de naissance", "date naissance", "naissance", "ne le",
-              "nee le", "ne e le", "ddn", "تاريخ الولادة", "تاريخ الميلاد"}
-_ETAB = {"etablissement", "etablissement d origine", "ecole", "lycee", "college",
-         "faculte", "institut", "المؤسسة", "المعهد", "المدرسة"}
-_MAIL = {"email", "e mail", "mail", "adresse mail", "adresse email",
-         "adresse e mail", "courriel", "البريد الالكتروني", "البريد الإلكتروني"}
-_EXTRAS = {"cin": _CIN, "naissance": _NAISSANCE, "etablissement": _ETAB,
-           "email": _MAIL}
-_FULL = {"nom et prenom", "nom prenom", "nom complet", "etudiant", "candidat",
-         "الاسم واللقب", "اللقب والاسم"}
+def _entetes(*textes):
+    """Intitulés sous la forme où norm() les rend (« الإصدار » -> « الاصدار »)."""
+    return {norm(t) for t in textes}
+
+
+_LAST = _entetes("nom", "lastname", "last name", "last", "nom de famille", "اللقب")
+_FIRST = _entetes("prenom", "firstname", "first name", "first", "الاسم")
+_NUM = _entetes("numero", "numero d inscription", "n", "n inscription", "no", "num",
+                "matricule", "inscription", "numero inscription", "id", "identifiant",
+                "n d inscription", "رقم التسجيل", "الرقم", "عدد الترسيم", "رقم الترسيم",
+                "ع الترسيم", "الترسيم", "عدد التسجيل")
+# Colonnes de la fiche au registre, celles de la liste officielle de
+# l'institut. Une colonne « CIN » seule (sans colonne de n° d'inscription)
+# reste lue comme le n° : c'était le cas avant que la CIN ait son propre champ,
+# les fichiers existants donnent le même résultat.
+_CIN = _entetes("cin", "n cin", "numero cin", "num cin", "cin n", "carte d identite",
+                "n carte d identite", "numero de cin", "رقم بطاقة التعريف",
+                "بطاقة التعريف", "عدد ب ت و", "ع ب ت و", "ب ت و", "عدد بطاقة التعريف",
+                "عدد بطاقة التعريف الوطنية", "رقم بطاقة التعريف الوطنية",
+                "بطاقة التعريف الوطنية")
+_CIN_LIEU = _entetes("مكانها", "مكان الإصدار", "مكان إصدارها", "جهة الإصدار", "lieu",
+                     "lieu de delivrance", "lieu delivrance", "lieu cin", "delivree a")
+_CIN_DATE = _entetes("تاريخ الإصدار", "تاريخ إصدارها", "تاريخها", "date de delivrance",
+                     "date delivrance", "date cin", "delivree le")
+_NAISSANCE = _entetes("date de naissance", "date naissance", "naissance", "ne le",
+                      "nee le", "ne e le", "ddn", "تاريخ الولادة", "تاريخ الميلاد")
+_CENTRE = _entetes("المركز", "مركز الامتحان", "مركز الاختبار", "centre",
+                   "centre d examen", "centre examen")
+_SALLE = _entetes("القاعة", "قاعة", "قاعة الامتحان", "salle", "salle d examen",
+                  "n salle", "numero de salle")
+_ETAB = _entetes("etablissement", "etablissement d origine", "ecole", "lycee", "college",
+                 "faculte", "institut", "المؤسسة", "المعهد", "المدرسة")
+_MAIL = _entetes("email", "e mail", "mail", "adresse mail", "adresse email",
+                 "adresse e mail", "courriel", "البريد الالكتروني")
+_EXTRAS = {"cin": _CIN, "cin_lieu": _CIN_LIEU, "cin_date": _CIN_DATE,
+           "naissance": _NAISSANCE, "centre": _CENTRE, "salle": _SALLE,
+           "etablissement": _ETAB, "email": _MAIL}
+_FULL = _entetes("nom et prenom", "nom prenom", "prenom et nom", "prenom nom",
+                 "nom complet", "etudiant", "candidat")
+
+_ARABE = re.compile(r"[؀-ۿ]")
+# Mots qui appartiennent au nom de famille avec le mot qui les suit :
+# « بن سالم », « بو علي », « عبد الله », « الحاج علي ».
+_PARTICULES = _entetes("بن", "ابن", "بنت", "بو", "أبو", "عبد", "حاج", "الحاج")
+
+
+def _colonne_nom_complet(entete):
+    """Une seule colonne pour le nom et le prénom ? Tolère les fautes de frappe
+    de l'intitulé (« الاسم ة اللقب » dans la liste de l'institut). Retourne
+    « prenom » ou « nom » selon ce qui vient en premier, sinon None."""
+    if "اسم" in entete and "لقب" in entete:
+        return "prenom" if entete.index("اسم") < entete.index("لقب") else "nom"
+    if entete in _FULL:
+        return "prenom" if entete.startswith("prenom") else "nom"
+    return None
+
+
+def decouper_nom_complet(texte, prenom_d_abord=False):
+    """Le contenu d'une colonne unique -> (nom, prénom, numéro éventuel).
+
+    En arabe, pas de majuscules pour reconnaître le nom de famille : c'est le
+    dernier mot quand la colonne donne le prénom d'abord (« الاسم و اللقب »), le
+    premier sinon, avec ses particules. Toujours au moins un mot pour le
+    prénom : « محمد علي بن سالم » -> « بن سالم », « محمد علي »."""
+    if not _ARABE.search(texte) or any(sep in texte for sep in ";\t,"):
+        return split_name_line(texte)
+    mots = texte.split()
+    numero = ""
+    if len(mots) > 1 and re.fullmatch(r"\d{3,}", mots[-1]):
+        numero = mots.pop()
+    elif len(mots) > 1 and re.fullmatch(r"\d{3,}", mots[0]):
+        numero = mots.pop(0)
+    if len(mots) < 2:
+        return " ".join(mots), "", numero
+    if prenom_d_abord:
+        debut = len(mots) - 1
+        while debut > 1 and norm(mots[debut - 1]) in _PARTICULES:
+            debut -= 1
+        return " ".join(mots[debut:]), " ".join(mots[:debut]), numero
+    fin = 1
+    while fin < len(mots) - 1 and norm(mots[fin - 1]) in _PARTICULES:
+        fin += 1
+    return " ".join(mots[:fin]), " ".join(mots[fin:]), numero
+
+
+_CHIFFRES_LATINS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+_FORMATS_DATE = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y/%m/%d")
+
+
+def chiffres_latins(texte):
+    """« ٧٦١ » -> « 761 » : les chiffres saisis au clavier arabe."""
+    return str(texte or "").translate(_CHIFFRES_LATINS)
+
+
+def lire_date(texte):
+    """Date d'une cellule (date d'Excel, « 17/12/2024 », « 2024-12-17 » ou n° de
+    série d'Excel quand la cellule n'est pas au format date) -> date, ou None."""
+    texte = chiffres_latins(texte).strip()
+    if not texte:
+        return None
+    if re.fullmatch(r"\d{5}(\.0+)?", texte):
+        return datetime.date(1899, 12, 30) + datetime.timedelta(days=int(float(texte)))
+    # « 2003-01-03 00:00:00 » : une date d'Excel passée par _cell()
+    texte = texte.split(" ")[0].split("T")[0]
+    for forme in _FORMATS_DATE:
+        try:
+            return datetime.datetime.strptime(texte, forme).date()
+        except ValueError:
+            continue
+    return None
 
 
 def split_name_line(line):
@@ -213,66 +303,108 @@ def rows_to_candidates(rows):
     return [(f["nom"], f["prenom"], f["numero"]) for f in rows_to_fiches(rows)]
 
 
+def fiche_simple(nom, prenom, numero):
+    """Une ligne qui ne porte que le nom et le n° (copier-coller, Word, PDF)."""
+    return dict({"nom": nom, "prenom": prenom, "numero": numero},
+                **{cle: "" for cle in _EXTRAS})
+
+
+def _colonnes_de(ligne):
+    """Colonnes reconnues d'une ligne d'intitulés : {clé: indice}. La première
+    occurrence l'emporte si un intitulé revient."""
+    colonnes = {}
+    for i, cellule in enumerate(ligne):
+        h = norm(cellule)
+        if not h:
+            continue
+        cle = None
+        if h in _LAST:
+            cle = "last"
+        elif h in _FIRST:
+            cle = "first"
+        elif h in _NUM:
+            cle = "number"
+        elif _colonne_nom_complet(h):
+            cle = "full"
+        else:
+            cle = next((c for c, noms in _EXTRAS.items() if h in noms), None)
+        if cle and cle not in colonnes:
+            colonnes[cle] = i
+            if cle == "full":
+                colonnes["prenom_d_abord"] = _colonne_nom_complet(h) == "prenom"
+    return colonnes
+
+
+def _trouver_entete(rows):
+    """(rang de la ligne d'intitulés, colonnes). Un titre peut la précéder
+    (« قائمة المترشحين ») : deux colonnes reconnues dans les 10 premières lignes
+    suffisent, ou une seule en première ligne. (None, {}) : pas d'en-tête."""
+    for rang, ligne in enumerate(rows[:10]):
+        colonnes = _colonnes_de(ligne)
+        if len(colonnes.keys() - {"prenom_d_abord"}) >= 2:
+            return rang, colonnes
+    colonnes = _colonnes_de(rows[0])
+    return (0, colonnes) if colonnes else (None, {})
+
+
+def _a_defaut(colonnes, cle, indice, nb_colonnes):
+    """Une colonne de nom sans intitulé connu reste à sa place habituelle, si
+    aucune autre colonne reconnue ne l'occupe (« Nom », « Prénoms », « N° »)."""
+    if cle not in colonnes and indice < nb_colonnes and indice not in colonnes.values():
+        colonnes[cle] = indice
+
+
 def rows_to_fiches(rows):
-    """Lignes de tableau -> [{nom, prenom, numero, cin, naissance,
-    etablissement, email}] ; les colonnes facultatives sont reconnues par
-    leur en-tête (vides sinon)."""
+    """Lignes de tableau -> [{nom, prenom, numero, cin, cin_lieu, cin_date,
+    naissance, centre, salle, etablissement, email}] ; les colonnes sont
+    reconnues par leur intitulé (vides sinon). Sans intitulé : nom, prénom, n°.
+
+    Avec des intitulés mais aucun pour le nom ni pour le n°, on refuse plutôt
+    que de deviner : la liste de l'institut, dont seule la date de naissance
+    était reconnue, donnait le n° pour nom et la CIN pour n°."""
     if not rows:
         return []
-    header = [norm(c) for c in rows[0]]
-    idx = {"last": 0, "first": 1, "number": 2}
-    extras = {}
-    full_col = None
-    has_header = False
-    for i, h in enumerate(header):
-        if h in _LAST:
-            idx["last"] = i; has_header = True
-        elif h in _FIRST:
-            idx["first"] = i; has_header = True
-        elif h in _NUM:
-            idx["number"] = i; has_header = True
-        elif h in _FULL:
-            full_col = i; has_header = True
-        else:
-            for cle, noms in _EXTRAS.items():
-                if h in noms:
-                    extras[cle] = i; has_header = True
-    found = _found(header)
-    if "cin" in extras and "number" not in found:
-        # ancien usage : la CIN tient lieu de n° d'inscription
-        idx["number"] = extras["cin"]
-        found.add("number")
+    rang, colonnes = _trouver_entete(rows)
+    has_header = rang is not None
+    donnees = rows[rang + 1:] if has_header else rows
+    if not has_header:
+        colonnes = {"last": 0, "first": 1, "number": 2}
+    elif not colonnes.keys() & {"last", "first", "full", "number", "cin"}:
+        raise ImportError_(
+            "Colonnes non reconnues : la première ligne du fichier doit nommer au "
+            "moins le n° d'inscription (عدد الترسيم) ou le nom (الاسم و اللقب).")
+    if "full" not in colonnes and colonnes.keys() & {"last", "first"}:
+        nb_colonnes = max(len(r) for r in rows)
+        _a_defaut(colonnes, "last", 0, nb_colonnes)
+        _a_defaut(colonnes, "first", 1, nb_colonnes)
+        _a_defaut(colonnes, "number", 2, nb_colonnes)
+    extras = {cle: colonnes.get(cle) for cle in _EXTRAS}
+    if "cin" in colonnes and "number" not in colonnes:
+        # ancien usage : la CIN tient lieu de n° d'inscription. Elle n'est pas
+        # lue en plus comme CIN : sans vrai n°, pas de fiche au registre.
+        colonnes["number"] = colonnes["cin"]
+        extras["cin"] = None
+    plein = colonnes.get("full") if not colonnes.keys() & {"last", "first"} else None
     out = []
-    for r in (rows[1:] if has_header else rows):
+    for r in donnees:
         def col(i):
             return r[i].strip() if i is not None and i < len(r) else ""
-        if full_col is not None and not ({"last", "first"} & found):
+        if plein is not None:
             # une seule colonne « Nom et prénom »
-            last, first, number = split_name_line(col(full_col))
-            if "number" in found:
-                number = col(idx["number"]) or number
+            last, first, number = decouper_nom_complet(
+                col(plein), colonnes.get("prenom_d_abord", False))
+            number = col(colonnes.get("number")) or number
         elif not has_header and len([c for c in r if c]) == 1:
             last, first, number = split_name_line(next(c for c in r if c))
         else:
-            last, first, number = col(idx["last"]), col(idx["first"]), col(idx["number"])
+            last, first, number = (col(colonnes.get("last")), col(colonnes.get("first")),
+                                   col(colonnes.get("number")))
         if last or first or number:
             fiche = {"nom": last, "prenom": first, "numero": number}
-            for cle in _EXTRAS:
-                fiche[cle] = col(extras.get(cle))
+            for cle, indice in extras.items():
+                fiche[cle] = col(indice)
             out.append(fiche)
     return out
-
-
-def _found(header):
-    found = set()
-    for h in header:
-        if h in _LAST:
-            found.add("last")
-        elif h in _FIRST:
-            found.add("first")
-        elif h in _NUM:
-            found.add("number")
-    return found
 
 
 def parse_candidates_file(name, data):
@@ -280,10 +412,36 @@ def parse_candidates_file(name, data):
     return [(f["nom"], f["prenom"], f["numero"]) for f in parse_fiches_file(name, data)]
 
 
+def modele_candidats_xlsx():
+    """La liste modèle à remplir : les colonnes de la liste officielle de
+    l'institut, de droite à gauche, avec deux lignes d'exemple inventées."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "المترشحون"
+    ws.sheet_view.rightToLeft = True
+    ws.append(["عدد الترسيم", "الاسم و اللقب", "عدد ب ت و", "مكانها", "تاريخ الإصدار",
+               "تاريخ الولادة", "المركز", "القاعة"])
+    for ligne in ((1001, "سامي بن تجربة", "01234567", "تونس", datetime.date(2020, 3, 2),
+                   datetime.date(2001, 5, 14), "معهد المثال", "قاعة عدد 1"),
+                  (1002, "ليلى المثال", "07654321", "صفاقس", datetime.date(2021, 9, 20),
+                   datetime.date(2000, 11, 3), "معهد المثال", "قاعة عدد 2")):
+        ws.append(list(ligne))
+    for rang in range(2, ws.max_row + 1):
+        ws.cell(rang, 3).number_format = "@"     # la CIN garde son zéro de tête
+        for colonne in (5, 6):
+            ws.cell(rang, colonne).number_format = "dd/mm/yyyy"
+    for colonne, largeur in zip("ABCDEFGH", (12, 26, 12, 12, 14, 14, 26, 14)):
+        ws.column_dimensions[colonne].width = largeur
+    tampon = io.BytesIO()
+    wb.save(tampon)
+    return tampon.getvalue()
+
+
 def parse_fiches_file(name, data):
-    """Comme parse_candidates_file, avec les colonnes facultatives du registre
-    (CIN, date de naissance, établissement, e-mail) quand le fichier est un
-    tableau : [{nom, prenom, numero, cin, naissance, etablissement, email}]."""
+    """Comme parse_candidates_file, avec les colonnes de la fiche au registre
+    (CIN, lieu et date de délivrance, naissance, centre, salle, établissement,
+    e-mail) quand le fichier est un tableau : voir rows_to_fiches."""
     ext = _ext(name)
     if ext in (".xlsx", ".xlsm"):
         return rows_to_fiches(_xlsx_rows(data))
@@ -306,9 +464,7 @@ def parse_fiches_file(name, data):
     # une première ligne d'en-tête (« Nom Prénom N° ») est ignorée
     if rows and norm(rows[0][0]) in _LAST | _FULL:
         rows = rows[1:]
-    return [dict({"nom": r[0], "prenom": r[1], "numero": r[2]},
-                 **{cle: "" for cle in _EXTRAS})
-            for r in rows if r[0] or r[1]]
+    return [fiche_simple(*r[:3]) for r in rows if r[0] or r[1]]
 
 
 # ------------------------------------------------------------------ questions

@@ -31,6 +31,7 @@ urlpatterns = [
     path("inscriptions/", vi.inscriptions, name="inscriptions"),
     path("inscriptions/<int:pk>/qr.png", vi.inscrit_qr, name="inscrit_qr"),
     path("inscriptions/cartes.pdf", vi.inscriptions_cartes, name="inscriptions_cartes"),
+    path("inscriptions/modele_candidats.xlsx", vi.modele_candidats, name="modele_candidats"),
     path("communiques/", vi.communiques, name="communiques"),
     path("quiz/<int:pk>/publication/", vi.quiz_publication, name="quiz_publication"),
     # espace public (sans compte)
