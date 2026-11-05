@@ -27,11 +27,13 @@ import cv2
 import pymupdf
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from grader import layout as L, services
-from grader.models import ClassGroup, Question, Quiz, Student
+from grader import layout as L, services, sheet_pdf
+from grader.models import ClassGroup, Inscrit, Question, Quiz, Student
 from test_commun import enseignant_complet
 from test_e2e import fill_sheet, mm2px, render_page, simulate_scan
 
@@ -102,6 +104,40 @@ def main():
     for r, milieu in ((sur_talon[0], L.PAGE_W / 2), (dans_bande[0], bande[0] + bande[2] / 2)):
         assert abs((r.x0 + r.x1) / 2 / PT_PAR_MM - milieu) < 1.5, (r, milieu)
     print("  copies à talon : nom et n° seulement au-dessus du trait de coupe OK")
+
+    # ---- sous le n° : la CIN et la salle de la fiche du registre (5 novembre 2026)
+    Inscrit.objects.filter(numero="TAL104501").delete()
+    amri = groupe.students.get(last_name="AMRI")
+    amri.inscrit = Inscrit.objects.create(numero="TAL104501", nom="AMRI", prenom="Sana",
+                                          cin="08870001", salle="B12")
+    amri.save(update_fields=["inscrit"])
+    disposition = quiz.layout_json
+    c.post(reverse("quiz_detail", args=[quiz.pk]), {"generate_pdf": "1"})
+    quiz.refresh_from_db()
+    assert quiz.layout_json == disposition, "la zone lue a bougé"
+    doc = pymupdf.open(stream=open(quiz.sheet_pdf.path, "rb").read(), filetype="pdf")
+    for texte in ("CIN 08870001", "Salle B12", "Page 1 / 1"):
+        r = doc[0].search_for(texte)
+        assert len(r) == 1 and r[0].y1 / PT_PAR_MM < L.TALON_COUPE - 2, (texte, r)
+        assert r[0].x0 / PT_PAR_MM > L.PAGE_W / 2, (texte, "pas du côté du n°")
+    cote_n = doc[0].search_for("N° 104501")[0]
+    assert doc[0].search_for("CIN 08870001")[0].y0 > cote_n.y1, "la CIN n'est pas sous le n°"
+    assert "CIN" not in doc[1].get_text() and "Salle" not in doc[1].get_text()
+    page_seule = doc[1].search_for("Page 1 / 1")[0]
+    assert abs(page_seule.y1 / PT_PAR_MM - 18.0) < 1.5, "sans fiche, le talon a bougé"
+    assert sheet_pdf._ligne_salle("Salle 4", sheet_pdf.LABELS["fr"]) == "Salle 4"
+    assert sheet_pdf._ligne_salle("قاعة عدد 37", sheet_pdf.LABELS["ar"]) == "قاعة عدد 37"
+    assert sheet_pdf._ligne_salle("37", sheet_pdf.LABELS["ar"]) == "القاعة 37"
+    # une requête pour toutes les fiches, pas une par copie
+    def requetes(n):
+        etudiants = list(groupe.students.all())[:n]
+        with CaptureQueriesContext(connection) as ctx:
+            sheet_pdf.generate_sheet_pdf(quiz, quiz.layout_json, students=etudiants)
+        return len(ctx)
+    requetes(3)     # le premier appel charge aussi la classe du quiz, une fois
+    une, trois = requetes(1), requetes(3)
+    assert une == trois, (une, trois)
+    print("  talon : CIN et salle sous le n°, au-dessus du trait ; rien sans fiche OK")
 
     # ---- la copie de BAKIR, remplie, talon découpé : à qui ? quelles réponses ?
     bakir = groupe.students.get(last_name="BAKIR")

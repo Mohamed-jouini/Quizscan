@@ -8,6 +8,7 @@ Le texte arabe est ligaturé et rendu droite->gauche (module fonts).
 """
 import functools
 import io
+import re
 
 import cv2
 import pymupdf
@@ -17,11 +18,13 @@ from reportlab.lib.pagesizes import A3, A4, landscape
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
+from django.db.models import prefetch_related_objects
 from reportlab.pdfgen import canvas as rl_canvas
 
 from . import layout as L
 from .fonts import (font_for, has_arabic, load_fonts, runs, shape,
                     text_width_pt, wrap)
+from .labels_pdf import _ellipsize
 from .models import choice_letter
 
 ARUCO_DICT = cv2.aruco.getPredefinedDictionary(L.ARUCO_DICT_ID)
@@ -76,6 +79,7 @@ LABELS = {
         "place": "PLACE N° {n}",
         "talon_coupe": "Talon à découper avant la correction : il porte votre nom. "
                        "La copie reste identifiée par son QR code.",
+        "cin": "CIN", "salle": "Salle",
         "writename": "Écrivez votre nom et votre prénom dans les cases ci-dessus.",
         "fiche": "Fiche",
         "sticker": "Emplacement réservé — collez ici le QR code qui vous a été remis",
@@ -111,6 +115,7 @@ LABELS = {
         "place": "المكان رقم {n}",
         "talon_coupe": "قسيمة تُقصّ قبل الإصلاح: تحمل اسمك. تبقى الورقة معرّفة "
                        "برمز QR.",
+        "cin": "ب.ت.و", "salle": "القاعة",
         "writename": "اكتب لقبك واسمك بخط واضح في الخانات أعلاه.",
         "fiche": "بطاقة",
         "sticker": "مكان مخصّص — ألصق هنا رمز QR الذي سُلّم إليك",
@@ -191,6 +196,10 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
     # « serials » ne sert plus qu'à répéter le jeu de pages autant de fois
     # qu'il y a d'exemplaires à imprimer : la fiche de concours ne porte ni
     # n° de série ni QR imprimé, c'est l'étiquette collée qui identifie.
+    if students and layout.get("talon"):
+        # la CIN et la salle du talon viennent de la fiche du registre : une
+        # requête pour toutes les copies, pas une par copie (des milliers)
+        prefetch_related_objects([s for s in students if s is not None], "inscrit")
     units = students or serials or [None]
     for unit, page in [(u, p) for u in units for p in layout["pages"]]:
         student = unit if (students and unit is not None) else None
@@ -563,21 +572,47 @@ def _dessiner_cadre(c, page_index, haut=L.CADRE_MARGE, talon=False):
     c.setLineWidth(1)
 
 
+def _ligne_salle(salle, T):
+    """« Salle 12 » ; une salle déjà nommée (« قاعة عدد 37 ») s'imprime telle quelle."""
+    return salle if re.match(r"\s*(salle|قاعة|القاعة)", salle, re.I) else f"{T['salle']} {salle}"
+
+
+def _taille_pour(texte, taille, largeur_mm, plancher=7.0):
+    """Corps qui fait tenir le texte dans la largeur, sans descendre sous le plancher."""
+    while taille > plancher and text_width_pt(texte, taille) / mm > largeur_mm:
+        taille -= 0.5
+    return taille
+
+
 def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang):
-    """Talon du haut de la copie : nom et n° de l'étudiant, épreuve, consigne,
-    puis le trait pointillé « couper ici » (hors du cadre de lecture)."""
+    """Talon du haut de la copie : nom et n° de l'étudiant, sous le n° sa CIN et
+    sa salle (fiche du registre, demande du 5 novembre 2026), épreuve, consigne,
+    puis le trait pointillé « couper ici » (hors du cadre de lecture : ce qu'on y
+    ajoute ne change rien à la lecture)."""
     x0, x1 = 14.0, L.PAGE_W - 14.0
     rtl = lang == "ar"
     nom = f"{student.last_name} {student.first_name}" if student else ""
     num = f"N° {student.student_number}" if student and student.student_number else ""
+    fiche = getattr(student, "inscrit", None) if student else None
+    details = [t for t in (f"{T['cin']} {fiche.cin}" if fiche and fiche.cin else "",
+                           _ligne_salle(fiche.salle, T) if fiche and fiche.salle else "") if t]
     debut, fin, sens_debut, sens_fin = ((x1, x0, "right", "left") if rtl
                                         else (x0, x1, "left", "right"))
     draw(nom, debut, _y(11.5), 16, bold=True, align=sens_debut)
     if num:
         draw(num, fin, _y(11.5), 12, bold=True, align=sens_fin)
-    draw(titre, L.PAGE_W / 2, _y(18.0), 9.5, align="center", gray=0.3)
-    draw(page_txt, fin, _y(18.0), 8, align=sens_fin, gray=0.4)
-    draw(consigne, debut, _y(23.5), 8, align=sens_debut, gray=0.35)
+    for rang, texte in enumerate(details):
+        draw(texte, fin, _y(16.8 + 4.4 * rang), 9, align=sens_fin)
+    # Le titre, au milieu, et la consigne laissent la place à ce qui est imprimé
+    # sous le n° (la page, ou la CIN et la salle) : ils se resserrent au besoin.
+    bloc = max(text_width_pt(t, 9 if details else 8) / mm for t in (details or [page_txt]))
+    place = L.PAGE_W - 2 * (x0 + bloc + 4)
+    taille = _taille_pour(titre, 9.5, place)
+    draw(_ellipsize(titre, taille, place), L.PAGE_W / 2, _y(18.0), taille,
+         align="center", gray=0.3)
+    draw(page_txt, fin, _y(25.6 if details else 18.0), 8, align=sens_fin, gray=0.4)
+    draw(consigne, debut, _y(23.5), _taille_pour(consigne, 8, x1 - x0 - bloc - 4, 6.5),
+         align=sens_debut, gray=0.35)
     # trait de coupe, pointillé, sur toute la largeur
     c.setStrokeGray(0.35)
     c.setLineWidth(0.6)
