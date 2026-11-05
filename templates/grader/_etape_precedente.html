@@ -9,7 +9,7 @@ L'encart ne s'affiche QUE s'il reste des admis à ajouter : une fois la liste
   <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M5 12h12"/><path d="M13 7l5 5-5 5"/></svg></span>
   <div class="note__body">
     <b>{{ etape.manquants }} {% if etape.manquants > 1 %}nouveaux{% else %}nouvel{% endif %} admis</b>
-    de « <a href="{% url 'quiz_results' etape.precedente.pk %}">{{ etape.precedente.title }}</a> »
+    <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>
     pas encore dans la liste des candidats (note minimale modifiée ou copies corrigées depuis)
     — {{ etape.n_admis }} admis en tout (note ≥ {{ etape.seuil|floatformat:"-2" }}).
     {% if perms.grader.creer_epreuve %}

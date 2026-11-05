@@ -1485,6 +1485,25 @@ def chaine_epreuves(quiz, autorisees=None):
     return chaine
 
 
+def _intitule(quiz, racine):
+    """Le titre d'une étape s'il dit autre chose que celui de son concours."""
+    return "" if quiz.title.startswith(racine.title) else quiz.title
+
+
+def fil_etapes(quiz, autorisees=None):
+    """Le concours d'une épreuve, pour l'en-tête de ses pages : son nom et ses étapes,
+    au lieu de « jhjh — écrit — oral ». None pour une épreuve seule."""
+    chaine = chaine_epreuves(quiz, autorisees)
+    if len(chaine) < 2:
+        return None
+    racine = chaine[0]
+    corrigees = set(ScanBatch.objects.filter(quiz__in=chaine).values_list("quiz_id", flat=True))
+    return {"titre": racine.title, "intitule": _intitule(quiz, racine),
+            "etapes": [{"quiz": q, "numero": n, "courante": q.pk == quiz.pk,
+                        "fait": q.pk in corrigees}
+                       for n, q in enumerate(chaine, start=1)]}
+
+
 def groupes_epreuves(epreuves):
     """Regroupe des épreuves par concours, pour les listes : QCM -> écrit -> oral
     forment un seul groupe et non trois lignes, sans requête par épreuve. Une
@@ -1520,8 +1539,7 @@ def groupes_epreuves(epreuves):
             groupes.append({
                 "racine": racine, "titre": racine.title, "multi": len(etapes) > 1,
                 "concours": any(q.auto_enroll for q in etapes),
-                "etapes": [{"quiz": q, "numero": n,
-                            "intitule": "" if q.title.startswith(racine.title) else q.title}
+                "etapes": [{"quiz": q, "numero": n, "intitule": _intitule(q, racine)}
                            for n, q in enumerate(etapes, start=1)],
             })
     groupes.sort(key=lambda g: max(e["quiz"].pk for e in g["etapes"]), reverse=True)
@@ -1580,7 +1598,7 @@ def parcours_concours(chaine):
                 cases.append({"etat": "non_convoque", "row": None, "resultat": None})
         final, ton = "—", "grey"
         if atteinte >= 0:
-            case, titre = cases[atteinte], chaine[atteinte].title
+            case, titre = cases[atteinte], chaine[atteinte].type_court
             if case["etat"] == "non_note":            # absent, ou pas encore scanné
                 final, ton = f"Non noté : {titre}", "warn"
             elif case["resultat"] == "refuse":

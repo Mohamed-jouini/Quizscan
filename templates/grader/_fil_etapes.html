@@ -1,0 +1,21 @@
+{% comment %}
+Les étapes d'un concours en haut de ses pages : QCM -> écrit -> oral, l'étape ouverte en vert, les
+autres à un clic. Rien pour une épreuve seule. Paramètres : fil (services.fil_etapes), quiz, lien
+(« quiz_detail » : la page des étapes ; « quiz_results » : leurs résultats).
+{% endcomment %}
+{% if fil %}
+<nav class="fil-etapes" aria-label="Étapes du concours">
+  <ol class="fil-etapes__liste">
+    {% for e in fil.etapes %}
+    <li>
+      {% if e.courante %}
+      <span class="fil-etapes__etape is-courante{% if e.fait %} is-fait{% endif %}" aria-current="step" title="{{ e.quiz.title }}"><span class="fil-etapes__num" aria-hidden="true">{% if e.fait %}✓{% else %}{{ e.numero }}{% endif %}</span>{{ e.quiz.type_court }}</span>
+      {% else %}
+      <a class="fil-etapes__etape{% if e.fait %} is-fait{% endif %}" title="{{ e.quiz.title }}" href="{% url lien e.quiz.pk %}"><span class="fil-etapes__num" aria-hidden="true">{% if e.fait %}✓{% else %}{{ e.numero }}{% endif %}</span>{{ e.quiz.type_court }}</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  <a class="btn small secondary" href="{% url 'quiz_parcours' quiz.pk %}">Résultats du concours</a>
+</nav>
+{% endif %}

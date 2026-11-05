@@ -33,7 +33,8 @@ def _renommer(request, quiz):
         services.renommer_epreuve(quiz, titre, request.user)
 
 
-def epreuve_detail(request, quiz):
+def epreuve_detail(request, quiz, fil=None):
+    """fil : le concours et ses étapes, pour l'en-tête (services.fil_etapes)."""
     if request.method == "POST" and "passer_admis" in request.POST:
         # étape suivante d'un concours : les nouveaux admis de l'épreuve
         # précédente rejoignent la liste des candidats
@@ -43,8 +44,8 @@ def epreuve_detail(request, quiz):
                                   f"({n_admis} admis au total, {deja} déjà dans la liste).")
         return redirect("quiz_detail", pk=quiz.pk)
     if quiz.type_epreuve == "oral":
-        return _oral(request, quiz)
-    return _ecrit(request, quiz)
+        return _oral(request, quiz, fil)
+    return _ecrit(request, quiz, fil)
 
 
 # ------------------------------------------------------------------- écrit
@@ -86,7 +87,7 @@ def _generer_documents(quiz, nb_exemplaires=100):
     return msg
 
 
-def _ecrit(request, quiz):
+def _ecrit(request, quiz, fil=None):
     form = EpreuveEcritForm(instance=quiz)
     if request.method == "POST":
         droits.exiger(request.user, droits.CREER, "modifier l'épreuve")
@@ -117,7 +118,7 @@ def _ecrit(request, quiz):
     perimee = bool(quiz.layout_json) and (
         quiz.layout_json.get("signature") != layout_mod.layout_signature(quiz))
     return render(request, "grader/epreuve_ecrit.html", {
-        "quiz": quiz, "form": form, "retour": _retour(quiz),
+        "quiz": quiz, "fil": fil, "form": form, "retour": _retour(quiz),
         "perimee": perimee, "upload_form": UploadForm(),
         "batches": quiz.batches.all(), "etape": services.etat_etape(quiz),
         "journal": quiz.modifications.all()[:15],
@@ -142,7 +143,7 @@ def _generer_fiches_orales(quiz):
     return len(etudiants)
 
 
-def _oral(request, quiz):
+def _oral(request, quiz, fil=None):
     form = EpreuveOralForm(instance=quiz)
     etudiants = list(quiz.class_group.students.all())
     if request.method == "POST":
@@ -174,7 +175,7 @@ def _oral(request, quiz):
     perimee = bool(quiz.layout_json) and (
         quiz.layout_json.get("signature") != layout_mod.layout_signature(quiz))
     return render(request, "grader/epreuve_oral.html", {
-        "quiz": quiz, "form": form, "retour": _retour(quiz), "lignes": lignes,
+        "quiz": quiz, "fil": fil, "form": form, "retour": _retour(quiz), "lignes": lignes,
         "n_notes": sum(1 for _, etat, _ in lignes if etat in ("lue", "manuelle")),
         "n_illisibles": sum(1 for _, etat, _ in lignes if etat == "illisible"),
         "lot_manuel": lot_manuel,

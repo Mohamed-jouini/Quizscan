@@ -620,7 +620,7 @@ def quiz_detail(request, pk):
         if request.method == "GET" and services.moderniser_calage(quiz):
             messages.info(request, "Fiche mise à jour : les carrés noirs des coins sont remplacés par un "
                                "cadre fin. Les copies déjà imprimées restent lisibles.")
-        return epreuve_detail(request, quiz)
+        return epreuve_detail(request, quiz, services.fil_etapes(quiz, _my_quizzes(request)))
     qform = QuestionForm(quiz=quiz)
     bulk_form = BulkQcmForm(quiz=quiz)
     import_form = QuestionImportForm()
@@ -949,6 +949,7 @@ def quiz_detail(request, pk):
                   if not services.is_stalled(b)]
     return render(request, "grader/quiz_detail.html", {
         "quiz": quiz, "qform": qform, "bulk_form": bulk_form,
+        "fil": services.fil_etapes(quiz, _my_quizzes(request)),
         "pages_etiquette": layout_mod.pages_a_etiquette(quiz.layout_json),
         "import_form": import_form, "bank_form": bank_form,
         "id_modes": _id_modes(quiz),
@@ -1417,11 +1418,8 @@ def quiz_results(request, pk):
     # Les statistiques portent sur toutes les copies ("rows") ; seul le
     # tableau des notes est paginé ("rows_page"), un concours pouvant
     # compter des milliers de candidats.
-    # concours en étapes (QCM -> écrit -> oral) : lien vers les résultats
-    # de tout le concours, cette page ne montrant qu'une épreuve
-    chaine = services.chaine_epreuves(quiz, _my_quizzes(request))
     return render(request, "grader/results.html", {
-        "chaine": chaine if len(chaine) > 1 else [],
+        "fil": services.fil_etapes(quiz, _my_quizzes(request)),
         "quiz": quiz, "rows": rows, "rows_page": _page(request, trouves, PAGE_RESULTATS),
         "rows_total": len(rows), "batch": batch,
         "recherche": recherche, "n_trouves": len(trouves),

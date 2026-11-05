@@ -2,15 +2,15 @@
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
-    <h1>Résultats</h1>
+    <h1><a href="{% url 'quiz_detail' quiz.pk %}" title="Ouvrir l'épreuve">{{ fil.titre|default:quiz.title }}</a></h1>
     <p class="page-head__meta">
-      <a href="{% url 'quiz_detail' quiz.pk %}" title="Ouvrir l'épreuve"><b>{{ quiz.title }}</b></a> · {{ quiz.class_group.name }}
-      {% if batch %}· lot {{ batch }}{% endif %}
+      <span class="badge info">Résultats {{ quiz.de_type }}</span>
+      {% if fil.intitule %}<span>{{ fil.intitule }}</span>{% endif %}
+      <span>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %}{% if batch %} · lot {{ batch }}{% endif %}</span>
     </p>
   </div>
   <div class="page-head__actions">
     <a class="btn small secondary" href="{% url 'resultats_list' %}">← Retour aux résultats</a>
-    {% if chaine %}<a class="btn small" href="{% url 'quiz_parcours' quiz.pk %}">Résultats du concours</a>{% endif %}
     <a class="btn small" href="{% url 'quiz_results_xlsx' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">
       Exporter en Excel</a>
     <a class="btn small" href="{% url 'quiz_bulletins_pdf' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">
@@ -33,15 +33,7 @@
   </div>
 </header>
 
-{% if chaine %}
-<div class="note">
-  <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M4 6h4v4H4zM10 14h4v4h-4zM16 6h4v4h-4z"/><path d="M8 8h8M6 10v6h4M18 10v6h-4"/></svg></span>
-  <div class="note__body">Concours en {{ chaine|length }} étapes :
-    {% for q in chaine %}{% if q.pk == quiz.pk %}<b>{{ q.title }}</b>{% else %}<a href="{% url 'quiz_results' q.pk %}">{{ q.title }}</a>{% endif %}{% if not forloop.last %} → {% endif %}{% endfor %}.
-    Cette page ne montre que « {{ quiz.title }} ».
-    <a class="btn small" href="{% url 'quiz_parcours' quiz.pk %}">Voir les résultats de tout le concours</a></div>
-</div>
-{% endif %}
+{% include "grader/_fil_etapes.html" with lien="quiz_results" %}
 
 {% if batches|length > 1 %}
 <div class="filtres">
@@ -148,7 +140,7 @@
   <div class="etape-suivante">
     <span class="etape-suivante__titre">Étape suivante du concours :</span>
     {% for suivante in quiz.epreuves_suivantes.all %}
-    <a class="btn small secondary" href="{% url 'quiz_detail' suivante.pk %}">{{ suivante.title|truncatechars:40 }}</a>
+    <a class="btn small secondary" title="{{ suivante.title }}" href="{% url 'quiz_detail' suivante.pk %}">{{ suivante.type_court }}</a>
     {% endfor %}
     {% if quiz.type_epreuve == "qcm" %}
     <a class="btn small" href="{% url 'quiz_create' %}?{% if quiz.auto_enroll %}concours=1&amp;{% endif %}precedente={{ quiz.pk }}&amp;type=ecrit">Créer l'écrit des {{ admission.n_admis }} admis</a>

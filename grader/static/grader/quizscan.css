@@ -479,6 +479,8 @@ input:focus,select:focus,textarea:focus{
   border-bottom:1px solid var(--qs-line);
 }
 .page-head__text{flex:1;min-width:min(260px,100%)}
+.page-head h1 a{color:inherit;text-decoration:none}
+.page-head h1 a:hover{color:var(--qs-blue)}
 .page-head__meta{
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;
   margin:7px 0 0;font-size:13px;color:var(--qs-muted);
@@ -1795,6 +1797,25 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .tuile-etape__nom{font-size:14px;font-weight:700;color:var(--qs-blue)}
 .tuile-etape__intitule{font-size:12.5px;color:var(--qs-muted);overflow-wrap:anywhere}
 .tuile-etape .carte-bouton__fleche{position:absolute;top:12px;right:14px}
+/* Les etapes d'un concours en haut de ses pages : l'etape ouverte en vert, les autres a un clic. */
+.fil-etapes{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  gap:10px 16px;margin:0 0 18px;padding:10px 14px;border:1px solid var(--qs-line);
+  border-radius:var(--qs-r-card);background:var(--qs-surface)}
+.fil-etapes__liste{display:flex;align-items:center;flex-wrap:wrap;gap:8px 6px;margin:0;padding:0;
+  list-style:none}
+.fil-etapes__liste li{display:flex;align-items:center;gap:6px}
+.fil-etapes__liste li + li::before{content:"";width:7px;height:7px;margin-right:4px;
+  border:solid var(--qs-line-strong);border-width:2px 2px 0 0;transform:rotate(45deg)}
+.fil-etapes__etape{display:inline-flex;align-items:center;gap:8px;padding:5px 14px 5px 6px;
+  border:1px solid var(--qs-line-strong);border-radius:999px;background:var(--qs-surface);
+  font-size:14px;font-weight:600;color:var(--qs-ink);text-decoration:none;
+  transition:border-color .15s,background-color .15s}
+a.fil-etapes__etape:hover{border-color:var(--qs-blue);background:var(--qs-surface-2)}
+.fil-etapes__etape.is-courante{border-color:var(--qs-btn-bg);background:var(--qs-btn-bg);color:#fff}
+.fil-etapes__num{width:24px;height:24px;flex:none;display:flex;align-items:center;
+  justify-content:center;border-radius:50%;font-size:12.5px;font-weight:700;
+  background:var(--qs-track);color:var(--qs-muted)}
+.fil-etapes__etape.is-fait .fil-etapes__num{background:var(--qs-accent);color:var(--qs-accent-ink)}
 /* Un bloc qui est un bouton : relief, survol et enfoncement d'un bouton, et tout le bloc cliquable
    (le lien s'etend dessus). Les vrais boutons qu'il contient passent au-dessus. */
 .carte-bouton{position:relative;border:1px solid var(--qs-line-strong);

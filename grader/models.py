@@ -345,6 +345,11 @@ class Quiz(models.Model):
         return {"qcm": "QCM", "ecrit": "Écrit", "oral": "Oral"}.get(self.type_epreuve, "")
 
     @property
+    def de_type(self):
+        """Une étape dans une phrase : « admis du QCM », « admis de l'écrit »."""
+        return {"qcm": "du QCM", "ecrit": "de l'écrit", "oral": "de l'oral"}.get(self.type_epreuve, "")
+
+    @property
     def copies_nominatives(self):
         """Talon ou n° de place : une copie par étudiant, QR imprimé (même en
         concours, où l'on imprime sinon des fiches anonymes à étiquette)."""

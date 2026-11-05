@@ -95,7 +95,7 @@ def main():
     assert "3 admis de « Étapes QCM » ajoutés" in r.content.decode()
     page = c.get(reverse("quiz_detail", args=[ecrit.pk])).content.decode()
     # liste à jour : pas d'encart ni de bouton, l'en-tête rappelle l'origine
-    assert "candidats : admis de" in page and "Mettre à jour la liste" not in page
+    assert "candidats : admis" in page and "du QCM</a>" in page and "Mettre à jour la liste" not in page
     print("  écrit : liste des candidats = les 3 admis du QCM OK")
 
     # ---- étape 3 : l'oral (épreuve de classe), admis de l'écrit (≥ 10 / 20)
@@ -139,9 +139,9 @@ def main():
     # dernière étape : rien à créer après l'oral
     page = c.get(reverse("quiz_results", args=[oral.pk])).content.decode()
     assert "Créer l'" not in page and "Étape suivante" not in page
-    attendu = {"AMRI": "Admis au concours", "CHERIF": "Non admis : Étapes oral",
-               "BAKIR": "Non admis : Étapes écrit", "DRISS": "Non noté : Étapes écrit",
-               "ESSID": "Non admis : Étapes QCM", "FERCHICHI": "Non admis : Étapes QCM"}
+    attendu = {"AMRI": "Admis au concours", "CHERIF": "Non admis : Oral",
+               "BAKIR": "Non admis : Écrit", "DRISS": "Non noté : Écrit",
+               "ESSID": "Non admis : QCM", "FERCHICHI": "Non admis : QCM"}
     for depart in (qcm, ecrit, oral):
         r = c.get(reverse("quiz_parcours", args=[depart.pk]))
         assert r.status_code == 200
@@ -171,19 +171,34 @@ def main():
     assert ws.cell(row=3, column=1).value == "AMRI"
     assert ws.cell(row=3, column=ws.max_column).value == "Admis au concours"
     assert ws.max_row == 2 + len(attendu)
-    # la page des résultats d'une étape mène aux résultats du concours
-    page = c.get(reverse("quiz_results", args=[ecrit.pk])).content.decode()
-    assert "Voir les résultats de tout le concours" in page
     # retour vers la liste des résultats ; l'épreuve reste à un clic (titre)
+    page = c.get(reverse("quiz_results", args=[ecrit.pk])).content.decode()
     assert f'href="{reverse("resultats_list")}">← Retour aux résultats' in page
     assert f'href="{reverse("quiz_detail", args=[ecrit.pk])}" title="Ouvrir l' in page
-    assert reverse("quiz_parcours", args=[ecrit.pk]) in page
-    for q in (ecrit, oral):
-        page = c.get(reverse("quiz_detail", args=[q.pk])).content.decode()
-        assert reverse("quiz_parcours", args=[q.pk]) in page
+    # chaque page d'une étape : le nom du concours, et la barre de ses étapes, une fois
+    for vue, etape in (("quiz_results", q) for q in (qcm, ecrit, oral)):
+        page = c.get(reverse(vue, args=[etape.pk])).content.decode()
+        assert page.count("Résultats du concours") == 1, (vue, etape.title)
+        assert page.count('aria-current="step"') == 1 and "Cette page ne montre" not in page
+        for autre in {qcm, ecrit, oral} - {etape}:
+            assert f'href="{reverse(vue, args=[autre.pk])}"' in page, (vue, etape.title, autre.title)
+    for etape in (qcm, ecrit, oral):
+        page = c.get(reverse("quiz_detail", args=[etape.pk])).content.decode()
+        assert f"<h1>{qcm.title}</h1>" in page, etape.title
+        assert page.count("Résultats du concours") == 1, etape.title
+        assert reverse("quiz_parcours", args=[etape.pk]) in page
+        for autre in {qcm, ecrit, oral} - {etape}:
+            assert f'href="{reverse("quiz_detail", args=[autre.pk])}"' in page, (etape.title, autre.title)
+    # le titre complet d'une étape reste modifiable sur sa page
+    assert f'value="{ecrit.title}"' in c.get(reverse("quiz_detail", args=[ecrit.pk])).content.decode()
+    # une étape au titre à elle : il reste écrit en clair à côté du nom du concours
+    assert services.fil_etapes(ecrit)["intitule"] == "Étapes écrit"
+    # une épreuve seule : ni barre ni « Résultats du concours », son titre tel quel
     seul = Quiz.objects.create(title="Hors concours", class_group=groupe, owner=prof)
-    page = c.get(reverse("quiz_results", args=[seul.pk])).content.decode()
-    assert "Résultats du concours" not in page
+    assert services.fil_etapes(seul) is None
+    for vue in ("quiz_results", "quiz_detail"):
+        page = c.get(reverse(vue, args=[seul.pk])).content.decode()
+        assert "Résultats du concours" not in page and "Hors concours" in page and "fil-etapes" not in page, vue
     print("  résultats du concours : parcours de chaque candidat, résultat final, Excel OK")
 
     # ---- listes Concours et Résultats : un seul bloc par concours, ses étapes dedans

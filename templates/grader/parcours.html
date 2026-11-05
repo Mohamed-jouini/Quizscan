@@ -5,11 +5,11 @@
 <header class="page-head">
   <div class="page-head__text">
     <h1>Résultats du concours</h1>
-    <p class="page-head__meta"><span>{% for q in epreuves %}<b>{{ q.title }}</b>{% if not forloop.last %} → {% endif %}{% endfor %}</span></p>
+    <p class="page-head__meta"><b>{{ epreuves.0.title }}</b><span class="badge grey">{{ epreuves|length }} étape{{ epreuves|length|pluralize }}</span></p>
     <p class="helptext">Chaque candidat, épreuve par épreuve : les admis d'une étape passent à la suivante. Le résultat final se lit à la dernière étape où il a été convoqué ; « non noté » : absent, ou copie pas encore scannée.</p>
   </div>
   <div class="page-head__actions">
-    <a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}">← Résultats de « {{ quiz.title|truncatechars:28 }} »</a>
+    <a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}" title="{{ quiz.title }}">← Résultats {{ quiz.de_type }}</a>
     <a class="btn small" href="?format=xlsx">Exporter en Excel</a>
   </div>
 </header>
@@ -17,9 +17,8 @@
 <ol class="etapes">
   {% for e in parcours.etapes %}
   <li class="{% if e.admis %}is-fait{% endif %}">
-    <b><a href="{% url 'quiz_results' e.quiz.pk %}">{{ e.quiz.title }}</a></b>
-    <span>{% if e.quiz.type_epreuve == "ecrit" %}écrit{% elif e.quiz.type_epreuve == "oral" %}oral{% else %}QCM{% endif %} ·
-      {{ e.convoques }} convoqué{{ e.convoques|pluralize }} · {{ e.presents }} noté{{ e.presents|pluralize }} ·
+    <b><a href="{% url 'quiz_results' e.quiz.pk %}" title="{{ e.quiz.title }}">{{ e.quiz.type_court }}</a></b>
+    <span>{{ e.convoques }} convoqué{{ e.convoques|pluralize }} · {{ e.presents }} noté{{ e.presents|pluralize }} ·
       {% if e.seuil is not None %}<strong>{{ e.admis }}</strong> admis (note ≥ {{ e.seuil|floatformat:"-2" }}){% else %}note minimale à fixer{% endif %}</span>
   </li>
   {% endfor %}
@@ -37,7 +36,7 @@
     <table>
       <tr>
         <th>Candidat</th>
-        {% for q in epreuves %}<th>{{ q.title|truncatechars:26 }}</th>{% endfor %}
+        {% for q in epreuves %}<th title="{{ q.title }}">{{ q.type_court }}</th>{% endfor %}
         <th>Résultat final</th>
       </tr>
       {% for c in candidats_page %}

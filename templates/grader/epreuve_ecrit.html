@@ -3,18 +3,18 @@
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
-    <h1>{{ quiz.title }}</h1>
+    <h1>{{ fil.titre|default:quiz.title }}</h1>
     <p class="page-head__meta"><span class="badge info">Épreuve écrite</span>
-      <span>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b>{% if etape %} · candidats : admis de « <a href="{% url 'quiz_results' etape.precedente.pk %}">{{ etape.precedente.title }}</a> »{% endif %}</span></p>
+      {% if fil.intitule %}<span>{{ fil.intitule }}</span>{% endif %}
+      <span>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b>{% if etape %} · candidats : admis <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>{% endif %}</span></p>
   </div>
   <div class="page-head__actions">
     <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
     <a class="btn small secondary" href="{% url 'class_detail' quiz.class_group.pk %}">{% if quiz.auto_enroll %}Candidats{% else %}Étudiants{% endif %} &amp; étiquettes QR</a>
-    {% if quiz.epreuve_precedente_id or quiz.epreuves_suivantes.exists %}
-    <a class="btn small secondary" href="{% url 'quiz_parcours' quiz.pk %}">Résultats du concours</a>{% endif %}
     <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">Résultats</a>
   </div>
 </header>
+{% include "grader/_fil_etapes.html" with lien="quiz_detail" %}
 {% include "grader/_etape_precedente.html" %}
 
 {% if perimee %}
