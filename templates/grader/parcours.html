@@ -17,8 +17,8 @@
 
 <ol class="etapes">
   {% for e in parcours.etapes %}
-  <li class="{% if e.admis %}is-fait{% endif %}">
-    <b><a href="{% url 'quiz_results' e.quiz.pk %}" title="{{ e.quiz.title }}">{{ e.quiz.type_court }}</a></b>
+  <li class="carte-bouton{% if e.admis %} is-fait{% endif %}">
+    <b><a class="carte-bouton__lien" href="{% url 'quiz_results' e.quiz.pk %}" title="{{ e.quiz.title }}">{{ e.quiz.type_court }}</a></b>
     <span>{{ e.convoques }} convoqué{{ e.convoques|pluralize }} · {{ e.presents }} noté{{ e.presents|pluralize }} ·
       {% if e.seuil is not None %}<strong>{{ e.admis }}</strong> admis (note ≥ {{ e.seuil|floatformat:"-2" }}){% else %}note minimale à fixer{% endif %}</span>
   </li>

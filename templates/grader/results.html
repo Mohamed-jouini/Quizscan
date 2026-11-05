@@ -160,9 +160,9 @@
     <table>
     <tr><th>Rang</th><th>Nom et prénom</th><th>N° d'inscription</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>Pourcentage</th>{% if quiz.note_distincte %}<th>Note</th>{% endif %}</tr>
     {% for r in admission.admis_affiches %}
-    <tr>
+    <tr class="ligne-lien">
       <td>{{ r.rang }}</td>
-      <td><b>{{ r.student.full_name }}</b></td>
+      <td>{% if r.copie %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'sheet_review' r.copie.pk %}"><b>{{ r.student.full_name }}</b></a>{% else %}<b>{{ r.student.full_name }}</b>{% endif %}</td>
       <td>{{ r.student.student_number|default:"—" }}</td>
       {% if quiz.a_des_qcm %}<td class="score">{{ r.correct }} / {{ r.n_qcm }}</td>{% endif %}
       <td>{% include "grader/_pourcentage.html" with pct=r.pct %}</td>
@@ -211,8 +211,8 @@
       <th>Résultat</th><th></th>
     </tr>
     {% for r in rows_page %}
-    <tr>
-      <td><b>{{ r.student.full_name }}</b>
+    <tr class="ligne-lien">
+      <td>{% if r.copie %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'sheet_review' r.copie.pk %}"><b>{{ r.student.full_name }}</b></a>{% else %}<b>{{ r.student.full_name }}</b>{% endif %}
           {% if r.student.student_number %}<span class="helptext">n° {{ r.student.student_number }}</span>{% endif %}
           {% if r.questions_manquantes %}<span class="badge warn" title="Page non identifiée ou non reçue : ces questions ne comptent pas dans la note">Incomplète : {{ r.questions_manquantes }} question{{ r.questions_manquantes|pluralize }}</span>{% endif %}</td>
       {% if quiz.a_des_qcm %}<td class="score">{{ r.correct }} / {{ r.n_qcm }}</td>{% endif %}
@@ -220,7 +220,7 @@
       {% if quiz.note_distincte %}<td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>{% endif %}
       {% if quiz.a_des_qcm %}<td><span class="badge bad">{{ r.wrong }}</span></td>
       <td><span class="badge grey">{{ r.blank }}</span></td>{% endif %}
-      {% if quiz.note_distincte %}<td>{% if r.pending_open %}{% if r.a_noter.image %}<a class="badge warn" href="{% url 'sheet_review' r.a_noter.pk %}" title="Ouvrir la copie pour saisir la note">{% if quiz.a_des_qcm %}{{ r.pending_open }} →{% else %}Saisir la note →{% endif %}</a>{% else %}<span class="badge warn">{{ r.pending_open }}</span>{% endif %}{% else %}—{% endif %}</td>{% endif %}
+      {% if quiz.note_distincte %}<td>{% if r.pending_open %}{% if r.a_noter.image %}<a class="badge warn" href="{% url 'sheet_review' r.a_noter.pk %}" title="Ouvrir la copie pour saisir la note">{% if quiz.a_des_qcm %}{{ r.pending_open }}{% else %}Saisir la note{% endif %}</a>{% else %}<span class="badge warn">{{ r.pending_open }}</span>{% endif %}{% else %}—{% endif %}</td>{% endif %}
       <td>
         {% if r.resultat == "admis" %}<span class="badge ok">{% if quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</span>
         {% elif r.resultat == "en_attente" %}<span class="badge warn">En attente</span>

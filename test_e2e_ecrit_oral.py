@@ -120,6 +120,12 @@ def test_ecrit(c, prof, groupe):
     detail = c.get(reverse("batch_detail", args=[lot.pk])).content.decode()
     assert "Page de rédaction" in detail
     cherif = copies_lues["CHERIF.jpg"]
+    # toute la ligne s'ouvre d'un clic : le lien de sa première cellule s'étend dessus
+    cible = f'class="ligne-lien__cible ligne-lien__nom" href="{reverse("sheet_review", args=[cherif.pk])}"'
+    assert cible in detail, "la ligne d'une copie ne s'ouvre pas"
+    assert cible in c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
+    assert (f'class="ligne-lien__cible" href="{reverse("batch_detail", args=[lot.pk])}"'
+            in c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()), "la ligne d'un lot ne s'ouvre pas"
     revue = c.get(reverse("sheet_review", args=[cherif.pk])).content.decode()
     assert "Note illisible : à saisir" in revue
     reponse = cherif.answers.get()

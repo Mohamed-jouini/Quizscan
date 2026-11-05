@@ -162,6 +162,7 @@ def main():
     blocs = re.findall(r'class="[^"]*\bcarte-bouton\b[^"]*"', accueil)
     assert blocs and len(blocs) == accueil.count("carte-bouton__lien"), \
         "une table de l'administration n'est pas un bouton"
+    assert "fleche" not in accueil, "plus de flèche sur les blocs (demande de l'utilisateur)"
     for url in administration:
         corps = menu(c.get(url).content.decode())
         liens = re.findall(r'href="(/admin/\w+/\w+/)"', corps)
@@ -307,6 +308,16 @@ def main():
     assert re.search(r"@media \(max-width:980px\)\{\s*#changelist\{"
                      r"flex-direction:column;align-items:stretch\}", sans_com), \
         "liste d'administration plus large que le téléphone"
+    # Une ligne de ces listes s'ouvre d'un clic, sa case à cocher restant à part.
+    assert "#result_list tbody th a::after{" in sans_com, "ligne d'administration non cliquable"
+    assert re.search(r"#result_list td\.action-checkbox[^{]*\{position:relative;z-index:1",
+                     sans_com), "le lien de la ligne couvrirait la case à cocher"
+    # Ce qui se clique ne porte pas de flèche « aller » (demande de l'utilisateur).
+    lien_fleche = re.compile(r"<a\b(?:(?!</a>).)*→(?:(?!</a>).)*</a>", re.S)
+    for racine, _, fichiers in os.walk(os.path.join(django.conf.settings.BASE_DIR, "templates")):
+        for nom in fichiers:
+            with open(os.path.join(racine, nom), encoding="utf-8") as fh:
+                assert not lien_fleche.search(fh.read()), f"{nom} : lien avec une flèche"
     # Menu latéral fixe pendant que la page défile. Il ne tient que si la
     # carte qui le contient coupe ses bords par « clip » : avec « hidden »
     # seul, la carte devient un conteneur de défilement et le menu y reste

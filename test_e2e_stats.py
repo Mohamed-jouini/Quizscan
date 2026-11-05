@@ -266,6 +266,8 @@ def main():
     assert a_faire.count("a-faire__ligne carte-bouton") == a_faire.count("carte-bouton__lien") >= 3
     assert (f'class="carte-bouton__lien a-faire__titre" href="/quiz/{sans_corrige.pk}/"'
             in a_faire), "le corrigé incomplet ne s'ouvre pas d'un clic"
+    assert "carte-bouton__fleche" not in a_faire and 'class="btn' not in a_faire, (
+        "« À faire » : ni petit bouton ni flèche, la ligne suffit")
     print("  tableau de bord blocages et alertes remontés, lignes cliquables OK")
 
     # Un compte sans rien : pas de bloc « À faire » vide, le mode d'emploi à la place.

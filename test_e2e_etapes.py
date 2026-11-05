@@ -289,6 +289,7 @@ def main():
     for texte in (page, resultats):
         blocs = re.findall(r'class="[^"]*\bcarte-bouton\b[^"]*"', texte)
         assert blocs and len(blocs) == texte.count("carte-bouton__lien")
+        assert "fleche" not in texte, "plus de flèche sur les blocs (demande de l'utilisateur)"
     concours_seul.delete()
     print("  listes : chaque épreuve est un bouton, tout le bloc cliquable OK")
 

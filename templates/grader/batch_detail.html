@@ -85,8 +85,8 @@
     <table>
     <tr><th>Page</th><th>Aperçu</th><th>{% if batch.quiz.type_epreuve == "ecrit" %}Identification lue{% else %}Nom lu (OCR){% endif %}</th><th>Étudiant</th><th>Statut</th><th></th></tr>
     {% for s in sheets_page %}
-    <tr>
-      <td>{{ s.source_name }}<br><span class="helptext">page fiche {{ s.page_index|add:1 }}</span></td>
+    <tr class="ligne-lien">
+      <td>{% if s.status == "ok" or s.status == "no_match" %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'sheet_review' s.pk %}">{{ s.source_name }}</a>{% else %}{{ s.source_name }}{% endif %}<br><span class="helptext">page fiche {{ s.page_index|add:1 }}</span></td>
       <td>{% if s.name_crop %}<img class="thumb" src="{{ s.name_crop.url }}" alt="nom">{% endif %}</td>
       <td>{% if s.id_read %}{% if s.id_read.isdigit %}n° {% endif %}{{ s.id_read }}{% else %}{{ s.ocr_name_raw|default:"—" }}{% endif %}</td>
       <td>{% if s.student %}<b>{{ s.student.full_name }}</b>

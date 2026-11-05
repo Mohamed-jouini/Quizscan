@@ -321,6 +321,12 @@ a.tile:hover{border-color:var(--qs-line-strong)}
 .tile__row{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
 .tile__row--gauche{justify-content:flex-start;align-items:center}
 .tile__fort{color:var(--qs-accent)}
+/* Une tuile qui mene quelque part : tout le bloc s'ouvre d'un clic. */
+.tile--lien{position:relative;transition:border-color .15s}
+.tile--lien:hover{border-color:var(--qs-blue)}
+.tile--accent.tile--lien:hover{border-color:var(--qs-accent)}
+.tile__cible{color:inherit;text-decoration:none}
+.tile__cible::after{content:"";position:absolute;inset:0;border-radius:var(--qs-r-card)}
 .tile__value{font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px}
 .tile__unit{font-size:14px;font-weight:600;color:var(--qs-faint);margin-left:3px}
 .tile__note{font-size:12px;color:var(--qs-faint)}
@@ -383,7 +389,7 @@ a.tile:hover{border-color:var(--qs-line-strong)}
    ligne de titres restant visible. La barre reste affichee meme pour une liste
    courte, a la demande de l'utilisateur. A l'impression, toute la liste. */
 .table-wrap--defile{max-height:360px;overflow-y:scroll}
-.shell .table-wrap--defile table tr:first-child > th{position:sticky;top:0;z-index:1}
+.shell .table-wrap--defile table tr:first-child > th{position:sticky;top:0;z-index:2}
 @media print{.table-wrap--defile{max-height:none;overflow:visible}}
 
 /* --- Boutons ------------------------------------------------------------- */
@@ -1140,7 +1146,6 @@ body.dashboard #content{width:auto;max-width:none}
 .qs-table__n{font-size:25px;font-weight:700;line-height:1;color:var(--qs-ink)}
 /* La carte est un bouton (.carte-bouton) : son titre est le lien vers la table,
    il garde la couleur de lien de l administration. */
-.qs-table__nom{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .qs-table__name{font-size:15px;font-weight:600;text-decoration:none}
 .qs-table__links{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
 /* Ajouter, Modification : de petits boutons, l icone de Django gardee a gauche
@@ -1295,6 +1300,11 @@ body.dashboard #content{width:auto;max-width:none}
 #result_list tbody tr:last-child td{border-bottom:0}
 /* La premiere colonne ouvre la ligne : elle merite un peu plus de poids. */
 #result_list tbody th a:link,#result_list tbody th a:visited{font-weight:600}
+/* Toute la ligne l'ouvre, comme .ligne-lien : son lien s'étend sur elle, la
+   case à cocher et les autres liens restent au-dessus. */
+#result_list tbody tr{position:relative}
+#result_list tbody th a::after{content:"";position:absolute;inset:0}
+#result_list td.action-checkbox,#result_list tbody td a{position:relative;z-index:1}
 
 /* Colonne des cases a cocher : etroite et centree. */
 #result_list .action-checkbox-column,
@@ -1690,13 +1700,14 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .pub-avis__texte{font-size:14px;color:var(--qs-muted)}
 .pub-epreuves{list-style:none;margin:0;padding:0;border:1px solid var(--qs-line);
   border-radius:var(--qs-r-card);background:var(--qs-surface);overflow:hidden}
-.pub-epreuves li{display:flex;align-items:center;gap:10px;padding:14px 18px;
+.pub-epreuves li{position:relative;display:flex;align-items:center;gap:10px;padding:14px 18px;
   border-bottom:1px solid var(--qs-line)}
 .pub-epreuves li:last-child{border-bottom:0}
 .pub-epreuves li > a,.pub-epreuves__nom{flex:1 1 200px;min-width:0;text-decoration:none;
   color:var(--qs-ink);display:flex;flex-direction:column}
 .pub-epreuves li > a span,.pub-epreuves__nom span{font-size:13px;color:var(--qs-muted)}
 .pub-epreuves li > a:hover b{color:var(--qs-blue)}
+.pub-epreuves li > a::after{content:"";position:absolute;inset:0}
 .pub-epreuves__etapes{display:flex;flex-wrap:wrap;gap:6px}
 .pub-vide{color:var(--qs-muted);padding:18px;border:1px dashed var(--qs-line-strong);
   border-radius:var(--qs-r-card);margin:18px 0 0}
@@ -1713,7 +1724,6 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .pub-groupes .groupe__titre{font-size:17px;color:var(--qs-ink)}
 .tuile-etape--note{position:relative;border:1px solid var(--qs-line);border-radius:12px;
   background:var(--qs-surface)}
-.tuile-etape--note .tuile-etape__tete{padding-right:0}
 .tuile-etape--note .tuile-etape__nom{color:var(--qs-ink)}
 .pub-note{display:flex;flex-direction:column;gap:8px}
 .groupe > .pub-note{margin-top:auto}
@@ -1791,14 +1801,13 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .tuile-etape + .tuile-etape::before{content:"";position:absolute;left:-18px;top:50%;width:9px;
   height:9px;border:solid var(--qs-line-strong);border-width:2px 2px 0 0;
   transform:translateY(-50%) rotate(45deg)}
-.tuile-etape__tete{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;padding-right:32px}
+.tuile-etape__tete{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .tuile-etape__num{width:24px;height:24px;flex:none;display:flex;align-items:center;
   justify-content:center;border-radius:50%;font-size:12.5px;font-weight:700;
   background:var(--qs-track);color:var(--qs-muted)}
 .tuile-etape.is-fait .tuile-etape__num{background:var(--qs-accent);color:var(--qs-accent-ink)}
 .tuile-etape__nom{font-size:14px;font-weight:700;color:var(--qs-blue)}
 .tuile-etape__intitule{font-size:12.5px;color:var(--qs-muted);overflow-wrap:anywhere}
-.tuile-etape .carte-bouton__fleche{position:absolute;top:12px;right:14px}
 /* Les etapes d'un concours en haut de ses pages : l'etape ouverte en vert, les autres a un clic. */
 .fil-etapes{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
   gap:10px 16px;margin:0 0 18px;padding:10px 14px;border:1px solid var(--qs-line);
@@ -1836,13 +1845,14 @@ a.fil-etapes__etape:hover{border-color:var(--qs-blue);background:var(--qs-surfac
   align-items:center;justify-content:center;background:var(--qs-grad);color:#fff}
 .carte-bouton__icone svg{width:20px;height:20px;fill:none;stroke:currentColor;
   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-/* La fleche du bouton : claire au repos, pleine au survol du bloc. */
-.carte-bouton__fleche{width:26px;height:26px;flex:none;display:flex;align-items:center;
-  justify-content:center;border-radius:50%;background:var(--qs-track);color:var(--qs-blue);
-  transition:background-color .15s,color .15s}
-.carte-bouton__fleche::before{content:"";width:7px;height:7px;margin-left:-3px;
-  border:solid currentColor;border-width:2px 2px 0 0;transform:rotate(45deg)}
-.carte-bouton:hover .carte-bouton__fleche{background:var(--qs-btn-bg);color:#fff}
+/* Une ligne qui mene a une seule page : toute la ligne s'ouvre d'un clic (le lien de sa premiere
+   cellule s'etend dessus). Ses boutons et ses cases passent au-dessus. */
+.ligne-lien{position:relative}
+li.ligne-lien:hover{background:var(--qs-row-hover)}
+.ligne-lien__cible::after{content:"";position:absolute;inset:0}
+.ligne-lien__nom{color:inherit;text-decoration:none}
+.ligne-lien a:not(.ligne-lien__cible),.ligne-lien button,.ligne-lien input,.ligne-lien label,
+.ligne-lien .col-choix{position:relative;z-index:1}
 .chiffres-epreuve{display:flex;flex-wrap:wrap;gap:8px 12px;margin:0}
 .chiffres-epreuve dt{font-size:11.5px;color:var(--qs-muted);white-space:nowrap}
 .chiffres-epreuve dd{margin:2px 0 0;font-size:14px;font-weight:700;color:var(--qs-ink);
@@ -1917,7 +1927,6 @@ a.chiffre:hover{border-color:var(--qs-blue)}
 .a-faire h2{margin:0 0 4px}
 .a-faire__liste{list-style:none;margin:10px 0 3px;padding:0;display:grid;gap:10px}
 .a-faire__ligne{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 12px}
-.a-faire__ligne .carte-bouton__fleche{margin-left:auto}
 .a-faire__icone{flex:none;width:30px;height:30px;border-radius:10px;display:flex;align-items:center;
   justify-content:center;background:var(--qs-warn-bg);color:var(--qs-warn)}
 .a-faire__icone--bad{background:var(--qs-bad-bg);color:var(--qs-bad)}
@@ -1926,7 +1935,6 @@ a.chiffre:hover{border-color:var(--qs-blue)}
   stroke-linecap:round;stroke-linejoin:round}
 .a-faire__texte{flex:1 1 200px;min-width:0;font-size:13.5px;line-height:1.5;color:var(--qs-muted)}
 .a-faire__texte b,.a-faire__titre{font-weight:700;color:var(--qs-ink)}
-.a-faire__liens{display:flex;flex-wrap:wrap;gap:6px}
 .bord{display:grid;grid-template-columns:minmax(0,2.3fr) minmax(280px,1fr);gap:18px;align-items:start}
 .bord__principal,.bord__cote{min-width:0}
 .bord__cote .histo{height:150px}

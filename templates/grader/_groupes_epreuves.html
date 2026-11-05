@@ -24,7 +24,6 @@ copies notées, moyenne et admis ; faux : pages Concours et Classes, avec candid
           <span class="tuile-etape__num" aria-hidden="true">{% if e.resume or e.quiz.n_lots %}✓{% else %}{{ e.numero }}{% endif %}</span>
           <a class="tuile-etape__nom carte-bouton__lien" title="{{ e.quiz.title }}" href="{% if resultats %}{% url 'quiz_results' e.quiz.pk %}{% else %}{% url 'quiz_detail' e.quiz.pk %}{% endif %}">{{ e.quiz.type_court }}</a>
           {% if e.intitule %}<span class="tuile-etape__intitule">{{ e.intitule }}</span>{% endif %}
-          <span class="carte-bouton__fleche" aria-hidden="true"></span>
         </div>
         <div class="groupe__bas">
           {% include "grader/_chiffres_epreuve.html" %}
@@ -44,7 +43,6 @@ copies notées, moyenne et admis ; faux : pages Concours et Classes, avec candid
         <span class="badge grey">{{ e.quiz.type_court }}</span>
         {% if not g.concours %}<span class="groupe__classe">{{ e.quiz.class_group.name }}</span>{% endif %}
       </div>
-      <span class="carte-bouton__fleche" aria-hidden="true"></span>
     </header>
     <div class="groupe__bas">
       {% include "grader/_chiffres_epreuve.html" %}

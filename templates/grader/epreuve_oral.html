@@ -56,7 +56,7 @@
       <table>
         <tr><th>Lot</th><th>Date</th><th>Fiches</th><th>Identifiées</th></tr>
         {% for b in batches %}
-        <tr><td><a href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
+        <tr class="ligne-lien"><td><a class="ligne-lien__cible" href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
             {% if b.is_processing %}<span class="badge warn">lecture {{ b.processed_pages }}/{{ b.total_pages }}</span>{% endif %}</td>
           <td>{{ b.created_at|date:"d/m/Y H:i" }}</td><td>{{ b.sheets.count }}</td><td>{{ b.identified_count }}</td></tr>
         {% endfor %}
@@ -82,8 +82,8 @@
       <table>
         <tr><th>Nom et prénom</th><th>N° d'inscription</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th><th>Fiche</th></tr>
         {% for e, etat, r in lignes %}
-        <tr>
-          <td><b>{{ e.full_name }}</b></td>
+        <tr class="ligne-lien">
+          <td>{% if etat == "lue" or etat == "illisible" %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'sheet_review' r.sheet.pk %}"><b>{{ e.full_name }}</b></a>{% else %}<b>{{ e.full_name }}</b>{% endif %}</td>
           <td>{{ e.student_number|default:"—" }}</td>
           <td>{% if etat == "lue" or etat == "manuelle" %}<span class="score">{{ r.points_awarded|floatformat:"-2" }}</span>{% else %}—{% endif %}</td>
           <td>

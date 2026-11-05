@@ -285,10 +285,11 @@ def dashboard(request):
         "week": week,
         "week_total": sum(counts),
         "batches": batches,
-        "to_review": sheets.filter(status__in=["no_match", "no_markers", "error"])[:6],
-        "epreuves_a_noter": list(quizzes.filter(
+        # « À faire » : un clic sur la ligne ouvre le premier élément ; une fois traité, le suivant
+        "copie_a_reprendre": sheets.filter(status__in=["no_match", "no_markers", "error"]).first(),
+        "epreuve_a_noter": quizzes.filter(
             batches__sheets__answers__question__qtype="open",
-            batches__sheets__answers__points_awarded__isnull=True).distinct()[:6]),
+            batches__sheets__answers__points_awarded__isnull=True).distinct().first(),
     })
 
 

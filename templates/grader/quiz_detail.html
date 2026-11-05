@@ -193,8 +193,8 @@
     <table class="table--espacee">
     <tr><th>Corrigé scanné</th><th>Page</th><th>Lues</th><th>Date</th><th></th></tr>
     {% for k in answer_key_sheets %}
-    <tr>
-      <td>{{ k.source_name|truncatechars:42 }}</td>
+    <tr class="ligne-lien">
+      <td>{% if k.overlay_image %}<a class="ligne-lien__cible ligne-lien__nom" href="{{ k.overlay_image.url }}" target="_blank">{{ k.source_name|truncatechars:42 }}</a>{% else %}{{ k.source_name|truncatechars:42 }}{% endif %}</td>
       <td>page {{ k.page_index|add:1 }}</td>
       <td>{% if k.status == "ok" %}<span class="badge ok">{{ k.nb_lues }} réponse(s)</span>
           {% elif k.status == "partial" %}<span class="badge warn">{{ k.nb_lues }} lue(s),
@@ -445,8 +445,8 @@
     <table>
     <tr><th>Lot</th><th>Date</th><th>Pages</th><th>Identifiées</th><th></th></tr>
     {% for b in batches %}
-    <tr>
-      <td><a href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
+    <tr class="ligne-lien">
+      <td><a class="ligne-lien__cible" href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
           {% if b.is_processing %}<span class="badge warn">correction {{ b.processed_pages }}/{{ b.total_pages }}</span>
           {% elif b.status == "pending" %}<span class="badge grey">en attente — {{ b.total_pages }} page(s)</span>{% endif %}</td>
       <td>{{ b.created_at|date:"d/m/Y H:i" }}</td>

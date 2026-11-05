@@ -1163,6 +1163,8 @@ def compute_results(quiz, batch=None, student=None):
             "answers": {},
         })
         entry["sheets"].append(sheet)
+        if sheet.image and "copie" not in entry:      # la page qu'ouvre sa ligne de résultats
+            entry["copie"] = sheet
         for question_id, detected, multiple, points in par_copie.pop(sheet.pk, ()):
             if question_id in entry["seen_questions"]:
                 continue  # doublon (page scannée deux fois) : première lecture retenue

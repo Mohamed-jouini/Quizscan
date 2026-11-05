@@ -10,7 +10,7 @@
 <section class="pub-section">
   <div class="pub-section__tete">
     <h2>Derniers communiqués</h2>
-    {% if n_avis > avis|length %}<a href="{% url 'public_communiques' %}">Tous les communiqués ({{ n_avis }}) →</a>{% endif %}
+    {% if n_avis > avis|length %}<a href="{% url 'public_communiques' %}">Tous les communiqués ({{ n_avis }})</a>{% endif %}
   </div>
   {% if avis %}
   <div class="pub-cartes">

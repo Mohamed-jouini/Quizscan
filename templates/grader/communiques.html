@@ -50,9 +50,9 @@
     {% include "grader/_pagination.html" with page=page_avis label="Communiqués" %}
     <ul class="avis-liste">
       {% for a in page_avis %}
-      <li class="avis-liste__item">
+      <li class="avis-liste__item ligne-lien">
         <div class="avis-liste__tete">
-          <b>{{ a.titre }}</b>
+          {% if user.is_superuser or a.auteur_id == user.pk %}<a class="ligne-lien__cible ligne-lien__nom" href="?modifier={{ a.pk }}"><b>{{ a.titre }}</b></a>{% else %}<b>{{ a.titre }}</b>{% endif %}
           {% if a.publie %}<span class="badge ok">publié</span>{% else %}<span class="badge grey">brouillon</span>{% endif %}
         </div>
         <span class="helptext">{{ a.cree_le|date:"d/m/Y H:i" }}{% if a.auteur %} · {{ a.auteur.get_full_name|default:a.auteur.username }}{% endif %}</span>

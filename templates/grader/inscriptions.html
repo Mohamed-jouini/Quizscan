@@ -77,9 +77,9 @@
         <tr><th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="Tout cocher"></th>
           <th>N° d'inscription</th><th>Nom et prénom</th><th>CIN</th><th>Né(e) le</th><th>Établissement</th><th>Classes / concours</th><th>QR</th><th></th></tr>
         {% for i in page_inscrits %}
-        <tr>
+        <tr class="ligne-lien">
           <td class="col-choix"><input type="checkbox" name="choix" value="{{ i.pk }}" aria-label="Choisir {{ i.nom_complet }}"></td>
-          <td><b>{{ i.numero }}</b></td>
+          <td>{% if user.is_superuser or i.cree_par_id == user.pk %}<a class="ligne-lien__cible ligne-lien__nom" href="?modifier={{ i.pk }}#fiche-inscrit"><b>{{ i.numero }}</b></a>{% else %}<b>{{ i.numero }}</b>{% endif %}</td>
           <td><b>{{ i.nom }}</b> {{ i.prenom }}{% if i.email %}<span class="helptext">{{ i.email }}</span>{% endif %}
             {% if not i.fiche_complete %}<span class="badge warn" title="Inscrit avant : CIN, date de naissance, e-mail ou établissement manquant">fiche à compléter</span>{% endif %}</td>
           <td>{{ i.cin|default:"—" }}</td>

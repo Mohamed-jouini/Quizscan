@@ -22,7 +22,6 @@ Paramètre : groupes (services.groupes_epreuves, avec « bilan » sur chaque ét
           <span class="tuile-etape__num" aria-hidden="true">{% if e.bilan %}✓{% else %}{{ e.numero }}{% endif %}</span>
           <a class="tuile-etape__nom carte-bouton__lien" title="{{ e.quiz.title }}" href="{% if e.bilan %}{% url 'quiz_results' e.quiz.pk %}{% else %}{% url 'quiz_detail' e.quiz.pk %}{% endif %}">{{ e.quiz.type_court }}</a>
           {% if e.intitule %}<span class="tuile-etape__intitule">{{ e.intitule }}</span>{% endif %}
-          <span class="carte-bouton__fleche" aria-hidden="true"></span>
         </div>
         {% include "grader/_bord_chiffres.html" %}
       </li>
@@ -39,7 +38,6 @@ Paramètre : groupes (services.groupes_epreuves, avec « bilan » sur chaque ét
         <span class="badge grey">{{ e.quiz.type_court }}</span>
         {% if not g.concours %}<span class="groupe__classe">{{ e.quiz.class_group.name }}</span>{% endif %}
       </div>
-      <span class="carte-bouton__fleche" aria-hidden="true"></span>
     </header>
     {% include "grader/_bord_chiffres.html" %}
   </article>
