@@ -23,6 +23,16 @@ REMOTE=$(git rev-parse --short "origin/$BRANCH")
 if [ "$LOCAL" = "$REMOTE" ] && [ "${1:-}" != "--force" ]; then
     exit 0                                   # rien de nouveau
 fi
+
+# Un lot en cours de lecture s'arrêterait au redémarrage (il ne reprend qu'à la
+# main) : la mise à jour attend la fin de la lecture, le minuteur réessaie dans
+# 5 minutes. Conteneur arrêté ou commande absente (version d'avant) : 0, on y va.
+EN_COURS=$(docker compose exec -T quizscan python manage.py lots_en_cours 2>/dev/null \
+           | tr -dc '0-9' || true)
+if [ "${EN_COURS:-0}" -gt 0 ] && [ "${1:-}" != "--force" ]; then
+    log "Mise à jour $LOCAL -> $REMOTE reportée : $EN_COURS lot(s) en cours de lecture"
+    exit 0
+fi
 log "Mise à jour $LOCAL -> $REMOTE ($BRANCH)"
 
 if [ ! -f .env ]; then

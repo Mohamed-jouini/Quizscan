@@ -7,6 +7,7 @@ limite de volume : un concours de plusieurs milliers de copies est traité
 page par page, et un traitement interrompu (redémarrage du serveur) peut
 être relancé — les pages déjà notées ne sont pas relues.
 """
+import collections
 import contextlib
 import io
 import logging
@@ -14,6 +15,7 @@ import os
 import threading
 import time
 import uuid
+from concurrent.futures import Future, ThreadPoolExecutor
 
 import cv2
 import numpy as np
@@ -21,7 +23,7 @@ import pymupdf
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import DatabaseError, close_old_connections, connection, transaction
-from django.db.models import Avg, Count, Max, Min, Q, Sum
+from django.db.models import Count, Q, Sum
 
 from . import journal, omr, sheet_pdf
 from . import layout as layout_mod
@@ -110,9 +112,26 @@ def _enregistrer_copie(sheet):
                                  status="error", error_message=f"Page non enregistrée : {e}")
 
 
+def _fils_de_lecture():
+    """Pages lues en même temps dans un lot : une par processeur, 4 au plus
+    (LECTURE_FILS dans .env pour en changer ; 1 : une page après l'autre).
+    OpenCV relâche le verrou de Python pendant ses calculs : les fils lisent
+    vraiment en parallèle. La base, elle, reste au fil du lot."""
+    try:
+        demande = int(os.environ.get("LECTURE_FILS", "0"))
+    except ValueError:
+        demande = 0
+    return max(1, demande or min(4, os.cpu_count() or 1))
+
+
 def run_batch(batch_id):
     """Lit et note toutes les pages d'un lot. Reprenable : les pages déjà
-    enregistrées (même nom de source) sont ignorées."""
+    enregistrées (même nom de source) sont ignorées.
+
+    Les pages se lisent à plusieurs en même temps (_lire_page, dans des fils), puis
+    s'enregistrent ici une à une, dans l'ordre du paquet : l'ordre du scan sert à
+    l'identification (seconde passe, page précédente). Le PDF n'est ouvert que par
+    ce fil-ci : PyMuPDF ne se partage pas entre fils."""
     batch = ScanBatch.objects.select_related("quiz__class_group").get(pk=batch_id)
     quiz = batch.quiz
     layout = quiz.layout_json
@@ -122,6 +141,56 @@ def run_batch(batch_id):
     batch.processed_pages = len(done)
     batch.status = "processing"
     batch.save(update_fields=["processed_pages", "status", "updated_at"])
+    fils = _fils_de_lecture()
+    lecteurs = ThreadPoolExecutor(max_workers=fils, thread_name_prefix="quizscan-lecture")
+    # (nom de page, lecture à venir), dans l'ordre du lot ; borné : chaque page
+    # en attente garde ses images en mémoire
+    en_vol = collections.deque()
+
+    def enregistrer_la_premiere():
+        page_name, futur = en_vol.popleft()
+        lecture = futur.result()           # _lire_page ne lève jamais
+        sheet = SheetScan(batch=batch, source_name=page_name)
+        with _PROCESS_LOCK:
+            try:
+                if lecture.image_jpg:
+                    sheet.image.save(f"scan_{batch.pk}.jpg",
+                                     ContentFile(lecture.image_jpg), save=False)
+                if lecture.erreur is not None:
+                    if lecture.page_index is not None:
+                        sheet.page_index = lecture.page_index
+                    raise lecture.erreur
+                _enregistrer_page(sheet, lecture, students, questions, quiz)
+            except omr.MarkerError as e:
+                if quiz.type_epreuve == "ecrit":
+                    # copie scannée en entier : les pages de rédaction n'ont pas
+                    # de repères, seule la page de garde est lue
+                    sheet.status = "ignoree"
+                    sheet.error_message = (
+                        "Page sans repères : page de rédaction, "
+                        "ignorée. Si c'est une page de garde, "
+                        "rescannez-la bien à plat.")
+                elif lecture.blanche:
+                    # sinon, en recto-verso, un paquet de 500 feuilles
+                    # imprimées d'un seul côté donne 500 pages en erreur
+                    sheet.status = "ignoree"
+                    sheet.error_message = "Page blanche : verso vide, ignoré."
+                else:
+                    sheet.status = "no_markers"
+                    sheet.error_message = str(e)
+            except Exception as e:  # noqa: BLE001 — page illisible
+                log.exception("Page illisible (%s)", page_name)
+                sheet.status = "error"
+                sheet.error_message = f"{type(e).__name__}: {e}"
+            _enregistrer_copie(sheet)
+        done.add(page_name)
+        batch.processed_pages = len(done)
+        batch.save(update_fields=["processed_pages", "updated_at"])
+
+    def tout_enregistrer():
+        while en_vol:
+            enregistrer_la_premiere()
+
     try:
         for src in batch.source_files:
             with default_storage.open(src["path"], "rb") as fh:
@@ -130,9 +199,10 @@ def run_batch(batch_id):
             # fichier, même si une page lève une erreur inattendue.
             with contextlib.ExitStack() as stack:
                 try:
-                    pages = stack.enter_context(_open_pages(src["name"], data))
+                    pages = stack.enter_context(_open_pages(src["name"], data, differer=True))
                 except Exception as e:  # noqa: BLE001 — fichier corrompu
                     if src["name"] not in done:
+                        tout_enregistrer()      # les pages d'avant d'abord : l'ordre
                         SheetScan.objects.create(
                             batch=batch, source_name=src["name"][:200], status="error",
                             error_message=f"Fichier illisible : {e}")
@@ -142,41 +212,20 @@ def run_batch(batch_id):
                     continue
                 for page_name, render in pages:
                     page_name = page_name[:200]     # lot envoyé avant la borne de create_batch
-                    if page_name in done:
+                    if page_name in done or any(nom == page_name for nom, _ in en_vol):
                         continue
-                    sheet = SheetScan(batch=batch, source_name=page_name)
-                    with _PROCESS_LOCK:
-                        try:
-                            img = render()
-                            _save_jpg(sheet.image, img, f"scan_{batch.pk}.jpg")
-                            _process_sheet(sheet, img, layout, students,
-                                           questions, quiz)
-                        except omr.MarkerError as e:
-                            if quiz.type_epreuve == "ecrit":
-                                # copie scannée en entier : les pages de
-                                # rédaction n'ont pas de repères, seule la
-                                # page de garde est lue
-                                sheet.status = "ignoree"
-                                sheet.error_message = (
-                                    "Page sans repères : page de rédaction, "
-                                    "ignorée. Si c'est une page de garde, "
-                                    "rescannez-la bien à plat.")
-                            elif omr.page_blanche(img):
-                                # sinon, en recto-verso, un paquet de 500 feuilles
-                                # imprimées d'un seul côté donne 500 pages en erreur
-                                sheet.status = "ignoree"
-                                sheet.error_message = "Page blanche : verso vide, ignoré."
-                            else:
-                                sheet.status = "no_markers"
-                                sheet.error_message = str(e)
-                        except Exception as e:  # noqa: BLE001 — page illisible
-                            log.exception("Page illisible (%s)", page_name)
-                            sheet.status = "error"
-                            sheet.error_message = f"{type(e).__name__}: {e}"
-                        _enregistrer_copie(sheet)
-                    done.add(page_name)
-                    batch.processed_pages = len(done)
-                    batch.save(update_fields=["processed_pages", "updated_at"])
+                    try:
+                        img = render()          # ici : le PDF reste à ce fil
+                    except Exception as e:  # noqa: BLE001 — page illisible
+                        futur = Future()
+                        futur.set_result(_Lecture(erreur=e))
+                    else:
+                        futur = lecteurs.submit(_lire_page_dans_un_fil, img, layout,
+                                                questions, quiz)
+                    en_vol.append((page_name, futur))
+                    while len(en_vol) > 2 * fils:
+                        enregistrer_la_premiere()
+        tout_enregistrer()
         # Seconde passe : les copies restées « à identifier » profitent de
         # ce que les autres ont été reconnues (élimination).
         try:
@@ -191,6 +240,8 @@ def run_batch(batch_id):
         batch.status = "error"
         batch.error_message = f"{type(e).__name__}: {e}"
         batch.save(update_fields=["status", "error_message", "updated_at"])
+    finally:
+        lecteurs.shutdown(wait=True, cancel_futures=True)
     return batch
 
 
@@ -219,15 +270,97 @@ def _controler_dimensions(name, data):
         raise ValueError(f"Image démesurée ({largeur} × {hauteur} pixels) : {name}")
 
 
+class _ADecoder:
+    """Une image à décoder plus tard, dans un fil de lecture : decoder() ne touche
+    ni à PyMuPDF ni à Pillow ouvert, seulement à des octets. Le fil du lot garde
+    ainsi pour lui ce qui ne se partage pas, et ne décode plus les pages des autres."""
+    __slots__ = ("decoder",)
+
+    def __init__(self, decoder):
+        self.decoder = decoder
+
+
+def _image_du_scanner(doc, page):
+    """L'image JPEG qu'un scanner a mise dans la page, lue telle quelle (ou None :
+    la page se dessine). Voir _jpeg_du_scanner."""
+    a_decoder = _jpeg_du_scanner(doc, page)
+    return a_decoder.decoder() if a_decoder is not None else None
+
+
+def _jpeg_du_scanner(doc, page):
+    """L'image JPEG qu'un scanner a mise dans la page, à décoder telle quelle.
+
+    Redessiner la page à 200 ppp coûtait 0,6 s par copie, le quart de sa
+    lecture ; décoder le JPEG qu'elle contient, quelques centièmes. Seulement
+    pour une page qui n'est que cette image, à plat et pleine page, en gris ou
+    en couleur : sinon (texte, dessin, rotation, masque, noir et blanc 1 bit,
+    CMJN…) None, et la page est dessinée comme avant. Une image plus fine que
+    200 ppp y est ramenée, comme le faisait le rendu. Tout ce qui demande le
+    PDF se fait ici ; le décodage, dans _ADecoder.decoder (None s'il échoue)."""
+    if page.rotation % 360:
+        return None
+    images = page.get_images(full=True)
+    if len(images) != 1 or images[0][1]:                 # une image, sans masque
+        return None
+    xref = images[0][0]
+    cles = {cle: doc.xref_get_key(xref, cle) for cle in
+            ("Filter", "ColorSpace", "BitsPerComponent", "Decode")}
+    if (cles["Filter"] != ("name", "/DCTDecode")
+            or cles["ColorSpace"] not in (("name", "/DeviceGray"), ("name", "/DeviceRGB"))
+            or cles["BitsPerComponent"] != ("int", "8") or cles["Decode"][0] != "null"):
+        return None
+    # sans « xrefs=True » : il décode chaque image pour la reconnaître (0,4 s) ;
+    # une seule image dans la page et un seul placement, c'est la même
+    placements = page.get_image_info()
+    if len(placements) != 1:
+        return None
+    a, b, c, d, _e, _f = placements[0]["transform"]
+    largeur_pt, hauteur_pt = page.rect.width, page.rect.height
+    x0, y0, x1, y1 = placements[0]["bbox"]
+    if (abs(b) > 1e-3 or abs(c) > 1e-3 or a <= 0 or d <= 0          # ni tournée, ni retournée
+            or max(abs(x0), abs(y0), abs(x1 - largeur_pt), abs(y1 - hauteur_pt)) > 2
+            or page.get_drawings() or page.get_text("text").strip()):
+        return None
+    try:
+        w, h = (int(doc.xref_get_key(xref, cle)[1]) for cle in ("Width", "Height"))
+    except (TypeError, ValueError):
+        return None
+    if not w or not h or abs(w / h - largeur_pt / hauteur_pt) > 0.02 * largeur_pt / hauteur_pt:
+        return None                                       # image étirée sur la page
+    if w * h > MAX_PIXELS_PAGE:
+        raise ValueError(f"Image démesurée ({w} × {h} pixels) dans la page.")
+    brut = doc.xref_stream_raw(xref)
+    from PIL import Image
+    try:        # l'en-tête seul (une fraction de milliseconde) : un JPEG que le décodage refuserait
+        with Image.open(io.BytesIO(brut), formats=("JPEG",)) as entete:
+            if entete.size != (w, h) or entete.mode not in ("L", "RGB"):
+                return None
+    except Exception:  # noqa: BLE001 — en-tête illisible : la page se dessine
+        return None
+    cible = (round(largeur_pt / 72 * SCAN_DPI), round(hauteur_pt / 72 * SCAN_DPI))
+
+    def decoder():
+        img = cv2.imdecode(np.frombuffer(brut, dtype=np.uint8),
+                           cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
+        if img is not None and img.shape[1] > cible[0] * 1.05:
+            img = cv2.resize(img, cible, interpolation=cv2.INTER_AREA)
+        return img
+    return _ADecoder(decoder)
+
+
 @contextlib.contextmanager
-def _open_pages(name, data):
+def _open_pages(name, data, differer=False):
     """Gestionnaire de contexte donnant la liste des (nom de page, fonction
     de rendu -> image BGR) d'un fichier téléversé.
 
     Le PDF n'est ouvert qu'une fois et chaque page n'est rendue qu'à la
     demande (un lot de plusieurs milliers de pages ne tient pas en mémoire) ;
     le document est refermé à la sortie du bloc, sans quoi un gros lot
-    accumulerait un document ouvert par fichier. Même chose pour un TIFF multipage."""
+    accumulerait un document ouvert par fichier. Même chose pour un TIFF multipage.
+
+    differer : la fonction de rendu peut rendre un _ADecoder au lieu de l'image,
+    quand le décodage peut se faire dans un fil de lecture (image seule, JPEG d'un
+    PDF de scanner). Une page à dessiner, un TIFF : l'image, tout de suite."""
     if not _is_pdf(name):
         nb_images = _images_tiff(data)
         if nb_images > 1:
@@ -250,7 +383,7 @@ def _open_pages(name, data):
             if img is None:
                 raise ValueError(f"Format d'image non reconnu : {name}")
             return img
-        yield [(name, decode)]
+        yield [(name, (lambda: _ADecoder(decode)) if differer else decode)]
         return
 
     with pymupdf.open(stream=data, filetype="pdf") as doc:
@@ -260,6 +393,14 @@ def _open_pages(name, data):
                 raise ValueError(f"Page démesurée ({rect.width / 72 * 2.54:.0f} × "
                                  f"{rect.height / 72 * 2.54:.0f} cm) : une copie se "
                                  "scanne en A4 ou A3.")
+            if differer:
+                a_decoder = _jpeg_du_scanner(doc, doc[i])
+                if a_decoder is not None:
+                    return a_decoder
+            else:
+                img = _image_du_scanner(doc, doc[i])
+                if img is not None:
+                    return img
             pix = doc[i].get_pixmap(dpi=SCAN_DPI, colorspace=pymupdf.csRGB)
             img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
                 pix.height, pix.width, 3)
@@ -881,18 +1022,98 @@ def reidentifier_lot(batch, utilisateur=None):
     return faites
 
 
+def _jpg(img_bgr, quality):
+    ok, buf = cv2.imencode(".jpg", img_bgr, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    return buf.tobytes() if ok else None
+
+
+class _Lecture:
+    """Ce qu'une page donne à la lecture de son image seule : recalage, QR, grille
+    du n°, cases, note, images de contrôle déjà encodées. Rien n'y vient de la base
+    ni de la liste des candidats : _lire_page tourne dans un fil de lecture,
+    plusieurs pages à la fois. erreur : l'exception de la lecture, levée de nouveau
+    à l'enregistrement, là où elle l'était avant (mêmes états, mêmes messages)."""
+    __slots__ = ("image_jpg", "erreur", "blanche", "warped", "page_index", "page_layout",
+                 "qr", "grille", "resultats", "note", "warped_jpg", "overlay_jpg")
+
+    def __init__(self, image_jpg=None, erreur=None):
+        self.image_jpg, self.erreur, self.blanche = image_jpg, erreur, False
+        self.warped = self.page_index = self.page_layout = self.qr = None
+        self.resultats = self.note = self.warped_jpg = self.overlay_jpg = None
+        self.grille = ""
+
+
+def _lire_page(img, layout, questions, quiz):
+    """Toute la lecture d'une page qui ne demande que son image (ou un _ADecoder,
+    décodé ici). Ne lève jamais : l'erreur est rangée dans la lecture."""
+    if isinstance(img, _ADecoder):
+        try:
+            img = img.decoder()
+            if img is None:
+                raise ValueError("Image JPEG de la page illisible.")
+        except Exception as e:  # noqa: BLE001 — même suite qu'une page illisible au rendu
+            return _Lecture(erreur=e)
+    lecture = _Lecture(image_jpg=_jpg(img, 82))
+    try:
+        warped, page_index = omr.detect_and_warp(img)
+        lecture.page_index = page_index
+        pages = layout["pages"]
+        if page_index >= len(pages):
+            raise omr.MarkerError(
+                f"Repères de la page {page_index + 1} alors que la fiche du quiz "
+                f"n'en compte que {len(pages)} : la fiche a été régénérée depuis "
+                "l'impression de cette copie. Réimprimez la fiche en cours ou "
+                "régénérez-la à l'identique.")
+        page_layout = pages[page_index]
+        lecture.warped, lecture.page_layout = warped, page_layout
+        if page_layout.get("qr"):
+            lecture.qr = omr.read_qr(warped, page_layout)
+        if page_layout.get("id_grid"):
+            # lue d'avance : la même lecture qu'au moment où l'identification la demande
+            lecture.grille = omr.read_id_grid(warped, page_layout)
+        resultats = omr.read_bubbles(warped, page_layout)
+        overlay = omr.draw_overlay(warped, page_layout, resultats, questions,
+                                   zone_nom=_has_name_zone(page_layout, quiz))
+        # Écrit : note noircie par le correcteur dans la grille de la page de garde
+        grille_note = page_layout.get("note_grid")
+        if grille_note:
+            lecture.note, chiffres = omr.lire_note(warped, grille_note, grille_note["sur"])
+            omr.dessiner_note(overlay, grille_note, chiffres, lecture.note, grille_note["sur"])
+        lecture.resultats = resultats
+        lecture.warped_jpg = _jpg(warped, 70)
+        lecture.overlay_jpg = _jpg(overlay, 70)
+    except omr.MarkerError as e:
+        lecture.erreur, lecture.blanche = e, omr.page_blanche(img)
+    except Exception as e:  # noqa: BLE001 — page illisible : signalée à l'enregistrement
+        lecture.erreur = e
+    return lecture
+
+
+def _lire_page_dans_un_fil(img, layout, questions, quiz):
+    """_lire_page pour un fil de lecture : il ne touche pas à la base, mais s'il
+    venait à ouvrir une connexion, elle ne resterait pas ouverte après lui."""
+    try:
+        return _lire_page(img, layout, questions, quiz)
+    finally:
+        connection.close()
+
+
 def _process_sheet(sheet, img, layout, students, questions, quiz):
+    """Lit et enregistre une page, d'un seul tenant (sans fil de lecture)."""
+    lecture = _lire_page(img, layout, questions, quiz)
+    if lecture.erreur is not None:
+        if lecture.page_index is not None:
+            sheet.page_index = lecture.page_index
+        raise lecture.erreur
+    _enregistrer_page(sheet, lecture, students, questions, quiz)
+
+
+def _enregistrer_page(sheet, lecture, students, questions, quiz):
+    """L'identification (liste des candidats, registre, OCR du nom en secours)
+    et l'enregistrement d'une page lue : dans le fil qui a la base, page après page."""
     language = quiz.language
-    warped, page_index = omr.detect_and_warp(img)
-    sheet.page_index = page_index
-    pages = layout["pages"]
-    if page_index >= len(pages):
-        raise omr.MarkerError(
-            f"Repères de la page {page_index + 1} alors que la fiche du quiz "
-            f"n'en compte que {len(pages)} : la fiche a été régénérée depuis "
-            "l'impression de cette copie. Réimprimez la fiche en cours ou "
-            "régénérez-la à l'identique.")
-    page_layout = pages[page_index]
+    warped, page_layout = lecture.warped, lecture.page_layout
+    sheet.page_index = lecture.page_index
 
     # Identification : QR, puis grille de n° (lectures exactes), puis OCR du
     # nom. En mode concours, un candidat inconnu est créé automatiquement.
@@ -900,7 +1121,7 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
     serial = None
     grid_id = ""
     if page_layout.get("qr"):
-        kind, _quiz_id, value = omr.read_qr(warped, page_layout)
+        kind, _quiz_id, value = lecture.qr
         if kind == "QS":
             student = next((s for s in students if s.pk == value), None)
             if student is not None:
@@ -918,7 +1139,7 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
             if student is not None:
                 sheet.match_score = 100.0
     if student is None and not grid_id and page_layout.get("id_grid"):
-        grid_id = omr.read_id_grid(warped, page_layout)
+        grid_id = lecture.grille
         sheet.id_read = grid_id[:20] or sheet.id_read
         student = omr.match_student_by_id(grid_id, students)
         if student is not None:
@@ -962,17 +1183,14 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
         student = _identifier_par_nom(sheet, warped, page_layout, quiz, students)
     sheet.student = student
 
-    # Lecture des cases QCM
-    results = omr.read_bubbles(warped, page_layout)
-    overlay = omr.draw_overlay(warped, page_layout, results, questions,
-                               zone_nom=_has_name_zone(page_layout, quiz))
-    # Écrit : note noircie par le correcteur dans la grille de la page de garde
+    # Cases QCM, note de l'écrit, images de contrôle : lues par _lire_page
+    results = lecture.resultats
     grille_note = page_layout.get("note_grid")
-    if grille_note:
-        note_lue, chiffres = omr.lire_note(warped, grille_note, grille_note["sur"])
-        omr.dessiner_note(overlay, grille_note, chiffres, note_lue, grille_note["sur"])
-    _save_jpg(sheet.warped_image, warped, "warped.jpg", quality=70)
-    _save_jpg(sheet.overlay_image, overlay, "overlay.jpg", quality=70)
+    note_lue = lecture.note
+    if lecture.warped_jpg:
+        sheet.warped_image.save("warped.jpg", ContentFile(lecture.warped_jpg), save=False)
+    if lecture.overlay_jpg:
+        sheet.overlay_image.save("overlay.jpg", ContentFile(lecture.overlay_jpg), save=False)
 
     sheet.status = "ok" if student is not None else "no_match"
     sheet.save()
@@ -1146,12 +1364,32 @@ def compute_results(quiz, batch=None, student=None):
     if student is not None:
         sheets = sheets.filter(student=student)
     questions = {q.pk: q for q in quiz.questions.all()}
-    # dans l'ordre des questions (Answer.Meta), copie par copie
+    # Une fois par question ce que chaque réponse en demande. Les règles sont
+    # celles d'Answer.is_blank et Answer.is_correct, écrites dans la boucle : à
+    # 10 000 copies de 30 questions, 300 000 appels de propriétés coûtaient
+    # plusieurs secondes à chaque affichage des résultats.
+    infos = {pk: (q, q.order, q.qtype == "qcm", q.qtype == "open", q.correct_choice)
+             for pk, q in questions.items()}
+    # Réponses lues à partir de l'épreuve, sans tri par la base : le tri de
+    # Answer.Meta (n° de question) menait PostgreSQL à parcourir les réponses de
+    # TOUTES les épreuves (2 s pour une épreuve de 3 copies, de plus en plus à
+    # mesure que la table grandit). Le même ordre est rétabli ici, copie par copie.
+    reponses_lues = Answer.objects.filter(sheet__batch__quiz=quiz, sheet__student__isnull=False)
+    if batch is not None:
+        reponses_lues = reponses_lues.filter(sheet__batch=batch)
+    if student is not None:
+        reponses_lues = reponses_lues.filter(sheet__student=student)
     par_copie = {}
-    for sheet_id, *reponse in (Answer.objects.filter(sheet__in=sheets.values("pk"))
-                               .values_list("sheet_id", "question_id", "detected_choice",
-                                            "is_multiple", "points_awarded").iterator()):
-        par_copie.setdefault(sheet_id, []).append(reponse)
+    for sheet_id, question_id, detected, multiple, points in (
+            reponses_lues.order_by()
+            .values_list("sheet_id", "question_id", "detected_choice", "is_multiple",
+                         "points_awarded").iterator(chunk_size=20000)):
+        liste = par_copie.get(sheet_id)
+        if liste is None:
+            liste = par_copie[sheet_id] = []
+        liste.append((question_id, detected, multiple, points))
+    for liste in par_copie.values():
+        liste.sort(key=lambda reponse: infos[reponse[0]][1])   # n° de la question
     sheets = sheets.select_related("student")
 
     per_student = {}
@@ -1165,28 +1403,37 @@ def compute_results(quiz, batch=None, student=None):
         entry["sheets"].append(sheet)
         if sheet.image and "copie" not in entry:      # la page qu'ouvre sa ligne de résultats
             entry["copie"] = sheet
+        vues, reponses = entry["seen_questions"], entry["answers"]
+        repondues = justes = fausses = vides = en_attente = 0
+        score = entry["score"]      # mêmes additions, dans le même ordre, qu'avant
         for question_id, detected, multiple, points in par_copie.pop(sheet.pk, ()):
-            if question_id in entry["seen_questions"]:
+            if question_id in vues:
                 continue  # doublon (page scannée deux fois) : première lecture retenue
-            entry["seen_questions"].add(question_id)
-            a = _Reponse(questions[question_id], detected, multiple, points)
-            entry["answers"][a.question.order] = a
-            if a.question.qtype == "qcm":
-                if a.is_blank:
-                    entry["blank"] += 1
+            vues.add(question_id)
+            question, ordre, qcm, ouverte, bonne = infos[question_id]
+            reponses[ordre] = _Reponse(question, detected, multiple, points)
+            if qcm:
+                if detected is None and not multiple:         # is_blank
+                    vides += 1
                 else:
-                    entry["answered"] += 1
-                    if a.is_correct:
-                        entry["correct"] += 1
+                    repondues += 1
+                    if not multiple and detected == bonne:     # is_correct
+                        justes += 1
                     else:
-                        entry["wrong"] += 1
-            if a.points_awarded is not None:
-                entry["score"] += a.points_awarded
-                if a.question.qtype == "open":
-                    entry["answered"] += 1
-            elif a.question.qtype == "open":
-                entry["pending_open"] += 1
+                        fausses += 1
+            if points is not None:
+                score += points
+                if ouverte:
+                    repondues += 1
+            elif ouverte:
+                en_attente += 1
                 entry.setdefault("a_noter", sheet)    # page où saisir la note
+        entry["answered"] += repondues
+        entry["correct"] += justes
+        entry["wrong"] += fausses
+        entry["blank"] += vides
+        entry["pending_open"] += en_attente
+        entry["score"] = score
 
     max_score = quiz.max_score
     # Une QCM = un point : le résultat se lit en bonnes réponses sur le
@@ -1273,7 +1520,7 @@ DISCRIMINATION_NEGATIVE = (
     "vérifiez la bonne réponse, elle est probablement erronée.")
 
 
-def _discrimination(rows, ordre):
+def _discrimination(rows, ordre, deja_filtrees=False):
     """Écart de réussite entre le tiers fort et le tiers faible du classement.
 
     Renvoie (indice, étiquette, explication), ou None si l'effectif est trop
@@ -1281,9 +1528,10 @@ def _discrimination(rows, ordre):
     dizaine de copies, trois bonnes réponses de plus d'un côté suffisent à
     faire basculer l'indice. Mieux vaut ne rien afficher qu'un chiffre
     trompeur sur lequel on refera une épreuve.
+    deja_filtrees : rows ne contient que les lignes qui ont répondu (compute_stats).
     """
     MINIMUM = 10
-    notes = [r for r in rows if ordre in r["answers"]]
+    notes = list(rows) if deja_filtrees else [r for r in rows if ordre in r["answers"]]
     if len(notes) < MINIMUM:
         return None
     notes.sort(key=lambda r: r["score"], reverse=True)
@@ -1757,35 +2005,35 @@ def corriges_douteux(quizzes):
 def resume_epreuve(quiz):
     """Effectif, moyenne et extrêmes d'une épreuve, sans charger les copies.
 
-    Deux requêtes : le total de points par candidat, puis la moyenne de ces
-    totaux. Renvoie None si aucune copie n'est encore notée.
+    Une requête : le total de points par candidat (un nombre par candidat).
+    Moyenne, extrêmes et admis s'en déduisent ; deux requêtes de plus sur les
+    mêmes réponses coûtaient 0,8 s au tableau de bord d'un concours de 10 000
+    copies. Renvoie None si aucune copie n'est encore notée.
     """
-    par_candidat = (Answer.objects
-                    .filter(sheet__batch__quiz=quiz,
-                            sheet__student__isnull=False,
-                            points_awarded__isnull=False)
-                    .values("sheet__student_id")
-                    .annotate(total=Sum("points_awarded")))
-    resume = par_candidat.aggregate(n=Count("sheet__student_id", distinct=True),
-                                    moyenne=Avg("total"),
-                                    meilleure=Max("total"),
-                                    plus_basse=Min("total"))
-    if not resume["n"]:
+    totaux = list(Answer.objects
+                  .filter(sheet__batch__quiz=quiz,
+                          sheet__student__isnull=False,
+                          points_awarded__isnull=False)
+                  .values("sheet__student_id")
+                  .annotate(total=Sum("points_awarded"))
+                  .order_by()
+                  .values_list("total", flat=True))
+    if not totaux:
         return None
     bareme = quiz.max_score or 0
-    moyenne = round(resume["moyenne"] or 0, 2)
+    moyenne = round(sum(totaux) / len(totaux), 2)
     return {
         "quiz": quiz,
-        "n": resume["n"],
+        "n": len(totaux),
         "moyenne": moyenne,
-        "meilleure": round(resume["meilleure"] or 0, 2),
-        "plus_basse": round(resume["plus_basse"] or 0, 2),
+        "meilleure": round(max(totaux), 2),
+        "plus_basse": round(min(totaux), 2),
         "bareme": bareme,
         # Part du barème, pour la jauge : une moyenne de 8,5 ne veut rien
         # dire sans savoir si l'épreuve est sur 14 ou sur 20.
         "pct": round(moyenne / bareme * 100) if bareme else 0,
-        # Avec une note minimale : combien l'atteignent (même requête).
-        "admis": (par_candidat.filter(total__gte=quiz.note_admission).count()
+        # Avec une note minimale : combien l'atteignent.
+        "admis": (sum(1 for t in totaux if t >= quiz.note_admission)
                   if quiz.note_admission is not None else None),
     }
 
@@ -1814,34 +2062,40 @@ def compute_stats(quiz, rows):
                   "pct": round(c / n * 100), "bar": round(c / biggest * 100)}
                  for i, c in enumerate(bins)]
 
+    # Les lignes qui ont répondu à chaque question, dans l'ordre des lignes : un
+    # seul passage sur les 300 000 réponses d'un grand concours, au lieu de trois
+    # par question (comptes, indice de discrimination, répartition des cases).
+    par_question = {}
+    for r in rows:
+        for ordre in r["answers"]:
+            par_question.setdefault(ordre, []).append(r)
     questions = []
     for q in quiz.questions.order_by("order"):
+        presentes = par_question.get(q.order, [])
+        reponses = [r["answers"][q.order] for r in presentes]
         st = {"question": q, "correct": 0, "wrong": 0, "blank": 0,
-              "graded": 0, "points_sum": 0.0, "n": 0}
-        for r in rows:
-            a = r["answers"].get(q.order)
-            if a is None:
-                continue
-            st["n"] += 1
-            if q.qtype == "qcm":
-                if a.is_blank:
+              "graded": 0, "points_sum": 0.0, "n": len(reponses)}
+        if q.qtype == "qcm":
+            for a in reponses:          # règles d'Answer.is_blank / is_correct
+                if a.detected_choice is None and not a.is_multiple:
                     st["blank"] += 1
-                elif a.is_correct:
+                elif not a.is_multiple and a.detected_choice == q.correct_choice:
                     st["correct"] += 1
                 else:
                     st["wrong"] += 1
-            elif a.points_awarded is not None:
-                st["graded"] += 1
-                st["points_sum"] += a.points_awarded
+        else:
+            for a in reponses:
+                if a.points_awarded is not None:
+                    st["graded"] += 1
+                    st["points_sum"] += a.points_awarded
         if q.qtype == "qcm":
             st["success"] = round(st["correct"] / st["n"] * 100) if st["n"] else 0
-            mesure = _discrimination(rows, q.order)
+            mesure = _discrimination(presentes, q.order, deja_filtrees=True)
             if mesure:
                 st["discrimination"], st["discrimination_label"], \
                     st["discrimination_aide"] = mesure
                 st["corrige_suspect"] = st["discrimination"] < 0
-            st["repartition"] = _repartition(
-                q, [r["answers"][q.order] for r in rows if q.order in r["answers"]])
+            st["repartition"] = _repartition(q, reponses)
             convergence = _convergence_suspecte(st, st["repartition"])
             if convergence:
                 st["corrige_suspect"] = True

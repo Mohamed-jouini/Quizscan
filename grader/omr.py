@@ -49,18 +49,19 @@ def detect_and_warp(image_bgr):
     """Recale le scan dans le repère canonique et identifie la page.
     Retourne (image_recalée, page_index).
 
-    Deux générations de fiches : les copies d'avant le 29 octobre 2026 ont
-    quatre repères ArUco dans les coins (essayés d'abord, ils ne coûtent
-    presque rien à chercher) ; les nouvelles, un cadre fin et un code de page
-    en haut (voir layout.CADRE_MARGE)."""
+    Deux générations de fiches : les nouvelles ont un cadre fin et un code de
+    page en haut (voir layout.CADRE_MARGE), cherchés d'abord ; les copies
+    d'avant le 29 octobre 2026, quatre repères ArUco dans les coins. Les
+    chercher en premier coûtait 0,2 s à chaque copie nouvelle, qui n'en a pas ;
+    une copie ancienne n'a ni cadre ni code de page, elle passe aux repères."""
+    resultat = _caler_par_cadre(image_bgr)
+    if resultat is not None:
+        return resultat
     try:
         return _caler_aruco(image_bgr)
     except MarkerError:
-        resultat = _caler_par_cadre(image_bgr)
-        if resultat is None:
-            raise MarkerError("Cadre de la page non détecté (page mal scannée, "
-                              "coupée ou sans cadre ?)") from None
-        return resultat
+        raise MarkerError("Cadre de la page non détecté (page mal scannée, "
+                          "coupée ou sans cadre ?)") from None
 
 
 # Cadre : bord extérieur et bord intérieur du trait (le contour trouvé peut
@@ -118,6 +119,13 @@ def _score_trait(gray_canon, haut=L.CADRE_MARGE):
     return sombres / len(pts)
 
 
+def _bas_du_code(haut):
+    """Lignes de l'image redressée qui contiennent le code de page et le 9e tiret
+    (avec la marge que lit _gris_moyen) : la bande à redresser pour les lire."""
+    cases = L.code_cases(haut) + [L.case_variante(haut)]
+    return min(_mm(max(y + h for _, y, _, h in cases)) + 2, CANON_H)
+
+
 def _caler_par_cadre(image_bgr):
     """Recalage par le cadre fin. Essaie chaque quadrilatère candidat dans ses
     quatre orientations (page à l'endroit, à l'envers, tournée) et pour les
@@ -142,15 +150,22 @@ def _caler_par_cadre(image_bgr):
                                     [_mm(L.PAGE_W - bord), _mm(L.PAGE_H - bord)],
                                     [_mm(bord), _mm(L.PAGE_H - bord)]], dtype=np.float32)
                     H = cv2.getPerspectiveTransform(pts.astype(np.float32), dst)
-                    canon = cv2.warpPerspective(gray, H, (CANON_W, CANON_H),
+                    # Le code de page et le 9e tiret sont en haut : on ne
+                    # redresse que cette bande pour les lire (les mêmes lignes,
+                    # au pixel près, que la page entière redressée), la page
+                    # entière seulement pour l'hypothèse qui les a valides.
+                    # Huit pages entières par copie coûtaient 0,2 s.
+                    bande = cv2.warpPerspective(gray, H, (CANON_W, _bas_du_code(haut)),
                                                 borderValue=255)
-                    page = L.lire_code_page([_gris_moyen(canon, r) < 128
+                    page = L.lire_code_page([_gris_moyen(bande, r) < 128
                                              for r in L.code_cases(haut)])
                     if page is None:
                         continue
-                    talon = _gris_moyen(canon, L.case_variante(haut)) < 128
+                    talon = _gris_moyen(bande, L.case_variante(haut)) < 128
                     if talon != (haut != L.CADRE_MARGE):
                         continue                          # pas ce gabarit
+                    canon = cv2.warpPerspective(gray, H, (CANON_W, CANON_H),
+                                                borderValue=255)
                     score = _score_trait(canon, haut)
                     if score >= 0.6 and (meilleur is None or score > meilleur[0]):
                         meilleur = (score, H, page)
@@ -212,6 +227,24 @@ def _caler_aruco(image_bgr):
 
 # ---------------------------------------------------------------- lecture QCM
 
+def _encre_disque(binary, x, y, r):
+    """(pixels d'encre, pixels) du disque de centre (x, y) et de rayon r.
+
+    Compté dans un petit carré autour de la case et non sur toute la page : un
+    masque de la taille de la page par case coûtait une seconde par copie de 30
+    questions. Même résultat au pixel près : le disque est tracé de la même
+    façon, simplement décalé, et le carré s'arrête aux mêmes bords de l'image."""
+    h, w = binary.shape
+    x0, y0 = max(x - r - 2, 0), max(y - r - 2, 0)
+    x1, y1 = min(x + r + 3, w), min(y + r + 3, h)
+    if x0 >= x1 or y0 >= y1:
+        return 0, 0
+    zone = binary[y0:y1, x0:x1]
+    masque = np.zeros_like(zone)
+    cv2.circle(masque, (x - x0, y - y0), r, 255, -1)
+    return cv2.countNonZero(cv2.bitwise_and(zone, masque)), cv2.countNonZero(masque)
+
+
 def read_bubbles(warped_bgr, page_layout):
     """Lit toutes les cases QCM de la page.
     Retourne {order: {"choice": int|None, "multiple": bool, "ratios": [...]}}"""
@@ -224,11 +257,7 @@ def read_bubbles(warped_bgr, page_layout):
     for item in page_layout["qcm"]:
         ratios = []
         for cx, cy in item["bubbles"]:
-            x, y = _mm(cx), _mm(cy)
-            mask = np.zeros_like(binary)
-            cv2.circle(mask, (x, y), r, 255, -1)
-            filled = cv2.countNonZero(cv2.bitwise_and(binary, mask))
-            area = cv2.countNonZero(mask)
+            filled, area = _encre_disque(binary, _mm(cx), _mm(cy), r)
             ratios.append(round(filled / max(area, 1), 3))
         marked = [i for i, v in enumerate(ratios) if v >= FILL_THRESHOLD]
         choice, multiple = None, False
@@ -260,11 +289,8 @@ def _lire_chiffres(warped_bgr, grid):
     for row in grid["rows"]:
         ratios = []
         for cx, cy in row:
-            x, y = _mm(cx), _mm(cy)
-            mask = np.zeros_like(binary)
-            cv2.circle(mask, (x, y), r, 255, -1)
-            filled = cv2.countNonZero(cv2.bitwise_and(binary, mask))
-            ratios.append(filled / max(cv2.countNonZero(mask), 1))
+            filled, area = _encre_disque(binary, _mm(cx), _mm(cy), r)
+            ratios.append(filled / max(area, 1))
         marked = [i for i, v in enumerate(ratios) if v >= FILL_THRESHOLD]
         if len(marked) == 1:
             lus.append(marked[0])
