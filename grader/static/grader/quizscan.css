@@ -319,6 +319,8 @@ body #container{
 a.tile:hover{border-color:var(--qs-line-strong)}
 .tile__label{font-size:12.5px;font-weight:600;color:var(--qs-muted)}
 .tile__row{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.tile__row--gauche{justify-content:flex-start;align-items:center}
+.tile__fort{color:var(--qs-accent)}
 .tile__value{font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px}
 .tile__unit{font-size:14px;font-weight:600;color:var(--qs-faint);margin-left:3px}
 .tile__note{font-size:12px;color:var(--qs-faint)}
@@ -1908,6 +1910,42 @@ a.fil-etapes__etape:hover{border-color:var(--qs-blue);background:var(--qs-surfac
 .chiffre b{color:var(--qs-ink);font-size:14px}
 a.chiffre:hover{border-color:var(--qs-blue)}
 @media (max-width:620px){.histo__lib{font-size:10px}}
+
+/* Tableau de bord : ce qui attend une action, puis les epreuves a gauche et le resume a droite.
+   align-items:start : une carte garde sa hauteur au lieu de s'etirer sur celle de sa voisine. */
+.a-faire{padding:16px 20px}
+.a-faire h2{margin:0 0 4px}
+.a-faire__liste{list-style:none;margin:0;padding:0}
+.a-faire__ligne{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 0;
+  border-top:1px solid var(--qs-line)}
+.a-faire__ligne:first-child{border-top:0}
+.a-faire__ligne:last-child{padding-bottom:0}
+.a-faire__icone{flex:none;width:30px;height:30px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;background:var(--qs-warn-bg);color:var(--qs-warn)}
+.a-faire__icone--bad{background:var(--qs-bad-bg);color:var(--qs-bad)}
+.a-faire__icone--info{background:var(--qs-info-bg);color:var(--qs-info)}
+.a-faire__icone svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+.a-faire__texte{flex:1 1 240px;min-width:0;font-size:13.5px;line-height:1.5;color:var(--qs-muted)}
+.a-faire__texte b{color:var(--qs-ink)}
+.a-faire__liens{display:flex;flex-wrap:wrap;gap:6px}
+.bord{display:grid;grid-template-columns:minmax(0,2.3fr) minmax(280px,1fr);gap:18px;align-items:start}
+.bord__principal,.bord__cote{min-width:0}
+.bord__cote .histo{height:150px}
+/* liste bornee a 8 concours : elle suit la page, sans cadre qui defile */
+.groupes--libre{max-height:none;overflow:visible;padding:0}
+.bord .tuile-etape{flex-basis:150px}
+.bord__tuile{margin-bottom:18px}
+.bord-note{margin-top:auto;display:flex;flex-direction:column;gap:6px}
+p.bord-note{display:block}
+.bord-note__lien{position:relative;z-index:1}
+.bord-lots{list-style:none;margin:6px 0 0;padding:0}
+.bord-lots li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;
+  border-top:1px solid var(--qs-line)}
+.bord-lots li:first-child{border-top:0}
+.bord-lots__nom{min-width:0;display:flex;flex-direction:column;gap:1px;font-size:14px}
+.bord-lots__etat{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:3px;font-size:12px;color:var(--qs-muted)}
+@media (max-width:1100px){.bord{grid-template-columns:minmax(0,1fr)}}
 
 /* Concours en plusieurs étapes : passage des admis à l'épreuve suivante. */
 .etape-suivante{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0 4px;

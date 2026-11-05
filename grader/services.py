@@ -1701,6 +1701,9 @@ def bilan_admissions(quizzes, par_epreuve_max=8):
         "admis": admis, "attente": attente, "refuses": refuses,
         "pct_admis": round(admis / jugees * 100) if jugees else 0,
         "pct_refuses": round(refuses / jugees * 100) if jugees else 0,
+        "w_admis": round(admis / jugees * 100, 1) if jugees else 0,
+        "w_attente": round(attente / jugees * 100, 1) if jugees else 0,
+        "w_refuses": round(refuses / jugees * 100, 1) if jugees else 0,
         "moyenne_pct": round(sum(pcts) / len(pcts)) if pcts else 0,
         "reussite_50": round(sum(1 for p in pcts if p >= 50) / len(pcts) * 100)
         if pcts else 0,

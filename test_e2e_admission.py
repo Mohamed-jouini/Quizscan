@@ -158,8 +158,8 @@ def main():
     e = bilan["par_epreuve"][0]
     assert (e["w_admis"], e["w_attente"]) == (50.0, 16.7), e
     accueil = client.get("/").content.decode()
-    for attendu in ("Résultats et admissions", "Admis / réussis", "Non admis",
-                    "Admission par épreuve", "Répartition des résultats",
+    for attendu in ("Admis / réussis", "Non admis", "2 non admis · 1 en attente",
+                    "Mes épreuves", "Répartition des résultats",
                     "<b>3</b> / 6 admis · 50 %", 'style="width:50.0%"'):
         assert attendu in accueil, f"« {attendu} » absent du tableau de bord"
     print("  tableau bord   admis 3, en attente 1, non admis 2 ; barre par "

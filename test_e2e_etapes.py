@@ -171,6 +171,43 @@ def main():
     assert ws.cell(row=3, column=1).value == "AMRI"
     assert ws.cell(row=3, column=ws.max_column).value == "Admis au concours"
     assert ws.max_row == 2 + len(attendu)
+    # export PDF : tous les candidats, malgré une recherche, chacun avec son résultat
+    import pymupdf
+    page = c.get(reverse("quiz_parcours", args=[ecrit.pk])).content.decode()
+    assert 'href="?format=pdf"' in page, "bouton « Exporter en PDF » absent"
+    r = c.get(reverse("quiz_parcours", args=[ecrit.pk]) + "?q=driss&format=pdf")
+    assert r["Content-Type"] == "application/pdf"
+    assert f'filename="concours_{qcm.pk}.pdf"' in r["Content-Disposition"]
+
+    def lire_pdf(octets):
+        with pymupdf.open(stream=octets, filetype="pdf") as doc:
+            return [(p.get_text(), p.get_text("words"), p.rect) for p in doc]
+
+    pages = lire_pdf(r.content)
+    texte = "".join(p[0] for p in pages)
+    assert len(pages) == 1 and "Résultats du concours" in texte and qcm.title in texte
+    assert "1 admis au concours sur 6 candidats" in texte, texte[:400]
+    for nom, final in attendu.items():
+        assert nom in texte and final in texte, (nom, final)
+    assert texte.index("AMRI") < texte.index("CHERIF") < texte.index("FERCHICHI"), "même ordre que la page"
+    assert "14,50 / 20" in texte and "9 / 10" in texte and "non convoqué" in texte
+    # beaucoup de candidats : pages numérotées, intitulés répétés, rien hors de la page
+    from grader import bulletin as bulletin_mod
+    from grader.models import Student as Etudiant
+    long_nom = Etudiant(last_name="ABDELLATIF BEN MOHAMED EL KEFI ZOUARI", first_name="Mohamed Salah Amine",
+                        student_number="5599")
+    grand = dict(p, candidats=p["candidats"] * 30
+                 + [dict(p["candidats"][0], etudiant=long_nom, final="Admis : QCM — étape suivante à venir")])
+    pages = lire_pdf(bulletin_mod.generate_parcours_pdf(grand))
+    assert len(pages) >= 8, len(pages)
+    assert f"page 1 / {len(pages)}" in pages[0][0] and f"page {len(pages)} / {len(pages)}" in pages[-1][0]
+    assert "(suite)" in pages[1][0] and "Résultat final" in pages[1][0]
+    assert "ZOUARI" in pages[-1][0] and "suivante à venir" in pages[-1][0]
+    for _, mots, rect in pages:
+        assert all(m[0] >= 0 and m[2] <= rect.width and m[3] <= rect.height for m in mots)
+        noms = [m for m in mots if m[4] == "ZOUARI"]
+        assert not noms or noms[0][2] < (14 + 54) * 72 / 25.4, "le nom déborde sur la colonne suivante"
+    assert lire_pdf(bulletin_mod.generate_parcours_pdf(dict(p, candidats=[])))[0][0].count("Aucun candidat") == 1
     # retour vers la liste des résultats ; l'épreuve reste à un clic (titre)
     page = c.get(reverse("quiz_results", args=[ecrit.pk])).content.decode()
     assert f'href="{reverse("resultats_list")}">← Retour aux résultats' in page
@@ -227,6 +264,12 @@ def main():
     # le titre proposé part de celui du concours, pas de l'étape précédente
     form = c.get(reverse("quiz_create") + f"?precedente={ecrit.pk}&type=oral").context["form"]
     assert form.initial["title"] == "Étapes QCM — oral", form.initial["title"]
+    # le tableau de bord aussi : un seul bloc, chaque étape mène à ses résultats
+    page = c.get("/").content.decode()
+    assert "3 étapes" in page and page.count(f'title="{qcm.title}"') == 1
+    for q in (qcm, ecrit, oral):
+        assert f'href="/quiz/{q.pk}/resultats/"' in page, q.title
+    assert f"<b>{oral.title}" not in page, "le titre complet d'une étape ne remonte pas"
     print("  listes : un bloc par concours, ses étapes dedans, titre « concours — oral » OK")
 
     # ---- chaque épreuve est un bouton : tout le bloc mène à l'épreuve ou à ses résultats

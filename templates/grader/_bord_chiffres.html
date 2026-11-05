@@ -1,0 +1,20 @@
+{% comment %}
+Admission d'une étape sur le tableau de bord. Paramètre : e (étape, avec son « bilan »).
+{% endcomment %}
+{% if e.bilan.seuil %}
+<div class="bord-note">
+  <span class="admission-liste__chiffre"><b>{{ e.bilan.admis }}</b> / {{ e.bilan.n }} admis · {{ e.bilan.pct_admis }} %</span>
+  <div class="barre-empilee" role="img"
+       aria-label="{{ e.bilan.admis }} admis, {{ e.bilan.attente }} en attente, {{ e.bilan.refuses }} non admis sur {{ e.bilan.n }}">
+    {% if e.bilan.admis %}<i class="pastille--admis" style="width:{{ e.bilan.w_admis|stringformat:'s' }}%" title="Admis : {{ e.bilan.admis }}"></i>{% endif %}
+    {% if e.bilan.attente %}<i class="pastille--attente" style="width:{{ e.bilan.w_attente|stringformat:'s' }}%" title="En attente : {{ e.bilan.attente }}"></i>{% endif %}
+    {% if e.bilan.refuses %}<i class="pastille--refuses" style="width:{{ e.bilan.w_refuses|stringformat:'s' }}%" title="Non admis : {{ e.bilan.refuses }}"></i>{% endif %}
+  </div>
+  <span class="helptext helptext--serre">moyenne {{ e.bilan.moyenne_pct }} % du barème · {{ e.bilan.n }} noté{{ e.bilan.n|pluralize }}</span>
+</div>
+{% elif e.bilan %}
+<p class="helptext helptext--serre bord-note">{{ e.bilan.n }} noté{{ e.bilan.n|pluralize }} · moyenne {{ e.bilan.moyenne_pct }} % ·
+  <a class="bord-note__lien" href="{% url 'quiz_results' e.quiz.pk %}#admission">fixer la note minimale</a></p>
+{% else %}
+<p class="chiffres-epreuve__vide bord-note">Aucune copie notée</p>
+{% endif %}

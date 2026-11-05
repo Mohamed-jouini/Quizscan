@@ -7,7 +7,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas as rl_canvas
 
-from .fonts import font_for, has_arabic, load_fonts, runs, shape
+from .fonts import font_for, has_arabic, load_fonts, runs, shape, text_width_pt, wrap
 
 PAGE_W, PAGE_H = 210.0, 297.0
 
@@ -295,6 +295,133 @@ def generate_liste_admis_pdf(quiz, admission, batch=None):
     if y + 8 <= BAS:
         _draw(c, f"Liste arrêtée à {admission['n_admis']} {qui}.", X0, y + 4.0,
               10, bold=True)
+    pied(page)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def _nombre(valeur):
+    """14.5 -> « 14,50 », 5.0 -> « 5 » : comme à l'écran."""
+    valeur = float(valeur)
+    return f"{valeur:g}" if valeur.is_integer() else f"{valeur:.2f}".replace(".", ",")
+
+
+def generate_parcours_pdf(parcours):
+    """Résultats de tout un concours (services.parcours_concours), à imprimer ou à signer :
+    chaque candidat, étape par étape, et son résultat final, sur autant de pages qu'il faut
+    (intitulés de colonnes répétés). Mêmes candidats et même ordre que la page, sans sa
+    recherche, comme l'export Excel."""
+    from django.utils import timezone
+
+    load_fonts()
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=A4)
+    X0, X1 = 14.0, 196.0
+    LIGNE, BAS = 10.6, 277.0
+    L_NOM, L_FINAL = 54.0, 38.0
+    etapes, candidats = parcours["etapes"], parcours["candidats"]
+    racine = parcours["epreuves"][0]
+    edite = timezone.localtime().strftime("%d/%m/%Y")
+    largeur_etape = (X1 - X0 - L_NOM - L_FINAL) / len(etapes)
+    x_etapes = [X0 + L_NOM + k * largeur_etape for k in range(len(etapes))]
+    x_final = X1 - L_FINAL + 1
+    verdicts = {"admis": "Admis", "refuse": "Non admis", "en_attente": "En attente"}
+
+    def taille_pour(texte, taille, largeur, gras=False):
+        """Un nom ou un titre trop long s'écrit plus petit plutôt que de déborder."""
+        while taille > 6.5 and text_width_pt(texte, taille, gras) > largeur * mm:
+            taille -= 0.5
+        return taille
+
+    def tete_tableau(y):
+        c.setFillGray(0.93)
+        c.rect(X0 * mm, _y(y + 2.4), (X1 - X0) * mm, 7.6 * mm, stroke=0, fill=1)
+        c.setFillGray(0.0)
+        _draw(c, "Candidat", X0 + 2, y, 9, bold=True, gray=0.25)
+        for etape, x in zip(etapes, x_etapes):
+            _draw(c, etape["quiz"].type_court, x, y, 9, bold=True, gray=0.25)
+        _draw(c, "Résultat final", x_final, y, 9, bold=True, gray=0.25)
+        return y + 8.5
+
+    lignes_entete = [t.strip() for t in (racine.entete or "").splitlines() if t.strip()]
+    haut_titre = 22.0 + 4.2 * len(lignes_entete)
+    debut_p1 = haut_titre + 22.5 + 4.2 * len(etapes) + 4.5
+    debut_suite = 26.0
+    par_page_1 = max(int((BAS - debut_p1 - 8.5) // LIGNE), 1)
+    par_page = int((BAS - debut_suite - 8.5) // LIGNE)
+    reste = max(len(candidats) - par_page_1, 0)
+    total_pages = 1 + (-(-reste // par_page) if reste else 0)
+
+    def pied(page):
+        _draw(c, f"{racine.title} — résultats du concours — édités le {edite}",
+              X0, 287.0, 7.5, gray=0.45)
+        _draw(c, f"page {page} / {total_pages}", X1, 287.0, 7.5, align="right", gray=0.45)
+
+    # ---- première page
+    y = 18.0
+    for ligne in lignes_entete:
+        _draw(c, ligne, PAGE_W / 2, y, 9, align="center", gray=0.3)
+        y += 4.2
+    _draw(c, "Résultats du concours", PAGE_W / 2, haut_titre + 4.0, 17, bold=True, align="center")
+    _draw(c, racine.title, PAGE_W / 2, haut_titre + 11.5,
+          taille_pour(racine.title, 12, X1 - X0), align="center")
+    n = len(candidats)
+    _draw(c, f"{parcours['n_admis_final']} admis au concours sur {n} candidat{'s' if n > 1 else ''}",
+          PAGE_W / 2, haut_titre + 17.5, 9.5, bold=True, align="center")
+    y = haut_titre + 22.5
+    for etape in etapes:
+        conv, notes, seuil = etape["convoques"], etape["presents"], etape["seuil"]
+        _draw(c, f"{etape['quiz'].type_court} : {conv} convoqué{'s' if conv > 1 else ''} · "
+                 f"{notes} noté{'s' if notes > 1 else ''} · "
+                 + (f"{etape['admis']} admis (note minimale {_nombre(seuil)})"
+                    if seuil is not None else "note minimale à fixer"),
+              PAGE_W / 2, y, 8.5, align="center", gray=0.3)
+        y += 4.2
+    c.setLineWidth(0.5)
+    c.line(X0 * mm, _y(debut_p1 - 4.5), X1 * mm, _y(debut_p1 - 4.5))
+    y = tete_tableau(debut_p1)
+    page, sur_la_page, capacite = 1, 0, par_page_1
+
+    for i, candidat in enumerate(candidats):
+        if sur_la_page == capacite:
+            pied(page)
+            c.showPage()
+            page += 1
+            _draw(c, f"Résultats du concours — {racine.title} (suite)", X0, 18.0,
+                  taille_pour(f"Résultats du concours — {racine.title} (suite)", 10, X1 - X0, True),
+                  bold=True)
+            y = tete_tableau(debut_suite)
+            sur_la_page, capacite = 0, par_page
+        if i % 2:
+            c.setFillGray(0.97)
+            c.rect(X0 * mm, _y(y + LIGNE - 3.6), (X1 - X0) * mm, LIGNE * mm, stroke=0, fill=1)
+            c.setFillGray(0.0)
+        s = candidat["etudiant"]
+        _draw(c, s.full_name, X0 + 2, y, taille_pour(s.full_name, 9.5, L_NOM - 4, True), bold=True)
+        _draw(c, f"n° {s.student_number}" if s.student_number else "sans n°", X0 + 2, y + 4.2, 8,
+              gray=0.35)
+        for case, x in zip(candidat["cases"], x_etapes):
+            if case["etat"] == "note":
+                row = case["row"]
+                _draw(c, f"{_nombre(row['score'])} / {_nombre(row['max_score'])}", x, y, 9.5, bold=True)
+                verdict = verdicts.get(case["resultat"])
+                _draw(c, f"{row['pct']} %" + (f" · {verdict}" if verdict else ""), x, y + 4.2, 8,
+                      gray=0.3)
+            elif case["etat"] == "non_note":
+                _draw(c, "Non noté", x, y, 8.5, gray=0.3)
+            else:
+                _draw(c, "non convoqué", x, y, 8, gray=0.5)
+        for k, morceau in enumerate(wrap(candidat["final"], 8.5, L_FINAL - 2, bold=True)[:2]):
+            _draw(c, morceau, x_final, y + k * 4.2, 8.5, bold=True)
+        y += LIGNE
+        sur_la_page += 1
+
+    if not candidats:
+        _draw(c, "Aucun candidat.", X0 + 2, y + 2, 10, gray=0.35)
+        y += LIGNE
+    c.setLineWidth(0.4)
+    c.line(X0 * mm, _y(y - 3.0), X1 * mm, _y(y - 3.0))
     pied(page)
     c.showPage()
     c.save()

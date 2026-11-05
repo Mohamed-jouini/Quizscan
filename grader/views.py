@@ -233,7 +233,20 @@ def dashboard(request):
         temps = {"valeur": round(minutes / 60, 1), "unite": "heures"}
 
     # --- Admis, non admis, moyenne et répartition, toutes épreuves -------
-    bilan = services.bilan_admissions(quizzes)
+    bilan = services.bilan_admissions(quizzes, par_epreuve_max=None)
+    # --- Un bloc par concours, avec l'admission de chaque étape ---------------
+    groupes = services.groupes_epreuves(quizzes)
+    par_quiz = {e["quiz"].pk: e for e in bilan["par_epreuve"]}
+    noms_courts = {}
+    for groupe in groupes:
+        for etape in groupe["etapes"]:
+            etape["bilan"] = par_quiz.get(etape["quiz"].pk)
+            noms_courts[etape["quiz"].pk] = f'{groupe["titre"]} · {etape["quiz"].type_court}'
+    if derniere:
+        derniere["nom_court"] = noms_courts.get(derniere["quiz"].pk, derniere["quiz"].title)
+    batches = list(_my_batches(request)[:6])
+    for b in batches:
+        b.nom_court = noms_courts.get(b.quiz_id, b.quiz.title)
     types = dict(quizzes.values_list("type_epreuve").annotate(n=Count("pk")))
     autres = {
         "qcm": types.get("qcm", 0), "ecrit": types.get("ecrit", 0),
@@ -258,7 +271,8 @@ def dashboard(request):
         "temps_epargne": temps,
         "copies_lues": copies_lues,
         "minutes_par_copie": services.MINUTES_PAR_COPIE_A_LA_MAIN,
-        "quizzes": quizzes.select_related("class_group")[:8],
+        "groupes": groupes[:8],
+        "n_groupes": len(groupes),
         "n_quizzes": quizzes.count(),
         "classes": classes,
         "n_classes": classes.count(),
@@ -270,8 +284,11 @@ def dashboard(request):
         "n_open_pending": n_open_pending,
         "week": week,
         "week_total": sum(counts),
-        "batches": _my_batches(request)[:6],
+        "batches": batches,
         "to_review": sheets.filter(status__in=["no_match", "no_markers", "error"])[:6],
+        "epreuves_a_noter": list(quizzes.filter(
+            batches__sheets__answers__question__qtype="open",
+            batches__sheets__answers__points_awarded__isnull=True).distinct()[:6]),
     })
 
 
@@ -1483,6 +1500,11 @@ def quiz_parcours(request, pk):
             parcours_workbook(parcours),
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         resp["Content-Disposition"] = f'attachment; filename="concours_{chaine[0].pk}.xlsx"'
+        return resp
+    if request.GET.get("format") == "pdf":
+        resp = HttpResponse(bulletin_mod.generate_parcours_pdf(parcours),
+                            content_type="application/pdf")
+        resp["Content-Disposition"] = f'attachment; filename="concours_{chaine[0].pk}.pdf"'
         return resp
     recherche = " ".join(request.GET.get("q", "").split())[:100]
     trouves = _filtrer_etudiants(parcours["candidats"], recherche)

@@ -10,90 +10,116 @@
   </div>
 </header>
 
-{# ---- Ce qui empêche le travail d'avancer. En tête, et seulement quand  #}
-{# il y a quelque chose à dire : un bandeau permanent cesse d'être lu.    #}
-{% if epreuves_bloquees or lots_en_attente or epreuves_douteuses %}
-<div class="alertes">
+{# ---- Ce qui attend une action. En tête, et seulement quand il y a quelque chose à dire. #}
+{% if epreuves_douteuses or epreuves_bloquees or n_attention or lots_en_attente or n_open_pending %}
+<section class="card a-faire" aria-labelledby="titre-a-faire">
+  <h2 id="titre-a-faire">À faire</h2>
+  <ul class="a-faire__liste">
 
-  {% if epreuves_bloquees %}
-  <div class="note note--warn">
-    <span class="note__icon">
-      <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-    </span>
-    <div class="note__body">
-      <b>{{ epreuves_bloquees|length }} épreuve{{ epreuves_bloquees|pluralize }}
-        au corrigé incomplet.</b>
-      La correction ne peut pas démarrer tant qu'une bonne réponse manque :
-      ces questions seraient comptées fausses pour tout le monde.
-      <p class="alertes__liste">
-        {% for q in epreuves_bloquees %}
-        <a class="btn small secondary" href="{% url 'quiz_detail' q.pk %}">{{ q.title|truncatechars:34 }}</a>
-        {% endfor %}
-      </p>
-    </div>
-  </div>
-  {% endif %}
-
-  {% if lots_en_attente %}
-  <div class="note">
-    <span class="note__icon">
-      <svg viewBox="0 0 24 24"><path d="M4 8.5 12 4l8 4.5-8 4.5z"/><path d="M4 13l8 4.5 8-4.5"/><path d="M4 17.5 12 22l8-4.5"/></svg>
-    </span>
-    <div class="note__body">
-      <b>{{ pages_en_attente }} page{{ pages_en_attente|pluralize }} reçue{{ pages_en_attente|pluralize }},
-        correction jamais lancée</b>
-      ({{ lots_en_attente|length }} lot{{ lots_en_attente|pluralize }}).
-      Ces copies sont en lieu sûr, mais personne n'a cliqué sur
-      « Lancer la correction ».
-      <p class="alertes__liste">
-        {% for b in lots_en_attente %}
-        <a class="btn small secondary" href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
-        {% endfor %}
-      </p>
-    </div>
-  </div>
-  {% endif %}
-
-  {% if epreuves_douteuses %}
-  <div class="note note--bad">
-    <span class="note__icon">
-      <svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
-    </span>
-    <div class="note__body">
-      <b>Bonne réponse à vérifier sur
-        {{ epreuves_douteuses|length }} épreuve{{ epreuves_douteuses|pluralize }}.</b>
-      Aucune copie n'a la réponse enregistrée et presque toutes ont coché la
-      même autre case : c'est le signe d'un corrigé erroné.
-      <p class="alertes__liste">
+    {% if epreuves_douteuses %}
+    <li class="a-faire__ligne">
+      <span class="a-faire__icone a-faire__icone--bad" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
+      </span>
+      <div class="a-faire__texte">
+        <b>Bonne réponse à vérifier sur {{ epreuves_douteuses|length }} épreuve{{ epreuves_douteuses|pluralize }}.</b>
+        Aucune copie n'a la réponse enregistrée et presque toutes ont coché la même autre case : c'est le signe d'un corrigé erroné.
+      </div>
+      <div class="a-faire__liens">
         {% for e in epreuves_douteuses %}
         <a class="btn small secondary" href="{% url 'quiz_results' e.quiz.pk %}">{{ e.quiz.title|truncatechars:28 }} —
           question{{ e.questions|length|pluralize }}
           {% for n in e.questions %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</a>
         {% endfor %}
-      </p>
-    </div>
-  </div>
-  {% endif %}
+      </div>
+    </li>
+    {% endif %}
 
-</div>
+    {% if epreuves_bloquees %}
+    <li class="a-faire__ligne">
+      <span class="a-faire__icone" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      </span>
+      <div class="a-faire__texte">
+        <b>{{ epreuves_bloquees|length }} épreuve{{ epreuves_bloquees|pluralize }} au corrigé incomplet.</b>
+        La correction ne peut pas démarrer tant qu'une bonne réponse manque : ces questions seraient comptées fausses pour tout le monde.
+      </div>
+      <div class="a-faire__liens">
+        {% for q in epreuves_bloquees %}
+        <a class="btn small secondary" href="{% url 'quiz_detail' q.pk %}">{{ q.title|truncatechars:34 }}</a>
+        {% endfor %}
+      </div>
+    </li>
+    {% endif %}
+
+    {% if n_attention %}
+    <li class="a-faire__ligne">
+      <span class="a-faire__icone a-faire__icone--bad" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M12 11v4"/><path d="M12 18h.01"/></svg>
+      </span>
+      <div class="a-faire__texte">
+        <b>{{ n_attention }} copie{{ n_attention|pluralize }} à reprendre.</b>
+        Un incident de lecture : QR illisible, repères manqués ou candidat non reconnu{% if causes %}
+        ({% for c in causes %}{{ c.n }} {{ c.libelle }}{% if not forloop.last %}, {% endif %}{% endfor %}){% endif %}.
+      </div>
+      <div class="a-faire__liens">
+        {% for s in to_review %}
+        <a class="btn small secondary" href="{% url 'sheet_review' s.pk %}">{{ s.source_name|truncatechars:26 }}</a>
+        {% endfor %}
+      </div>
+    </li>
+    {% endif %}
+
+    {% if lots_en_attente %}
+    <li class="a-faire__ligne">
+      <span class="a-faire__icone a-faire__icone--info" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 8.5 12 4l8 4.5-8 4.5z"/><path d="M4 13l8 4.5 8-4.5"/><path d="M4 17.5 12 22l8-4.5"/></svg>
+      </span>
+      <div class="a-faire__texte">
+        <b>{{ pages_en_attente }} page{{ pages_en_attente|pluralize }} reçue{{ pages_en_attente|pluralize }}, correction jamais lancée</b>
+        ({{ lots_en_attente|length }} lot{{ lots_en_attente|pluralize }}). Ces copies sont en lieu sûr, mais personne n'a cliqué sur « Lancer la correction ».
+      </div>
+      <div class="a-faire__liens">
+        {% for b in lots_en_attente %}
+        <a class="btn small secondary" href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
+        {% endfor %}
+      </div>
+    </li>
+    {% endif %}
+
+    {% if n_open_pending %}
+    <li class="a-faire__ligne">
+      <span class="a-faire__icone a-faire__icone--info" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></svg>
+      </span>
+      <div class="a-faire__texte">
+        <b>{{ n_open_pending }} réponse{{ n_open_pending|pluralize }} manuscrite{{ n_open_pending|pluralize }} à noter.</b>
+        Travail normal de correction, pas un incident : ces réponses n'ont pas de bonne réponse mécanique.
+      </div>
+      <div class="a-faire__liens">
+        {% for q in epreuves_a_noter %}
+        <a class="btn small secondary" href="{% url 'quiz_results' q.pk %}">{{ q.title|truncatechars:34 }}</a>
+        {% endfor %}
+      </div>
+    </li>
+    {% endif %}
+  </ul>
+</section>
 {% endif %}
 
-{# ---- Rangée de tuiles : les chiffres que l'enseignant regarde en premier #}
+{# ---- Les quatre chiffres que l'enseignant regarde en premier ---- #}
 <div class="tiles">
-
   <div class="tile tile--accent">
     <span class="tile__label">Copies scannées</span>
     <div class="tile__row">
       <span class="tile__value">{{ n_sheets }}</span>
-      {% if week_total %}<span class="chip">+{{ week_total }} cette semaine</span>{% endif %}
       <div class="spark" title="Copies reçues sur les 7 derniers jours">
         {% for d in week %}<i title="{{ d.date|date:'d/m' }} : {{ d.count }} copie(s)"><b style="height:{{ d.height }}%"></b></i>{% endfor %}
       </div>
     </div>
     <span class="tile__note">
-      {{ n_quizzes }} épreuve{{ n_quizzes|pluralize }} ·
-      {{ n_classes }} classe{{ n_classes|pluralize }} ·
-      {{ n_students }} étudiant{{ n_students|pluralize }}
+      {% if week_total %}<b class="tile__fort">+{{ week_total }} cette semaine</b> · {% endif %}{{ n_quizzes }} épreuve{{ n_quizzes|pluralize }} ·
+      {{ n_classes }} classe{{ n_classes|pluralize }} · {{ n_students }} étudiant{{ n_students|pluralize }}
     </span>
   </div>
 
@@ -110,283 +136,71 @@
       </svg>
     </div>
     <span class="tile__note">
-      {{ n_auto }} sur {{ n_sheets }} depuis le début.
-      {% if lot_recent %}
-      {# Le cumul ne bouge plus après quelques centaines de copies : c'est #}
-      {# le dernier lot qui dit si la séance de scan s'est bien passée.    #}
-      <br>Dernier lot : <b>{{ lot_recent.lues }}/{{ lot_recent.pages }}</b>
-      ({{ lot_recent.pct }} %)
-      {% endif %}
+      {{ n_auto }} sur {{ n_sheets }} depuis le début{% if lot_recent %}
+      {# Le cumul ne bouge plus après quelques centaines de copies : c'est le dernier lot qui dit si la séance de scan s'est bien passée. #}
+      · dernier lot <b>{{ lot_recent.lues }}/{{ lot_recent.pages }}</b>{% endif %}
     </span>
   </div>
 
   <div class="tile">
-    <span class="tile__label">Copies à reprendre</span>
-    <div class="tile__row">
-      <span class="tile__value">{{ n_attention }}</span>
-      {% if causes %}
-        {% for c in causes %}<span class="chip {{ c.ton }}">{{ c.n }} {{ c.libelle }}</span>{% endfor %}
-      {% else %}<span class="chip">aucune</span>{% endif %}
+    <span class="tile__label">Admis / réussis</span>
+    <div class="tile__row tile__row--gauche">
+      <span class="tile__value">{{ bilan.admis }}<span class="tile__unit">/ {{ bilan.jugees }}</span></span>
+      {% if bilan.jugees %}<span class="chip">{{ bilan.pct_admis }} %</span>{% endif %}
     </div>
-    <span class="tile__note">
-      {% if n_attention %}Un incident de lecture : QR illisible, repères
-        manqués ou candidat non reconnu.
-      {% else %}Toutes les copies scannées ont été lues.{% endif %}
-    </span>
+    {% if bilan.jugees %}
+    <div class="barre-empilee" role="img"
+         aria-label="{{ bilan.admis }} admis, {{ bilan.attente }} en attente, {{ bilan.refuses }} non admis sur {{ bilan.jugees }}">
+      {% if bilan.admis %}<i class="pastille--admis" style="width:{{ bilan.w_admis|stringformat:'s' }}%"></i>{% endif %}
+      {% if bilan.attente %}<i class="pastille--attente" style="width:{{ bilan.w_attente|stringformat:'s' }}%"></i>{% endif %}
+      {% if bilan.refuses %}<i class="pastille--refuses" style="width:{{ bilan.w_refuses|stringformat:'s' }}%"></i>{% endif %}
+    </div>
+    <span class="tile__note">{{ bilan.refuses }} non admis{% if bilan.attente %} · {{ bilan.attente }} en attente{% endif %}</span>
+    {% else %}
+    <span class="tile__note">Aucune note minimale fixée : fixez-la sur la page Résultats d'une épreuve.</span>
+    {% endif %}
   </div>
 
   <div class="tile">
-    <span class="tile__label">Manuscrites à noter</span>
-    <div class="tile__row">
-      <span class="tile__value">{{ n_open_pending }}</span>
-      {% if n_open_pending %}<span class="chip warn">à faire</span>
-      {% else %}<span class="chip">rien en attente</span>{% endif %}
+    <span class="tile__label">Moyenne générale</span>
+    <div class="tile__row tile__row--gauche">
+      <span class="tile__value">{{ bilan.moyenne_pct }}<span class="tile__unit">%</span></span>
+      {% if bilan.n_notes %}<span class="chip">{{ bilan.reussite_50 }} % ont la moitié</span>{% endif %}
     </div>
-    <span class="tile__note">
-      {% if n_open_pending %}Travail normal de correction, pas un incident :
-        ces réponses n'ont pas de bonne réponse mécanique.
-      {% else %}Aucune réponse manuscrite en attente.{% endif %}
-    </span>
+    <span class="tile__note">{% if bilan.n_notes %}du barème, sur {{ bilan.n_notes }} note{{ bilan.n_notes|pluralize }} et {{ bilan.n_epreuves }} épreuve{{ bilan.n_epreuves|pluralize }}{% else %}Aucune note pour l'instant.{% endif %}</span>
   </div>
 </div>
 
-{# ---- Résultats et valeur produite ---- #}
-<div class="tiles tiles--duo">
-  {% if derniere %}
-  <a class="tile" href="{% url 'quiz_results' derniere.quiz.pk %}">
-    <span class="tile__label">Dernière épreuve corrigée</span>
-    <div class="tile__row">
-      <span class="tile__value">{{ derniere.moyenne|floatformat:"-2" }}</span>
-      <span class="tile__unit">/ {{ derniere.bareme|floatformat:"-2" }}</span>
-      <span class="spacer"></span>
-      <span class="chip {% if derniere.pct < 50 %}bad{% elif derniere.pct < 65 %}warn{% endif %}">
-        {{ derniere.pct }} % du barème</span>
-    </div>
-    <span class="tile__note">
-      <b>{{ derniere.quiz.title|truncatechars:40 }}</b> —
-      {{ derniere.n }} copie{{ derniere.n|pluralize }} notée{{ derniere.n|pluralize }},
-      de {{ derniere.plus_basse|floatformat:"-2" }}
-      à {{ derniere.meilleure|floatformat:"-2" }}.
-    </span>
-  </a>
-  {% endif %}
-
-  <div class="tile">
-    <span class="tile__label">Temps de correction épargné</span>
-    <div class="tile__row">
-      <span class="tile__value">{{ temps_epargne.valeur|floatformat:"-1" }}</span>
-      <span class="tile__unit">{{ temps_epargne.unite }}</span>
-    </div>
-    <span class="tile__note">
-      {{ copies_lues }} copie{{ copies_lues|pluralize }} lue{{ copies_lues|pluralize }}
-      par la machine, sur la base de {{ minutes_par_copie }} minutes de
-      correction à la main par copie. C'est une hypothèse, pas une mesure.
-    </span>
-  </div>
-</div>
-
-{# ---- Résultats et admissions, toutes épreuves notées ---- #}
-<section class="bilan" aria-labelledby="titre-bilan">
-  <div class="section-titre">
-    <h2 id="titre-bilan">Résultats et admissions</h2>
-    <span class="helptext helptext--serre">{% if bilan.n_notes %}{{ bilan.n_notes }} note{{ bilan.n_notes|pluralize }} sur {{ bilan.n_epreuves }} épreuve{{ bilan.n_epreuves|pluralize }}{% endif %}</span>
-  </div>
-  {% if bilan.n_notes %}
-  <div class="tiles">
-    <div class="tile tile--accent">
-      <span class="tile__label">Admis / réussis</span>
-      <div class="tile__row">
-        <span class="tile__value">{{ bilan.admis }}<span class="tile__unit">/ {{ bilan.jugees }}</span></span>
-        {% if bilan.jugees %}<span class="chip">{{ bilan.pct_admis }} %</span>{% endif %}
-      </div>
-      <span class="tile__note">{% if bilan.jugees %}candidats ou étudiants ayant atteint la note minimale{% else %}Aucune note minimale fixée : fixez-la sur la page Résultats d'une épreuve.{% endif %}</span>
-    </div>
-    <div class="tile">
-      <span class="tile__label">Non admis</span>
-      <div class="tile__row">
-        <span class="tile__value">{{ bilan.refuses }}</span>
-        {% if bilan.jugees %}<span class="chip bad">{{ bilan.pct_refuses }} %</span>{% endif %}
-      </div>
-      <span class="tile__note">sous la note minimale, copie entièrement notée</span>
-    </div>
-    <div class="tile">
-      <span class="tile__label">En attente</span>
-      <div class="tile__row">
-        <span class="tile__value">{{ bilan.attente }}</span>
-        {% if bilan.attente %}<span class="chip warn">à noter</span>{% endif %}
-      </div>
-      <span class="tile__note">sous la note minimale, mais une réponse manuscrite reste à noter</span>
-    </div>
-    <div class="tile">
-      <span class="tile__label">Moyenne générale</span>
-      <div class="tile__row">
-        <span class="tile__value">{{ bilan.moyenne_pct }}<span class="tile__unit">%</span></span>
-        <span class="chip">{{ bilan.reussite_50 }} % ont la moitié</span>
-      </div>
-      <span class="tile__note">du barème, toutes notes confondues ; {{ bilan.reussite_50 }} % des notes atteignent au moins la moitié du barème</span>
-    </div>
-  </div>
-  {% if bilan.n_sans_seuil %}
-  <p class="helptext helptext--serre bilan__remarque">{{ bilan.n_sans_seuil }} épreuve{{ bilan.n_sans_seuil|pluralize }} sans note minimale : comptée{{ bilan.n_sans_seuil|pluralize }} dans la moyenne et la répartition, pas dans l'admission.</p>
-  {% endif %}
-
-  <div class="grid2">
-    <div class="card">
+<div class="bord">
+  {# ---- Mes épreuves : un bloc par concours, l'admission de chaque étape ---- #}
+  <div class="bord__principal">
+    <section class="card" aria-labelledby="titre-epreuves">
       <div class="card__head">
-        <h2>Admission par épreuve</h2>
-        <span class="spacer"></span>
+        <h2 id="titre-epreuves">Mes épreuves</h2>
         <span class="legende" aria-hidden="true">
           <span><i class="pastille pastille--admis"></i>Admis</span>
           <span><i class="pastille pastille--attente"></i>En attente</span>
           <span><i class="pastille pastille--refuses"></i>Non admis</span>
         </span>
+        <span class="spacer"></span>
+        <a class="btn small secondary" href="{% url 'resultats_list' %}">Tout voir{% if n_groupes > groupes|length %} ({{ n_groupes }}){% endif %}</a>
       </div>
-      <ul class="admission-liste">
-        {% for e in bilan.par_epreuve %}
-        <li>
-          <div class="admission-liste__tete">
-            <a href="{% url 'quiz_results' e.quiz.pk %}"><b>{{ e.quiz.title|truncatechars:38 }}</b></a>
-            <span class="badge grey">{% if e.quiz.type_epreuve == "ecrit" %}écrit{% elif e.quiz.type_epreuve == "oral" %}oral{% else %}QCM{% endif %}{% if e.quiz.auto_enroll %} · concours{% endif %}</span>
-            <span class="spacer"></span>
-            {% if e.seuil %}<span class="admission-liste__chiffre"><b>{{ e.admis }}</b> / {{ e.n }} admis · {{ e.pct_admis }} %</span>{% endif %}
-          </div>
-          {% if e.seuil %}
-          <div class="barre-empilee" role="img"
-               aria-label="{{ e.admis }} admis, {{ e.attente }} en attente, {{ e.refuses }} non admis sur {{ e.n }}">
-            {% if e.admis %}<i class="pastille--admis" style="width:{{ e.w_admis|stringformat:'s' }}%" title="Admis : {{ e.admis }} ({{ e.w_admis|floatformat:0 }} %)"></i>{% endif %}
-            {% if e.attente %}<i class="pastille--attente" style="width:{{ e.w_attente|stringformat:'s' }}%" title="En attente : {{ e.attente }}"></i>{% endif %}
-            {% if e.refuses %}<i class="pastille--refuses" style="width:{{ e.w_refuses|stringformat:'s' }}%" title="Non admis : {{ e.refuses }} ({{ e.w_refuses|floatformat:0 }} %)"></i>{% endif %}
-          </div>
-          <span class="helptext helptext--serre">moyenne {{ e.moyenne_pct }} % du barème · {{ e.n }} noté{{ e.n|pluralize }}</span>
-          {% else %}
-          <span class="helptext helptext--serre">{{ e.n }} noté{{ e.n|pluralize }} · moyenne {{ e.moyenne_pct }} % ·
-            <a href="{% url 'quiz_results' e.quiz.pk %}#admission">fixer la note minimale</a> pour compter les admis</span>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-
-    <div class="card">
-      <div class="card__head"><h2>Répartition des résultats</h2></div>
-      <p class="helptext helptext--serre">Nombre de notes par tranche, en % du barème de chaque épreuve.</p>
-      <div class="histo" role="img"
-           aria-label="{% for r in bilan.repartition %}{{ r.libelle }} : {{ r.n }}{% if not forloop.last %} ; {% endif %}{% endfor %}">
-        {% for r in bilan.repartition %}
-        <div class="histo__col" title="{{ r.libelle }} : {{ r.n }} note{{ r.n|pluralize }} ({{ r.part }} %)">
-          <span class="histo__n">{{ r.n }}</span>
-          <span class="histo__piste"><i style="height:{{ r.hauteur }}%"></i></span>
-          <span class="histo__lib">{{ r.libelle }}</span>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-  {% else %}
-  <p class="helptext helptext--serre">Aucune note pour l'instant : les statistiques d'admission apparaîtront après la correction des premières copies.</p>
-  {% endif %}
-
-  <div class="chiffres">
-    <span class="chiffre"><b>{{ autres.qcm }}</b> QCM</span>
-    <span class="chiffre"><b>{{ autres.ecrit }}</b> écrit{{ autres.ecrit|pluralize }}</span>
-    <span class="chiffre"><b>{{ autres.oral }}</b> ora{{ autres.oral|pluralize:"l,ux" }}</span>
-    <span class="chiffre"><b>{{ autres.concours }}</b> concours</span>
-    <a class="chiffre" href="{% url 'public_accueil' %}" target="_blank" rel="noopener"><b>{{ autres.publiees }}</b> résultat{{ autres.publiees|pluralize }} publié{{ autres.publiees|pluralize }}</a>
-    <a class="chiffre" href="{% url 'inscriptions' %}"><b>{{ autres.inscrits }}</b> inscrit{{ autres.inscrits|pluralize }} au registre</a>
-    <a class="chiffre" href="{% url 'communiques' %}"><b>{{ autres.communiques }}</b> communiqué{{ autres.communiques|pluralize }} publié{{ autres.communiques|pluralize }}</a>
-  </div>
-</section>
-
-<div class="grid2">
-  {# ---- Épreuves récentes ---- #}
-  <div class="card">
-    <div class="card__head">
-      <h2>Mes épreuves</h2>
-      <span class="spacer"></span>
-      <a class="btn small secondary" href="{% url 'class_list' %}">Tout voir</a>
-    </div>
-    {% if quizzes %}
-    <div class="table-wrap">
-      <table>
-      {% for q in quizzes %}
-      <tr>
-        <td><a href="{% url 'quiz_detail' q.pk %}"><b>{{ q.title }}</b></a>
-          <span class="helptext">{{ q.class_group.name }} ·
-            {{ q.questions.count }} question{{ q.questions.count|pluralize }}</span></td>
-        <td class="cellule--droite">
-          <a class="btn small secondary" href="{% url 'quiz_results' q.pk %}">Résultats</a></td>
-      </tr>
-      {% endfor %}
-    </table>
-    </div>
-    {% else %}
-    <div class="empty">
-      <span class="empty__icon">
-        <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9.5 12h6M9.5 16h4"/></svg>
-      </span>
-      <span class="empty__title">Aucune épreuve pour le moment</span>
-      <p>Une épreuve rassemble les questions, la fiche à imprimer et les
-         copies scannées.</p>
-      {% if perms.grader.creer_epreuve %}
-      <a class="btn" href="{% url 'quiz_create' %}">Créer la première</a>
-      {% endif %}
-    </div>
-    {% endif %}
-  </div>
-
-  <div>
-    {# ---- Lots de scans récents ---- #}
-    <div class="card">
-      <h2>Derniers lots de copies</h2>
-      {% if batches %}
-      <div class="table-wrap">
-        <table>
-        {% for b in batches %}
-        <tr>
-          <td><a href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
-            <span class="helptext">{{ b.quiz.title|truncatechars:34 }}</span></td>
-          <td class="cellule--serree">
-            {% if b.status == "processing" %}
-              <span class="badge warn">{{ b.processed_pages }}/{{ b.total_pages }}</span>
-            {% elif b.status == "pending" %}
-              <span class="badge grey">en attente</span>
-            {% elif b.status == "error" %}
-              <span class="badge bad">erreur</span>
-            {% else %}
-              <span class="badge ok">{{ b.sheets.count }} page{{ b.sheets.count|pluralize }}</span>
-            {% endif %}
-          </td>
-          <td class="helptext cellule--serree">{{ b.created_at|date:"d/m H:i" }}</td>
-        </tr>
-        {% endfor %}
-      </table>
-      </div>
+      {% if groupes %}
+      {% include "grader/_bord_epreuves.html" %}
       {% else %}
-      <p class="helptext helptext--serre">Aucun lot scanné. Générez la fiche
-        d'une épreuve, imprimez-la, puis téléversez les copies.</p>
-      {% endif %}
-    </div>
-
-    {# ---- Copies demandant une intervention ---- #}
-    {% if to_review %}
-    <div class="card">
-      <h2>Copies à vérifier</h2>
-      <div class="table-wrap">
-        <table>
-        {% for s in to_review %}
-        <tr>
-          <td><a href="{% url 'sheet_review' s.pk %}">{{ s.source_name|truncatechars:36 }}</a></td>
-          <td class="cellule--droite">
-            {% if s.status == "no_match" %}<span class="badge warn">à identifier</span>
-            {% elif s.status == "no_markers" %}<span class="badge bad">repères non détectés</span>
-            {% else %}<span class="badge bad">{{ s.get_status_display }}</span>{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </table>
+      <div class="empty">
+        <span class="empty__icon">
+          <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9.5 12h6M9.5 16h4"/></svg>
+        </span>
+        <span class="empty__title">Aucune épreuve pour le moment</span>
+        <p>Une épreuve rassemble les questions, la fiche à imprimer et les
+           copies scannées.</p>
+        {% if perms.grader.creer_epreuve %}
+        <a class="btn" href="{% url 'quiz_create' %}">Créer la première</a>
+        {% endif %}
       </div>
-    </div>
-    {% endif %}
+      {% endif %}
+    </section>
 
     {# ---- Rappel du cycle, utile tant qu'il n'y a pas de données ---- #}
     {% if not batches %}
@@ -402,5 +216,80 @@
     </div>
     {% endif %}
   </div>
+
+  <aside class="bord__cote" aria-label="Résumé">
+    {% if bilan.n_notes %}
+    <div class="card">
+      <h2>Répartition des résultats</h2>
+      <p class="helptext helptext--serre">Nombre de notes par tranche, en % du barème de chaque épreuve.</p>
+      <div class="histo" role="img"
+           aria-label="{% for r in bilan.repartition %}{{ r.libelle }} : {{ r.n }}{% if not forloop.last %} ; {% endif %}{% endfor %}">
+        {% for r in bilan.repartition %}
+        <div class="histo__col" title="{{ r.libelle }} : {{ r.n }} note{{ r.n|pluralize }} ({{ r.part }} %)">
+          <span class="histo__n">{{ r.n }}</span>
+          <span class="histo__piste"><i style="height:{{ r.hauteur }}%"></i></span>
+          <span class="histo__lib">{{ r.libelle }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% if bilan.n_sans_seuil %}<p class="helptext helptext--serre">{{ bilan.n_sans_seuil }} épreuve{{ bilan.n_sans_seuil|pluralize }} sans note minimale : comptée{{ bilan.n_sans_seuil|pluralize }} dans la moyenne et la répartition, pas dans l'admission.</p>{% endif %}
+    </div>
+    {% endif %}
+
+    {% if derniere %}
+    <a class="tile carte-bouton bord__tuile" href="{% url 'quiz_results' derniere.quiz.pk %}">
+      <span class="tile__label">Dernière épreuve corrigée</span>
+      <div class="tile__row tile__row--gauche">
+        <span class="tile__value">{{ derniere.moyenne|floatformat:"-2" }}<span class="tile__unit">/ {{ derniere.bareme|floatformat:"-2" }}</span></span>
+        <span class="chip {% if derniere.pct < 50 %}bad{% elif derniere.pct < 65 %}warn{% endif %}">{{ derniere.pct }} %</span>
+      </div>
+      <span class="tile__note"><b>{{ derniere.nom_court|truncatechars:40 }}</b> — {{ derniere.n }} copie{{ derniere.n|pluralize }} notée{{ derniere.n|pluralize }}, de {{ derniere.plus_basse|floatformat:"-2" }} à {{ derniere.meilleure|floatformat:"-2" }}.</span>
+    </a>
+    {% endif %}
+
+    <div class="tile bord__tuile">
+      <span class="tile__label">Temps de correction épargné</span>
+      <div class="tile__row tile__row--gauche">
+        <span class="tile__value">{{ temps_epargne.valeur|floatformat:"-1" }}<span class="tile__unit">{{ temps_epargne.unite }}</span></span>
+      </div>
+      <span class="tile__note">{{ copies_lues }} copie{{ copies_lues|pluralize }} lue{{ copies_lues|pluralize }} par la machine, sur la base de {{ minutes_par_copie }} minutes de correction à la main par copie. C'est une hypothèse, pas une mesure.</span>
+    </div>
+
+    <div class="card">
+      <h2>Derniers lots de copies</h2>
+      {% if batches %}
+      <ul class="bord-lots">
+        {% for b in batches %}
+        <li>
+          <span class="bord-lots__nom">
+            <a href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
+            <span class="helptext helptext--serre">{{ b.nom_court|truncatechars:34 }}</span>
+          </span>
+          <span class="bord-lots__etat">
+            {% if b.status == "processing" %}<span class="badge warn">{{ b.processed_pages }}/{{ b.total_pages }}</span>
+            {% elif b.status == "pending" %}<span class="badge grey">en attente</span>
+            {% elif b.status == "error" %}<span class="badge bad">erreur</span>
+            {% else %}<span class="badge ok">{{ b.sheets.count }} page{{ b.sheets.count|pluralize }}</span>{% endif %}
+            {{ b.created_at|date:"d/m H:i" }}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="helptext helptext--serre">Aucun lot scanné. Générez la fiche
+        d'une épreuve, imprimez-la, puis téléversez les copies.</p>
+      {% endif %}
+    </div>
+  </aside>
+</div>
+
+<div class="chiffres">
+  <span class="chiffre"><b>{{ autres.qcm }}</b> QCM</span>
+  <span class="chiffre"><b>{{ autres.ecrit }}</b> écrit{{ autres.ecrit|pluralize }}</span>
+  <span class="chiffre"><b>{{ autres.oral }}</b> ora{{ autres.oral|pluralize:"l,ux" }}</span>
+  <span class="chiffre"><b>{{ autres.concours }}</b> concours</span>
+  <a class="chiffre" href="{% url 'public_accueil' %}" target="_blank" rel="noopener"><b>{{ autres.publiees }}</b> résultat{{ autres.publiees|pluralize }} publié{{ autres.publiees|pluralize }}</a>
+  <a class="chiffre" href="{% url 'inscriptions' %}"><b>{{ autres.inscrits }}</b> inscrit{{ autres.inscrits|pluralize }} au registre</a>
+  <a class="chiffre" href="{% url 'communiques' %}"><b>{{ autres.communiques }}</b> communiqué{{ autres.communiques|pluralize }} publié{{ autres.communiques|pluralize }}</a>
 </div>
 {% endblock %}

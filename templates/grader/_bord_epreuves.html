@@ -1,0 +1,49 @@
+{% comment %}
+Tableau de bord : un bloc par concours, comme les pages Concours et Résultats, avec l'admission de
+chaque étape. Le bloc d'une étape mène à ses résultats, ou à sa page tant qu'elle n'a pas de note.
+Paramètre : groupes (services.groupes_epreuves, avec « bilan » sur chaque étape).
+{% endcomment %}
+<div class="groupes groupes--libre">
+  {% for g in groupes %}
+  {% if g.multi %}
+  <article class="groupe groupe--etapes">
+    <header class="groupe__tete">
+      <div class="groupe__nom">
+        <h3 class="groupe__titre"><a href="{% url 'quiz_parcours' g.racine.pk %}">{{ g.titre }}</a></h3>
+        <span class="badge grey">{{ g.etapes|length }} étapes</span>
+        {% if not g.concours %}<span class="groupe__classe">{{ g.racine.class_group.name }}</span>{% endif %}
+      </div>
+      <a class="btn small secondary" href="{% url 'quiz_parcours' g.racine.pk %}">Résultats du concours</a>
+    </header>
+    <ol class="groupe__etapes">
+      {% for e in g.etapes %}
+      <li class="tuile-etape carte-bouton{% if e.bilan %} is-fait{% endif %}">
+        <div class="tuile-etape__tete">
+          <span class="tuile-etape__num" aria-hidden="true">{% if e.bilan %}✓{% else %}{{ e.numero }}{% endif %}</span>
+          <a class="tuile-etape__nom carte-bouton__lien" title="{{ e.quiz.title }}" href="{% if e.bilan %}{% url 'quiz_results' e.quiz.pk %}{% else %}{% url 'quiz_detail' e.quiz.pk %}{% endif %}">{{ e.quiz.type_court }}</a>
+          {% if e.intitule %}<span class="tuile-etape__intitule">{{ e.intitule }}</span>{% endif %}
+          <span class="carte-bouton__fleche" aria-hidden="true"></span>
+        </div>
+        {% include "grader/_bord_chiffres.html" %}
+      </li>
+      {% endfor %}
+    </ol>
+  </article>
+  {% else %}
+  {% with e=g.etapes.0 %}
+  <article class="groupe carte-bouton">
+    <header class="groupe__tete">
+      <span class="carte-bouton__icone" aria-hidden="true">{% include "grader/_icone_epreuve.html" with quiz=e.quiz %}</span>
+      <div class="groupe__nom">
+        <h3 class="groupe__titre"><a class="carte-bouton__lien" href="{% if e.bilan %}{% url 'quiz_results' e.quiz.pk %}{% else %}{% url 'quiz_detail' e.quiz.pk %}{% endif %}">{{ g.titre }}</a></h3>
+        <span class="badge grey">{{ e.quiz.type_court }}</span>
+        {% if not g.concours %}<span class="groupe__classe">{{ e.quiz.class_group.name }}</span>{% endif %}
+      </div>
+      <span class="carte-bouton__fleche" aria-hidden="true"></span>
+    </header>
+    {% include "grader/_bord_chiffres.html" %}
+  </article>
+  {% endwith %}
+  {% endif %}
+  {% endfor %}
+</div>

@@ -263,6 +263,16 @@ def main():
     assert "7 page" in page, "le nombre de pages en attente n'est pas repris"
     print("  tableau de bord blocages et alertes remontés OK")
 
+    # Un compte sans rien : pas de bloc « À faire » vide, le mode d'emploi à la place.
+    get_user_model().objects.filter(username="st_neuf").delete()
+    neuf = enseignant_complet(get_user_model().objects.create_user("st_neuf", password="x"))
+    vide = Client()
+    vide.force_login(neuf)
+    page = vide.get("/").content.decode()
+    assert "À faire" not in page and "Répartition des résultats" not in page
+    assert "Aucune épreuve pour le moment" in page and "Le cycle d'une épreuve" in page
+    print("  tableau de bord compte neuf : rien à faire, mode d'emploi OK")
+
     print("\n✅ TEST DES STATISTIQUES RÉUSSI")
 
 
