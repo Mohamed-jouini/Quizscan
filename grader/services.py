@@ -124,7 +124,59 @@ def _fils_de_lecture():
     return max(1, demande or min(4, os.cpu_count() or 1))
 
 
+# Verrou de PostgreSQL d'un lot en lecture : (VERROU_LOTS, n° du lot). Verrou de
+# session : il tombe de lui-même quand le processus qui lit meurt (sa connexion se
+# ferme). C'est à lui qu'on reconnaît un lot vraiment lu, quelle que soit la
+# durée d'une étape, et il empêche deux lecteurs du même lot (« Relancer » cliqué
+# pendant que la reprise automatique s'en charge).
+VERROU_LOTS = 7240
+# Un lot « en cours » sans verrou ni progrès depuis ce délai est repris d'office
+REPRISE_APRES = 60
+
+
+@contextlib.contextmanager
+def verrou_du_lot(batch_id):
+    """Prend le verrou du lot s'il est libre ; donne True si on l'a."""
+    with connection.cursor() as curseur:
+        curseur.execute("SELECT pg_try_advisory_lock(%s, %s)", [VERROU_LOTS, batch_id])
+        obtenu = curseur.fetchone()[0]
+    try:
+        yield obtenu
+    finally:
+        if obtenu:
+            with connection.cursor() as curseur:
+                curseur.execute("SELECT pg_advisory_unlock(%s, %s)", [VERROU_LOTS, batch_id])
+
+
+def lots_verrouilles():
+    """N° des lots qu'un processus lit en ce moment (verrou tenu)."""
+    with connection.cursor() as curseur:
+        curseur.execute("SELECT objid FROM pg_locks WHERE locktype = 'advisory' "
+                        "AND classid = %s AND objsubid = 2 AND granted", [VERROU_LOTS])
+        return {int(ligne[0]) for ligne in curseur.fetchall()}
+
+
+def lots_a_reprendre():
+    """Lots « en cours » que personne ne lit et qui n'avancent plus : à relancer."""
+    lots = list(ScanBatch.objects.filter(status="processing").order_by("created_at"))
+    if not lots:
+        return []
+    lus = lots_verrouilles()
+    limite = time.time() - REPRISE_APRES
+    return [lot for lot in lots if lot.pk not in lus and lot.updated_at.timestamp() < limite]
+
+
 def run_batch(batch_id):
+    """Lit et note toutes les pages d'un lot, sauf s'il est déjà lu ailleurs (son
+    verrou est pris) : rien ne se fait alors deux fois."""
+    with verrou_du_lot(batch_id) as obtenu:
+        if not obtenu:
+            log.info("Lot %s déjà en lecture par un autre processus", batch_id)
+            return ScanBatch.objects.get(pk=batch_id)
+        return _lire_le_lot(batch_id)
+
+
+def _lire_le_lot(batch_id):
     """Lit et note toutes les pages d'un lot. Reprenable : les pages déjà
     enregistrées (même nom de source) sont ignorées.
 
@@ -471,10 +523,14 @@ def launch_pending(quiz):
 
 
 def is_stalled(batch):
-    """Lot resté « en cours » sans progression (serveur redémarré…)."""
+    """Lot resté « en cours » sans progression (serveur redémarré…), que personne
+    ne lit plus : une étape longue d'un lot qui tourne (son verrou est tenu) n'est
+    pas une interruption."""
     if batch.status != "processing":
         return False
-    return (time.time() - batch.updated_at.timestamp()) > STALLED_AFTER
+    if (time.time() - batch.updated_at.timestamp()) <= STALLED_AFTER:
+        return False
+    return batch.pk not in lots_verrouilles()
 
 
 class LotEnCours(Exception):

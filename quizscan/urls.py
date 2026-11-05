@@ -2,8 +2,8 @@ from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
-from django.views.static import serve as file_serve
 
+from grader.statique import fichier_statique
 from grader.views import AdminLoginView, ConnexionView, protected_media
 
 urlpatterns = [
@@ -31,7 +31,7 @@ urlpatterns += [
 if not settings.DEBUG:
     # En production (application interne à faible trafic), Django sert
     # lui-même ses fichiers statiques (en DEBUG, runserver s'en charge).
+    # Avec de quoi rester dans le navigateur (grader/statique.py).
     urlpatterns += [
-        re_path(r"^static/(?P<path>.*)$", file_serve,
-                {"document_root": settings.STATIC_ROOT}),
+        re_path(r"^static/(?P<path>.*)$", fichier_statique),
     ]

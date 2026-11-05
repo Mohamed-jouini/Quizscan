@@ -196,6 +196,91 @@ def test_mise_a_jour(quiz):
           "processus web selon les processeurs OK")
 
 
+def test_fichiers_statiques():
+    from django.http import Http404
+    from django.test import RequestFactory, override_settings
+
+    from grader.statique import fichier_statique
+    from grader.templatetags.qs_statique import _empreinte
+
+    racine = os.path.join(os.path.dirname(services.__file__), "static")
+    chemin = os.path.join(racine, "grader", "quizscan.css")
+    bonne = _empreinte(chemin, os.path.getmtime(chemin))
+    demande = RequestFactory()
+    with override_settings(STATIC_ROOT=racine):
+        def cache(**parametres):
+            reponse = fichier_statique(demande.get("/static/grader/quizscan.css", parametres),
+                                       "grader/quizscan.css")
+            assert reponse.status_code == 200
+            return reponse["Cache-Control"]
+        assert cache(v=bonne) == "public, max-age=31536000, immutable", cache(v=bonne)
+        assert cache(v="0000000000") == "public, max-age=3600", "empreinte d'une autre version"
+        assert cache() == "public, max-age=3600"
+        try:
+            fichier_statique(demande.get("/static/absent.css"), "absent.css")
+        except Http404:
+            pass
+        else:
+            raise AssertionError("fichier absent servi")
+    with open("quizscan/urls.py", encoding="utf-8") as fh:
+        assert "fichier_statique" in fh.read(), "les fichiers statiques sans cache"
+    print("  fichiers statiques : un an dans le navigateur avec leur empreinte, une heure sans OK")
+
+
+def test_reprise_des_lots(quiz):
+    import io as _io
+    from django.db import connections
+
+    copie = cv2.imencode(".jpg", simulate_scan(fill_sheet(
+        render_page(services.copies_nominatives_pdf(quiz, quiz.layout_json)[0], 0),
+        quiz.layout_json, REPONSES, name_text=("", ""))))[1].tobytes()
+    lot = services.create_batch(quiz, [SimpleUploadedFile("repris.jpg", copie)],
+                                status="processing")
+    vieux = timezone.now() - datetime.timedelta(seconds=services.STALLED_AFTER + 60)
+    ScanBatch.objects.filter(pk=lot.pk).update(updated_at=vieux)
+
+    # Un autre processus le lit (son verrou est pris) : ni relu, ni « interrompu »
+    autre = connections.create_connection("default")
+    try:
+        with autre.cursor() as curseur:
+            curseur.execute("SELECT pg_advisory_lock(%s, %s)", [services.VERROU_LOTS, lot.pk])
+        assert lot.pk in services.lots_verrouilles()
+        services.run_batch(lot.pk)
+        lot.refresh_from_db()
+        assert lot.sheets.count() == 0 and lot.status == "processing", "lu deux fois"
+        assert not services.is_stalled(lot), "un lot qu'on lit n'est pas interrompu"
+        assert lot.pk not in [l.pk for l in services.lots_a_reprendre()]
+        tampon = _io.StringIO()
+        call_command("lots_en_cours", stdout=tampon)
+        assert int(tampon.getvalue()) >= 1, "la mise à jour n'attendrait pas ce lot"
+    finally:
+        autre.close()                       # le processus « meurt » : son verrou tombe
+    assert lot.pk not in services.lots_verrouilles()
+    assert services.is_stalled(lot)
+    assert lot.pk in [l.pk for l in services.lots_a_reprendre()]
+    call_command("reprendre_lots", stdout=_io.StringIO())
+    lot.refresh_from_db()
+    copie_lue = lot.sheets.get()
+    assert lot.status == "done" and copie_lue.status == "ok", (lot.status, copie_lue.status)
+    assert lot.pk not in [l.pk for l in services.lots_a_reprendre()]
+    with open("docker-entrypoint.sh", encoding="utf-8") as fh:
+        script = fh.read()
+    assert script.index("reprendre_lots --veiller &") < script.index("exec gunicorn"), \
+        "la reprise doit partir au démarrage du conteneur"
+    print("  reprise : un lot lu ailleurs n'est pas relu ; arrêté, il repart de lui-même OK")
+
+
+def test_postgresql():
+    with open("docker-compose.yml", encoding="utf-8") as fh:
+        compose = fh.read()
+    for reglage in ("shared_buffers=${PG_SHARED_BUFFERS:-1GB}", "work_mem=${PG_WORK_MEM:-32MB}",
+                    "effective_cache_size=", "maintenance_work_mem=", "shm_size: 512mb"):
+        assert reglage in compose, reglage
+    db = compose[compose.index("\n  db:"):]
+    assert db.index("command:") < db.index("environment:"), "réglages hors du service db"
+    print("  PostgreSQL : mémoire réglée pour 16 Go, modifiable dans .env OK")
+
+
 def main():
     logging.disable(logging.WARNING)
     Quiz.objects.filter(owner__username="prof_vitesse").delete()
@@ -210,6 +295,12 @@ def main():
     test_requete_des_resultats(quiz)
     print("Mise à jour automatique :")
     test_mise_a_jour(quiz)
+    print("Reprise des lots arrêtés :")
+    test_reprise_des_lots(quiz)
+    print("Fichiers statiques :")
+    test_fichiers_statiques()
+    print("PostgreSQL :")
+    test_postgresql()
     Quiz.objects.filter(owner=prof).delete()
     ClassGroup.objects.filter(owner=prof).delete()
     prof.delete()

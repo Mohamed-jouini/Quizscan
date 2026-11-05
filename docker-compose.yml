@@ -26,6 +26,23 @@ services:
   # à jour automatique ne doit jamais le faire.
   db:
     image: postgres:17
+    # Mémoire de PostgreSQL pour un serveur de 16 Go partagé avec d'autres services.
+    # Ses valeurs d'origine visent une toute petite machine : 128 Mo de cache, 4 Mo pour
+    # trier, au-delà de quoi les gros calculs (résultats et tableau de bord d'un concours
+    # de 10 000 copies) passent par le disque. À ajuster dans .env (PG_…) ; un changement
+    # redémarre la base une fois, à la mise à jour suivante.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-1GB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-4GB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-32MB}
+      - -c
+      - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-256MB}
+    # mémoire partagée des requêtes en parallèle : 64 Mo par défaut dans Docker, trop peu
+    shm_size: 512mb
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-quizscan}
       POSTGRES_USER: ${POSTGRES_USER:-quizscan}

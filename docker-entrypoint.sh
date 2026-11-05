@@ -6,6 +6,9 @@ python manage.py collectstatic --noinput
 # Fiches « grille » générées avant le cadre QR : mises à jour sans toucher à
 # ce que le scan lit. Ne doit jamais empêcher le démarrage.
 python manage.py moderniser_fiches || true
+# Lots dont la lecture s'est arrêtée (redémarrage, coupure de courant) : repris
+# d'eux-mêmes, puis veille toutes les deux minutes, à côté du serveur web.
+python manage.py reprendre_lots --veiller &
 # timeout long : téléversement de gros PDF de scans (la correction elle-même
 # tourne en arrière-plan dans le worker, voir grader/services.py).
 # Processus web : un par processeur (de 2 à 8), sauf GUNICORN_WORKERS dans .env.
