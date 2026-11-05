@@ -261,7 +261,12 @@ def main():
     assert "correction jamais lancée" in page, (
         "un lot en attente depuis des jours n'est pas signalé")
     assert "7 page" in page, "le nombre de pages en attente n'est pas repris"
-    print("  tableau de bord blocages et alertes remontés OK")
+    # Chaque ligne de « À faire » s'ouvre d'un clic : un seul lien étendu sur tout le bloc.
+    a_faire = page.split('class="card a-faire"', 1)[1].split("</section>", 1)[0]
+    assert a_faire.count("a-faire__ligne carte-bouton") == a_faire.count("carte-bouton__lien") >= 3
+    assert (f'class="carte-bouton__lien a-faire__titre" href="/quiz/{sans_corrige.pk}/"'
+            in a_faire), "le corrigé incomplet ne s'ouvre pas d'un clic"
+    print("  tableau de bord blocages et alertes remontés, lignes cliquables OK")
 
     # Un compte sans rien : pas de bloc « À faire » vide, le mode d'emploi à la place.
     get_user_model().objects.filter(username="st_neuf").delete()

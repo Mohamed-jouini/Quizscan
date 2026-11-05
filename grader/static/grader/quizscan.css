@@ -1915,19 +1915,17 @@ a.chiffre:hover{border-color:var(--qs-blue)}
    align-items:start : une carte garde sa hauteur au lieu de s'etirer sur celle de sa voisine. */
 .a-faire{padding:16px 20px}
 .a-faire h2{margin:0 0 4px}
-.a-faire__liste{list-style:none;margin:0;padding:0}
-.a-faire__ligne{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 0;
-  border-top:1px solid var(--qs-line)}
-.a-faire__ligne:first-child{border-top:0}
-.a-faire__ligne:last-child{padding-bottom:0}
+.a-faire__liste{list-style:none;margin:10px 0 3px;padding:0;display:grid;gap:10px}
+.a-faire__ligne{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 12px}
+.a-faire__ligne .carte-bouton__fleche{margin-left:auto}
 .a-faire__icone{flex:none;width:30px;height:30px;border-radius:10px;display:flex;align-items:center;
   justify-content:center;background:var(--qs-warn-bg);color:var(--qs-warn)}
 .a-faire__icone--bad{background:var(--qs-bad-bg);color:var(--qs-bad)}
 .a-faire__icone--info{background:var(--qs-info-bg);color:var(--qs-info)}
 .a-faire__icone svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;
   stroke-linecap:round;stroke-linejoin:round}
-.a-faire__texte{flex:1 1 240px;min-width:0;font-size:13.5px;line-height:1.5;color:var(--qs-muted)}
-.a-faire__texte b{color:var(--qs-ink)}
+.a-faire__texte{flex:1 1 200px;min-width:0;font-size:13.5px;line-height:1.5;color:var(--qs-muted)}
+.a-faire__texte b,.a-faire__titre{font-weight:700;color:var(--qs-ink)}
 .a-faire__liens{display:flex;flex-wrap:wrap;gap:6px}
 .bord{display:grid;grid-template-columns:minmax(0,2.3fr) minmax(280px,1fr);gap:18px;align-items:start}
 .bord__principal,.bord__cote{min-width:0}

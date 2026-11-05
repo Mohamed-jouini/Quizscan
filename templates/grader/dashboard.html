@@ -17,12 +17,12 @@
   <ul class="a-faire__liste">
 
     {% if epreuves_douteuses %}
-    <li class="a-faire__ligne">
+    <li class="a-faire__ligne carte-bouton">
       <span class="a-faire__icone a-faire__icone--bad" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
       </span>
       <div class="a-faire__texte">
-        <b>Bonne réponse à vérifier sur {{ epreuves_douteuses|length }} épreuve{{ epreuves_douteuses|pluralize }}.</b>
+        <a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_results' epreuves_douteuses.0.quiz.pk %}">Bonne réponse à vérifier sur {{ epreuves_douteuses|length }} épreuve{{ epreuves_douteuses|pluralize }}.</a>
         Aucune copie n'a la réponse enregistrée et presque toutes ont coché la même autre case : c'est le signe d'un corrigé erroné.
       </div>
       <div class="a-faire__liens">
@@ -32,16 +32,17 @@
           {% for n in e.questions %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</a>
         {% endfor %}
       </div>
+      <span class="carte-bouton__fleche" aria-hidden="true"></span>
     </li>
     {% endif %}
 
     {% if epreuves_bloquees %}
-    <li class="a-faire__ligne">
+    <li class="a-faire__ligne carte-bouton">
       <span class="a-faire__icone" aria-hidden="true">
         <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
       </span>
       <div class="a-faire__texte">
-        <b>{{ epreuves_bloquees|length }} épreuve{{ epreuves_bloquees|pluralize }} au corrigé incomplet.</b>
+        <a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_detail' epreuves_bloquees.0.pk %}">{{ epreuves_bloquees|length }} épreuve{{ epreuves_bloquees|pluralize }} au corrigé incomplet.</a>
         La correction ne peut pas démarrer tant qu'une bonne réponse manque : ces questions seraient comptées fausses pour tout le monde.
       </div>
       <div class="a-faire__liens">
@@ -49,16 +50,17 @@
         <a class="btn small secondary" href="{% url 'quiz_detail' q.pk %}">{{ q.title|truncatechars:34 }}</a>
         {% endfor %}
       </div>
+      <span class="carte-bouton__fleche" aria-hidden="true"></span>
     </li>
     {% endif %}
 
     {% if n_attention %}
-    <li class="a-faire__ligne">
+    <li class="a-faire__ligne carte-bouton">
       <span class="a-faire__icone a-faire__icone--bad" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M12 11v4"/><path d="M12 18h.01"/></svg>
       </span>
       <div class="a-faire__texte">
-        <b>{{ n_attention }} copie{{ n_attention|pluralize }} à reprendre.</b>
+        {% if to_review %}<a class="carte-bouton__lien a-faire__titre" href="{% url 'sheet_review' to_review.0.pk %}">{{ n_attention }} copie{{ n_attention|pluralize }} à reprendre.</a>{% else %}<b>{{ n_attention }} copie{{ n_attention|pluralize }} à reprendre.</b>{% endif %}
         Un incident de lecture : QR illisible, repères manqués ou candidat non reconnu{% if causes %}
         ({% for c in causes %}{{ c.n }} {{ c.libelle }}{% if not forloop.last %}, {% endif %}{% endfor %}){% endif %}.
       </div>
@@ -67,16 +69,17 @@
         <a class="btn small secondary" href="{% url 'sheet_review' s.pk %}">{{ s.source_name|truncatechars:26 }}</a>
         {% endfor %}
       </div>
+      <span class="carte-bouton__fleche" aria-hidden="true"></span>
     </li>
     {% endif %}
 
     {% if lots_en_attente %}
-    <li class="a-faire__ligne">
+    <li class="a-faire__ligne carte-bouton">
       <span class="a-faire__icone a-faire__icone--info" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M4 8.5 12 4l8 4.5-8 4.5z"/><path d="M4 13l8 4.5 8-4.5"/><path d="M4 17.5 12 22l8-4.5"/></svg>
       </span>
       <div class="a-faire__texte">
-        <b>{{ pages_en_attente }} page{{ pages_en_attente|pluralize }} reçue{{ pages_en_attente|pluralize }}, correction jamais lancée</b>
+        <a class="carte-bouton__lien a-faire__titre" href="{% url 'batch_detail' lots_en_attente.0.pk %}">{{ pages_en_attente }} page{{ pages_en_attente|pluralize }} reçue{{ pages_en_attente|pluralize }}, correction jamais lancée</a>
         ({{ lots_en_attente|length }} lot{{ lots_en_attente|pluralize }}). Ces copies sont en lieu sûr, mais personne n'a cliqué sur « Lancer la correction ».
       </div>
       <div class="a-faire__liens">
@@ -84,16 +87,17 @@
         <a class="btn small secondary" href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
         {% endfor %}
       </div>
+      <span class="carte-bouton__fleche" aria-hidden="true"></span>
     </li>
     {% endif %}
 
     {% if n_open_pending %}
-    <li class="a-faire__ligne">
+    <li class="a-faire__ligne carte-bouton">
       <span class="a-faire__icone a-faire__icone--info" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></svg>
       </span>
       <div class="a-faire__texte">
-        <b>{{ n_open_pending }} réponse{{ n_open_pending|pluralize }} manuscrite{{ n_open_pending|pluralize }} à noter.</b>
+        {% if epreuves_a_noter %}<a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_results' epreuves_a_noter.0.pk %}">{{ n_open_pending }} réponse{{ n_open_pending|pluralize }} manuscrite{{ n_open_pending|pluralize }} à noter.</a>{% else %}<b>{{ n_open_pending }} réponse{{ n_open_pending|pluralize }} manuscrite{{ n_open_pending|pluralize }} à noter.</b>{% endif %}
         Travail normal de correction, pas un incident : ces réponses n'ont pas de bonne réponse mécanique.
       </div>
       <div class="a-faire__liens">
@@ -101,6 +105,7 @@
         <a class="btn small secondary" href="{% url 'quiz_results' q.pk %}">{{ q.title|truncatechars:34 }}</a>
         {% endfor %}
       </div>
+      <span class="carte-bouton__fleche" aria-hidden="true"></span>
     </li>
     {% endif %}
   </ul>
