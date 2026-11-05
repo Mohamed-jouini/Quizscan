@@ -9,28 +9,39 @@
 {% if trop %}
 <p class="pub-alerte">Trop de recherches depuis votre connexion. Réessayez dans quelques minutes.</p>
 {% elif numero %}
-  {% if lignes %}
+  {% if groupes %}
   <section class="pub-section">
     <div class="pub-identite">
       <span class="avatar">{{ identite.last_name|slice:":1" }}{{ identite.first_name|slice:":1" }}</span>
       <span><b>{{ identite.last_name }} {{ identite.first_name }}</b><small>N° d'inscription {{ numero }}</small></span>
     </div>
-    <div class="pub-cartes">
-      {% for l in lignes %}
-      <article class="pub-note">
-        <span class="pub-note__epreuve">{{ l.quiz.title }}</span>
-        <span class="pub-note__classe">{% if l.quiz.auto_enroll %}Concours{% else %}{{ l.quiz.class_group.name }}{% endif %}</span>
-        {% if l.quiz.a_des_qcm %}
-        <span class="pub-note__chiffre"><b>{{ l.row.correct }}</b> / {{ l.row.n_qcm }} bonnes réponses</span>
+    <div class="pub-groupes">
+      {% for g in groupes %}
+      <article class="groupe{% if g.multi %} groupe--etapes{% endif %}">
+        <header class="groupe__tete">
+          {% if not g.multi %}<span class="carte-bouton__icone" aria-hidden="true">{% include "grader/_icone_epreuve.html" with quiz=g.racine %}</span>{% endif %}
+          <div class="groupe__nom">
+            <h2 class="groupe__titre">{{ g.titre }}</h2>
+            <span class="badge grey">{% if g.multi %}{{ g.etapes|length }} étapes{% else %}{{ g.racine.type_court }}{% endif %}</span>
+            <span class="groupe__classe">{% if g.concours %}Concours{% else %}{{ g.racine.class_group.name }}{% endif %}</span>
+          </div>
+        </header>
+        {% if g.multi %}
+        <ol class="groupe__etapes">
+          {% for e in g.etapes %}
+          <li class="tuile-etape tuile-etape--note{% if e.row.resultat == 'admis' %} is-fait{% endif %}">
+            <div class="tuile-etape__tete">
+              <span class="tuile-etape__num" aria-hidden="true">{% if e.row.resultat == 'admis' %}✓{% else %}{{ e.numero }}{% endif %}</span>
+              <b class="tuile-etape__nom">{{ e.quiz.type_court }}</b>
+              {% if e.intitule %}<span class="tuile-etape__intitule">{{ e.intitule }}</span>{% endif %}
+            </div>
+            {% include "public/_note.html" with quiz=e.quiz row=e.row %}
+          </li>
+          {% endfor %}
+        </ol>
         {% else %}
-        <span class="pub-note__chiffre"><b>{{ l.row.score|floatformat:"-2" }}</b> / {{ l.row.max_score|floatformat:"-2" }}{% if l.quiz.type_epreuve == "oral" %} · oral{% else %} · écrit{% endif %}</span>
+        {% include "public/_note.html" with quiz=g.racine row=g.etapes.0.row %}
         {% endif %}
-        <span class="pub-note__pct">{{ l.row.pct }} %</span>
-        {% if l.row.resultat == "admis" %}<span class="badge ok pub-note__verdict">{% if l.quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</span>
-        {% elif l.row.resultat == "refuse" %}<span class="badge bad pub-note__verdict">{% if l.quiz.auto_enroll %}Non admis{% else %}Non réussi{% endif %}</span>
-        {% elif l.row.resultat == "en_attente" %}<span class="badge warn pub-note__verdict">Correction en cours</span>
-        {% elif l.row.pending_open or l.row.questions_manquantes %}<span class="badge warn">Note provisoire : correction en cours</span>{% endif %}
-        {% if l.quiz.a_des_qcm %}<span class="pub-note__detail">{% if l.quiz.note_distincte %}Note {{ l.row.score|floatformat:"-2" }} / {{ l.row.max_score|floatformat:"-2" }} · {% endif %}{{ l.row.wrong }} fausse(s) · {{ l.row.blank }} sans réponse · 1 point par bonne réponse</span>{% endif %}
       </article>
       {% endfor %}
     </div>

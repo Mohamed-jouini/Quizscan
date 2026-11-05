@@ -1689,23 +1689,41 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .pub-epreuves li{display:flex;align-items:center;gap:10px;padding:14px 18px;
   border-bottom:1px solid var(--qs-line)}
 .pub-epreuves li:last-child{border-bottom:0}
-.pub-epreuves a{flex:1;text-decoration:none;color:var(--qs-ink);display:flex;
-  flex-direction:column}
-.pub-epreuves a span{font-size:13px;color:var(--qs-muted)}
-.pub-epreuves a:hover b{color:var(--qs-blue)}
+.pub-epreuves li > a,.pub-epreuves__nom{flex:1 1 200px;min-width:0;text-decoration:none;
+  color:var(--qs-ink);display:flex;flex-direction:column}
+.pub-epreuves li > a span,.pub-epreuves__nom span{font-size:13px;color:var(--qs-muted)}
+.pub-epreuves li > a:hover b{color:var(--qs-blue)}
+.pub-epreuves__etapes{display:flex;flex-wrap:wrap;gap:6px}
 .pub-vide{color:var(--qs-muted);padding:18px;border:1px dashed var(--qs-line-strong);
   border-radius:var(--qs-r-card);margin:18px 0 0}
 .pub-alerte{margin:18px 0 0;padding:14px 18px;border-radius:12px;
   background:var(--qs-warn-bg);color:var(--qs-warn)}
-.pub-identite{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.pub-identite{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:14px 18px;
+  border:1px solid var(--qs-line);border-radius:var(--qs-r-card);background:var(--qs-surface)}
 .pub-identite b{display:block;font-size:18px}
 .pub-identite small{color:var(--qs-muted)}
-.pub-note{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:18px;
-  border-radius:var(--qs-r-card);background:var(--qs-surface);border:1px solid var(--qs-line)}
-.pub-note__epreuve{font-weight:700;font-size:16px}
-.pub-note__classe,.pub-note__detail{font-size:13px;color:var(--qs-muted)}
-.pub-note__chiffre{font-size:15px;color:var(--qs-muted)}
-.pub-note__chiffre b{font-size:30px;color:var(--qs-ink);letter-spacing:-.5px}
+/* Mes resultats : un bloc par concours (composant .groupe des listes), ses etapes dedans. */
+.pub-groupes{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));
+  grid-auto-flow:dense;gap:14px}
+.pub-groupes .groupe{padding:18px}
+.pub-groupes .groupe__titre{font-size:17px;color:var(--qs-ink)}
+.tuile-etape--note{position:relative;border:1px solid var(--qs-line);border-radius:12px;
+  background:var(--qs-surface)}
+.tuile-etape--note .tuile-etape__tete{padding-right:0}
+.tuile-etape--note .tuile-etape__nom{color:var(--qs-ink)}
+.pub-note{display:flex;flex-direction:column;gap:8px}
+.groupe > .pub-note{margin-top:auto}
+.pub-note__tete{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 10px}
+.pub-note__chiffre{font-size:14px;color:var(--qs-muted)}
+.pub-note__chiffre b{font-size:30px;line-height:1.1;color:var(--qs-ink);letter-spacing:-.5px}
+.pub-note__jauge{display:flex;align-items:center;gap:10px}
+.pub-note__jauge b{font-size:15px;color:var(--qs-blue);white-space:nowrap}
+.pub-note__jauge progress{flex:1;min-width:0;height:8px;border:0;border-radius:999px;overflow:hidden;
+  appearance:none;background:var(--qs-track)}
+.pub-note__jauge progress::-webkit-progress-bar{background:var(--qs-track)}
+.pub-note__jauge progress::-webkit-progress-value{background:var(--qs-grad-chart)}
+.pub-note__jauge progress::-moz-progress-bar{background:var(--qs-grad-chart)}
+.pub-note__detail{font-size:12.5px;color:var(--qs-muted)}
 .pub-tableau{overflow-x:auto;border:1px solid var(--qs-line);border-radius:var(--qs-r-card);
   background:var(--qs-surface)}
 .pub-tableau table{width:100%;border-collapse:collapse}
@@ -1731,8 +1749,6 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .pourcentage__jauge{width:64px;height:6px;border-radius:999px;background:var(--qs-track);
   overflow:hidden}
 .pourcentage__jauge i{display:block;height:100%;border-radius:999px;background:var(--qs-grad-chart)}
-.pub-note__pct{font-size:22px;font-weight:700;color:var(--qs-blue);letter-spacing:-.3px}
-.pub-note__verdict{font-size:13.5px;padding:5px 14px}
 
 /* === Épreuves écrites et orales ========================================== */
 /* Les quatre étapes d'une épreuve écrite, cochées au fur et à mesure. */

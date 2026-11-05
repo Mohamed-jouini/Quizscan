@@ -23,15 +23,25 @@
 
 <section class="pub-section">
   <div class="pub-section__tete"><h2>Résultats publiés</h2></div>
-  {% if epreuves %}
+  {% if groupes %}
   <ul class="pub-epreuves">
-    {% for q in epreuves %}
+    {% for g in groupes %}
     <li>
-      <a href="{% url 'public_epreuve' q.pk %}">
-        <b>{{ q.title }}</b>
-        <span>{% if q.auto_enroll %}Concours{% else %}{{ q.class_group.name }}{% endif %}{% if q.publie_le %} · publié le {{ q.publie_le|date:"d/m/Y" }}{% endif %}</span>
+      {% if g.multi %}
+      <span class="pub-epreuves__nom">
+        <b>{{ g.titre }}</b>
+        <span>{% if g.concours %}Concours{% else %}{{ g.racine.class_group.name }}{% endif %}{% if g.publie_le %} · publié le {{ g.publie_le|date:"d/m/Y" }}{% endif %}</span>
+      </span>
+      <span class="pub-epreuves__etapes">
+        {% for e in g.etapes %}<a class="btn small secondary" title="{{ e.quiz.title }}" href="{% url 'public_epreuve' e.quiz.pk %}">{{ e.quiz.type_court }}</a>{% endfor %}
+      </span>
+      {% else %}
+      <a href="{% url 'public_epreuve' g.racine.pk %}">
+        <b>{{ g.titre }}</b>
+        <span>{% if g.concours %}Concours{% else %}{{ g.racine.class_group.name }}{% endif %}{% if g.publie_le %} · publié le {{ g.publie_le|date:"d/m/Y" }}{% endif %}</span>
       </a>
-      {% if q.admis_publies %}<span class="badge ok">liste des {% if q.auto_enroll %}admis{% else %}réussis{% endif %}</span>{% endif %}
+      {% if g.racine.admis_publies %}<span class="badge ok">liste des {% if g.concours %}admis{% else %}réussis{% endif %}</span>{% endif %}
+      {% endif %}
     </li>
     {% endfor %}
   </ul>

@@ -40,14 +40,21 @@ def _trop_de_recherches(request):
 
 def _epreuves_publiees():
     return (Quiz.objects.filter(Q(resultats_publies=True) | Q(admis_publies=True))
-            .order_by("-publie_le", "-pk"))
+            .select_related("class_group").order_by("-publie_le", "-pk"))
 
 
 def accueil(request):
+    # Un concours en étapes n'est qu'une ligne, à la place de son étape publiée la dernière.
+    epreuves = list(_epreuves_publiees()[:30])
+    rangs = {q.pk: rang for rang, q in enumerate(epreuves)}
+    groupes = services.groupes_epreuves(epreuves)
+    for groupe in groupes:
+        groupe["rang"] = min(rangs[etape["quiz"].pk] for etape in groupe["etapes"])
+        groupe["publie_le"] = epreuves[groupe["rang"]].publie_le
     return render(request, "public/accueil.html", {
         "avis": Communique.objects.filter(publie=True).prefetch_related("pieces")[:4],
         "n_avis": Communique.objects.filter(publie=True).count(),
-        "epreuves": _epreuves_publiees()[:30],
+        "groupes": sorted(groupes, key=lambda groupe: groupe["rang"]),
     })
 
 
@@ -62,9 +69,10 @@ def _resultat(quiz, etudiant):
 
 
 def resultat(request):
-    """Résultats d'un étudiant, par son n° d'inscription."""
+    """Résultats d'un étudiant, par son n° d'inscription : un bloc par concours, ses
+    étapes publiées à l'intérieur (chaque étape a sa fiche d'étudiant, sous le même n°)."""
     numero = numero_propre(request.GET.get("numero"))
-    contexte = {"numero": numero, "lignes": [], "identite": None, "trop": False}
+    contexte = {"numero": numero, "groupes": [], "identite": None, "trop": False}
     if numero:
         if _trop_de_recherches(request):
             contexte["trop"] = True
@@ -73,14 +81,20 @@ def resultat(request):
                          .filter(student_number=numero,
                                  class_group__quizzes__resultats_publies=True)
                          .distinct().select_related("class_group"))
+            epreuves, notes = [], {}
             for etudiant in etudiants:
                 for quiz in (etudiant.class_group.quizzes
                              .filter(resultats_publies=True)
                              .order_by("-publie_le", "-pk")):
                     row = _resultat(quiz, etudiant)
                     if row is not None:
-                        contexte["lignes"].append({"quiz": quiz, "row": row})
+                        epreuves.append(quiz)
+                        notes[quiz.pk] = row
                         contexte["identite"] = contexte["identite"] or etudiant
+            contexte["groupes"] = services.groupes_epreuves(epreuves)
+            for groupe in contexte["groupes"]:
+                for etape in groupe["etapes"]:
+                    etape["row"] = notes[etape["quiz"].pk]
     return render(request, "public/resultat.html", contexte)
 
 

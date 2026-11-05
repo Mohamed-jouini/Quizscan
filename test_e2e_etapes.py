@@ -21,6 +21,7 @@ from django.core.management import call_command  # noqa: E402
 call_command("migrate", verbosity=0)
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.db import connection
 from django.test import Client
 from django.test.utils import setup_test_environment
@@ -252,6 +253,37 @@ def main():
     quiz_classe.delete()
     ClassGroup.objects.filter(name__startswith="Boutons ", owner=prof).delete()
     print("  page Classes : classes et quiz en boutons, création d'une classe OK")
+
+    # ---- espace public : un bloc par concours, ses étapes dedans, rien de non publié
+    cache.clear()
+    anonyme = Client()
+
+    def mes_resultats(numero):
+        return anonyme.get(reverse("public_resultat"), {"numero": numero}).content.decode()
+
+    Quiz.objects.filter(pk__in=[qcm.pk, ecrit.pk]).update(resultats_publies=True)
+    page = mes_resultats("5500")
+    assert page.count('class="groupe__titre"') == 1 and "2 étapes" in page
+    assert ">Oral<" not in page and "<b>15</b>" not in page, "l'oral n'est pas publié"
+    Quiz.objects.filter(pk=oral.pk).update(resultats_publies=True)
+    page = mes_resultats("5500")
+    assert page.count('class="groupe__titre"') == 1 and "3 étapes" in page
+    assert page.index(">QCM<") < page.index(">Écrit<") < page.index(">Oral<")
+    for note in ("<b>9</b> / 10 bonnes réponses", "<b>14,50</b> / 20", "<b>15</b> / 20"):
+        assert note in page, note
+    # éliminé à l'écrit : ses deux étapes seulement, et le verdict de chacune
+    page = mes_resultats("5501")
+    assert "2 étapes" in page and ">Oral<" not in page
+    assert page.count(">Admis<") == 1 and page.count(">Non admis<") == 1
+    # accueil : une seule ligne pour le concours, un bouton par étape
+    page = anonyme.get(reverse("public_accueil")).content.decode()
+    assert page.count("<b>Étapes QCM</b>") == 1 and "<b>Étapes oral</b>" not in page
+    for q in (qcm, ecrit, oral):
+        assert f'href="{reverse("public_epreuve", args=[q.pk])}"' in page, q.title
+    Quiz.objects.filter(pk__in=[qcm.pk, ecrit.pk, oral.pk]).update(resultats_publies=False)
+    assert "Aucun résultat publié" in mes_resultats("5500")
+    cache.clear()
+    print("  espace public : un bloc par concours, étapes publiées seules, une ligne à l'accueil OK")
 
     # une épreuve d'un collègue n'est pas proposée comme épreuve précédente
     autre = enseignant_complet(User.objects.get_or_create(username="prof_etapes2")[0])
