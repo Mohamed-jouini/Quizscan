@@ -20,6 +20,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import logging
+from html.parser import HTMLParser
 
 import django
 
@@ -46,6 +47,36 @@ COPIE = {1: 0, 2: 1, 3: 2, 4: 3, 5: 0, 6: 3}        # 5 justes sur 6
 
 def jpg(img):
     return cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 88])[1].tobytes()
+
+
+def champs_du_formulaire(page, bouton, valeur):
+    """Noms des champs que poste le formulaire de la page portant le bouton
+    name=bouton value=valeur : ce que le navigateur envoie vraiment."""
+    formulaires, courant = [], None
+
+    class Lecteur(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            nonlocal courant
+            a = dict(attrs)
+            if tag == "form":
+                courant = {"champs": set(), "boutons": set()}
+                formulaires.append(courant)
+            elif courant is not None and a.get("name"):
+                if tag in ("input", "select", "textarea"):
+                    courant["champs"].add(a["name"])
+                elif tag == "button":
+                    courant["boutons"].add((a["name"], a.get("value")))
+
+        def handle_endtag(self, tag):
+            nonlocal courant
+            if tag == "form":
+                courant = None
+
+    Lecteur().feed(page)
+    for f in formulaires:
+        if (bouton, str(valeur)) in f["boutons"]:
+            return f["champs"] | {bouton}
+    raise AssertionError(f"aucun formulaire avec le bouton {bouton}={valeur}")
 
 
 def main():
@@ -151,10 +182,16 @@ def main():
         (page2.status, page2.unreadable)
     print("  case laissée vide : question 3 signalée « à définir » OK")
 
-    # on la complète à la main, le quiz redevient corrigeable
+    # on la complète à la main, le quiz redevient corrigeable. Envoyé comme par la page :
+    # le formulaire de sa ligne n'a que la bonne réponse (une QCM vaut 1 point, pas de
+    # champ de barème) ; ainsi envoyé, il faisait une erreur 500 depuis la modification 12,
+    # que ce test, qui ajoutait « points », ne voyait pas
     q3 = quiz2.questions.get(order=3)
-    r = c.post(f"/quiz/{quiz2.pk}/", {"edit_question": q3.pk, "correct": "2",
-                                      "points": "1"})
+    champs = champs_du_formulaire(c.get(f"/quiz/{quiz2.pk}/").content.decode(),
+                                  "edit_question", q3.pk)
+    assert champs == {"csrfmiddlewaretoken", "correct", "edit_question"}, champs
+    r = c.post(f"/quiz/{quiz2.pk}/", {"edit_question": q3.pk, "correct": "2"})
+    assert r.status_code == 302, r.status_code
     quiz2.refresh_from_db()
     assert quiz2.corrige_complet and quiz2.questions.get(order=3).correct_choice == 2
     print("  complétée à la main : corrigé complet OK")

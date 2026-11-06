@@ -779,12 +779,16 @@ def quiz_detail(request, pk):
             q = get_object_or_404(
                 quiz.questions, pk=_int_or_none(request.POST.get("edit_question")) or 0)
             ancien_bareme, ancienne_bonne = q.points, q.correct_choice
-            try:
-                q.points = max(float(request.POST.get("points", q.points)
-                                     .replace(",", ".")), 0.0)
-            except (ValueError, TypeError):
-                messages.error(request, "Barème invalide.")
-                return redirect("quiz_detail", pk=pk)
+            # Une QCM n'a pas de champ de barème (elle vaut 1 point) : sa ligne n'envoie que
+            # la bonne réponse. Lire « points » sans lui faisait une erreur 500 à chaque
+            # bonne réponse choisie dans le tableau (depuis la modification 12).
+            bareme = request.POST.get("points")
+            if bareme is not None:
+                try:
+                    q.points = max(float(bareme.replace(",", ".")), 0.0)
+                except ValueError:
+                    messages.error(request, "Barème invalide.")
+                    return redirect("quiz_detail", pk=pk)
             if q.qtype == "qcm":
                 raw = (request.POST.get("correct") or "").strip()
                 if raw == "":

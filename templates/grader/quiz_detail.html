@@ -244,20 +244,22 @@
   <div class="card">
     <h2>Questions ({{ quiz.questions.count }})</h2>
     {% if quiz.questions.all %}
-    <div class="table-wrap">
+    {% comment %}« ajuste » : les textes vont à la ligne dans la demi-largeur de la carte ; sans
+      cela, une ligne de choix un peu longue repoussait la bonne réponse et la croix hors de
+      la carte (questionnaire de 50 questions de l'utilisateur, 6 novembre 2026).{% endcomment %}
+    <div class="table-wrap table-wrap--ajuste">
       <table>
-      <tr><th>N°</th><th>Type</th><th>Choix</th><th>Bonne rép.</th><th>Barème</th><th></th></tr>
+      <tr><th>N°</th><th>Question</th><th>Bonne rép.</th><th>Barème</th><th></th></tr>
       {% for q in quiz.questions.all %}
       <tr>
         <td>{{ q.order }}</td>
-        <td>{% if q.qtype == "qcm" %}QCM{% else %}Manuscrite{% endif %}
+        <td>{% if q.qtype == "qcm" %}QCM · {{ q.num_bubbles }} choix{% else %}Manuscrite{% endif %}
             {% if q.text %}<span class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>{{ q.text|truncatechars:50 }}</span>{% endif %}
             {% if q.qtype == "qcm" and q.choices %}
               <div class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>
                 {% for ch in q.choices %}{{ ch }}{% if not forloop.last %} · {% endif %}{% endfor %}
               </div>
             {% endif %}</td>
-        <td>{% if q.qtype == "qcm" %}{{ q.num_bubbles }}{% else %}—{% endif %}</td>
         {% if perms.grader.creer_epreuve %}
         <td colspan="2">
           <form class="inline qedit" method="post">{% csrf_token %}
