@@ -149,10 +149,15 @@ par numéro, les notes suivent.
   (QCM / Manuscrite), `A`, `B`, `C`… (textes des choix), `Réponse` (lettre
   A–J ou أ ب ت…, numéro, ou texte exact du choix), `Barème`, `Hauteur` (mm) —
   voir **`modele_questions.xlsx`** ;
-- **Word (.docx), PDF, texte** : questions numérotées, choix précédés d'une
-  lettre, bonne réponse marquée d'un astérisque ou donnée sur une ligne
-  « Réponse : » ; barème facultatif entre parenthèses ; une question sans
-  choix (ou marquée `[manuscrite]`) devient une question manuscrite :
+- **Word (.docx), PDF, texte, Markdown (.md)** : questions numérotées, choix
+  précédés d'une lettre, bonne réponse marquée d'un astérisque ou donnée sur
+  une ligne « Réponse : » (« الإجابة: ب » en arabe) ; barème facultatif entre
+  parenthèses ; une question sans choix (ou marquée `[manuscrite]`) devient une
+  question manuscrite ; une question sans bonne réponse s'importe, à compléter
+  ensuite. Modèle en arabe : **`modele_questions_ar.docx`** (ou `.md`). Pour
+  l'arabe, préférer le Word au PDF : selon le logiciel qui l'a créé, un PDF
+  rend ses lettres dans le désordre (et un PDF « Microsoft Print to PDF » n'a
+  aucun texte) :
 
   ```
   1. Quelle est la capitale de la Tunisie ? (2 pts)

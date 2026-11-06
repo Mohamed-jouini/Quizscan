@@ -732,6 +732,16 @@ def quiz_detail(request, pk):
                 if n:
                     messages.success(request, f"{n} question(s) importée(s) depuis "
                                               f"« {f.name} ».")
+                sans_corrige = [next_order + k for k, it in enumerate(items)
+                                if it["qtype"] == "qcm" and it["correct"] is None]
+                if sans_corrige:
+                    numeros = ", ".join(map(str, sans_corrige[:20]))
+                    messages.warning(
+                        request, f"{len(sans_corrige)} question(s) sans bonne réponse "
+                                 f"(n° {numeros}{' …' if len(sans_corrige) > 20 else ''}) : "
+                                 "renseignez-la dans le tableau des questions, ou scannez "
+                                 "la fiche remplie avec le corrigé. La correction des "
+                                 "copies attend qu'elles le soient toutes.")
                 if errors:
                     messages.error(request, "Non importé — " + " ; ".join(errors[:12])
                                    + (" …" if len(errors) > 12 else ""))

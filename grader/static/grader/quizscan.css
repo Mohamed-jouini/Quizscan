@@ -470,6 +470,8 @@ input:focus,select:focus,textarea:focus{
   line-height:1.55;border:1px solid var(--qs-ok-line)}
 .messages li.error{background:var(--qs-bad-bg);color:var(--qs-bad-ink);
   border-color:var(--qs-bad-line)}
+.messages li.warning{background:var(--qs-warn-bg);color:var(--qs-warn);
+  border-color:var(--qs-warn-line)}
 
 .bar{display:inline-block;background:var(--qs-grad-chart);height:10px;
   border-radius:999px;vertical-align:middle;min-width:2px}

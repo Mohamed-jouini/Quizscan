@@ -3,10 +3,11 @@
 Formats acceptés (fiche technique : « Import Excel / PDF / Word ») :
   - Excel (.xlsx / .xlsm) : un tableau avec une ligne d'en-tête ;
   - Word (.docx)          : paragraphes et tableaux ;
-  - PDF (.pdf)            : texte du document (PDF « texte », pas un scan) ;
-  - Texte (.txt / .csv).
+  - PDF (.pdf)            : texte du document (PDF « texte », pas un scan ni
+                            une impression « Microsoft Print to PDF ») ;
+  - Texte (.txt / .csv), Markdown (.md) : puces, titres et gras sont ignorés.
 
-Questionnaire au format texte (Word, PDF, .txt) — une question numérotée,
+Questionnaire au format texte (Word, PDF, .txt, .md) — une question numérotée,
 puis ses choix précédés d'une lettre ; la bonne réponse est marquée d'un
 astérisque ou donnée sur une ligne « Réponse : B » :
 
@@ -16,7 +17,10 @@ astérisque ou donnée sur une ligne « Réponse : B » :
     C) Sousse
     2. Expliquez le cycle de l'eau. [manuscrite]
 
-Une question sans choix est importée comme question manuscrite.
+Une question sans choix est importée comme question manuscrite. Une question à
+choix sans bonne réponse indiquée est importée sans corrigé : il se renseigne
+ensuite, à la main ou en scannant la fiche du corrigé (une bonne réponse écrite
+mais invalide, elle, est refusée).
 """
 import csv
 import datetime
@@ -29,7 +33,7 @@ from xml.etree import ElementTree as ET
 from .models import ARABIC_LETTERS, MAX_CHOICES, MAX_OPEN_HEIGHT_MM
 
 CANDIDATE_EXTS = (".xlsx", ".xlsm", ".csv", ".txt", ".docx", ".pdf")
-QUESTION_EXTS = (".xlsx", ".xlsm", ".csv", ".txt", ".docx", ".pdf")
+QUESTION_EXTS = (".xlsx", ".xlsm", ".csv", ".txt", ".md", ".markdown", ".docx", ".pdf")
 
 
 class ImportError_(ValueError):
@@ -123,10 +127,17 @@ def _pdf_lines(data):
     lines = []
     for page in doc:
         lines.extend(page.get_text("text").splitlines())
+    imprime = "print to pdf" in (doc.metadata.get("producer") or "").lower()
     doc.close()
     if not any(l.strip() for l in lines):
-        raise ImportError_("Ce PDF ne contient pas de texte (document scanné ?). "
-                           "Utilisez un PDF exporté depuis Word, ou le fichier Word.")
+        # « Microsoft Print to PDF » dessine chaque lettre : rien à lire, pas même
+        # par un copier-coller (questionnaire reçu de l'utilisateur, 6 novembre 2026)
+        cause = ("Il a été imprimé avec « Microsoft Print to PDF », qui transforme les "
+                 "lettres en dessins" if imprime
+                 else "Ses lettres y sont des images ou des dessins (document scanné ?)")
+        raise ImportError_(f"Ce PDF ne contient pas de texte lisible. {cause}. Importez "
+                           "plutôt le fichier d'origine (Word, texte ou Markdown .md), ou "
+                           "un PDF créé depuis Word par « Enregistrer sous… › PDF ».")
     return lines
 
 
@@ -517,8 +528,39 @@ def _points(s):
     return float(s.replace(",", "."))
 
 
+_MD_TRAIT = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")
+_MD_DEBUT = re.compile(r"^\s*(?:#{1,6}\s+|>\s?)")
+_MD_PUCE = re.compile(r"^\s*[-*+•·▪●◦]\s+")
+
+
+_FORMES_ARABES = re.compile("[ﭐ-﷿ﹰ-﻿]+")
+_MARQUES_SENS = re.compile("[؜‍‎‏‪-‮⁦-⁩]")
+_LETTRE_PARENTHESE = re.compile("^(\\s*[" + "".join(ARABIC_LETTERS) + "ا])\\s*\\(")
+
+
+def texte_normalise(ligne):
+    """Une ligne telle que la relit un PDF arabe, remise en texte ordinaire : formes de
+    présentation (« ﺗﻮﻧﺲ ») en lettres (« تونس »), espaces insécables en espaces, marques
+    de sens retirées, et la parenthèse d'un choix rendue retournée (« ب( ») remise à
+    l'endroit. Sans effet sur un texte déjà ordinaire."""
+    ligne = _FORMES_ARABES.sub(lambda m: unicodedata.normalize("NFKC", m.group()), ligne)
+    ligne = _MARQUES_SENS.sub("", ligne.replace("\xa0", " ").replace(" ", " "))
+    return _LETTRE_PARENTHESE.sub(r"\1)", ligne)
+
+
+def sans_markdown(ligne):
+    """Une ligne de Markdown lue comme du texte : sans trait de séparation, titre,
+    citation, puce de liste, ni gras « ** » / « __ ». Le « * » qui suit un choix
+    (bonne réponse) reste : seul « * » suivi d'un espace en début de ligne est une puce."""
+    if _MD_TRAIT.match(ligne):
+        return ""
+    ligne = _MD_PUCE.sub("", _MD_DEBUT.sub("", ligne))
+    return ligne.replace("**", "").replace("__", "").strip()
+
+
 def parse_questions_text(lines):
-    """Texte libre -> (questions, erreurs). Voir le format en tête de module."""
+    """Texte libre -> (questions, erreurs). Voir le format en tête de module.
+    Le Markdown d'un questionnaire (« **1.** … », « - أ) … ») se lit aussi."""
     items, cur = [], None
 
     def close():
@@ -526,7 +568,7 @@ def parse_questions_text(lines):
             items.append(cur)
 
     for raw in lines:
-        line = raw.strip()
+        line = sans_markdown(texte_normalise(raw))
         if not line:
             continue
         m_ans = _ANSWER.match(line)
@@ -588,18 +630,22 @@ def _finalize(items):
                               "open_height_mm": 25})
             continue
         correct = it["correct"]
-        if it.get("answer"):
-            correct = _answer_index(it["answer"], choices)
+        reponse = it.get("answer")
+        if reponse:
+            correct = _answer_index(reponse, choices)
         if len(choices) < 2:
             errors.append(f"{label} : au moins deux choix sont nécessaires.")
             continue
         if len(choices) > MAX_CHOICES:
             errors.append(f"{label} : maximum {MAX_CHOICES} choix.")
             continue
-        if correct is None or not (0 <= correct < len(choices)):
-            errors.append(f"{label} : bonne réponse absente ou invalide "
-                          "(marquez-la d'un * ou ajoutez « Réponse : B »).")
+        if reponse and (correct is None or not 0 <= correct < len(choices)):
+            errors.append(f"{label} : bonne réponse « {reponse[:20]} » invalide "
+                          "(la lettre d'un choix : A, B… ou أ، ب…).")
             continue
+        # Sans bonne réponse indiquée (« version sans réponses ») : importée quand
+        # même, à renseigner ensuite à la main ou par le scan du corrigé ; la
+        # correction attend qu'elle le soit (services.corrige_incomplet).
         questions.append({"qtype": "qcm", "text": text[:500], "choices": choices,
                           "correct": correct, "points": points,
                           "open_height_mm": 25})
@@ -691,16 +737,17 @@ def parse_questions_rows(rows):
         if any(not c for c in choices):
             errors.append(f"{label} : un choix est vide entre deux choix remplis.")
             continue
-        correct = _answer_index(col("answer"), choices)
+        reponse = col("answer")
+        correct = _answer_index(reponse, choices) if reponse else None
         # sans texte de choix (grille de réponses seule) : le nombre de cases
         # suit le réglage du quiz, vérifié à l'enregistrement
         n_choices = len(choices) or MAX_CHOICES
         if len(choices) == 1:
             errors.append(f"{label} : au moins deux choix sont nécessaires.")
             continue
-        if correct is None or not (0 <= correct < n_choices):
-            errors.append(f"{label} : bonne réponse absente ou invalide "
-                          f"« {col('answer')} ».")
+        # réponse vide : à renseigner ensuite (voir _finalize) ; écrite mais fausse : refusée
+        if reponse and (correct is None or not 0 <= correct < n_choices):
+            errors.append(f"{label} : bonne réponse « {reponse} » invalide.")
             continue
         questions.append({"qtype": "qcm", "text": text[:500], "choices": choices,
                           "correct": correct, "points": points,
@@ -726,7 +773,7 @@ def parse_questions_file(name, data):
         return parse_questions_text(lines)
     if ext == ".pdf":
         return parse_questions_text(_pdf_lines(data))
-    if ext == ".txt":
+    if ext in (".txt", ".md", ".markdown"):
         return parse_questions_text(_text_lines(data))
     raise ImportError_("Format non pris en charge : utilisez un fichier "
-                       "Excel, CSV, Word (.docx), PDF ou texte.")
+                       "Excel, CSV, Word (.docx), PDF, texte ou Markdown (.md).")
