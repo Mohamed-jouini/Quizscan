@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.db.models.functions import TruncDate
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -651,6 +651,28 @@ def _add_questions(quiz, items, next_order, errors):
     return created
 
 
+def _liberer_numero(quiz, numero):
+    """Libère le n° `numero` pour y insérer une question : les questions de ce n° et
+    les suivantes, jusqu'au premier n° libre (celui d'une question supprimée, ou la
+    fin), prennent un n° de plus. Rend les anciens n° décalés, rien si `numero` était
+    libre. Dans une transaction.
+
+    En deux temps : (quiz, n°) est unique et PostgreSQL le vérifie ligne par ligne,
+    « n° + 1 » en une fois buterait sur la question suivante. Le bloc passe d'abord
+    au-delà du plus grand n°, puis revient un rang plus loin."""
+    pris = set(quiz.questions.values_list("order", flat=True))
+    libre = numero
+    while libre in pris:
+        libre += 1
+    if libre == numero:
+        return []
+    ecart = max(pris) + 1
+    quiz.questions.filter(order__gte=numero, order__lt=libre).update(order=F("order") + ecart)
+    quiz.questions.filter(order__gte=numero + ecart, order__lt=libre + ecart).update(
+        order=F("order") - ecart + 1)
+    return list(range(numero, libre))
+
+
 @login_required
 def quiz_detail(request, pk):
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
@@ -696,7 +718,6 @@ def quiz_detail(request, pk):
             if qform.is_valid():
                 q = qform.save(commit=False)
                 q.quiz = quiz
-                q.order = next_order
                 q.choices = qform.cleaned_data["choices_list"]
                 q.num_choices = qform.cleaned_data["num_choices"]
                 lettre = qform.cleaned_data["correct_letter"]
@@ -704,7 +725,26 @@ def quiz_detail(request, pk):
                     q.correct_choice = int(lettre)
                 else:
                     q.correct_choice = None
-                q.save()
+                # n° choisi (le suivant par défaut, toujours lui si des copies sont
+                # scannées : QuestionForm.clean_numero)
+                numero = qform.cleaned_data["numero"]
+                with transaction.atomic():
+                    decales = _liberer_numero(quiz, numero)
+                    q.order = numero
+                    q.save()
+                if decales:
+                    if len(decales) == 1:
+                        suite = (f"l'ancienne question n° {decales[0]} devient "
+                                 f"n° {decales[0] + 1}")
+                    else:
+                        suite = (f"les anciennes questions n° {decales[0]} à {decales[-1]} "
+                                 f"deviennent n° {decales[0] + 1} à {decales[-1] + 1}")
+                    messages.success(request, f"Question ajoutée au n° {numero} ; {suite}.")
+                    if quiz.layout_json:
+                        messages.warning(
+                            request, "Régénérez la fiche, et ne distribuez aucune fiche "
+                                     "imprimée avant ce changement : ses réponses à partir "
+                                     f"du n° {numero} seraient lues décalées d'une question.")
                 return redirect("quiz_detail", pk=pk)
         elif "bulk_add" in request.POST:
             bulk_form = BulkQcmForm(request.POST, quiz=quiz)

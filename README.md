@@ -38,6 +38,13 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    de questions** : « Reprendre les questions du quiz… » copie tout ou partie
    (ex. `1-5, 8`) des questions d'une de vos épreuves précédentes.
 
+   Une question ajoutée une à une prend le **n° de votre choix** : le suivant
+   par défaut (à la fin) ; un n° déjà pris l'insère à ce rang, les questions
+   suivantes prenant un n° de plus (régénérez alors la fiche). Dès qu'une copie
+   est scannée, elle se place à la fin : une fiche imprimée associe chaque
+   rangée de cases à un n°, une insertion ferait lire décalées les copies
+   restantes.
+
    Le **nombre de choix (A, B, C…) se règle pour chaque question** : il suit
    les choix saisis, ou le champ « Nombre de choix » de la question (et de
    l'ajout rapide) quand seul le corrigé est donné.

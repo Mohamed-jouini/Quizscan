@@ -130,6 +130,53 @@ def main():
     assert counts == [3, 3, 3, 5, 2], counts
     print("nombre de choix par question :", counts, "✔")
 
+    # ---- n° choisi à l'ajout (demande de l'utilisateur, 6 novembre 2026) : la question
+    # prend ce rang, les suivantes un n° de plus ; un n° libre est pris sans rien décaler
+    q_ins = Quiz.objects.create(title="Insertion", class_group=group, owner=teacher,
+                                sheet_mode="grid", id_mode="grid")
+    url_ins = f"/quiz/{q_ins.pk}/"
+
+    def ajouter(texte, numero=None, follow=False):
+        donnees = {"add_question": "1", "qtype": "qcm", "text": texte,
+                   "choices_text": "a\nb", "correct_letter": "0", "open_height_mm": 25}
+        if numero is not None:
+            donnees["numero"] = numero
+        return c.post(url_ins, donnees, follow=follow)
+
+    def rangs():
+        return list(q_ins.questions.order_by("order").values_list("order", "text"))
+
+    for texte in ("Un", "Deux", "Trois", "Quatre"):
+        ajouter(texte)
+    champ = c.get(url_ins).context["qform"].fields["numero"]
+    assert champ.initial == 5 and not champ.disabled, (champ.initial, champ.disabled)
+    r = ajouter("Nouvelle", "2", follow=True)
+    assert rangs() == [(1, "Un"), (2, "Nouvelle"), (3, "Deux"), (4, "Trois"),
+                       (5, "Quatre")], rangs()
+    notes = [str(m) for m in r.context["messages"]]
+    assert any("Question ajoutée au n° 2" in n and "n° 2 à 4 deviennent n° 3 à 5" in n
+               for n in notes), notes
+    assert not any("Régénérez" in n for n in notes), "pas de fiche générée : rien à refaire"
+    q_ins.questions.get(text="Trois").delete()          # le n° 4 se libère
+    ajouter("Comble", "4")                              # pris tel quel, rien ne bouge
+    assert rangs() == [(1, "Un"), (2, "Nouvelle"), (3, "Deux"), (4, "Comble"),
+                       (5, "Quatre")], rangs()
+    ajouter("Fin")                                      # sans n° : à la fin
+    assert rangs()[-1] == (6, "Fin"), rangs()
+    r = ajouter("Trop loin", "9")
+    assert r.status_code == 200 and "numero" in r.context["qform"].errors, r.status_code
+    assert len(rangs()) == 6, rangs()
+    # fiche déjà générée : celles imprimées avant l'insertion ne doivent plus servir
+    c.post(url_ins, {"generate_pdf": "1"})
+    r = ajouter("En tête", "1", follow=True)
+    assert rangs()[:3] == [(1, "En tête"), (2, "Un"), (3, "Nouvelle")], rangs()
+    assert rangs()[-1] == (7, "Fin"), rangs()
+    notes = [(m.level_tag, str(m)) for m in r.context["messages"]]
+    assert any(niveau == "warning" and "Régénérez la fiche" in texte
+               and "à partir du n° 1" in texte for niveau, texte in notes), notes
+    print("n° choisi à l'ajout : insérée à ce rang, suivantes décalées, n° libre "
+          "comblé, fiche à refaire signalée ✔")
+
     # fiche et lecture d'une copie : chaque question a son nombre de cases
     c.post(url, {"generate_pdf": "1"})
     quiz.refresh_from_db()
@@ -150,6 +197,20 @@ def main():
     assert (row["correct"], row["n_qcm"], row["pct"]) == (4, 5, 80), row
     r = c.get(f"/copies/{sheet.pk}/")
     assert r.status_code == 200
+
+    # une copie est scannée : plus de n° au choix (les fiches imprimées associent chaque
+    # rangée de cases à un n°), la question ajoutée se place à la fin
+    r = c.get(url)
+    champ = r.context["qform"].fields["numero"]
+    assert champ.disabled and champ.initial == 6, (champ.disabled, champ.initial)
+    assert "Des copies sont déjà scannées" in r.content.decode()
+    avant = list(quiz.questions.order_by("order").values_list("pk", flat=True))
+    c.post(url, {"add_question": "1", "numero": "1", "qtype": "qcm",
+                 "text": "Après le scan", "choices_text": "a\nb", "correct_letter": "0",
+                 "open_height_mm": 25})
+    apres = list(quiz.questions.order_by("order").values_list("pk", "order"))
+    assert [pk for pk, _ in apres[:-1]] == avant and apres[-1][1] == 6, apres
+    print("copies scannées : la question ajoutée se place à la fin, rien n'est décalé ✔")
 
     # réglages : plus de nombre de choix global
     r = c.get(url)

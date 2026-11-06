@@ -483,6 +483,9 @@ class EpreuveOralForm(forms.ModelForm):
 
 
 class QuestionForm(forms.ModelForm):
+    # N° de la question : le suivant par défaut (à la fin) ; un n° déjà pris place la
+    # question à ce rang (demande de l'utilisateur, 6 novembre 2026). Voir __init__.
+    numero = forms.IntegerField(label="N° de la question", required=False, min_value=1)
     correct_letter = forms.ChoiceField(
         label="Bonne réponse (facultatif)", required=False,
         help_text="Laissez vide si vous préférez renseigner le corrigé plus "
@@ -505,7 +508,7 @@ class QuestionForm(forms.ModelForm):
 
     class Meta:
         model = Question
-        fields = ["qtype", "text", "choices_text", "correct_letter",
+        fields = ["numero", "qtype", "text", "choices_text", "correct_letter",
                   "points", "open_height_mm"]
         field_classes = {"points": DecimalField}
         widgets = {"open_height_mm": forms.NumberInput(
@@ -531,6 +534,27 @@ class QuestionForm(forms.ModelForm):
         self.fields["points"].required = False
         self.fields["points"].label = "Barème de la réponse manuscrite (points)"
         self.fields["points"].help_text = "Une QCM vaut toujours 1 point."
+        # N° : plus au choix dès qu'une copie est scannée. Une fiche imprimée associe
+        # chaque rangée de cases à un n° de question (rien sur la fiche ne dit avec
+        # quelle version des questions elle a été imprimée) : insérer une question
+        # ferait lire décalées les copies qui restent à scanner.
+        self.prochain_numero, self.insertion_possible = 1, True
+        if quiz is not None and quiz.pk:
+            dernier = quiz.questions.order_by("-order").values_list("order", flat=True).first()
+            self.prochain_numero = (dernier or 0) + 1
+            self.insertion_possible = not quiz.batches.exists()
+        numero = self.fields["numero"]
+        numero.initial = self.prochain_numero
+        numero.widget.attrs.update({"min": 1, "max": self.prochain_numero})
+        if self.insertion_possible:
+            numero.help_text = (
+                f"{self.prochain_numero} : à la fin. Un n° déjà pris place la question à "
+                "ce rang, et les questions suivantes prennent un n° de plus.")
+        else:
+            numero.disabled = True
+            numero.help_text = (
+                "Des copies sont déjà scannées : la question se place à la fin, pour ne "
+                "pas décaler la lecture des fiches déjà imprimées.")
         # Quiz en arabe : saisie de droite à gauche pour l'intitulé et les choix
         if quiz and quiz.language == "ar":
             for name in ("text", "choices_text"):
@@ -538,6 +562,15 @@ class QuestionForm(forms.ModelForm):
                     {"dir": "rtl", "style": "text-align:right"})
             self.fields["choices_text"].widget.attrs["placeholder"] = \
                 "مثال:\nتونس\nصفاقس\nسوسة\nبنزرت"
+
+    def clean_numero(self):
+        numero = self.cleaned_data.get("numero")
+        if numero is None or not self.insertion_possible:
+            return self.prochain_numero
+        if numero > self.prochain_numero:
+            raise forms.ValidationError(
+                f"Entre 1 et {self.prochain_numero} ({self.prochain_numero} : à la fin).")
+        return numero
 
     def _cases_par_defaut(self):
         """Nombre de cases d'une QCM dont le texte des choix n'est pas saisi."""
