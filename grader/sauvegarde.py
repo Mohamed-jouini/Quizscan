@@ -26,6 +26,7 @@ import os
 import shutil
 import tempfile
 import zipfile
+import zlib
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 
@@ -205,7 +206,9 @@ def lire_manifeste(archive):
                 raise ArchiveInvalide("ce n'est pas une sauvegarde QuizScan "
                                       "(manifeste.json absent)")
             manifeste = json.loads(zf.read("manifeste.json"))
-    except (zipfile.BadZipFile, OSError, ValueError) as exc:
+    except (zipfile.BadZipFile, OSError, ValueError, EOFError, zlib.error) as exc:
+        # zlib.error : flux compressé abîmé, que testzip ne transforme pas en
+        # nom de fichier selon l'endroit touché (archive abîmée au milieu, 7 novembre 2026)
         raise ArchiveInvalide(f"archive illisible : {exc}") from exc
     if manifeste.get("application") != "QuizScan":
         raise ArchiveInvalide("ce n'est pas une sauvegarde QuizScan")

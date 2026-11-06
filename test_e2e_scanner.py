@@ -64,7 +64,7 @@ def verifier_tiff(teacher):
     assert [f.student_id for f in feuilles] == [a.pk, a.pk, b.pk, b.pk], feuilles
     rangs = lignes(quiz)
     assert rangs[a.pk]["score"] == rangs[b.pk]["score"] == NB_QCM, rangs
-    print("  TIFF couleur de 4 pages : 4 pages lues, 50/50 pour chacun")
+    print(f"  TIFF couleur de 4 pages : 4 pages lues, {NB_QCM}/{NB_QCM} pour chacun")
 
     # Noir et blanc compressé : toutes les pages arrivent à la lecture.
     _, quiz, (a, b) = creer_quiz("SC-TIFF-G4", teacher, id_mode="sticker", auto_enroll=True)

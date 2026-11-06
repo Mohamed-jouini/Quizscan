@@ -1,7 +1,7 @@
 """Planche d'étiquettes autocollantes des candidats d'un concours.
 
-Chaque vignette porte, de gauche à droite : le n° d'inscription, le NOM et le
-prénom du candidat, puis son QR code (format « QS|<groupe>|<id> », lu par le
+Chaque vignette porte, de gauche à droite : le n° d'inscription, le prénom et le
+NOM du candidat, puis son QR code (format « QS|<groupe>|<id> », lu par le
 scanner). Le bloc nom/numéro sert à savoir à qui remettre quelle étiquette ;
 **seul le QR, entouré de pointillés, est découpé et collé** par le candidat
 dans l'emplacement réservé de sa feuille de réponses. Chaque page de la copie
@@ -143,7 +143,8 @@ def generate_labels_pdf(group, students, exemplaires=1):
         c.drawImage(qr_du_candidat[1], (qx + QR_PAD) * mm, y_top(qy + QR_PAD + QR_MM),
                     QR_MM * mm, QR_MM * mm)
 
-        # ---- Identité à gauche du QR : n° d'inscription, NOM, prénom
+        # ---- Identité à gauche du QR : n° d'inscription, prénom, NOM (le prénom
+        # d'abord, partout : demande de l'utilisateur, 7 novembre 2026)
         tx = x0 + PAD
         text_w = qx - tx - 3.0
         rtl = has_arabic(f"{s.last_name} {s.first_name}")
@@ -154,10 +155,10 @@ def generate_labels_pdf(group, students, exemplaires=1):
         numero = f"N° {s.student_number}" if s.student_number else "N° —"
         _draw_text(c, _ellipsize(numero, 10, text_w, bold=True),
                    ax * mm, y_top(y0 + 10.0), 10, bold=True, align=align)
-        _draw_text(c, _ellipsize(s.last_name.upper(), 11, text_w, bold=True),
-                   ax * mm, y_top(y0 + 17.5), 11, bold=True, align=align)
         _draw_text(c, _ellipsize(s.first_name, 10.5, text_w),
-                   ax * mm, y_top(y0 + 24.0), 10.5, align=align)
+                   ax * mm, y_top(y0 + 17.5), 10.5, align=align)
+        _draw_text(c, _ellipsize(s.last_name.upper(), 11, text_w, bold=True),
+                   ax * mm, y_top(y0 + 24.0), 11, bold=True, align=align)
         c.setFillGray(0.5)
         _draw_text(c, _ellipsize(group.name, 7.5, text_w),
                    ax * mm, y_top(y0 + 30.0), 7.5, align=align)

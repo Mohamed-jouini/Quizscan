@@ -154,7 +154,7 @@ def main():
     # dont il a été trouvé, et ne se change pas. Avant : « Nom lu par OCR :
     # (rien) — confiance 100 % » et une liste « Affecter à » ouverte.
     revue = c.get(f"/copies/{sh1.pk}/").content.decode()
-    assert 'class="identite-copie__nom">BEN SALAH Ahmed<' in revue
+    assert 'class="identite-copie__nom">Ahmed BEN SALAH<' in revue
     assert "Reconnu par son code QR" in revue and "Nom lu par OCR" not in revue
     assert 'name="student"' not in revue, "liste des étudiants sur une copie reconnue"
     # QCM seuls, copie reconnue : rien à enregistrer, des liens de navigation.

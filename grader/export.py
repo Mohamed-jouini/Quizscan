@@ -30,7 +30,7 @@ def results_workbook(quiz, rows, stats=None, admission=None):
     ws = wb.active
     ws.title = "Résultats"
 
-    headers = ["Nom", "Prénom", "N° inscription", "Note", "Sur",
+    headers = ["Prénom", "Nom", "N° inscription", "Note", "Sur",
                "Répondues", "Correctes", "Fausses", "Sans réponse",
                "Manuscrites à corriger", "Pourcentage", "Questions non lues"]
     if admission:
@@ -48,7 +48,7 @@ def results_workbook(quiz, rows, stats=None, admission=None):
 
     for r in rows:
         s = r["student"]
-        ligne = [s.last_name, s.first_name, s.student_number,
+        ligne = [s.first_name, s.last_name, s.student_number,
                  r["score"], r["max_score"], r["answered"], r["correct"],
                  r["wrong"], r["blank"], r["pending_open"], r["pct"] / 100,
                  r["questions_manquantes"]]
@@ -57,7 +57,7 @@ def results_workbook(quiz, rows, stats=None, admission=None):
         ws.append(_sans_formule(ligne))
         ws.cell(row=ws.max_row, column=11).number_format = "0%"
 
-    widths = [22, 18, 14, 8, 6, 11, 10, 8, 13, 20, 12, 12, 12]
+    widths = [18, 22, 14, 8, 6, 11, 10, 8, 13, 20, 12, 12, 12]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A3"
@@ -69,7 +69,7 @@ def results_workbook(quiz, rows, stats=None, admission=None):
                    f"{admission['seuil']:g} / {admission['max_score'] or 0:g}) : "
                    f"{admission['n_admis']} sur {admission['n']}"])
         wa["A1"].font = Font(bold=True, size=12)
-        entetes = ["Rang", "Nom", "Prénom", "N° inscription", "Note", "Sur",
+        entetes = ["Rang", "Prénom", "Nom", "N° inscription", "Note", "Sur",
                    "Bonnes réponses", "Pourcentage"]
         wa.append(entetes)
         for col in range(1, len(entetes) + 1):
@@ -78,10 +78,10 @@ def results_workbook(quiz, rows, stats=None, admission=None):
             cell.fill = head_fill
         for r in admission["admis"]:
             s = r["student"]
-            wa.append([r["rang"], s.last_name, s.first_name, s.student_number,
+            wa.append([r["rang"], s.first_name, s.last_name, s.student_number,
                        r["score"], r["max_score"], r["correct"], r["pct"] / 100])
             wa.cell(row=wa.max_row, column=8).number_format = "0%"
-        for i, w in enumerate([7, 22, 18, 14, 8, 6, 15, 12], start=1):
+        for i, w in enumerate([7, 18, 22, 14, 8, 6, 15, 12], start=1):
             wa.column_dimensions[get_column_letter(i)].width = w
         wa.freeze_panes = "A3"
 
@@ -147,7 +147,7 @@ def parcours_workbook(parcours):
     ws = wb.active
     ws.title = "Concours"
     epreuves = parcours["epreuves"]
-    headers = ["Nom", "Prénom", "N° inscription"]
+    headers = ["Prénom", "Nom", "N° inscription"]
     for q in epreuves:
         headers += [f"{q.title} — note", f"{q.title} — %", f"{q.title} — résultat"]
     headers.append("Résultat final")
@@ -163,7 +163,7 @@ def parcours_workbook(parcours):
         cellule.alignment = Alignment(horizontal="center", wrap_text=True)
     for c in parcours["candidats"]:
         s = c["etudiant"]
-        ligne = [s.last_name, s.first_name, s.student_number]
+        ligne = [s.first_name, s.last_name, s.student_number]
         for case in c["cases"]:
             if case["etat"] == "note":
                 r = case["row"]
@@ -177,7 +177,7 @@ def parcours_workbook(parcours):
         ws.append(_sans_formule(ligne))
         for k in range(len(epreuves)):
             ws.cell(row=ws.max_row, column=5 + 3 * k).number_format = "0%"
-    for i, largeur in enumerate([22, 18, 14] + [11, 8, 13] * len(epreuves) + [34],
+    for i, largeur in enumerate([18, 22, 14] + [11, 8, 13] * len(epreuves) + [34],
                                 start=1):
         ws.column_dimensions[get_column_letter(i)].width = largeur
     ws.freeze_panes = "D3"

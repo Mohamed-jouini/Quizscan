@@ -24,7 +24,7 @@
       {% for a in verification.anomalies %}
       <tr>
         <td>{{ a.numero|default:"—" }}</td>
-        <td>{% if a.nom or a.prenom %}{{ a.nom }} {{ a.prenom }}{% else %}—{% endif %}</td>
+        <td>{% if a.nom or a.prenom %}{{ a.prenom }} {{ a.nom }}{% else %}—{% endif %}</td>
         <td>{{ a.registre|default:"—" }}</td>
         <td>{% if a.etat == "nom_different" %}<span class="badge warn">Nom différent — identité du registre retenue</span>{% elif a.etat == "non_inscrit" %}<span class="badge bad">N° absent du registre</span>{% elif a.etat == "sans_numero" %}<span class="badge">Sans n° : non vérifiable</span>{% elif a.etat == "doublon" %}<span class="badge warn">N° en double</span>{% elif a.etat == "ajoute" %}<span class="badge ok">Ajoutée au registre</span>{% endif %}
           {% for remarque in a.remarques %}<span class="helptext helptext--serre">{{ remarque }}</span>{% endfor %}</td>

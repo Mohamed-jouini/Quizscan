@@ -4,7 +4,8 @@
   - les épreuves dont les résultats sont publiés, et pour un concours la
     liste des admis si elle est publiée ;
   - la note d'un étudiant, retrouvée par son n° d'inscription (choix de
-    l'établissement : le n° suffit, comme pour les résultats du bac).
+    l'établissement : le n° suffit, comme pour les résultats du bac) ou par son
+    n° de CIN, envoyé par le formulaire et jamais dans l'adresse de la page.
 
 Rien n'y est visible tant que le personnel n'a pas publié (Quiz.resultats_publies,
 Quiz.admis_publies, Communique.publie). Les recherches par n° sont freinées
@@ -16,8 +17,8 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 
 from . import pieces, services
-from .inscriptions import numero_propre
-from .models import Communique, PieceJointe, Quiz, Student
+from .inscriptions import cin_propre, cin_valide, numero_propre
+from .models import Communique, Inscrit, PieceJointe, Quiz, Student
 from .securite import adresse_client
 from .views import _page
 
@@ -68,19 +69,44 @@ def _resultat(quiz, etudiant):
     return row
 
 
+def _etudiants_publies(cible):
+    return (Student.objects.filter(cible, class_group__quizzes__resultats_publies=True)
+            .distinct().select_related("class_group"))
+
+
+def _par_cin(saisie):
+    """Fiches d'étudiant de l'inscrit dont c'est la CIN (registre), sinon aucune. Une CIN
+    compte 8 chiffres : une saisie plus courte est un n° d'inscription, sans zéro ajouté
+    (un n° de 7 chiffres complété d'un zéro pourrait être la CIN d'un autre)."""
+    cin = cin_propre(saisie)
+    if len(cin) < 8 or not cin_valide(cin):
+        return Student.objects.none()
+    cible = Q(pk__in=[])
+    for pk, numero in Inscrit.objects.filter(cin=cin).values_list("pk", "numero"):
+        cible |= Q(inscrit_id=pk) | Q(student_number=numero)
+    return _etudiants_publies(cible)
+
+
 def resultat(request):
-    """Résultats d'un étudiant, par son n° d'inscription : un bloc par concours, ses
-    étapes publiées à l'intérieur (chaque étape a sa fiche d'étudiant, sous le même n°)."""
-    numero = numero_propre(request.GET.get("numero"))
+    """Résultats d'un étudiant, par son n° d'inscription ou par son n° de CIN (demande
+    de l'utilisateur, 7 novembre 2026) : un bloc par concours, ses étapes publiées à
+    l'intérieur (chaque étape a sa fiche d'étudiant, sous le même n°).
+
+    Le formulaire s'envoie en POST : rien de ce qui est tapé ne s'inscrit dans l'adresse
+    de la page (historique, journaux du serveur). La CIN ne se reconnaît que par lui ; un
+    lien « ?numero= » (GET) ne cherche que le n° d'inscription, comme avant. Le n°
+    d'inscription passe en premier : la CIN n'est cherchée que s'il ne donne rien."""
+    par_formulaire = request.method == "POST"
+    saisie = (request.POST if par_formulaire else request.GET).get("numero") or ""
+    numero = numero_propre(saisie)
     contexte = {"numero": numero, "groupes": [], "identite": None, "trop": False}
     if numero:
         if _trop_de_recherches(request):
             contexte["trop"] = True
         else:
-            etudiants = (Student.objects
-                         .filter(student_number=numero,
-                                 class_group__quizzes__resultats_publies=True)
-                         .distinct().select_related("class_group"))
+            etudiants = _etudiants_publies(Q(student_number=numero))
+            if par_formulaire and not etudiants.exists():
+                etudiants = _par_cin(saisie)
             epreuves, notes = [], {}
             for etudiant in etudiants:
                 for quiz in (etudiant.class_group.quizzes

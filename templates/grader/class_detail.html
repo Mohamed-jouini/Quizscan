@@ -43,7 +43,7 @@
         </select>
         <label for="id_filtre">Filtrer (facultatif)</label>
         <input id="id_filtre" type="text" name="filtre" maxlength="100" autocomplete="off"
-               placeholder="Nom, prénom ou début de n° — vide : toute la liste">
+               placeholder="Prénom, nom ou début de n° — vide : toute la liste">
         <p><button class="btn" name="importer_base" value="1" type="submit">Importer</button></p>
       </form>
       <span class="helptext">Les étudiants déjà présents (même n°) ne sont pas recréés. Depuis le registre, chacun garde son identité enregistrée et son QR code.</span>
@@ -83,11 +83,11 @@
   {% include "grader/_pagination.html" with page=students_page label="Candidats" %}
   <div class="table-wrap table-wrap--ajuste">
     <table>
-    <tr><th>N°</th><th>Nom</th><th>Prénom</th>{% if avec_fiches %}<th>CIN</th><th>Lieu</th><th>Délivrée le</th><th>Né(e) le</th><th>Centre</th><th>Salle</th>{% endif %}<th>QR</th><th></th></tr>
+    <tr><th>N°</th><th>Prénom</th><th>Nom</th>{% if avec_fiches %}<th>CIN</th><th>Lieu</th><th>Délivrée le</th><th>Né(e) le</th><th>Centre</th><th>Salle</th>{% endif %}<th>QR</th><th></th></tr>
     {% for s in students_page %}
     <tr class="ligne-lien">
       <td>{% if s.inscrit and user.is_superuser or s.inscrit and s.inscrit.cree_par_id == user.pk %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'inscriptions' %}?modifier={{ s.inscrit_id }}#fiche-inscrit"><b>{{ s.student_number }}</b></a>{% else %}{{ s.student_number|default:"—" }}{% endif %}</td>
-      <td>{{ s.last_name|default:"—" }}</td><td>{{ s.first_name|default:"—" }}</td>
+      <td>{{ s.first_name|default:"—" }}</td><td>{{ s.last_name|default:"—" }}</td>
       {% if avec_fiches %}{% with i=s.inscrit %}
       <td>{{ i.cin|default:"—" }}</td>
       <td>{{ i.cin_lieu|default:"—" }}</td>

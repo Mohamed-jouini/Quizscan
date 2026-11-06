@@ -164,9 +164,9 @@ class StudentAdmin(TitresFrancais, admin.ModelAdmin):
     titre_liste = "Étudiants"
     titre_ajout = "Nouvel étudiant"
     titre_modification = "Modifier l'étudiant"
-    list_display = ("last_name", "first_name", "student_number", "class_group")
+    list_display = ("first_name", "last_name", "student_number", "class_group")
     list_filter = ("class_group__owner",)
-    search_fields = ("last_name", "first_name", "student_number")
+    search_fields = ("first_name", "last_name", "student_number")
     list_select_related = ("class_group",)
     # une classe de concours peut compter des milliers de candidats : une
     # liste déroulante les chargerait tous dans la page
@@ -184,7 +184,7 @@ class InscritAdmin(TitresFrancais, admin.ModelAdmin):
     titre_liste = "Inscriptions"
     titre_ajout = "Nouvelle inscription"
     titre_modification = "Modifier l'inscription"
-    list_display = ("numero", "nom", "prenom", "cin", "cin_lieu", "cin_date",
+    list_display = ("numero", "prenom", "nom", "cin", "cin_lieu", "cin_date",
                     "date_naissance", "centre", "salle", "cree_le")
     search_fields = ("numero", "nom", "prenom", "cin", "centre", "salle", "email",
                      "etablissement")

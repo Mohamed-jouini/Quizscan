@@ -13,6 +13,13 @@ from django.utils.text import get_valid_filename
 # ne tient plus dans la zone imprimable d'une page A4 (voir layout.py).
 MAX_OPEN_HEIGHT_MM = 200
 
+def nom_et_prenom(nom, prenom):
+    """Nom complet affiché ou imprimé d'un seul tenant : le prénom d'abord, partout
+    dans l'application (demande de l'utilisateur, 7 novembre 2026). C'est l'ordre de la
+    liste officielle de l'institut, « الاسم واللقب » : « محمد أمين الجبالي », « Mokhtar
+    ARBI ». Les tableaux mettent de même la colonne Prénom avant la colonne Nom."""
+    return f"{(prenom or '').strip()} {(nom or '').strip()}".strip()
+
 
 class ClassGroup(models.Model):
     """Une classe / un groupe d'étudiants."""
@@ -94,7 +101,7 @@ class Inscrit(models.Model):
 
     @property
     def nom_complet(self):
-        return f"{self.nom} {self.prenom}".strip()
+        return nom_et_prenom(self.nom, self.prenom)
 
     @property
     def fiche_complete(self):
@@ -127,7 +134,7 @@ class Student(models.Model):
 
     @property
     def full_name(self):
-        return f"{self.last_name} {self.first_name}".strip()
+        return nom_et_prenom(self.last_name, self.first_name)
 
     def __str__(self):
         return self.full_name

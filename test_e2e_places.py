@@ -5,6 +5,7 @@ la copie au bon étudiant. Les places restent stables si la liste change.
 """
 import os
 import sys
+from unittest import mock
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -28,7 +29,8 @@ from django.test import Client
 from django.test.utils import setup_test_environment
 from django.urls import reverse
 
-from grader import services
+from grader import bulletin, services
+from grader.fonts import shape
 from grader.models import ClassGroup, Question, Quiz, Student
 from test_commun import enseignant_complet
 from test_e2e import fill_sheet, render_page, simulate_scan
@@ -64,6 +66,13 @@ def main():
         Student.objects.create(class_group=groupe, last_name=nom, first_name=prenom,
                                student_number=num)
     e = {s.last_name: s for s in groupe.students.all()}
+
+    # ---- tableau des candidats : la colonne Prénom avant la colonne Nom (demande de
+    # l'utilisateur, 7 novembre 2026, « change dans tout le logiciel »)
+    page = c.get(reverse("class_detail", args=[groupe.pk])).content.decode()
+    assert "<th>N°</th><th>Prénom</th><th>Nom</th>" in page
+    assert "<td>Sana</td><td>AMRI</td>" in page, "le prénom d'abord dans chaque ligne"
+    print("  tableau des candidats : Prénom, puis Nom OK")
 
     # ---- le choix : nom imprimé / talon / n° de place (exclusifs)
     quiz = Quiz.objects.create(title="Contrôle places", class_group=groupe, owner=prof,
@@ -107,8 +116,17 @@ def main():
     liste = textes(r.content)[0]
     assert "Liste de placement et d'émargement" in liste and "Signature" in liste
     for nom, prenom, num in ETUDIANTS:
-        assert f"{nom} {prenom}" in liste and num in liste
+        assert f"{prenom} {nom}" in liste and num in liste
     print("  liste d'émargement : place, n°, nom, case de signature OK")
+    # le prénom d'abord, comme sur la liste officielle et le talon (demande de
+    # l'utilisateur, 7 novembre 2026), ici pour un nom écrit en arabe
+    dessines = []
+    with mock.patch.object(bulletin, "shape",
+                           side_effect=lambda t: dessines.append(t) or shape(t)):
+        bulletin.generate_liste_emargement(quiz, [(1, Student(
+            last_name="الجبالي", first_name="محمد أمين", student_number="1782"))])
+    assert "محمد أمين الجبالي" in dessines and "الجبالي محمد أمين" not in dessines, dessines
+    print("  liste d'émargement : nom arabe, prénom d'abord (« محمد أمين الجبالي ») OK")
 
     # ---- la copie de la place 2, scannée : BAKIR et ses réponses
     img = simulate_scan(fill_sheet(render_page(pdf, 1), quiz.layout_json, REPONSES,
@@ -134,7 +152,7 @@ def main():
     quiz.refresh_from_db()
     assert sorted(quiz.layout_json["places"].values()) == [1, 2, 4]
     liste = textes(c.get(reverse("quiz_emargement_pdf", args=[quiz.pk])).content)[0]
-    assert "ABID Ali" in liste and "CHERIF" not in liste
+    assert "Ali ABID" in liste and "CHERIF" not in liste
     print("  étudiant ajouté : place 4, les autres gardent la leur ; retiré : "
           "aucune renumérotation OK")
 
@@ -165,7 +183,7 @@ def main():
     # et le QR, jamais le nom ni le n° d'inscription
     ecrit.refresh_from_db()
     pages = textes(open(ecrit.sheet_pdf.path, "rb").read())
-    par_copie = 1 + ecrit.pages_redaction
+    par_copie = 1 + ecrit.layout_json["pages_redaction"]
     assert ecrit.pages_redaction >= 1 and len(pages) % par_copie == 0, len(pages)
     for suite in pages[1:par_copie]:
         assert "PLACE N° 1" in suite, suite

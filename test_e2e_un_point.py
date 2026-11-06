@@ -88,7 +88,7 @@ def main():
     xl = load_workbook(io.BytesIO(c.get(reverse("quiz_results_xlsx", args=[quiz.pk])).content))
     ws = xl["Résultats"]
     entetes = [x.value for x in ws[2]]
-    ligne = {r[0].value: r for r in ws.iter_rows(min_row=3)}["AMRI"]
+    ligne = {r[entetes.index("Nom")].value: r for r in ws.iter_rows(min_row=3)}["AMRI"]
     assert round(ligne[entetes.index("Pourcentage")].value, 2) == 0.83
     assert ligne[entetes.index("Correctes")].value == 5
     assert ligne[entetes.index("Résultat")].value == "Admis"

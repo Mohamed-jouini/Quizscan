@@ -56,7 +56,7 @@ class InscritForm(forms.ModelForm):
 
     class Meta:
         model = Inscrit
-        fields = ["numero", "nom", "prenom", "cin", "cin_lieu", "cin_date",
+        fields = ["numero", "prenom", "nom", "cin", "cin_lieu", "cin_date",
                   "date_naissance", "centre", "salle", "email", "etablissement"]
         labels = {"cin_lieu": "Lieu de délivrance", "cin_date": "Date de délivrance"}
         widgets = {
@@ -217,7 +217,7 @@ class StudentImportForm(forms.Form):
 class CandidateFileForm(forms.Form):
     """Import d'une liste de candidats depuis un fichier existant : la liste
     officielle de l'institut (Excel), ou Excel, CSV, Word, PDF à colonnes
-    Nom, Prénom, N° d'inscription."""
+    Prénom, Nom, N° d'inscription."""
     file = forms.FileField(
         label="Fichier (Excel, CSV, Word ou PDF)",
         widget=forms.ClearableFileInput(
@@ -450,6 +450,10 @@ class EpreuveEcritForm(forms.ModelForm):
                   "pages_redaction": "Pages lignées après la page de garde",
                   "format_impression": "Format des copies"}
         help_texts = {"entete": AIDE_ENTETE,
+                      "pages_redaction": "Elles ne sont pas lues au scan. Chaque copie "
+                                         "remplit des feuilles entières, pour le recto-verso : "
+                                         "en A4, un nombre pair prend une page de plus "
+                                         "(2 → 3) ; en A3, 3 ou 7.",
                       "format_impression": "A3 : la page de garde et 3 pages lignées sur une "
                                            "feuille, imprimée recto-verso sur le bord court, à "
                                            "100 %, puis pliée au milieu. Les pages lignées "

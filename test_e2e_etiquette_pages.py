@@ -42,7 +42,8 @@ from test_commun import enseignant_complet
 from test_e2e import fill_sheet, render_page, simulate_scan
 from test_e2e_web import stick_label
 
-NB_QCM = 50                 # 42 sur la page 1, 8 sur la page 2
+PAGE_1 = 63                 # questions sur la page 1 (trois colonnes depuis le 7 nov. 2026)
+NB_QCM = PAGE_1 + 8         # 8 sur la page 2
 PROF = "prof_etiq_pages"
 INCOMPLETE = "à copie incomplète"
 
@@ -135,7 +136,7 @@ def verifier_planche(teacher):
     print("  planche : 2 vignettes par candidat ; une étiquette sur chaque page : 50/50")
 
     # Fiche d'une page : rien ne change.
-    groupe, quiz, _ = creer_quiz("EP-UNE-PAGE", teacher, nb_qcm=42, id_mode="sticker")
+    groupe, quiz, _ = creer_quiz("EP-UNE-PAGE", teacher, nb_qcm=PAGE_1, id_mode="sticker")
     preparer(quiz)
     assert services.etiquettes_par_candidat(groupe) == 1
     assert "(PDF) : " not in client.get(f"/classes/{groupe.pk}/").content.decode()
@@ -169,13 +170,14 @@ def verifier_etiquette_oubliee(teacher):
     # La note reste partielle, mais elle ne se présente plus comme une note définitive.
     rangs = lignes(quiz)
     r = rangs[oublie.pk]
-    assert r["score"] == 42 and r["questions_manquantes"] == 8 and r["blank"] == 0, r
+    assert r["score"] == PAGE_1 and r["questions_manquantes"] == 8 and r["blank"] == 0, r
     assert rangs[complet.pk]["score"] == NB_QCM
     assert rangs[complet.pk]["questions_manquantes"] == 0
     adm = services.admissions(quiz, list(rangs.values()))
     assert r["resultat"] == "en_attente", "copie sans faute refusée sur une note partielle"
     assert rangs[complet.pk]["resultat"] == "admis" and adm["n_attente"] == 1
-    print("  étiquette oubliée : 42/50 en attente, 8 questions non lues, pas de refus")
+    print(f"  étiquette oubliée : {PAGE_1}/{NB_QCM} en attente, 8 questions non lues, "
+          "pas de refus")
 
     # Partout où la note se lit : écran, alerte qu'on ne peut pas fermer, bulletin, Excel.
     url = f"/quiz/{quiz.pk}/resultats/"

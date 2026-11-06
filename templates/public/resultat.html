@@ -12,8 +12,8 @@
   {% if groupes %}
   <section class="pub-section">
     <div class="pub-identite">
-      <span class="avatar">{{ identite.last_name|slice:":1" }}{{ identite.first_name|slice:":1" }}</span>
-      <span><b>{{ identite.last_name }} {{ identite.first_name }}</b><small>N° d'inscription {{ numero }}</small></span>
+      <span class="avatar">{{ identite.first_name|slice:":1" }}{{ identite.last_name|slice:":1" }}</span>
+      <span><b>{{ identite.full_name }}</b><small>N° d'inscription {{ identite.student_number|default:numero }}</small></span>
     </div>
     <div class="pub-groupes">
       {% for g in groupes %}

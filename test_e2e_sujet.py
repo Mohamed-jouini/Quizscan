@@ -202,9 +202,9 @@ def verifier_tous_les_cas(teacher):
         "concours sans en-tête saisi : celui de l'institut + épreuve"
     quiz.auto_enroll, quiz.id_mode = False, "name"
     texte = _texte(sheet_pdf.generate_subject_pdf(quiz))
-    assert abs(milieu_titre() - centre) < 1 and "Nom et prénom" in texte, "classe : 3 cases"
+    assert abs(milieu_titre() - centre) < 1 and "Prénom et nom" in texte, "classe : 3 cases"
     quiz.id_mode, quiz.talon_nom = "qr", True
-    assert "Nom et prénom" not in _texte(sheet_pdf.generate_subject_pdf(quiz)), "copie anonyme"
+    assert "Prénom et nom" not in _texte(sheet_pdf.generate_subject_pdf(quiz)), "copie anonyme"
 
     # Types de questions : pas de consigne de cases s'il n'y a rien à noircir.
     quiz = _concours(teacher, "fr")

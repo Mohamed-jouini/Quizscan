@@ -1,10 +1,11 @@
-{# Champ « n° d'inscription » de l'espace public (accueil et page des résultats). #}
-<form class="pub-recherche" method="get" action="{% url 'public_resultat' %}" role="search">
-  <label for="id_numero" class="visually-hidden">N° d'inscription</label>
+{# Champ « n° d'inscription ou de CIN » de l'espace public (accueil et page des résultats). #}
+{# POST : ni le n° ni la CIN tapés ne s'inscrivent dans l'adresse de la page. #}
+<form class="pub-recherche" method="post" action="{% url 'public_resultat' %}" role="search">{% csrf_token %}
+  <label for="id_numero" class="visually-hidden">N° d'inscription ou n° de CIN</label>
   <span class="pub-recherche__champ">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
     <input id="id_numero" type="search" name="numero" value="{{ numero|default:'' }}" inputmode="numeric"
-           autocomplete="off" placeholder="Votre n° d'inscription" required>
+           autocomplete="off" placeholder="Votre n° d'inscription ou de CIN" required>
   </span>
   <button class="btn" type="submit">Voir mes résultats</button>
 </form>

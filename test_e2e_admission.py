@@ -204,7 +204,7 @@ def main():
 
     html, admis, notes = tableaux("chaab")
     assert admis == ["CHAABANE"] and notes == ["CHAABANE"], (admis, notes)
-    assert re.search(r"<td>2</td>\s*<td><b>CHAABANE", html), "rang réel perdu"
+    assert re.search(r"<td>2</td>\s*<td><b>X CHAABANE", html), "rang réel perdu"
     assert "3<span class=\"tile__unit\">/ 6" in html.replace("\n", ""), \
         "la recherche ne doit pas changer les décomptes"
     assert "1 résultat pour « chaab »" in html
@@ -238,12 +238,14 @@ def main():
         f"/quiz/{quiz.pk}/resultats.xlsx").content))
     assert "Admis" in wb.sheetnames, wb.sheetnames
     feuille = wb["Admis"]
-    noms = [feuille.cell(row=i, column=2).value for i in range(3, feuille.max_row + 1)]
+    col_nom = [c.value for c in feuille[2]].index("Nom") + 1     # après Rang et Prénom
+    noms = [feuille.cell(row=i, column=col_nom).value for i in range(3, feuille.max_row + 1)]
     assert noms == ["AMRI", "BEN SALEM", "CHAABANE"], noms
     principale = wb["Résultats"]
     entetes = [c.value for c in principale[2]]
     assert entetes[-1] == "Résultat", entetes
-    col = {principale.cell(row=i, column=1).value: principale.cell(row=i, column=len(entetes)).value
+    col = {principale.cell(row=i, column=entetes.index("Nom") + 1).value:
+           principale.cell(row=i, column=len(entetes)).value
            for i in range(3, principale.max_row + 1)}
     assert col["DRISS"] == "En attente" and col["ESSID"] == "Non admis"
     print("  export Excel   colonne « Résultat » et feuille « Admis »")

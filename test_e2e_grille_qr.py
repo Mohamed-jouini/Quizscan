@@ -287,6 +287,82 @@ def verifier_mise_a_jour(teacher):
           "la commande ; fiche modifiée laissée intacte")
 
 
+def verifier_trois_colonnes(teacher):
+    """Feuille de réponses sur trois colonnes (demande de l'utilisateur, 7 novembre 2026) :
+    plus de questions par page. Deux colonnes, aux places d'avant, quand trois ne tiennent
+    pas (5 choix) ou quand des copies sont déjà scannées ; alerte quand une régénération
+    déplace les cases d'une fiche déjà générée."""
+    from django.test import Client
+    from grader.models import ScanBatch
+    from test_commun import enseignant_complet
+    enseignant_complet(teacher)
+    client = Client()
+    client.force_login(teacher)
+
+    def colonnes_vues(page):
+        return len({item["bubbles"][0][0] for item in page["qcm"]})
+
+    for langue in ("fr", "ar"):
+        _, quiz = _quiz(teacher, f"GQR-3COL-{langue}", language=langue)
+        Question.objects.bulk_create(
+            Question(quiz=quiz, order=o, qtype="qcm", points=1.0, correct_choice=0)
+            for o in range(9, 91))                                  # 90 questions
+        trois = L.build_layout(quiz)
+        with mock.patch.object(L, "_colonnes_grille", lambda quiz, bloc: 2):
+            deux = L.build_layout(quiz)
+        assert trois["colonnes"] == 3 and colonnes_vues(trois["pages"][0]) == 3
+        n3, n2 = len(trois["pages"][0]["qcm"]), len(deux["pages"][0]["qcm"])
+        assert n3 >= n2 * 3 // 2, (langue, n3, n2)
+        assert sum(len(p["qcm"]) for p in trois["pages"]) == 90
+        for page in trois["pages"]:
+            for item in page["qcm"]:
+                for x, _ in item["bubbles"]:
+                    assert L.CONTENT_X0 <= x - L.BUBBLE_R and x + L.BUBBLE_R <= L.CONTENT_X1
+        xs = sorted({x for item in trois["pages"][0]["qcm"] for x, _ in item["bubbles"]})
+        ecarts = [b - a for a, b in zip(xs, xs[1:]) if b - a > L.BUBBLE_STEP + 0.01]
+        assert len(ecarts) == 2 and min(ecarts) >= 20, ecarts    # place du n° de question
+    print(f"  trois colonnes  {n3} questions en page 1 au lieu de {n2}, cases dans la page, "
+          "place des numéros (fr, ar) OK")
+
+    # 5 choix : trois colonnes ne tiennent pas, deux, aux places d'avant
+    _, quiz5 = _quiz(teacher, "GQR-5CHOIX")
+    quiz5.num_choices = 5
+    quiz5.save(update_fields=["num_choices"])
+    disposition = L.build_layout(quiz5)
+    largeur = L.CONTENT_X1 - L.CONTENT_X0
+    assert disposition["colonnes"] == 2
+    assert {item["bubbles"][0][0] for item in disposition["pages"][0]["qcm"]} == {
+        L.CONTENT_X0 + 14.0, round(L.CONTENT_X0 + largeur / 2 + 4.0 + 14.0, 2)}
+
+    # Fiche générée en deux colonnes avant ce changement, copies déjà scannées : elle garde
+    # ses deux colonnes ; sans copie scannée, la régénération passe à trois et le signale.
+    for scannee in (True, False):
+        _, quiz2 = _quiz(teacher, f"GQR-AVANT-{scannee}")
+        with mock.patch.object(L, "_colonnes_grille", lambda quiz, bloc: 2):
+            client.post(f"/quiz/{quiz2.pk}/", {"generate_pdf": "1"})
+        quiz2.refresh_from_db()
+        ancienne = dict(quiz2.layout_json)
+        del ancienne["colonnes"]                     # les fiches d'avant ne le notaient pas
+        quiz2.layout_json = ancienne
+        quiz2.save(update_fields=["layout_json"])
+        if scannee:
+            ScanBatch.objects.create(quiz=quiz2, label="copies d'avant")
+            refaite = L.build_layout(quiz2)
+            assert refaite["colonnes"] == 2 and not services.zones_lues_changees(
+                ancienne, refaite), "copies scannées : les cases ne doivent pas bouger"
+        else:
+            page = client.post(f"/quiz/{quiz2.pk}/", {"generate_pdf": "1"},
+                               follow=True).content.decode()
+            quiz2.refresh_from_db()
+            assert quiz2.layout_json["colonnes"] == 3
+            assert "Les cases de la feuille ont changé de place" in page
+            page = client.post(f"/quiz/{quiz2.pk}/", {"generate_pdf": "1"},
+                               follow=True).content.decode()
+            assert "Les cases de la feuille ont changé de place" not in page
+    print("  trois colonnes  5 choix : deux, aux places d'avant ; copies déjà scannées : "
+          "fiche gardée ; régénération qui déplace les cases signalée OK")
+
+
 def main():
     logging.disable(logging.WARNING)
     User.objects.filter(username="prof_gqr").delete()
@@ -295,6 +371,7 @@ def main():
     verifier_impression(teacher)
     verifier_lecture(teacher)
     verifier_mise_a_jour(teacher)
+    verifier_trois_colonnes(teacher)
     print("\n✅ TEST GRILLE + ÉTIQUETTE QR RÉUSSI")
 
 

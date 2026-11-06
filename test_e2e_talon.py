@@ -8,6 +8,7 @@ une copie normale ; concours et épreuve écrite.
 """
 import os
 import sys
+from unittest import mock
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -33,6 +34,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from grader import layout as L, services, sheet_pdf
+from grader.fonts import shape
 from grader.models import ClassGroup, Inscrit, Question, Quiz, Student
 from test_commun import enseignant_complet
 from test_e2e import fill_sheet, mm2px, render_page, simulate_scan
@@ -198,7 +200,7 @@ def main():
     ecrit.refresh_from_db()
     pdf_e = open(ecrit.sheet_pdf.path, "rb").read()
     grille = ecrit.layout_json["pages"][0]["note_grid"]
-    pages_par_copie = 1 + ecrit.pages_redaction
+    pages_par_copie = 1 + ecrit.layout_json["pages_redaction"]
     img = render_page(pdf_e, 2 * pages_par_copie)          # copie de CHERIF
     for row, d in zip(grille["rows"], [1, 3, 5, None]):     # 13,5
         if d is not None:
@@ -220,9 +222,10 @@ def main():
         "le talon de la page de garde doit compter toutes les pages de la copie"
     for k in range(1, pages_par_copie):
         texte = doc_e[k].get_text()
-        for attendu in ("AMRI Sana", "N° 104501", f"Page {k + 1} / {pages_par_copie}",
-                        "Talon à découper", "Ne pas scanner"):
+        for attendu in ("Sana AMRI", "N° 104501", f"Page {k + 1} / {pages_par_copie}",
+                        "Talon à découper", "Page non lue au scan"):
             assert attendu in texte, (k, attendu, texte)
+        assert "Ne pas scanner" not in texte, "au dos de la page de garde en recto-verso"
         lu, _, _ = cv2.QRCodeDetector().detectAndDecode(render_page(pdf_e, k))
         assert lu == f"QS|{ecrit.pk}|{amri.pk}", (k, lu)
     lot = services.process_uploaded_files(ecrit, [
@@ -244,14 +247,43 @@ def main():
     nominatif.refresh_from_db()
     pdf_n = open(nominatif.sheet_pdf.path, "rb").read()
     doc_n = pymupdf.open(stream=pdf_n, filetype="pdf")
-    assert len(doc_n) == 3 * len(ETUDIANTS), len(doc_n)
-    for k in (1, 2):
+    # 2 pages lignées demandées, 3 imprimées : 4 pages par copie, deux feuilles entières en
+    # recto-verso ; chaque page de garde tombe sur un recto (demande du 6 novembre 2026 : en
+    # 3 pages, celle de l'étudiant suivant était au dos de la dernière page)
+    assert nominatif.layout_json["pages_redaction"] == 3, nominatif.layout_json["pages_redaction"]
+    assert len(doc_n) == 4 * len(ETUDIANTS), len(doc_n)
+    gardes = [k for k, p in enumerate(doc_n) if "RÉSERVÉ AU CORRECTEUR" in p.get_text()]
+    assert gardes == [0, 4, 8], gardes
+    for k in (1, 2, 3):
         texte = doc_n[k].get_text()
-        assert "AMRI Sana" in texte and "N° 104501" in texte and f"Page {k + 1} / 3" in texte \
-            and "Ne pas scanner" in texte, (k, texte)
+        assert "Sana AMRI" in texte and "N° 104501" in texte and f"Page {k + 1} / 4" in texte \
+            and "Page non lue au scan" in texte, (k, texte)
         lu, _, _ = cv2.QRCodeDetector().detectAndDecode(render_page(pdf_n, k))
         assert lu == f"QS|{nominatif.pk}|{amri.pk}", (k, lu)
-    print("  écrit nominatif : nom, n° et QR sur chaque page de rédaction OK")
+    print("  écrit nominatif : nom, n° et QR sur chaque page de rédaction ; 2 pages lignées "
+          "demandées, 3 imprimées, chaque page de garde sur un recto OK")
+
+    # ---- le prénom d'abord, partout (demande de l'utilisateur, 7 novembre 2026) : en arabe
+    # « الاسم واللقب », comme la liste officielle, et de même en lettres latines
+    arabe = Student.objects.create(class_group=groupe, last_name="الجبالي",
+                                   first_name="محمد أمين", student_number="1782")
+    assert arabe.full_name == "محمد أمين الجبالي", arabe.full_name
+    assert amri.full_name == "Sana AMRI"
+    assert Inscrit(numero="1782", nom="الجبالي", prenom="محمد أمين").nom_complet \
+        == "محمد أمين الجبالي"
+    for talon_nom in (True, False):                     # talon, puis bande du nom imprimé
+        qcm_ar = Quiz.objects.create(title=f"QCM arabe {talon_nom}", class_group=groupe,
+                                     owner=prof, language="ar", id_mode="qr",
+                                     talon_nom=talon_nom)
+        Question.objects.create(quiz=qcm_ar, order=1, qtype="qcm", correct_choice=0)
+        dessines = []
+        with mock.patch.object(sheet_pdf, "shape",
+                               side_effect=lambda t: dessines.append(t) or shape(t)):
+            sheet_pdf.generate_sheet_pdf(qcm_ar, L.build_layout(qcm_ar), students=[arabe])
+        assert "محمد أمين الجبالي" in dessines and "الجبالي محمد أمين" not in dessines, \
+            (talon_nom, [t for t in dessines if "الجبالي" in t])
+    arabe.delete()
+    print("  prénom d'abord : « محمد أمين الجبالي » sur le talon et la bande, « Sana AMRI » OK")
 
     # ---- nombre de copies : il suit la liste, le champ n'apparaît que s'il agit
     def page(q):

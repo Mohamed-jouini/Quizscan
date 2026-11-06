@@ -179,7 +179,7 @@ def main():
     # ---- nom piégé : un simple texte dans un attribut, plus du JavaScript
     Student.objects.create(class_group=ga, last_name="X');alert(1);//", first_name="Y")
     page = ca.get(reverse("class_detail", args=[ga.pk])).content.decode()
-    assert 'data-confirmer="Supprimer X&#x27;);alert(1);// Y ?"' in page
+    assert 'data-confirmer="Supprimer Y X&#x27;);alert(1);// ?"' in page
     print("  nom d'étudiant piégé : texte dans un attribut, jamais du JavaScript OK")
 
     # ---- journal : ce qui change à qui une note appartient, ou qui est admis

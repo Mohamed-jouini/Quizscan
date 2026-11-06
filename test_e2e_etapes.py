@@ -115,7 +115,7 @@ def main():
     inscrits = sorted(oral.class_group.students.values_list("last_name", flat=True))
     assert inscrits == ["AMRI", "CHERIF"], inscrits
     page = c.get(reverse("quiz_detail", args=[oral.pk])).content.decode()
-    assert "AMRI X" in page and "BAKIR" not in page.split("Notes de l'oral")[1]
+    assert "X AMRI" in page and "BAKIR" not in page.split("Notes de l'oral")[1]
     print("  oral : liste des candidats = les 2 admis de l'écrit OK")
 
     # ---- la note minimale du QCM baisse : un nouvel admis à faire passer
@@ -168,7 +168,7 @@ def main():
     from openpyxl import load_workbook
     ws = load_workbook(io.BytesIO(r.content)).active
     assert ws.cell(row=2, column=ws.max_column).value == "Résultat final"
-    assert ws.cell(row=3, column=1).value == "AMRI"
+    assert ws.cell(row=3, column=2).value == "AMRI"       # Prénom, puis Nom
     assert ws.cell(row=3, column=ws.max_column).value == "Admis au concours"
     assert ws.max_row == 2 + len(attendu)
     # export PDF : tous les candidats, malgré une recherche, chacun avec son résultat

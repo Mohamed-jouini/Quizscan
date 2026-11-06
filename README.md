@@ -20,7 +20,11 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    l'application) donne `عدد الترسيم`, `الاسم و اللقب`, `عدد ب ت و`, `مكانها`,
    `تاريخ الإصدار`, `تاريخ الولادة`, `المركز`, `القاعة` : une telle ligne crée
    aussi la fiche de son n° au registre des inscriptions. Une liste qui ne donne
-   que Nom, Prénom et N° n'inscrit personne au registre.
+   que Nom, Prénom et N° n'inscrit personne au registre. Partout dans
+   l'application, le prénom vient avant le nom, dans l'ordre de cette liste :
+   « محمد أمين الجبالي », « Mokhtar ARBI » (talon et copies, listes, bulletins,
+   exports Excel, étiquettes, cartes, tableaux des écrans). Seules les cases NOM et
+   PRÉNOM des feuilles à nom manuscrit gardent leur place : le scan les lit là.
 2. **Quiz** : créez un quiz en choisissant le **type de fiche** :
    - **Sujet séparé + feuille de réponses** : deux documents — un PDF
      « Sujet » avec les questions et leurs choix (à distribuer, non scanné)
@@ -32,6 +36,13 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    - **Fiche de réponses seule** : grille compacte de cases (le sujet est
      distribué à part) — pratique avec l'« ajout rapide » qui crée toutes les
      questions en saisissant le corrigé (ex. `ABCADB`).
+
+   La feuille de réponses (fiche seule, ou celle du sujet séparé) range les cases sur
+   **trois colonnes** jusqu'à 4 choix par question : 69 questions sur la première page
+   d'une copie à talon, au lieu de 46 sur deux colonnes. À 5 choix et plus, deux
+   colonnes, aux places d'avant. Une fiche dont des copies sont déjà scannées garde ses
+   colonnes. Si une régénération déplace des cases, la page le signale : une feuille
+   imprimée avant serait lue de travers.
 
    Les questions se saisissent une à une, par **ajout rapide** du corrigé, par
    **import d'un questionnaire existant** (voir plus bas) ou depuis la **banque
@@ -555,7 +566,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_labels.py` | étiquette QR d'un candidat de concours collée sur la copie |
 | `test_e2e_etiquette_pages.py` | feuille à étiquette sur plusieurs pages : une vignette par page, étiquette oubliée signalée (copie incomplète, en attente), présélection d'après l'ordre du scan |
 | `test_e2e_scanner.py` | sorties d'un scanner à chargeur : TIFF multipage lu en entier, versos blancs ignorés, étiquettes lues en noir et blanc |
-| `test_e2e_a3.py` | copies d'écrit et sujet de QCM en A3 recto-verso plié : ordre des pages, sans carrés noirs, page de garde lue sur la feuille A3 dans tous les sens, A4 inchangé |
+| `test_e2e_a3.py` | copies d'écrit et sujet de QCM en A3 recto-verso plié : ordre des pages, sans carrés noirs, page de garde lue sur la feuille A3 dans tous les sens, en-tête et QR de l'étudiant repris sur les pages lignées, A4 inchangé |
 | `test_e2e_import.py` | import de questionnaires et de candidats (Excel, Word, PDF, CSV), banque de questions |
 | `test_e2e_forms.py` | création d'un concours (sans classe ni case « mode concours ») et d'un quiz, nombre de choix par question jusqu'à la lecture de la copie |
 | `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » |
@@ -589,11 +600,16 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   le bord court, à 100 %, et pliez au milieu ; le sujet d'un QCM peut prendre le même format,
   sa feuille de réponses reste en A4. Au scan, passez les feuilles dépliées, en A3, recto seul :
   la page de garde est retrouvée sur la feuille dans n'importe quel sens, le reste n'est pas lu.
-- Copies d'écrit nominatives en A4 (talon, nom imprimé ou n° de place) : chaque page de
-  rédaction reprend l'en-tête de la page de garde (talon à découper, bande du titre et QR de
-  l'étudiant), pour qu'une feuille détachée reste à qui elle est. Elles n'ont toujours ni
+- Copies d'écrit en A4 : chaque copie remplit des feuilles entières (une page lignée de plus
+  quand le nombre de pages serait impair : 2 demandées donnent 3). Imprimez-les recto-verso sur
+  le bord long, à 100 % : une copie ne commence jamais au dos de la précédente, et le talon de
+  la page 2 tombe au dos de celui de la page de garde (une seule coupe).
+- Copies d'écrit nominatives (talon, nom imprimé ou n° de place), en A4 comme en A3 : chaque
+  page de rédaction reprend l'en-tête de la page de garde (talon à découper, bande du titre et
+  QR de l'étudiant), pour qu'une feuille détachée reste à qui elle est. Elles n'ont toujours ni
   cadre ni code de page : scannées avec la copie, elles sont ignorées, seule la page de garde
-  porte la note.
+  porte la note. En A3, un seul coup de massicot sur toute la largeur retire le talon des
+  quatre pages de la feuille.
 - Si les questions changent après impression, **régénérez la fiche** avant de
   scanner (la disposition est figée dans la fiche PDF).
 - L'OCR d'un nom manuscrit n'est jamais parfait : les copies non identifiées

@@ -44,7 +44,7 @@
       {# Copie identifiée : le nom, et comment il a été trouvé. Pas de     #}
       {# changement d'étudiant ici : la lecture du QR ou du n° fait foi.   #}
       <div class="identite-copie">
-        <span class="avatar">{{ sheet.student.last_name|slice:":1" }}{{ sheet.student.first_name|slice:":1" }}</span>
+        <span class="avatar">{{ sheet.student.first_name|slice:":1" }}{{ sheet.student.last_name|slice:":1" }}</span>
         <div>
           <div class="identite-copie__nom">{{ sheet.student.full_name }}</div>
           <div class="identite-copie__meta">

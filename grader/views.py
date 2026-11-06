@@ -1015,6 +1015,10 @@ def quiz_detail(request, pk):
                         msg += (" Imprimez aussi la planche d'étiquettes QR des candidats "
                                 "(page « Candidats & étiquettes QR ») à coller sur les copies.")
                 layout["signature"] = layout_mod.layout_signature(quiz)
+                # cases déplacées (3 colonnes depuis le 7 novembre 2026, questions
+                # modifiées…) : une feuille imprimée avant serait lue de travers
+                cases_deplacees = bool(quiz.layout_json) and services.zones_lues_changees(
+                    quiz.layout_json, layout)
                 quiz.layout_json = layout
                 quiz.sheet_pdf.save(filename, ContentFile(pdf_bytes), save=False)
                 # Mode « sujet séparé » : générer aussi le document des questions
@@ -1028,6 +1032,11 @@ def quiz_detail(request, pk):
                            "remplir et scanner.")
                 quiz.save()
                 messages.success(request, msg)
+                if cases_deplacees:
+                    messages.warning(request, "Les cases de la feuille ont changé de place : "
+                                              "une feuille imprimée avant cette génération "
+                                              "serait lue de travers. Imprimez et "
+                                              "distribuez la nouvelle.")
             return redirect("quiz_detail", pk=pk)
 
     layout_stale = False

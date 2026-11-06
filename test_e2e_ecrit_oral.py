@@ -86,10 +86,15 @@ def test_ecrit(c, prof, groupe):
     assert "Racontez un voyage" in sujet and "note sur 20" in sujet and "1 h 30" in sujet
     copies = quiz.sheet_pdf.read()
     doc = pymupdf.open(stream=copies, filetype="pdf")
-    assert len(doc) == 3, len(doc)                    # garde + 2 pages lignées
+    # 2 pages lignées demandées, 3 imprimées : la copie remplit deux feuilles entières en
+    # recto-verso (demande de l'utilisateur, 6 novembre 2026)
+    assert quiz.layout_json["pages_redaction"] == 3 and len(doc) == 4, len(doc)
     assert "RÉSERVÉ AU CORRECTEUR" in doc[0].get_text()
-    assert "Ne pas scanner" in doc[1].get_text()
-    print("  sujet et copies générés (page de garde + 2 pages lignées) OK")
+    assert "Page non lue au scan" in doc[1].get_text() and "Ne pas scanner" not in doc[1].get_text()
+    page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
+    assert "page de garde + 3 pages lignées, en A4 à 100 %, recto-verso sur le bord long" in page
+    print("  sujet et copies générés (page de garde + 3 pages lignées : 2 demandées, "
+          "feuilles entières) OK")
 
     layout = quiz.layout_json
     grille = layout["pages"][0]["note_grid"]
@@ -180,7 +185,7 @@ def test_oral(c, groupe):
     assert r.status_code == 302
     quiz = Quiz.objects.get(title="Oral d'anglais", class_group=groupe)
     page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
-    assert "Notes de l'oral" in page and "AMRI Sana" in page
+    assert "Notes de l'oral" in page and "Sana AMRI" in page
     assert "pas encore scannée" in page and 'class="etapes"' not in page
     e = {s.last_name: s for s in groupe.students.all()}
     assert f'name="note_{e["AMRI"].pk}"' not in page

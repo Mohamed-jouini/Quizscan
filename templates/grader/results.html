@@ -158,7 +158,7 @@
   {% include "grader/_recherche_liste.html" with ancre="liste-admis" champ="id_q_admis" sujet=quiz.auto_enroll|yesno:"admis,étudiant ayant réussi" n=admission.admis_affiches|length %}
   <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Liste par ordre de mérite">
     <table>
-    <tr><th>Rang</th><th>Nom et prénom</th><th>N° d'inscription</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>Pourcentage</th>{% if quiz.note_distincte %}<th>Note</th>{% endif %}</tr>
+    <tr><th>Rang</th><th>Prénom et nom</th><th>N° d'inscription</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>Pourcentage</th>{% if quiz.note_distincte %}<th>Note</th>{% endif %}</tr>
     {% for r in admission.admis_affiches %}
     <tr class="ligne-lien">
       <td>{{ r.rang }}</td>

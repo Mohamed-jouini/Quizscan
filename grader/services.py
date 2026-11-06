@@ -738,6 +738,14 @@ def _has_name_zone(page_layout, quiz):
 _ZONES_LUES = ("id_grid", "qcm", "open", "note_grid")
 
 
+def zones_lues_changees(ancienne, nouvelle):
+    """Une copie imprimée avec l'ancienne disposition serait-elle lue de travers avec la
+    nouvelle ? Vrai dès qu'une case lue change de place sur une page commune."""
+    return any(page.get(cle) != avant.get(cle)
+               for page, avant in zip(nouvelle.get("pages", []), ancienne.get("pages", []))
+               for cle in _ZONES_LUES)
+
+
 def fiche_grille_perimee(quiz):
     """La feuille de réponses de ce quiz porte-t-elle encore les cases
     NOM/PRÉNOM, retirées depuis là où un code QR identifie la copie ?

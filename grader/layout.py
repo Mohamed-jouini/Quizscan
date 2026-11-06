@@ -168,6 +168,11 @@ def layout_signature(quiz):
         data["ecrit"] = [quiz.note_sur, quiz.pages_redaction]
         if quiz.type_epreuve == "ecrit" and quiz.format_impression == "a3":
             data["format"] = "a3"   # seulement si choisi : empreintes inchangées
+        elif quiz.type_epreuve == "ecrit" and \
+                pages_lignees_a4(quiz.pages_redaction) != quiz.pages_redaction:
+            # A4 arrondi à des feuilles entières (6 novembre 2026) : seules les copies
+            # imprimées avant, avec une page de moins, sont à refaire
+            data["feuilles_entieres"] = True
         if quiz.type_epreuve == "oral":
             data["oral"] = [s.pk for s in quiz.class_group.students.all()]
     raw = json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
@@ -283,15 +288,18 @@ def _build_sans_talon(quiz):
 
     page, y = new_page()
 
-    # ---- Grille QCM, sur deux colonnes si nécessaire ----
+    # ---- Grille QCM, sur trois colonnes quand elles tiennent ----
     # chaque question a son propre nombre de cases ; la largeur des colonnes
     # suit la question qui en a le plus
     ncho = max([q.num_bubbles for q in qcm_qs] or [ncho])
     qcm_block_w = 14.0 + ncho * BUBBLE_STEP        # numéro + cases
-    two_cols = qcm_block_w * 2 + 12.0 <= (CONTENT_X1 - CONTENT_X0)
-    col_x = [CONTENT_X0]
-    if two_cols:
-        col_x.append(CONTENT_X0 + (CONTENT_X1 - CONTENT_X0) / 2 + 4.0)
+    n_cols = _colonnes_grille(quiz, qcm_block_w)
+    largeur = CONTENT_X1 - CONTENT_X0
+    if n_cols == 3:
+        col_x = [CONTENT_X0 + k * (largeur + ECART_3_COLONNES) / 3 for k in range(3)]
+    else:
+        # une ou deux colonnes : les places d'avant le 7 novembre 2026, au millimètre
+        col_x = [CONTENT_X0, CONTENT_X0 + largeur / 2 + 4.0][:n_cols]
 
     if qcm_qs:
         i = 0
@@ -333,7 +341,33 @@ def _build_sans_talon(quiz):
         })
         y += h + 4.0
 
-    return _checked({"mode": "grid", "num_choices": ncho, "pages": pages})
+    return _checked({"mode": "grid", "num_choices": ncho, "colonnes": n_cols, "pages": pages})
+
+
+ECART_3_COLONNES = 4.0     # entre deux blocs de cases, sur trois colonnes (mm)
+
+
+def _colonnes_grille(quiz, bloc):
+    """Colonnes de la grille QCM : trois quand elles tiennent (jusqu'à 4 choix), pour
+    mettre plus de questions sur une page (demande de l'utilisateur, 7 novembre 2026) ;
+    sinon deux, sinon une.
+
+    Une fiche dont des copies sont déjà scannées garde ses colonnes : les copies imprimées
+    avec elle et pas encore scannées doivent se lire à l'identique (même principe que
+    l'insertion d'une question, verrouillée après le premier scan). Les fiches d'avant ce
+    changement n'en notaient pas le nombre : elles en avaient deux au plus."""
+    largeur = CONTENT_X1 - CONTENT_X0
+    if bloc * 3 + 2 * ECART_3_COLONNES <= largeur:
+        possibles = 3
+    elif bloc * 2 + 12.0 <= largeur:
+        possibles = 2
+    else:
+        possibles = 1
+    ancienne = getattr(quiz, "layout_json", None) or {}
+    if ancienne.get("mode") == "grid" and getattr(quiz, "pk", None) \
+            and quiz.batches.exists():
+        return min(possibles, ancienne.get("colonnes", 2))
+    return possibles
 
 
 # ---------------------------------------------------------------------------
@@ -540,8 +574,17 @@ def _build_ecrit_layout(quiz):
         return _checked({"mode": "ecrit", "num_choices": 0, "pages": [page], "format": "a3",
                          "pages_redaction": (n_lignees + 4) // 4 * 4 - 1})
     page["lignes"] = {"y0": round(y + 12.0, 2), "y1": CONTENT_Y1, "pas": NOTE_LIGNE}
+    # A4 : des feuilles entières aussi (demande de l'utilisateur, 6 novembre 2026). Avec un
+    # nombre impair de pages par copie, imprimée en recto-verso, la page de garde de la
+    # copie suivante tombait au dos de la dernière page : une page lignée de plus.
     return _checked({"mode": "ecrit", "num_choices": 0, "pages": [page],
-                     "pages_redaction": n_lignees})
+                     "pages_redaction": pages_lignees_a4(n_lignees)})
+
+
+def pages_lignees_a4(demandees):
+    """Pages lignées d'une copie A4 : un nombre impair, pour qu'avec la page de garde
+    elle remplisse des feuilles entières en recto-verso (2 demandées -> 3, 0 -> 1)."""
+    return demandees // 2 * 2 + 1
 
 
 def lignes_a3(y0, langue):

@@ -7,10 +7,13 @@ lignées, sans les quatre carrés noirs. On vérifie :
 3. la note et l'identité lues sur la feuille A3 par le vrai chemin : dépliée, tournée (le
    chargeur prend l'A3 dans le sens de la longueur), à l'envers, pliée, talon coupé ;
 4. les copies A4 déjà imprimées restent lues après le passage en A3, et l'A4 ne change pas ;
-5. le sujet d'un QCM en A3 sans toucher à la feuille de réponses, qui reste en A4.
+5. le sujet d'un QCM en A3 sans toucher à la feuille de réponses, qui reste en A4 ;
+6. copie nominative (talon, nom imprimé, n° de place) : les pages lignées reprennent l'en-tête
+   de la page de garde et le QR de l'étudiant, sans gêner la lecture de la page de garde.
 """
 import re
 import sys
+from unittest import mock
 
 # (django.setup et migrate : à l'import de ce module)
 from test_e2e_ecrit_oral import jpg, noircir_note
@@ -74,6 +77,30 @@ def creer_ecrit(c, prof, nom, langue="fr", **reglages):
     return quiz, groupe
 
 
+def moities(page):
+    """(moitié gauche, moitié droite) d'un côté de la feuille A3."""
+    largeur, hauteur = page.rect.width, page.rect.height
+    return (pymupdf.Rect(0, 0, largeur / 2, hauteur),
+            pymupdf.Rect(largeur / 2, 0, largeur, hauteur))
+
+
+def qr_de_la_moitie(image, droite, zone, marge=3.0):
+    """QR lu sur une moitié d'un côté de la feuille (rendue ou scannée), recadré à sa place
+    (zone de la disposition, à la marge près) comme à la lecture des copies : sur la moitié
+    entière, le détecteur d'OpenCV en rate selon leur motif, celui de la page de garde
+    compris."""
+    milieu = image.shape[1] // 2
+    moitie = image[:, milieu:] if droite else image[:, :milieu]
+    x, y, w, h = zone["rect"]
+    recadre = moitie[mm2px(y - marge):mm2px(y + h + marge),
+                     mm2px(x - marge):mm2px(x + w + marge)]
+    for detecteur in (cv2.QRCodeDetector(), cv2.QRCodeDetectorAruco()):
+        lu = detecteur.detectAndDecode(recadre)[0]
+        if lu:
+            return lu
+    return ""
+
+
 def pages_des_moities(doc, titre):
     """(n° de page à gauche, à droite) de chaque côté, d'après le pied des pages."""
     cotes = []
@@ -117,10 +144,21 @@ def copie_remplie(pdf, quiz, index_recto, numero, chiffres, gauche, ecrire=True,
         moitie = griffonner(moitie, (22, haut + 9, 190, 276), graine)
     feuille[:, decalage:decalage + moitie.shape[1]] = moitie
     if ecrire:
-        # l'autre moitié du recto : une page de texte
+        # l'autre moitié du recto : une page de texte, sous l'en-tête que reprend la page
+        # lignée d'une copie nominative (son QR reste lisible : il ne doit rien gêner)
         autre = 210 if gauche else 0
-        feuille = griffonner(feuille, (autre + 22, 28, autre + 190, 276), graine + 1)
+        feuille = griffonner(feuille, (autre + 22, debut_du_texte(page), autre + 190, 276),
+                             graine + 1)
     return feuille
+
+
+def debut_du_texte(page):
+    """Ordonnée (mm) où l'on commence à écrire sur une page lignée : sous la bande et le QR que
+    reprend celle d'une copie nominative, sinon à 28 mm."""
+    zone = page.get("qr") or {}
+    if zone and not zone.get("sticker"):
+        return zone["band"][1] + zone["band"][3] + L.A3_LIGNE + 9
+    return 28.0
 
 
 def en_pdf(images):
@@ -243,9 +281,12 @@ def verifier_talon(c, prof):
     assert premiere.last_name in doc[0].get_text()
     # Le massicot coupe toute la largeur : aucune ligne d'écriture au-dessus du trait, sur
     # aucune page lignée (français : à gauche sur le recto, des deux côtés sur le verso).
+    # Traits pleins seulement : le trait de coupe, pointillé, est sur chaque page.
     vues = 0
     for page in doc[:2]:
         for trace in page.get_drawings():
+            if "s" not in (trace.get("type") or "") or trace.get("dashes") != "[] 0":
+                continue
             for element in trace["items"]:
                 if element[0] == "l" and abs(element[1].y - element[2].y) < .1 \
                         and element[2].x - element[1].x > 150 * MM \
@@ -253,15 +294,93 @@ def verifier_talon(c, prof):
                     assert element[1].y / MM >= L.TALON_COUPE + 1, element
                     vues += 1
     assert vues > 60, vues
+
+    # Pages lignées (demande de l'utilisateur, 6 novembre 2026) : chacune reprend l'en-tête de
+    # la page de garde, talon avec le nom et le n°, bande du titre et QR de l'étudiant. Pas de
+    # « ne pas scanner » : elles sont sur la feuille de la page de garde.
+    zone = quiz.layout_json["pages"][0]["qr"]
+    gauche_droite = moities(doc[0])
+    assert "Page 1 / 4" in doc[0].get_text(clip=gauche_droite[1])
+    for index, droite, numero in ((0, False, 4), (1, False, 2), (1, True, 3)):
+        texte = doc[index].get_text(clip=moities(doc[index])[droite])
+        for attendu in (premiere.full_name,
+                        f"N° {premiere.student_number}", f"Page {numero} / 4",
+                        "Talon à découper"):
+            assert attendu in texte, (numero, attendu, texte)
+        assert qr_de_la_moitie(render_page(pdf, index), droite, zone) \
+            == f"QS|{quiz.pk}|{premiere.pk}", numero
+    assert "Ne pas scanner" not in doc[0].get_text() + doc[1].get_text()
+
+    # Lecture : la page de garde, à côté de la page 4 et de son QR ; le verso, talon coupé
+    # ou non, ignoré (ni cadre ni code de page).
     feuille = copie_remplie(pdf, quiz, 0, "", [1, 3, None, None], gauche=False)
     coupee = feuille[mm2px(L.TALON_COUPE):]
-    lot = services.process_uploaded_files(
-        quiz, [SimpleUploadedFile("talon.jpg", jpg(simulate_scan(coupee)))], label="A3 talon")
-    s = lot.sheets.get()
+    haut = debut_du_texte(quiz.layout_json["pages"][0])
+    verso = griffonner(griffonner(render_page(pdf, 1), (22, haut, 190, 276), 5),
+                       (232, haut, 400, 276), 6)
+    lot = services.process_uploaded_files(quiz, [
+        SimpleUploadedFile("talon.jpg", jpg(simulate_scan(coupee))),
+        SimpleUploadedFile("verso_coupe.jpg", jpg(simulate_scan(verso[mm2px(L.TALON_COUPE):]))),
+        SimpleUploadedFile("verso_entier.jpg", jpg(simulate_scan(verso)))], label="A3 talon")
+    feuilles = {s.source_name: s for s in lot.sheets.all()}
+    s = feuilles["talon.jpg"]
     assert s.status == "ok" and s.student == premiere, (s.status, s.error_message)
-    assert notes(quiz)[premiere.last_name] == 13.0
+    for nom in ("verso_coupe.jpg", "verso_entier.jpg"):
+        assert feuilles[nom].status == "ignoree", (nom, feuilles[nom].status)
+    assert notes(quiz) == {premiere.last_name: 13.0}, notes(quiz)
     print("  copie à talon : nom sur le talon, rien à écrire au-dessus du trait, talon coupé "
           "sur toute la largeur, QR et note lus OK")
+    print("  copie à talon : talon, bande et QR repris sur les pages 2 à 4, verso ignoré "
+          "au scan OK")
+
+
+def verifier_entete_nominatif(c, prof):
+    """Nom imprimé, puis n° de place : l'en-tête de la page de garde sur chaque page lignée."""
+    quiz, groupe = creer_ecrit(c, prof, "A3-NOM", id_mode="qr")
+    assert not quiz.talon_nom and not quiz.place_anonyme
+    pdf = quiz.sheet_pdf.read()
+    doc = ouvrir(pdf)
+    assert len(doc) == 2 * groupe.students.count(), len(doc)
+    etudiants = {s.last_name: s for s in groupe.students.all()}
+    amri = etudiants["AMRI"]
+    zone = quiz.layout_json["pages"][0]["qr"]
+    for index, droite, numero in ((0, False, 4), (1, False, 2), (1, True, 3)):
+        texte = doc[index].get_text(clip=moities(doc[index])[droite])
+        for attendu in ("Sana AMRI", "N° 104501", f"Page {numero} / 4"):
+            assert attendu in texte, (numero, attendu, texte)
+        assert qr_de_la_moitie(render_page(pdf, index), droite, zone) \
+            == f"QS|{quiz.pk}|{amri.pk}", numero
+    assert "Ne pas scanner" not in doc[0].get_text() + doc[1].get_text()
+    # la page de garde se lit avec, à côté, le QR de la page 4 : dépliée, puis tournée
+    recto = simulate_scan(copie_remplie(pdf, quiz, 0, "", [1, 2, None, None], gauche=False))
+    # (marge large : le scan simulé tourne et décale la feuille de quelques millimètres)
+    assert qr_de_la_moitie(recto, False, zone, marge=12.0) == f"QS|{quiz.pk}|{amri.pk}", \
+        "le QR de la page 4 doit être sur le scan"
+    haut = debut_du_texte(quiz.layout_json["pages"][0])
+    verso = griffonner(render_page(pdf, 1), (232, haut, 400, 276), 9)
+    lot = services.process_uploaded_files(quiz, [
+        SimpleUploadedFile("amri.jpg", jpg(recto)),
+        SimpleUploadedFile("bakir.jpg", jpg(simulate_scan(cv2.rotate(
+            copie_remplie(pdf, quiz, 2, "", [None, 8, 5, None], gauche=False),
+            cv2.ROTATE_90_CLOCKWISE)))),
+        SimpleUploadedFile("verso.jpg", jpg(simulate_scan(verso)))], label="A3 nominatives")
+    feuilles = {s.source_name: s for s in lot.sheets.all()}
+    for nom, etudiant in (("amri.jpg", amri), ("bakir.jpg", etudiants["BAKIR"])):
+        s = feuilles[nom]
+        assert s.status == "ok" and s.student == etudiant, (nom, s.status, s.error_message)
+    assert feuilles["verso.jpg"].status == "ignoree", feuilles["verso.jpg"].status
+    assert notes(quiz) == {"AMRI": 12.0, "BAKIR": 8.5}, notes(quiz)
+    print("  copie nominative : nom, n° et QR repris sur les pages 2 à 4 ; page de garde lue "
+          "dépliée et tournée, verso ignoré OK")
+
+    places, _ = creer_ecrit(c, prof, "A3-PLACES", id_mode="qr", anonymat="place")
+    assert places.place_anonyme
+    doc = ouvrir(places.sheet_pdf.read())
+    for index, droite in ((0, False), (1, False), (1, True)):
+        texte = doc[index].get_text(clip=moities(doc[index])[droite])
+        assert "PLACE N° 1" in texte, (index, droite, texte)
+        assert not any(nom in texte or num in texte for nom, _, num in ETUDIANTS), texte
+    print("  copie à n° de place : « PLACE N° 1 » et QR sur les pages 2 à 4, ni nom ni n° OK")
 
 
 def verifier_deux_feuilles(c, prof):
@@ -281,13 +400,37 @@ def verifier_a4_inchange(c, prof):
     assert "format" not in quiz.layout_json
     pdf_a4 = quiz.sheet_pdf.read()
     doc = ouvrir(pdf_a4)
-    assert len(doc) == 3 and all(format_mm(p) == (210, 297) for p in doc)
-    assert "Ne pas scanner" in doc[1].get_text()
+    # 2 pages lignées demandées, 3 imprimées : deux feuilles entières en recto-verso
+    assert len(doc) == 4 and all(format_mm(p) == (210, 297) for p in doc), len(doc)
+    assert "Page non lue au scan" in doc[1].get_text()
     signature_a4 = quiz.layout_json["signature"]
     assert L.layout_signature(quiz) == signature_a4
     zones_a4 = {k: quiz.layout_json["pages"][0].get(k) for k in services._ZONES_LUES}
     page_a4 = quiz.layout_json["pages"][0]
-    print("  format A4 : pages séparées, comme avant OK")
+    print("  format A4 : pages séparées, feuilles entières pour le recto-verso OK")
+
+    # Pages lignées imprimées selon le nombre demandé (0 à 6) : feuilles entières, en A4
+    # (demande de l'utilisateur, 6 novembre 2026) comme en A3.
+    for demandees, a4, a3 in zip(range(7), (1, 1, 3, 3, 5, 5, 7), (3, 3, 3, 3, 7, 7, 7)):
+        quiz.pages_redaction = demandees
+        for fmt, attendu in (("a4", a4), ("a3", a3)):
+            quiz.format_impression = fmt
+            assert L.build_layout(quiz)["pages_redaction"] == attendu, (demandees, fmt)
+    quiz.refresh_from_db()
+
+    # Copies A4 générées avant les feuilles entières (3 pages : la copie suivante commençait
+    # au dos de la dernière) : la page de l'épreuve demande de les régénérer.
+    with mock.patch.object(L, "pages_lignees_a4", lambda n: n):
+        c.post(reverse("quiz_detail", args=[quiz.pk]), {"generer": "1"})
+    quiz.refresh_from_db()
+    assert len(ouvrir(quiz.sheet_pdf.read())) == 3
+    assert "régénérez les documents" in c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
+    c.post(reverse("quiz_detail", args=[quiz.pk]), {"generer": "1"})
+    quiz.refresh_from_db()
+    assert len(ouvrir(quiz.sheet_pdf.read())) == 4
+    assert "régénérez les documents" not in \
+        c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
+    print("  copies A4 d'avant, à une page près : régénération demandée, puis 4 pages OK")
 
     # Passage en A3 : l'alerte de régénération, puis une copie A4 déjà imprimée reste lue.
     r = c.post(reverse("quiz_detail", args=[quiz.pk]), {
@@ -416,6 +559,7 @@ def main():
     verifier_ecrit(c, prof)
     verifier_arabe_et_etiquette(c, prof)
     verifier_talon(c, prof)
+    verifier_entete_nominatif(c, prof)
     verifier_deux_feuilles(c, prof)
     verifier_a4_inchange(c, prof)
     verifier_lecteur_ne_confond_pas()

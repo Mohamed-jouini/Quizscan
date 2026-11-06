@@ -1,5 +1,5 @@
 {% comment %}
-Recherche juste au-dessus d'une liste de résultats : nom, prénom ou n° d'inscription,
+Recherche juste au-dessus d'une liste de résultats : prénom, nom ou n° d'inscription,
 dans toute la liste et pas seulement la page affichée. La page se recharge et revient
 sur la liste (ancre).
 Paramètres : ancre, champ (id du champ de saisie), sujet (« candidat »…), n (lignes trouvées).
@@ -10,7 +10,7 @@ Paramètres : ancre, champ (id du champ de saisie), sujet (« candidat »…), n
     <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
     <label for="{{ champ }}" class="visually-hidden">Rechercher un {{ sujet }}</label>
     <input id="{{ champ }}" type="search" name="q" value="{{ recherche }}" autocomplete="off"
-           placeholder="Rechercher un {{ sujet }} — nom, prénom ou n° d'inscription">
+           placeholder="Rechercher un {{ sujet }} — prénom, nom ou n° d'inscription">
     {% if recherche %}
     <a class="recherche-etudiant__effacer" href="?{% if batch %}batch={{ batch.pk }}{% endif %}#{{ ancre }}"
        title="Effacer la recherche" aria-label="Effacer la recherche">

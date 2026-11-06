@@ -422,10 +422,11 @@ def cartes_pdf(inscrits, etablissement=""):
         c.setFillGray(0.0)
         _draw_text(c, _ellipsize(i.numero, 13, largeur, bold=True),
                    tx * mm, y(y0 + 25.5), 13, bold=True)
-        _draw_text(c, _ellipsize(i.nom.upper(), 11, largeur, bold=True),
-                   ax * mm, y(y0 + 34), 11, bold=True, align=align)
+        # le prénom d'abord, puis le NOM (demande de l'utilisateur, 7 novembre 2026)
         _draw_text(c, _ellipsize(i.prenom, 10.5, largeur),
-                   ax * mm, y(y0 + 40.5), 10.5, align=align)
+                   ax * mm, y(y0 + 34), 10.5, align=align)
+        _draw_text(c, _ellipsize(i.nom.upper(), 11, largeur, bold=True),
+                   ax * mm, y(y0 + 40.5), 11, bold=True, align=align)
         identite = " · ".join(t for t in (
             f"CIN {i.cin}" if i.cin else "",
             f"né(e) le {i.date_naissance:%d/%m/%Y}" if i.date_naissance else "") if t)

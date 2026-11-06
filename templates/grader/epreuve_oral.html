@@ -80,7 +80,7 @@
     {% if lignes %}
     <div class="table-wrap">
       <table>
-        <tr><th>Nom et prénom</th><th>N° d'inscription</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th><th>Fiche</th></tr>
+        <tr><th>Prénom et nom</th><th>N° d'inscription</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th><th>Fiche</th></tr>
         {% for e, etat, r in lignes %}
         <tr class="ligne-lien">
           <td>{% if etat == "lue" or etat == "illisible" %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'sheet_review' r.sheet.pk %}"><b>{{ e.full_name }}</b></a>{% else %}<b>{{ e.full_name }}</b>{% endif %}</td>

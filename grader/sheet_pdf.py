@@ -102,8 +102,8 @@ LABELS = {
                       "puis scanne la fiche : la note est affectée à l'étudiant.",
         "observations": "Observations de l'examinateur",
         "redaction": "Copie — page de rédaction",
-        "ne_pas_scanner": "Ne pas scanner cette page : seule la page de garde "
-                          "est lue.",
+        # page lignée : en recto-verso, elle passe au scanner avec la page de garde
+        "non_lue": "Page non lue au scan : seule la page de garde porte la note.",
         "pli": "pli au milieu",
     },
     "ar": {
@@ -135,7 +135,7 @@ LABELS = {
         "oral_instr": "بطاقة تقييم شفاهي — يملأ الممتحن العدد ثم تُمسح البطاقة ضوئيا.",
         "observations": "ملاحظات الممتحن",
         "redaction": "ورقة التحرير",
-        "ne_pas_scanner": "لا تُمسح هذه الصفحة ضوئيا: تُقرأ صفحة الغلاف فقط.",
+        "non_lue": "هذه الصفحة لا تُقرأ عند المسح الضوئي: العدد على صفحة الغلاف فقط.",
         "pli": "طيّ في الوسط",
     },
 }
@@ -433,28 +433,25 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
              L.PAGE_W / 2, _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
         c.showPage()
 
-        # Écrit : pages lignées après la page de garde de chaque copie. Sans
-        # repères : elles ne se scannent pas (et sont ignorées si elles le sont).
+        # Écrit : pages lignées après la page de garde de chaque copie, en nombre qui
+        # remplit des feuilles entières (layout). Sans repères : elles ne sont pas lues,
+        # et sont ignorées quand elles passent au scanner (au dos de la page de garde,
+        # en recto-verso).
         if mode == "ecrit" and pidx == len(layout["pages"]) - 1:
             n = int(layout.get("pages_redaction", 0) or 0)
+            # A3 : les pages lignées sont sur la feuille de la page de garde (ou sur une
+            # feuille emboîtée dedans) et passent au scanner avec elle. Le massicot coupe
+            # toute la largeur : rien à écrire au-dessus du trait du talon, quelle que
+            # soit la page.
+            a3 = layout.get("format") == "a3"
             for k in range(n):
-                if layout.get("format") == "a3":
-                    # Même feuille que la page de garde : elle passe au scanner avec.
-                    # Le massicot coupe toute la largeur : rien à écrire au-dessus du
-                    # trait du talon, quelle que soit la page.
-                    _dessiner_lignes(c, L.lignes_a3(
-                        L.TALON_COUPE + L.A3_LIGNE if talon else L.A3_HAUT, lang))
-                    draw(f"{quiz.title} — page {k + 2}", L.PAGE_W / 2,
-                         _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
-                    c.showPage()
-                    continue
                 if image_qr is not None:
                     # Copie nominative : chaque page de rédaction reprend l'en-tête de la
                     # page de garde, talon (nom, n°, à découper) et bande du titre avec le
                     # QR de l'étudiant : une page détachée reste à qui elle est (demande
-                    # de l'utilisateur, 6 novembre 2026). Toujours sans cadre ni code de
-                    # page : au scan, elle reste « ignorée », seule la page de garde
-                    # porte la note.
+                    # de l'utilisateur, 6 novembre 2026, en A4 puis en A3). Toujours sans
+                    # cadre ni code de page : au scan, elle reste « ignorée », seule la
+                    # page de garde porte la note.
                     page_txt = f"{T['page']} {k + 2} / {n + 1}"
                     if talon:
                         _dessiner_talon(c, draw, student, head_title, page_txt,
@@ -467,17 +464,29 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
                     _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T,
                                     lang, image_qr)
                     _, bande_y, _, bande_h = qr_zone["band"]
-                    draw(T["ne_pas_scanner"], L.PAGE_W / 2, _y(bande_y + bande_h + 5.0),
-                         7.5, align="center", gray=0.45)
-                    _dessiner_lignes(c, {"y0": bande_y + bande_h + 12.0,
-                                         "y1": L.PAGE_H - 16.0, "pas": L.NOTE_LIGNE})
+                    if a3:
+                        # pas de « ne pas scanner » : la feuille passe entière
+                        _dessiner_lignes(c, L.lignes_a3(bande_y + bande_h + L.A3_LIGNE,
+                                                        lang))
+                    else:
+                        draw(T["non_lue"], L.PAGE_W / 2,
+                             _y(bande_y + bande_h + 5.0), 7.5, align="center", gray=0.45)
+                        _dessiner_lignes(c, {"y0": bande_y + bande_h + 12.0,
+                                             "y1": L.PAGE_H - 16.0, "pas": L.NOTE_LIGNE})
+                elif a3:
+                    _dessiner_lignes(c, L.lignes_a3(
+                        L.TALON_COUPE + L.A3_LIGNE if talon else L.A3_HAUT, lang))
                 else:
                     draw(f"{T['redaction']} {k + 2} / {n + 1} — {quiz.title}",
                          L.PAGE_W / 2, _y(16.0), 9, bold=True, align="center")
-                    draw(T["ne_pas_scanner"], L.PAGE_W / 2, _y(21.0), 7.5,
+                    draw(T["non_lue"], L.PAGE_W / 2, _y(21.0), 7.5,
                          align="center", gray=0.45)
                     _dessiner_lignes(c, {"y0": 30.0, "y1": L.PAGE_H - 16.0,
                                          "pas": L.NOTE_LIGNE})
+                if a3:
+                    # n° de la page au pied : l'ordre des pages, une fois la feuille pliée
+                    draw(f"{quiz.title} — page {k + 2}", L.PAGE_W / 2,
+                         _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
                 c.showPage()
 
     c.save()
@@ -597,7 +606,7 @@ def _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang, ima
         # copie anonyme : le n° de place, ni nom ni n° d'inscription
         title_txt = T["place"].format(n=places.get(student.pk, "—"))
     else:
-        title_txt = f"{student.last_name} {student.first_name}"
+        title_txt = student.full_name               # en arabe, le prénom d'abord
         sub_txt = T["personal"]
         num_txt = f"N° {student.student_number}" if student.student_number else ""
     if not sub_txt:
@@ -623,7 +632,7 @@ def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang):
     ajoute ne change rien à la lecture)."""
     x0, x1 = 14.0, L.PAGE_W - 14.0
     rtl = lang == "ar"
-    nom = f"{student.last_name} {student.first_name}" if student else ""
+    nom = student.full_name if student else ""      # en arabe, le prénom d'abord
     num = f"N° {student.student_number}" if student and student.student_number else ""
     fiche = getattr(student, "inscrit", None) if student else None
     details = [t for t in (f"{T['cin']} {fiche.cin}" if fiche and fiche.cin else "",
@@ -744,7 +753,7 @@ SUJET_TEXTES = {
         "duree": "Durée : {d}",
         "date": "Date",
         "duree_seule": "Durée",
-        "nom": "Nom et prénom :",
+        "nom": "Prénom et nom :",
         "classe": "Classe : {c}",
         "titre_main": "Intitulé de l'épreuve :",
         "remarques": "Remarques :",
@@ -939,7 +948,7 @@ def generate_subject_pdf(quiz, questions=None):
     # Titre écrit à la main (mode étiquette hors concours) : le même sujet
     # peut servir à plusieurs épreuves, il ne porte ni titre ni classe.
     titre_a_la_main = sticker and not concours and not ecrit
-    # Case « Nom et prénom » : pas sur le sujet d'un concours, d'une épreuve à
+    # Case « Prénom et nom » : pas sur le sujet d'un concours, d'une épreuve à
     # étiquette (elle va sur la feuille de réponses) ni d'une copie anonyme.
     nom_sur_sujet = not (concours or sticker or getattr(quiz, "talon_nom", False)
                          or getattr(quiz, "place_anonyme", False))

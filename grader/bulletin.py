@@ -8,8 +8,28 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas as rl_canvas
 
 from .fonts import font_for, has_arabic, load_fonts, runs, shape, text_width_pt, wrap
+from .labels_pdf import _ellipsize
+from .models import nom_et_prenom
 
 PAGE_W, PAGE_H = 210.0, 297.0
+
+
+def nom_ajuste(etudiant, largeur_mm, taille, gras=False):
+    """(texte, corps) du nom complet qui tient dans la largeur, sans déborder sur la
+    colonne voisine. Le corps diminue jusqu'à 6,5 pt ; au-delà, les prénoms passent à leurs
+    initiales et le nom de famille reste entier (le prénom venant d'abord depuis le
+    7 novembre 2026, c'est lui qui aurait débordé), quitte à descendre à 5 pt ; en
+    dernier recours, le texte est coupé « … »."""
+    largeur = largeur_mm * mm
+    initiales = " ".join(f"{mot[0]}." for mot in (etudiant.first_name or "").split())
+    for texte, plancher in ((etudiant.full_name, 6.5),
+                            (nom_et_prenom(etudiant.last_name, initiales), 5.0)):
+        corps = taille
+        while corps > plancher and text_width_pt(texte, corps, gras) > largeur:
+            corps -= 0.5
+        if text_width_pt(texte, corps, gras) <= largeur:
+            return texte, corps
+    return _ellipsize(texte, 5.0, largeur_mm, gras), 5.0
 
 # Marques juste / faux / sans réponse du tableau de détail.
 # Helvetica (police PDF standard) ne possède pas ✓ ✗ ✱ : ReportLab les
@@ -91,7 +111,8 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
         c.setLineWidth(0.5)
         c.line(X0 * mm, _y(38.5), X1 * mm, _y(38.5))
 
-        _draw(c, s.full_name, X0, 48.0, 13, bold=True)
+        nom, corps = nom_ajuste(s, X1 - X0 - 32, 13, gras=True)     # N° à droite
+        _draw(c, nom, X0, 48.0, corps, bold=True)
         if s.student_number:
             _draw(c, f"N° {s.student_number}", X1, 48.0, 10, align="right", gray=0.3)
 
@@ -218,7 +239,7 @@ def generate_liste_admis_pdf(quiz, admission, batch=None):
         c.setFillGray(0.93)
         c.rect(X0 * mm, _y(y + 2.4), (X1 - X0) * mm, 7.6 * mm, stroke=0, fill=1)
         c.setFillGray(0.0)
-        for texte, x in zip(("Rang", "Nom et prénom", "N° d'inscription"), cols):
+        for texte, x in zip(("Rang", "Prénom et nom", "N° d'inscription"), cols):
             _draw(c, texte, x, y, 9, bold=True, gray=0.25)
         _draw(c, "Bonnes rép." if quiz.a_des_qcm else "Note", X1 - 24, y, 9,
               bold=True, align="right", gray=0.25)
@@ -277,7 +298,8 @@ def generate_liste_admis_pdf(quiz, admission, batch=None):
             c.setFillGray(0.0)
         s = r["student"]
         _draw(c, str(r["rang"]), cols[0], y, 10, bold=True)
-        _draw(c, s.full_name, cols[1], y, 10)
+        nom, corps = nom_ajuste(s, cols[2] - cols[1] - 3, 10)
+        _draw(c, nom, cols[1], y, corps)
         _draw(c, s.student_number or "—", cols[2], y, 10)
         _draw(c, (f"{r['correct']} / {r['n_qcm']}" if quiz.a_des_qcm
                   else f"{r['score']:g} / {r['max_score']:g}"), X1 - 24, y, 10,
@@ -398,7 +420,8 @@ def generate_parcours_pdf(parcours):
             c.rect(X0 * mm, _y(y + LIGNE - 3.6), (X1 - X0) * mm, LIGNE * mm, stroke=0, fill=1)
             c.setFillGray(0.0)
         s = candidat["etudiant"]
-        _draw(c, s.full_name, X0 + 2, y, taille_pour(s.full_name, 9.5, L_NOM - 4, True), bold=True)
+        nom, corps = nom_ajuste(s, L_NOM - 4, 9.5, gras=True)
+        _draw(c, nom, X0 + 2, y, corps, bold=True)
         _draw(c, f"n° {s.student_number}" if s.student_number else "sans n°", X0 + 2, y + 4.2, 8,
               gray=0.35)
         for case, x in zip(candidat["cases"], x_etapes):
@@ -456,7 +479,7 @@ def generate_liste_emargement(quiz, lignes, salle=""):
         c.setFillGray(0.92)
         c.rect(X0 * mm, _y(y + 2.6), (X1 - X0) * mm, 8.2 * mm, stroke=0, fill=1)
         c.setFillGray(0.0)
-        for texte, x in zip(("Place", "N° d'inscription", "Nom et prénom"), cols):
+        for texte, x in zip(("Place", "N° d'inscription", "Prénom et nom"), cols):
             _draw(c, texte, x, y, 9, bold=True, gray=0.2)
         _draw(c, "Signature", x_sig + 3, y, 9, bold=True, gray=0.2)
         return y + 9.0
@@ -498,7 +521,8 @@ def generate_liste_emargement(quiz, lignes, salle=""):
             c.setFillGray(0.0)
         _draw(c, str(place), cols[0] + 5, y + 0.6, 12, bold=True, align="center")
         _draw(c, s.student_number or "—", cols[1], y + 0.6, 10)
-        _draw(c, s.full_name, cols[2], y + 0.6, 10.5, bold=True)
+        nom, corps = nom_ajuste(s, x_sig - cols[2] - 3, 10.5, gras=True)
+        _draw(c, nom, cols[2], y + 0.6, corps, bold=True)
         c.setStrokeGray(0.55)
         c.setLineWidth(0.5)
         c.rect(x_sig * mm, _y(y + 2.8), (X1 - x_sig - 1) * mm, (LIGNE - 1.6) * mm)

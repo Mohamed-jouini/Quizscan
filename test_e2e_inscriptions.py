@@ -61,7 +61,7 @@ def test_identite(c, prof, autre):
 
     # contrôles : CIN déjà prise, CIN invalide, naissance future, e-mail faux
     for donnees, erreur in (
-            ({"cin": "09876543"}, "déjà celle de KHELIFI Omar"),
+            ({"cin": "09876543"}, "déjà celle de Omar KHELIFI"),
             ({"cin": "12-34"}, "N° de CIN invalide"),
             ({"date_naissance": "2099-01-01"}, "invraisemblable"),
             ({"email": "pas-un-mail"}, "adresse de courriel valide")):
@@ -75,7 +75,7 @@ def test_identite(c, prof, autre):
     c.post(reverse("class_detail", args=[groupe.pk]),
            {"ajouter_inscrits": "1", "numeros": "207001"})
     page = c.get(url + f"?modifier={i.pk}").content.decode()
-    assert "Modifier l'inscription de KHELIFI Omar" in page and 'value="09876543"' in page
+    assert "Modifier l'inscription de Omar KHELIFI" in page and 'value="09876543"' in page
     c.post(url, {"inscrire": "1", "modifier": i.pk, "nom": "KHELIFI", "prenom": "Omar Ali",
                  "numero": "207001", "cin": "09876543", "cin_lieu": "Sfax",
                  "cin_date": "2024-01-10", "date_naissance": "2006-03-15",
@@ -338,9 +338,33 @@ def test_scan_et_public(c, prof):
     assert quiz.resultats_publies and not quiz.admis_publies   # pas de note minimale
     r = anonyme.get(reverse("public_resultat") + "?numero=104 525")
     page_pub = r.content.decode()
-    assert "ABDELLATIF Mohamed" in page_pub and "<b>5</b> / 6" in page_pub, page_pub[-1500:]
+    assert "Mohamed ABDELLATIF" in page_pub and "<b>5</b> / 6" in page_pub, page_pub[-1500:]
     assert anonyme.get(reverse("public_accueil")).content.decode().count(escape(quiz.title)) == 1
     print("  publication : note consultée par n° d'inscription, sans compte OK")
+
+    # par le n° de CIN aussi (demande de l'utilisateur, 7 novembre 2026) : le formulaire
+    # s'envoie en POST, rien de tapé ne va dans l'adresse ; la page donne le n° d'inscription
+    accueil = anonyme.get(reverse("public_accueil")).content.decode()
+    assert 'method="post"' in accueil and "csrfmiddlewaretoken" in accueil
+    assert "n° d'inscription ou de CIN" in accueil
+    cin = cand.inscrit.cin
+    assert len(cin) == 8, cin
+    for saisie in (cin, f"{cin[:4]} {cin[4:]}"):
+        page_cin = anonyme.post(reverse("public_resultat"), {"numero": saisie}).content.decode()
+        assert "Mohamed ABDELLATIF" in page_cin and "<b>5</b> / 6" in page_cin, saisie
+        assert "N° d'inscription 104525" in page_cin, page_cin[-1500:]
+    page_n = anonyme.post(reverse("public_resultat"), {"numero": "104525"}).content.decode()
+    assert "Mohamed ABDELLATIF" in page_n, "le n° d'inscription par le formulaire"
+    # une CIN dans l'adresse (lien « ?numero= ») ne donne rien ; sans son zéro de tête
+    # non plus : 7 chiffres sont un n° d'inscription
+    assert "Aucun résultat publié" in anonyme.get(
+        reverse("public_resultat") + f"?numero={cin}").content.decode()
+    if cin.startswith("0"):
+        assert "Aucun résultat publié" in anonyme.post(
+            reverse("public_resultat"), {"numero": cin[1:]}).content.decode()
+    assert "Aucun résultat publié" in anonyme.post(
+        reverse("public_resultat"), {"numero": "99999999"}).content.decode()
+    print("  publication : note consultée par n° de CIN (formulaire, jamais dans l'adresse) OK")
 
     quiz.note_admission = 4
     quiz.save(update_fields=["note_admission"])

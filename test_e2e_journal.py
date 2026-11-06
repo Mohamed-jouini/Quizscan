@@ -86,7 +86,7 @@ def main():
     assert "identification" in gestes, "réattribution d'une copie non tracée"
     assert "note" in gestes, "note manuscrite non tracée"
     entree = Modification.objects.get(copie=copie, action="identification")
-    assert entree.avant == "non attribuée" and entree.apres == "BRUNO B", (
+    assert entree.avant == "non attribuée" and entree.apres == "B BRUNO", (
         f"valeurs mal tracées : {entree.avant!r} → {entree.apres!r}")
     assert entree.auteur_nom == "jr_prof", f"auteur : {entree.auteur_nom!r}"
     note = Modification.objects.get(copie=copie, action="note")
