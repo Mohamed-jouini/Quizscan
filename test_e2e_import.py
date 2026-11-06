@@ -11,6 +11,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import io
+import time
 import zipfile
 from xml.sax.saxutils import escape
 
@@ -24,6 +25,7 @@ call_command("migrate", verbosity=0)
 
 import openpyxl
 import pymupdf
+import pytesseract
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
@@ -129,6 +131,55 @@ def make_xlsx(rows):
     return buf.getvalue()
 
 
+def pdf_arabe(html, taille=None):
+    """PDF arabe à vrai texte, écrit par PyMuPDF dans la police de l'application."""
+    polices = os.path.join(os.path.dirname(importers.__file__), "fonts")
+    histoire = pymupdf.Story(
+        html=f'<body dir="rtl">{html}</body>',
+        user_css="@font-face { font-family: naskh; src: url(NotoNaskhArabic-Regular.ttf); }"
+                 "body { font-family: naskh; direction: rtl; text-align: right; "
+                 + (f"font-size: {taille}; " if taille else "") + "}",
+        archive=pymupdf.Archive(polices))
+    tampon = io.BytesIO()
+    ecrivain = pymupdf.DocumentWriter(tampon)
+    page = ecrivain.begin_page(pymupdf.paper_rect("a4"))
+    histoire.place(pymupdf.paper_rect("a4") + (50, 50, -50, -50))
+    histoire.draw(page)
+    ecrivain.end_page()
+    ecrivain.close()
+    return tampon.getvalue()
+
+
+def en_image(pdf, dpi=200):
+    """Le même PDF sans texte, comme scanné : chaque page remise en simple image."""
+    source = pymupdf.open(stream=pdf, filetype="pdf")
+    scan = pymupdf.open()
+    for page in source:
+        pix = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
+        nouvelle = scan.new_page(width=page.rect.width, height=page.rect.height)
+        nouvelle.insert_image(nouvelle.rect, pixmap=pix)
+    scan.set_metadata({"producer": "Scanner"})
+    return scan.tobytes(deflate=True)
+
+
+# questionnaire arabe à puces, sans réponses, comme celui de l'utilisateur (6 novembre 2026)
+QUESTIONS_OCR = [("ما هي عاصمة تونس؟", ["صفاقس", "تونس", "سوسة", "بنزرت"]),
+                 ("كم عدد قارات العالم؟", ["5", "6", "7", "8"]),
+                 ("ما هو أطول نهر في العالم؟", ["الأمازون", "النيل", "اليانغتسي", "المسيسيبي"])]
+HTML_OCR = "<h2>بنك أسئلة — ثقافة عامة</h2>" + "".join(
+    f"<p><b>{n}.</b> {q}</p><ul>"
+    + "".join(f"<li>{lettre}) {c}</li>" for lettre, c in zip("أبتث", choix)) + "</ul>"
+    for n, (q, choix) in enumerate(QUESTIONS_OCR, start=1))
+
+
+def tesseract_arabe():
+    """Tesseract et son arabe sont-ils là ? (l'image Docker : oui ; un poste : pas toujours)"""
+    try:
+        return "ara" in pytesseract.get_languages()
+    except pytesseract.TesseractNotFoundError:
+        return False
+
+
 def check_questionnaire(items, errors, source):
     assert not errors, f"{source} : erreurs {errors}"
     assert len(items) == 4, f"{source} : {len(items)} questions"
@@ -202,25 +253,66 @@ def main():
             raise AssertionError("PDF sans texte accepté")
     print("  PDF sans texte : la cause dite (Print to PDF ou scan), le fichier à envoyer ✔")
 
+    # lignes telles que l'OCR les rend (questionnaire de l'utilisateur, imprimé avec
+    # « Microsoft Print to PDF ») : titre, lettre perdue, doublée ou collée au nombre,
+    # choix illisible (sa place gardée), point du n° de question perdu
+    lues = ["بنك أسئلة [] ثقافة عامة",
+            "1. ما هي عاصمة تونس؟", ") صفاقس", "ب) تونس", "تث) سوسة", "ث) بنزرت",
+            "2. كم عدد قارات العالم؟", "5)", "ب)6", "ث) ة8",
+            "3 ما هو أطول نهر في العالم؟", "أ) الأمازون", "ب) النيل", "ت) اليانغتسي",
+            "ث) المسيسيبي"]
+    items, errors = importers.parse_questions_text(lues, ocr=True)
+    assert not errors, errors
+    assert [q["text"] for q in items] == [q for q, _ in QUESTIONS_OCR], items
+    assert items[0]["choices"] == QUESTIONS_OCR[0][1], items[0]
+    assert items[1]["choices"] == ["5", "6", importers.A_RELIRE, "8"], items[1]
+    assert items[2]["choices"] == QUESTIONS_OCR[2][1], items[2]
+    assert [q["correct"] for q in items] == [None, None, None], items
+    print("  OCR : lettre perdue, doublée ou collée, choix illisible « (à relire) », "
+          "n° sans point ✔")
+
+    # PDF sans texte, en images (scan) : sans Tesseract ou sans son arabe, le message
+    # d'avant (quoi envoyer à la place) ; avec, les questions lues par OCR
+    scan = en_image(pdf_arabe(HTML_OCR, taille="13pt"))
+    assert not pymupdf.open(stream=scan, filetype="pdf")[0].get_text().strip()
+    vrai_moteur, vraies_langues = pytesseract.pytesseract.tesseract_cmd, pytesseract.get_languages
+    for panne in ("Tesseract absent", "arabe absent"):
+        if panne == "Tesseract absent":
+            pytesseract.pytesseract.tesseract_cmd = "tesseract-introuvable"
+        else:
+            pytesseract.get_languages = lambda *a, **k: ["eng", "fra"]
+        try:
+            importers.parse_questions_file("scan.pdf", scan, langue="ar")
+        except importers.ImportError_ as exc:
+            assert "texte lisible" in str(exc) and "document scanné" in str(exc), exc
+        else:
+            raise AssertionError(f"{panne} : PDF sans texte accepté")
+        finally:
+            pytesseract.pytesseract.tesseract_cmd = vrai_moteur
+            pytesseract.get_languages = vraies_langues
+    print("  PDF sans texte, Tesseract ou son arabe absent : le fichier à envoyer dit ✔")
+    if tesseract_arabe():
+        debut = time.perf_counter()
+        items, errors = importers.parse_questions_file("scan.pdf", scan, langue="ar")
+        duree = time.perf_counter() - debut
+        assert not errors, errors
+        assert [len(q["choices"]) for q in items] == [4, 4, 4], items
+        assert all(q["ocr"] and q["qtype"] == "qcm" and q["correct"] is None
+                   for q in items), items
+        assert "عاصمة تونس" in items[0]["text"], items[0]
+        assert items[1]["choices"] == ["5", "6", "7", "8"], items[1]
+        print(f"  PDF sans texte, lu par OCR : 3 questions à 4 choix, en {duree:.1f} s ✔")
+    else:
+        print("  PDF sans texte, lu par OCR : non essayé ici (Tesseract ou son arabe absent)")
+
     # PDF arabe à vrai texte (écrit ici par PyMuPDF) : relu en formes de présentation,
     # espaces insécables et parenthèse du choix retournée (« ب( ») — remis en ordre
-    polices = os.path.join(os.path.dirname(importers.__file__), "fonts")
-    histoire = pymupdf.Story(
-        html='<body dir="rtl"><p>1. ما هي عاصمة تونس؟</p><p>أ) صفاقس</p><p>ب) تونس *</p>'
-             '<p>ت) سوسة</p><p>2. كم عدد قارات العالم؟</p><p>أ) 5</p><p>ب) 6</p><p>ت) 7 *</p></body>',
-        user_css="@font-face { font-family: naskh; src: url(NotoNaskhArabic-Regular.ttf); }"
-                 "body { font-family: naskh; direction: rtl; text-align: right; }",
-        archive=pymupdf.Archive(polices))
-    tampon = io.BytesIO()
-    ecrivain = pymupdf.DocumentWriter(tampon)
-    page = ecrivain.begin_page(pymupdf.paper_rect("a4"))
-    histoire.place(pymupdf.paper_rect("a4") + (50, 50, -50, -50))
-    histoire.draw(page)
-    ecrivain.end_page()
-    ecrivain.close()
-    brut = pymupdf.open(stream=tampon.getvalue(), filetype="pdf")[0].get_text()
+    arabe = pdf_arabe("<p>1. ما هي عاصمة تونس؟</p><p>أ) صفاقس</p><p>ب) تونس *</p>"
+                      "<p>ت) سوسة</p><p>2. كم عدد قارات العالم؟</p><p>أ) 5</p><p>ب) 6</p>"
+                      "<p>ت) 7 *</p>")
+    brut = pymupdf.open(stream=arabe, filetype="pdf")[0].get_text()
     assert "ﻭ" in brut or "ﺗ" in brut or "ﺗ" in brut, "le PDF ne rend plus de formes"
-    items, errors = importers.parse_questions_file("arabe.pdf", tampon.getvalue())
+    items, errors = importers.parse_questions_file("arabe.pdf", arabe)
     assert not errors and [q["correct"] for q in items] == [1, 2], (items, errors)
     assert items[0]["text"] == "ما هي عاصمة تونس؟" and items[0]["choices"][1] == "تونس", items
     assert importers.texte_normalise("Question 1 (2 pts)") == "Question 1 (2 pts)"
@@ -304,6 +396,21 @@ def main():
     assert not any(niveau == "error" for niveau, _ in notes), notes
     assert q_md.questions_sans_corrige.count() == 2, "la correction n'attendrait pas le corrigé"
     print("Web : questionnaire Markdown sans réponses importé, questions à compléter dites ✔")
+
+    # le PDF sans texte, par la page de l'épreuve : lu par OCR, à relire et à compléter
+    if tesseract_arabe():
+        q_ocr = Quiz.objects.create(title="Culture générale (scan)", class_group=group,
+                                    owner=teacher, language="ar")
+        r = c.post(f"/quiz/{q_ocr.pk}/", {
+            "import_questions": "1", "file": SimpleUploadedFile("qcm1.pdf", scan)},
+            follow=True)
+        notes = [(m.level_tag, str(m)) for m in r.context["messages"]]
+        assert q_ocr.questions.count() == 3, notes
+        assert any(niveau == "warning" and "reconnaissance de caractères (OCR)" in texte
+                   and "Relisez-les" in texte for niveau, texte in notes), notes
+        assert any("3 question(s) sans bonne réponse" in texte for _, texte in notes), notes
+        assert not any(niveau == "error" for niveau, _ in notes), notes
+        print("Web : PDF sans texte importé par OCR, questions à relire et à compléter dites ✔")
     Quiz.objects.filter(owner=teacher).delete()
     teacher.delete()
     print("\n✅ TEST DES IMPORTS RÉUSSI")

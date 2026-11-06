@@ -723,7 +723,8 @@ def quiz_detail(request, pk):
             if import_form.is_valid():
                 f = import_form.cleaned_data["file"]
                 try:
-                    items, errors = importers.parse_questions_file(f.name, f.read())
+                    items, errors = importers.parse_questions_file(f.name, f.read(),
+                                                                   langue=quiz.language)
                 except importers.ImportError_ as exc:
                     items, errors = [], [str(exc)]
                 except Exception as exc:  # noqa: BLE001 — fichier corrompu
@@ -732,6 +733,12 @@ def quiz_detail(request, pk):
                 if n:
                     messages.success(request, f"{n} question(s) importée(s) depuis "
                                               f"« {f.name} ».")
+                if any(it.get("ocr") for it in items):
+                    messages.warning(
+                        request, "Ce PDF n'a pas de texte : ses questions ont été lues par "
+                                 "reconnaissance de caractères (OCR). Relisez-les dans le "
+                                 "tableau des questions : une lettre ou un chiffre peut y "
+                                 "être mal lu.")
                 sans_corrige = [next_order + k for k, it in enumerate(items)
                                 if it["qtype"] == "qcm" and it["correct"] is None]
                 if sans_corrige:

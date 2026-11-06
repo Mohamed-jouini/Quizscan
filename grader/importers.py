@@ -3,8 +3,9 @@
 Formats acceptés (fiche technique : « Import Excel / PDF / Word ») :
   - Excel (.xlsx / .xlsm) : un tableau avec une ligne d'en-tête ;
   - Word (.docx)          : paragraphes et tableaux ;
-  - PDF (.pdf)            : texte du document (PDF « texte », pas un scan ni
-                            une impression « Microsoft Print to PDF ») ;
+  - PDF (.pdf)            : texte du document ; un PDF sans texte (scan,
+                            impression « Microsoft Print to PDF ») est lu par
+                            OCR, pour les questionnaires (ocr_pdf) ;
   - Texte (.txt / .csv), Markdown (.md) : puces, titres et gras sont ignorés.
 
 Questionnaire au format texte (Word, PDF, .txt, .md) — une question numérotée,
@@ -38,6 +39,10 @@ QUESTION_EXTS = (".xlsx", ".xlsm", ".csv", ".txt", ".md", ".markdown", ".docx", 
 
 class ImportError_(ValueError):
     """Fichier illisible ou contenu non reconnu (message pour l'utilisateur)."""
+
+
+class PdfSansTexte(ImportError_):
+    """PDF lisible, mais sans texte : ses lettres sont des images ou des dessins."""
 
 
 def norm(s):
@@ -135,7 +140,7 @@ def _pdf_lines(data):
         cause = ("Il a été imprimé avec « Microsoft Print to PDF », qui transforme les "
                  "lettres en dessins" if imprime
                  else "Ses lettres y sont des images ou des dessins (document scanné ?)")
-        raise ImportError_(f"Ce PDF ne contient pas de texte lisible. {cause}. Importez "
+        raise PdfSansTexte(f"Ce PDF ne contient pas de texte lisible. {cause}. Importez "
                            "plutôt le fichier d'origine (Word, texte ou Markdown .md), ou "
                            "un PDF créé depuis Word par « Enregistrer sous… › PDF ».")
     return lines
@@ -558,9 +563,52 @@ def sans_markdown(ligne):
     return ligne.replace("**", "").replace("__", "").strip()
 
 
-def parse_questions_text(lines):
+_LETTRES_CHOIX = "A-Ja-j" + "".join(ARABIC_LETTERS) + "ا"
+# Ce que l'OCR fait d'un choix : lettre perdue (« ) الأمازون »), doublée (« تث) النيل »),
+# ou, devant un nombre, lettre perdue et ordre inversé (« أ) 5 » lu « 5) »).
+_CHOIX_OCR = re.compile(rf"^\s*([{_LETTRES_CHOIX}]{{1,2}})?\s*[)(]+\s*(.*)$")
+_NOMBRE_OCR = re.compile(r"^\s*(\d{1,4})\s*[)(]\s*$")
+_Q_SANS_POINT = re.compile(r"^\s*(\d{1,3})\s+([^\W\d_].*)$")
+_LETTRE_COLLEE = re.compile(r"^[ء-ي](\d+)$")      # « ة8 » : 8
+
+
+A_RELIRE = "(à relire)"
+
+
+def _choix_ocr(ligne, attendu):
+    """(position, texte) du choix lu par l'OCR, ou None si la ligne n'en est pas un.
+    Position : celle de la lettre lue, ou celle attendue (attendu : le nombre de choix
+    déjà lus) quand l'OCR a perdu la lettre. Une lettre plus loin que l'attendue (deux
+    au plus) : les choix d'entre-deux n'ont pas été lus."""
+    if attendu >= MAX_CHOICES:
+        return None
+    nombre = _NOMBRE_OCR.match(ligne)
+    if nombre:
+        return attendu, nombre.group(1)
+    m = _CHOIX_OCR.match(ligne)
+    if not m or not m.group(2).strip():
+        return None
+    position = attendu
+    if m.group(1):
+        lues = {letter_index(l) for l in m.group(1)} - {None}
+        if attendu not in lues:
+            plus_loin = [p for p in lues if attendu < p <= attendu + 2 and p < MAX_CHOICES]
+            if not plus_loin:
+                return None
+            position = min(plus_loin)
+    texte = m.group(2).strip()
+    collee = _LETTRE_COLLEE.match(texte)
+    return position, (collee.group(1) if collee else texte)
+
+
+def parse_questions_text(lines, ocr=False):
     """Texte libre -> (questions, erreurs). Voir le format en tête de module.
-    Le Markdown d'un questionnaire (« **1.** … », « - أ) … ») se lit aussi."""
+    Le Markdown d'un questionnaire (« **1.** … », « - أ) … ») se lit aussi.
+
+    ocr : lignes lues par OCR (ocr_pdf). Le n° d'une question peut y perdre un
+    chiffre (« 0. » pour 10.) : il ne sert que de repère, l'ordre est celui des
+    lignes ; une question doit avoir un texte, et un choix se reconnaît même
+    quand l'OCR en a perdu ou doublé la lettre (_choix_ocr)."""
     items, cur = [], None
 
     def close():
@@ -580,6 +628,26 @@ def parse_questions_text(lines):
             cur["points"] = _points(m_pts.group(1))
             continue
         m_q = _Q_START.match(line)
+        if ocr and m_q and not re.search(r"[^\W\d_]", m_q.group(2)):
+            m_q = None            # « 5) » : un choix dont l'OCR a perdu la lettre
+        if ocr and not m_q and (cur is None or len(cur["choices"]) >= 2):
+            # « 7 ما هي … ؟ » : l'OCR a perdu le point du n° ; une question (texte
+            # terminé par « ؟ » ou de 4 mots et plus), après une question complète
+            m_q = _Q_SANS_POINT.match(line)
+            if m_q and not (m_q.group(2).rstrip().endswith(("؟", "?"))
+                            or len(m_q.group(2).split()) >= 4):
+                m_q = None
+        if ocr and cur is not None and not m_q:
+            lu = _choix_ocr(line, len(cur["choices"]))
+            if lu is not None:
+                position, texte_choix = lu
+                while len(cur["choices"]) < position:      # choix illisible : sa place
+                    cur["choices"].append(A_RELIRE)
+                if _MARK.search(texte_choix):
+                    texte_choix = _MARK.sub("", texte_choix).strip()
+                    cur["correct"] = position
+                cur["choices"].append(texte_choix)
+                continue
         m_c = _CHOICE.match(line)
         if m_q:
             close()
@@ -755,8 +823,37 @@ def parse_questions_rows(rows):
     return questions, errors
 
 
-def parse_questions_file(name, data):
-    """Fichier Excel / CSV / Word / PDF / texte -> (questions, erreurs)."""
+def _questions_du_pdf(data, langue):
+    """Questions d'un PDF : son texte ; s'il n'en a pas (imprimé avec « Microsoft
+    Print to PDF », scanné), ce que l'OCR y lit. Chaque question lue par OCR porte
+    « ocr » : à relire. Sans Tesseract, le message dit quoi envoyer à la place."""
+    try:
+        return parse_questions_text(_pdf_lines(data))
+    except PdfSansTexte as sans_texte:
+        import pymupdf
+
+        from . import ocr_pdf
+        try:
+            with pymupdf.open(stream=data, filetype="pdf") as doc:
+                if doc.page_count > ocr_pdf.PAGES_MAX:
+                    raise ImportError_(
+                        f"{sans_texte} La lecture par OCR s'arrête à {ocr_pdf.PAGES_MAX} "
+                        f"pages ; ce PDF en a {doc.page_count}.") from None
+                lignes = ocr_pdf.lignes_du_pdf(doc, langue)
+        except ocr_pdf.OcrIndisponible:
+            raise sans_texte from None
+        questions, erreurs = parse_questions_text(lignes, ocr=True)
+        if not questions and not erreurs:
+            raise ImportError_(f"{sans_texte} La lecture par reconnaissance de caractères "
+                               "(OCR) n'y a trouvé aucune question numérotée.") from None
+        for q in questions:
+            q["ocr"] = True
+        return questions, erreurs
+
+
+def parse_questions_file(name, data, langue="fr"):
+    """Fichier Excel / CSV / Word / PDF / texte -> (questions, erreurs).
+    langue : celle du quiz, pour l'OCR d'un PDF sans texte."""
     ext = _ext(name)
     if ext in (".xlsx", ".xlsm"):
         return parse_questions_rows(_xlsx_rows(data))
@@ -772,7 +869,7 @@ def parse_questions_file(name, data):
             lines.extend([b] if isinstance(b, str) else ["\t".join(b)])
         return parse_questions_text(lines)
     if ext == ".pdf":
-        return parse_questions_text(_pdf_lines(data))
+        return _questions_du_pdf(data, langue)
     if ext in (".txt", ".md", ".markdown"):
         return parse_questions_text(_text_lines(data))
     raise ImportError_("Format non pris en charge : utilisez un fichier "

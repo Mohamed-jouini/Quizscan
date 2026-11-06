@@ -11,6 +11,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt "gunicorn>=23,<27"
 
+# Tesseract tourne en plusieurs exemplaires à la fois (lecture des copies, OCR d'un
+# questionnaire en PDF sans texte, 4 fils chacune) : un fil chacun, sinon leurs
+# fils OpenMP se disputent les processeurs et tout ralentit. Placé après les
+# paquets : le changer ne les fait pas réinstaller.
+ENV OMP_THREAD_LIMIT=1
+
 COPY . .
 
 RUN chmod +x docker-entrypoint.sh
