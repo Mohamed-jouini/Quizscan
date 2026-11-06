@@ -589,6 +589,11 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   le bord court, à 100 %, et pliez au milieu ; le sujet d'un QCM peut prendre le même format,
   sa feuille de réponses reste en A4. Au scan, passez les feuilles dépliées, en A3, recto seul :
   la page de garde est retrouvée sur la feuille dans n'importe quel sens, le reste n'est pas lu.
+- Copies d'écrit nominatives en A4 (talon, nom imprimé ou n° de place) : chaque page de
+  rédaction reprend l'en-tête de la page de garde (talon à découper, bande du titre et QR de
+  l'étudiant), pour qu'une feuille détachée reste à qui elle est. Elles n'ont toujours ni
+  cadre ni code de page : scannées avec la copie, elles sont ignorées, seule la page de garde
+  porte la note.
 - Si les questions changent après impression, **régénérez la fiche** avant de
   scanner (la disposition est figée dans la fiche PDF).
 - L'OCR d'un nom manuscrit n'est jamais parfait : les copies non identifiées

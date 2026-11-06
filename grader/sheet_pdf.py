@@ -176,6 +176,10 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
     # Concours : identification anonyme (n° de série + étiquette autocollante),
     # pas de nom de classe ni de cases nom/prénom manuscrites.
     concours = getattr(quiz, "auto_enroll", False)
+    # pages d'une copie : à l'écrit, la page de garde et ses pages de rédaction (le
+    # talon disait « page 1 / 1 » sur une copie de 3 pages)
+    pages_copie = len(layout["pages"]) + (
+        int(layout.get("pages_redaction", 0) or 0) if mode == "ecrit" else 0)
 
     def draw(text, x_mm_, y_pt, size, bold=False, align="left", gray=None):
         if gray is not None:
@@ -219,7 +223,7 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
         if talon:
             # nom, titre et consigne sur le talon, au-dessus du trait de coupe
             _dessiner_talon(c, draw, student, head_title,
-                            f"{T['page']} {pidx + 1} / {len(layout['pages'])}",
+                            f"{T['page']} {pidx + 1} / {pages_copie}",
                             consigne, T, lang)
         else:
             draw(head_title, L.PAGE_W / 2, _y(24.0),
@@ -237,6 +241,7 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
         # Zone nom / prénom  (ou emplacement réservé à une étiquette autocollante)
         nb = page["name_boxes"]
         qr_zone = page.get("qr")
+        image_qr = None         # QR imprimé de l'étudiant (copie nominative)
         # Pas de cases nom/prénom :
         # - fiche de concours à étiquette : l'identification est portée par
         #   l'étiquette apposée dessous, le candidat n'écrit rien (fiche
@@ -317,45 +322,10 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
             c.rect(zx0 * mm, _y(by_, bh_), zw * mm, bh_ * mm)
             c.setDash()
         elif qr_zone and student is not None:
-            payload = f"QS|{quiz.pk}|{student.pk}"
-            qx, qy, qw, qh = qr_zone["rect"]
-            c.drawImage(_qr_image(payload), qx * mm, _y(qy, qh),
-                        qw * mm, qh * mm)
-            bx_, by_, bw_, bh_ = qr_zone["band"]
-            c.setFillGray(0.955)
-            c.roundRect(bx_ * mm, _y(by_, bh_), bw_ * mm, bh_ * mm, 2 * mm,
-                        stroke=0, fill=1)
-            c.setFillGray(0.0)
-            sub_txt = num_txt = ""
-            if talon:
-                # le nom est sur le talon découpé : dans le cadre, rien
-                # qui identifie l'étudiant à l'œil
-                title_txt = quiz.title
-            elif places is not None:
-                # copie anonyme : le n° de place, ni nom ni n° d'inscription
-                title_txt = T["place"].format(n=places.get(student.pk, "—"))
-            else:
-                title_txt = f"{student.last_name} {student.first_name}"
-                sub_txt = T["personal"]
-                num_txt = (f"N° {student.student_number}"
-                           if student.student_number else "")
-            if not sub_txt:
-                # seul dans la bande : centré
-                draw(title_txt, bx_ + bw_ / 2, _y(by_ + bh_ / 2 + 1.7), 14,
-                     bold=True, align="center")
-            elif lang == "ar":
-                draw(title_txt, bx_ + bw_ - 5, _y(by_ + 9.0), 14,
-                     bold=True, align="right")
-                draw(sub_txt, bx_ + bw_ - 5, _y(by_ + 15.5), 8,
-                     align="right", gray=0.4)
-                if num_txt:
-                    draw(num_txt, bx_ + 5, _y(by_ + 15.5), 8, gray=0.4)
-            else:
-                draw(title_txt, bx_ + 5, _y(by_ + 9.0), 14, bold=True)
-                draw(sub_txt, bx_ + 5, _y(by_ + 15.5), 8, gray=0.4)
-                if num_txt:
-                    draw(num_txt, bx_ + bw_ - 5, _y(by_ + 15.5), 8,
-                         align="right", gray=0.4)
+            # une fois par copie : les pages de rédaction reprennent ce QR
+            image_qr = _qr_image(f"QS|{quiz.pk}|{student.pk}")
+            _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang,
+                            image_qr)
 
         # Grille de numéro d'inscription
         grid = page.get("id_grid")
@@ -478,12 +448,36 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
                          _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
                     c.showPage()
                     continue
-                draw(f"{T['redaction']} {k + 2} / {n + 1} — {quiz.title}",
-                     L.PAGE_W / 2, _y(16.0), 9, bold=True, align="center")
-                draw(T["ne_pas_scanner"], L.PAGE_W / 2, _y(21.0), 7.5,
-                     align="center", gray=0.45)
-                _dessiner_lignes(c, {"y0": 30.0, "y1": L.PAGE_H - 16.0,
-                                     "pas": L.NOTE_LIGNE})
+                if image_qr is not None:
+                    # Copie nominative : chaque page de rédaction reprend l'en-tête de la
+                    # page de garde, talon (nom, n°, à découper) et bande du titre avec le
+                    # QR de l'étudiant : une page détachée reste à qui elle est (demande
+                    # de l'utilisateur, 6 novembre 2026). Toujours sans cadre ni code de
+                    # page : au scan, elle reste « ignorée », seule la page de garde
+                    # porte la note.
+                    page_txt = f"{T['page']} {k + 2} / {n + 1}"
+                    if talon:
+                        _dessiner_talon(c, draw, student, head_title, page_txt,
+                                        T["redaction"], T, lang)
+                    else:
+                        draw(head_title, L.PAGE_W / 2, _y(24.0), 13, bold=True,
+                             align="center")
+                        draw(f"{T['redaction']} — {page_txt}", L.PAGE_W / 2, _y(28.5), 8,
+                             align="center")
+                    _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T,
+                                    lang, image_qr)
+                    _, bande_y, _, bande_h = qr_zone["band"]
+                    draw(T["ne_pas_scanner"], L.PAGE_W / 2, _y(bande_y + bande_h + 5.0),
+                         7.5, align="center", gray=0.45)
+                    _dessiner_lignes(c, {"y0": bande_y + bande_h + 12.0,
+                                         "y1": L.PAGE_H - 16.0, "pas": L.NOTE_LIGNE})
+                else:
+                    draw(f"{T['redaction']} {k + 2} / {n + 1} — {quiz.title}",
+                         L.PAGE_W / 2, _y(16.0), 9, bold=True, align="center")
+                    draw(T["ne_pas_scanner"], L.PAGE_W / 2, _y(21.0), 7.5,
+                         align="center", gray=0.45)
+                    _dessiner_lignes(c, {"y0": 30.0, "y1": L.PAGE_H - 16.0,
+                                         "pas": L.NOTE_LIGNE})
                 c.showPage()
 
     c.save()
@@ -582,6 +576,44 @@ def _taille_pour(texte, taille, largeur_mm, plancher=7.0):
     while taille > plancher and text_width_pt(texte, taille) / mm > largeur_mm:
         taille -= 0.5
     return taille
+
+
+def _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang, image_qr):
+    """QR de l'étudiant et bande grise d'une copie nominative, à la place que lui
+    donne la disposition : sur la page de garde et, à l'identique, sur les pages de
+    rédaction d'un écrit."""
+    qx, qy, qw, qh = qr_zone["rect"]
+    c.drawImage(image_qr, qx * mm, _y(qy, qh), qw * mm, qh * mm)
+    bx_, by_, bw_, bh_ = qr_zone["band"]
+    c.setFillGray(0.955)
+    c.roundRect(bx_ * mm, _y(by_, bh_), bw_ * mm, bh_ * mm, 2 * mm, stroke=0, fill=1)
+    c.setFillGray(0.0)
+    sub_txt = num_txt = ""
+    if talon:
+        # le nom est sur le talon découpé : dans le cadre, rien
+        # qui identifie l'étudiant à l'œil
+        title_txt = quiz.title
+    elif places is not None:
+        # copie anonyme : le n° de place, ni nom ni n° d'inscription
+        title_txt = T["place"].format(n=places.get(student.pk, "—"))
+    else:
+        title_txt = f"{student.last_name} {student.first_name}"
+        sub_txt = T["personal"]
+        num_txt = f"N° {student.student_number}" if student.student_number else ""
+    if not sub_txt:
+        # seul dans la bande : centré
+        draw(title_txt, bx_ + bw_ / 2, _y(by_ + bh_ / 2 + 1.7), 14,
+             bold=True, align="center")
+    elif lang == "ar":
+        draw(title_txt, bx_ + bw_ - 5, _y(by_ + 9.0), 14, bold=True, align="right")
+        draw(sub_txt, bx_ + bw_ - 5, _y(by_ + 15.5), 8, align="right", gray=0.4)
+        if num_txt:
+            draw(num_txt, bx_ + 5, _y(by_ + 15.5), 8, gray=0.4)
+    else:
+        draw(title_txt, bx_ + 5, _y(by_ + 9.0), 14, bold=True)
+        draw(sub_txt, bx_ + 5, _y(by_ + 15.5), 8, gray=0.4)
+        if num_txt:
+            draw(num_txt, bx_ + bw_ - 5, _y(by_ + 15.5), 8, align="right", gray=0.4)
 
 
 def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang):
