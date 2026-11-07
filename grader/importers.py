@@ -203,13 +203,10 @@ _CENTRE = _entetes("المركز", "مركز الامتحان", "مركز الا
                    "centre d examen", "centre examen")
 _SALLE = _entetes("القاعة", "قاعة", "قاعة الامتحان", "salle", "salle d examen",
                   "n salle", "numero de salle")
-_ETAB = _entetes("etablissement", "etablissement d origine", "ecole", "lycee", "college",
-                 "faculte", "institut", "المؤسسة", "المعهد", "المدرسة")
-_MAIL = _entetes("email", "e mail", "mail", "adresse mail", "adresse email",
-                 "adresse e mail", "courriel", "البريد الالكتروني")
+# Plus d'établissement ni d'e-mail : retirés du registre le 7 novembre 2026, leurs
+# colonnes sont ignorées comme toute colonne inconnue.
 _EXTRAS = {"cin": _CIN, "cin_lieu": _CIN_LIEU, "cin_date": _CIN_DATE,
-           "naissance": _NAISSANCE, "centre": _CENTRE, "salle": _SALLE,
-           "etablissement": _ETAB, "email": _MAIL}
+           "naissance": _NAISSANCE, "centre": _CENTRE, "salle": _SALLE}
 _FULL = _entetes("nom et prenom", "nom prenom", "prenom et nom", "prenom nom",
                  "nom complet", "etudiant", "candidat")
 
@@ -372,7 +369,7 @@ def _a_defaut(colonnes, cle, indice, nb_colonnes):
 
 def rows_to_fiches(rows):
     """Lignes de tableau -> [{nom, prenom, numero, cin, cin_lieu, cin_date,
-    naissance, centre, salle, etablissement, email}] ; les colonnes sont
+    naissance, centre, salle}] ; les colonnes sont
     reconnues par leur intitulé (vides sinon). Sans intitulé : nom, prénom, n°.
 
     Avec des intitulés mais aucun pour le nom ni pour le n°, on refuse plutôt

@@ -186,9 +186,10 @@ class InscritAdmin(TitresFrancais, admin.ModelAdmin):
     titre_modification = "Modifier l'inscription"
     list_display = ("numero", "prenom", "nom", "cin", "cin_lieu", "cin_date",
                     "date_naissance", "centre", "salle", "cree_le")
-    search_fields = ("numero", "nom", "prenom", "cin", "centre", "salle", "email",
-                     "etablissement")
+    search_fields = ("numero", "prenom", "nom", "cin", "centre", "salle")
     readonly_fields = ("cree_le", "cree_par")
+    # retirés de la fiche le 7 novembre 2026 : les colonnes restent, sans saisie
+    exclude = ("email", "etablissement")
 
 
 @admin.register(Communique)

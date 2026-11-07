@@ -157,7 +157,7 @@ def verifier_etiquette_oubliee(teacher):
     client = Client()
     client.force_login(teacher)
     groupe, quiz, (oublie, complet) = creer_quiz("EP-OUBLI", teacher, id_mode="sticker",
-                                                 auto_enroll=True, note_admission=45,
+                                                 auto_enroll=True, note_admission=PAGE_1 + 3,
                                                  resultats_publies=True)
     disposition, pdf = preparer(quiz)
     lot = envoyer(quiz, copie(pdf, disposition, oublie, {0})
@@ -212,7 +212,7 @@ def verifier_etiquette_oubliee(teacher):
     quiz.note_admission = None
     r = lignes(quiz)[oublie.pk]
     assert services.admissions(quiz, [r]) is None and r["resultat"] is None
-    quiz.note_admission = 40
+    quiz.note_admission = PAGE_1 - 2
     r = lignes(quiz)[oublie.pk]
     services.admissions(quiz, [r])
     assert r["resultat"] == "admis", r["resultat"]
@@ -220,7 +220,7 @@ def verifier_etiquette_oubliee(teacher):
     r = lignes(quiz)[oublie.pk]
     services.admissions(quiz, [r])
     assert r["resultat"] == "en_attente", r["resultat"]
-    quiz.note_admission, quiz.wrong_penalty = 45, 0.0
+    quiz.note_admission, quiz.wrong_penalty = PAGE_1 + 3, 0.0
 
     # La page se rattache à la main, le candidat de la page précédente présélectionné.
     ecran = client.get(f"/copies/{page2.pk}/").content.decode()

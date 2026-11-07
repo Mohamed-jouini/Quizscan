@@ -34,10 +34,8 @@
         <div>{{ form.date_naissance.label_tag }}{{ form.date_naissance }}{{ form.date_naissance.errors }}</div>
         <div>{{ form.centre.label_tag }}{{ form.centre }}{{ form.centre.errors }}</div>
         <div>{{ form.salle.label_tag }}{{ form.salle }}{{ form.salle.errors }}</div>
-        <div>{{ form.email.label_tag }}{{ form.email }}{{ form.email.errors }}</div>
-        <div class="form-inscription__large">{{ form.etablissement.label_tag }}{{ form.etablissement }}{{ form.etablissement.errors }}</div>
       </div>
-      <span class="helptext"><b>Facultatifs : centre, salle, e-mail et établissement.</b> CIN : 8 chiffres (ou n° de passeport). Le QR code de la carte contient le n° d'inscription, le prénom et le nom — jamais la CIN.</span>
+      <span class="helptext"><b>Facultatifs : centre et salle.</b> CIN : 8 chiffres (ou n° de passeport). Le QR code de la carte contient le n° d'inscription, le prénom et le nom — jamais la CIN.</span>
       <p><button class="btn" name="inscrire" value="1" type="submit">{% if modifie %}Enregistrer{% else %}Inscrire et créer son QR code{% endif %}</button>
         {% if modifie %}<a class="btn secondary" href="{% url 'inscriptions' %}">Annuler</a>{% endif %}</p>
     </form>
@@ -55,7 +53,7 @@
     <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
     <label for="id_q" class="visually-hidden">Rechercher un inscrit</label>
     <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
-           placeholder="Rechercher — prénom, nom, n° d'inscription, CIN, centre, salle ou e-mail">
+           placeholder="Rechercher — prénom, nom, n° d'inscription, CIN, centre ou salle">
     {% if recherche %}
     <a class="recherche-etudiant__effacer" href="{% url 'inscriptions' %}"
        title="Effacer la recherche" aria-label="Effacer la recherche">
@@ -93,7 +91,7 @@
         <tr class="ligne-lien">
           <td class="col-choix"><input type="checkbox" name="choix" value="{{ i.pk }}" aria-label="Choisir {{ i.nom_complet|default:i.numero }}"></td>
           <td>{% if user.is_superuser or i.cree_par_id == user.pk %}<a class="ligne-lien__cible ligne-lien__nom" href="?modifier={{ i.pk }}#fiche-inscrit"><b>{{ i.numero }}</b></a>{% else %}<b>{{ i.numero }}</b>{% endif %}</td>
-          <td>{{ i.prenom }} <b>{{ i.nom|default:"—" }}</b>{% if i.email %}<span class="helptext">{{ i.email }}</span>{% endif %}{% if i.etablissement %}<span class="helptext">{{ i.etablissement }}</span>{% endif %}
+          <td>{{ i.prenom }} <b>{{ i.nom|default:"—" }}</b>
             {% if not i.fiche_complete %}<span class="badge warn" title="Nom, CIN, lieu ou date de délivrance, ou date de naissance manquant">fiche à compléter</span>{% endif %}</td>
           <td>{{ i.cin|default:"—" }}</td>
           <td>{{ i.cin_lieu|default:"—" }}</td>

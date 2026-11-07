@@ -52,12 +52,14 @@ def _date_passee():
 
 class InscritForm(forms.ModelForm):
     """Inscription d'un étudiant au registre de l'établissement : les colonnes
-    de la liste officielle de l'institut (voir importers.modele_candidats_xlsx)."""
+    de la liste officielle de l'institut (voir importers.modele_candidats_xlsx).
+    Plus d'adresse e-mail ni d'établissement (demande de l'utilisateur, 7 novembre
+    2026) : les colonnes restent en base, ni affichées ni modifiées."""
 
     class Meta:
         model = Inscrit
         fields = ["numero", "prenom", "nom", "cin", "cin_lieu", "cin_date",
-                  "date_naissance", "centre", "salle", "email", "etablissement"]
+                  "date_naissance", "centre", "salle"]
         labels = {"cin_lieu": "Lieu de délivrance", "cin_date": "Date de délivrance"}
         widgets = {
             "numero": _texte("104523"),
@@ -69,11 +71,8 @@ class InscritForm(forms.ModelForm):
             "date_naissance": _date_passee(),
             "centre": _texte("Lycée pilote de Sfax"),
             "salle": _texte("Salle 12"),
-            "email": forms.EmailInput(attrs={"placeholder": "prenom.nom@exemple.tn",
-                                             "autocomplete": "off"}),
-            "etablissement": _texte("Faculté de droit de Tunis"),
         }
-        help_texts = {"cin": "", "centre": "", "etablissement": ""}
+        help_texts = {"cin": "", "centre": ""}
         error_messages = {"numero": {
             "unique": "Ce n° d'inscription est déjà attribué (voir la liste)."}}
 
@@ -130,7 +129,7 @@ class InscritForm(forms.ModelForm):
 
     def clean(self):
         donnees = super().clean()
-        for champ in ("cin_lieu", "centre", "salle", "etablissement"):
+        for champ in ("cin_lieu", "centre", "salle"):
             if donnees.get(champ):
                 donnees[champ] = " ".join(donnees[champ].split())
         naissance, delivrance = donnees.get("date_naissance"), donnees.get("cin_date")

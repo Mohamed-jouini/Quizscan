@@ -329,11 +329,13 @@ def test_registre(c, prof, autre):
     assert "inscrite par un collègue" in r.content.decode()
     print("  fiche d'un collègue : pas modifiée, et il le voit dans le rapport OK")
 
-    # formulaire : les colonnes du fichier, e-mail et établissement facultatifs
+    # formulaire : les colonnes du fichier, ni e-mail ni établissement (retirés le
+    # 7 novembre 2026)
     page = c.get(url).content.decode()
     for champ in ("id_numero", "id_nom", "id_prenom", "id_cin", "id_cin_lieu", "id_cin_date",
-                  "id_date_naissance", "id_centre", "id_salle", "id_email", "id_etablissement"):
+                  "id_date_naissance", "id_centre", "id_salle"):
         assert f'id="{champ}"' in page, champ
+    assert 'id="id_email"' not in page and 'id="id_etablissement"' not in page
     assert page.index('id="id_numero"') < page.index('id="id_nom"') < page.index('id="id_cin_lieu"')
     assert 'max="9999-12-31"' in page, "année à six chiffres possible au clavier"
     base = {"inscrire": "1", "numero": "886003", "nom": "Mabrouk", "prenom": "Ali",

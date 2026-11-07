@@ -15,8 +15,6 @@ import datetime
 import io
 import re
 
-from django.core.exceptions import ValidationError
-from django.core.validators import validate_email
 from django.db import transaction
 from PIL import Image
 from reportlab.lib.pagesizes import A4
@@ -130,13 +128,13 @@ def ajouter_a_classe(groupe, inscrits):
 
 def filtrer_inscrits(qs, recherche):
     """Chaque mot doit se trouver dans le nom, le prénom, le n°, la CIN, le
-    centre, la salle, l'établissement ou l'adresse e-mail."""
+    centre ou la salle (plus l'e-mail ni l'établissement, retirés de la fiche le
+    7 novembre 2026 : une ligne trouvée par eux ne montrerait pas pourquoi)."""
     from django.db.models import Q
     for mot in (recherche or "").split():
         qs = qs.filter(Q(nom__icontains=mot) | Q(prenom__icontains=mot)
                        | Q(numero__icontains=mot) | Q(cin__icontains=mot)
-                       | Q(centre__icontains=mot) | Q(salle__icontains=mot)
-                       | Q(etablissement__icontains=mot) | Q(email__icontains=mot))
+                       | Q(centre__icontains=mot) | Q(salle__icontains=mot))
     return qs
 
 
@@ -206,18 +204,10 @@ def _valeurs_lues(ligne, remarques):
     if cin and not cin_valide(cin):
         remarques.append(f"CIN invalide : « {cin[:30]} » non retenue.")
         cin = ""
-    email = texte("email", 254)
-    if email:
-        try:
-            validate_email(email)
-        except ValidationError:
-            remarques.append(f"E-mail invalide : « {email[:60]} » non retenu.")
-            email = ""
     return {"cin": cin, "cin_lieu": texte("cin_lieu", 80),
             "cin_date": _date_lue(ligne, "cin_date", "Date de délivrance", remarques),
             "date_naissance": _date_lue(ligne, "naissance", "Date de naissance", remarques),
-            "centre": texte("centre", 150), "salle": texte("salle", 60),
-            "etablissement": texte("etablissement", 150), "email": email}
+            "centre": texte("centre", 150), "salle": texte("salle", 60)}
 
 
 def _cin_libre(valeurs, numero, proprietaires, remarques):
@@ -375,7 +365,7 @@ CARTE_QR = 30.0
 
 
 def cartes_pdf(inscrits, etablissement=""):
-    """Planche A4 de cartes d'inscription (10 par page) : NOM, prénom,
+    """Planche A4 de cartes d'inscription (10 par page) : prénom, NOM,
     n° et QR code. À découper ; chaque étudiant garde la sienne."""
     load_fonts()
     buf = io.BytesIO()
@@ -403,8 +393,8 @@ def cartes_pdf(inscrits, etablissement=""):
         c.setFillColorRGB(0.12, 0.42, 0.27)
         c.rect((x0 + 3) * mm, y(y0 + 11), (CARTE_W - 6) * mm, 8 * mm, stroke=0, fill=1)
         c.setFillGray(1.0)
-        bandeau = (f"Carte d'inscription — {i.etablissement}" if i.etablissement
-                   else etablissement or "Carte d'inscription")
+        # plus l'établissement de la fiche : retiré du registre le 7 novembre 2026
+        bandeau = etablissement or "Carte d'inscription"
         _draw_text(c, _ellipsize(bandeau, 8.5, CARTE_W - 12, bold=True),
                    (x0 + 6) * mm, y(y0 + 8.2), 8.5, bold=True)
         c.setFillGray(0.0)

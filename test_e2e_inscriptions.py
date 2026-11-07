@@ -46,29 +46,32 @@ def test_identite(c, prof, autre):
     url = reverse("inscriptions")
     page = c.get(url).content.decode()
     for champ in ("id_cin", "id_cin_lieu", "id_cin_date", "id_date_naissance", "id_centre",
-                  "id_salle", "id_email", "id_etablissement"):
+                  "id_salle"):
         assert f'id="{champ}"' in page, champ
+    # plus d'adresse e-mail ni d'établissement (demande de l'utilisateur, 7 novembre 2026)
+    for champ in ("id_email", "id_etablissement"):
+        assert f'id="{champ}"' not in page, champ
+    assert "e-mail" not in page.split('id="fiche-inscrit"')[1].split("</form>")[0]
     r = c.post(url, {"inscrire": "1", "nom": "Khelifi", "prenom": "Omar",
                      "numero": "207001", "cin": " 0987 6543 ", "cin_lieu": "Sfax",
                      "cin_date": "2024-01-10", "date_naissance": "2006-03-15",
-                     "email": "omar.k@exemple.tn",
-                     "etablissement": "  Lycée  pilote de Sfax "}, follow=True)
+                     "email": "omar.k@exemple.tn", "etablissement": "Lycée pilote"},
+               follow=True)
     i = Inscrit.objects.get(numero="207001")
-    assert (i.cin, i.date_naissance, i.email, i.etablissement) == (
-        "09876543", datetime.date(2006, 3, 15), "omar.k@exemple.tn",
-        "Lycée pilote de Sfax"), (i.cin, i.date_naissance, i.email, i.etablissement)
-    print("  inscription complète : CIN nettoyée, date, e-mail, établissement OK")
+    assert (i.cin, i.date_naissance) == ("09876543", datetime.date(2006, 3, 15)), \
+        (i.cin, i.date_naissance)
+    assert (i.email, i.etablissement) == ("", ""), "champs retirés : rien d'enregistré"
+    print("  inscription complète : CIN nettoyée, date ; ni e-mail ni établissement OK")
 
-    # contrôles : CIN déjà prise, CIN invalide, naissance future, e-mail faux
+    # contrôles : CIN déjà prise, CIN invalide, naissance future
     for donnees, erreur in (
             ({"cin": "09876543"}, "déjà celle de Omar KHELIFI"),
             ({"cin": "12-34"}, "N° de CIN invalide"),
-            ({"date_naissance": "2099-01-01"}, "invraisemblable"),
-            ({"email": "pas-un-mail"}, "adresse de courriel valide")):
+            ({"date_naissance": "2099-01-01"}, "invraisemblable")):
         r = c.post(url, dict(_fiche("TEST", "X", "207002", "22220002"), **donnees))
         assert r.status_code == 200 and erreur in r.content.decode(), (donnees, erreur)
     assert not Inscrit.objects.filter(numero="207002").exists()
-    print("  contrôles : CIN en double ou invalide, date future, e-mail faux refusés OK")
+    print("  contrôles : CIN en double ou invalide, date future refusées OK")
 
     # modifier : le registre fait foi, les listes reliées suivent
     groupe = ClassGroup.objects.create(name="Identité — classe", owner=prof)
@@ -78,10 +81,9 @@ def test_identite(c, prof, autre):
     assert "Modifier l'inscription de Omar KHELIFI" in page and 'value="09876543"' in page
     c.post(url, {"inscrire": "1", "modifier": i.pk, "nom": "KHELIFI", "prenom": "Omar Ali",
                  "numero": "207001", "cin": "09876543", "cin_lieu": "Sfax",
-                 "cin_date": "2024-01-10", "date_naissance": "2006-03-15",
-                 "email": "omar@exemple.tn", "etablissement": "Lycée pilote de Sfax"})
+                 "cin_date": "2024-01-10", "date_naissance": "2006-03-15"})
     i.refresh_from_db()
-    assert i.prenom == "Omar Ali" and i.email == "omar@exemple.tn"
+    assert i.prenom == "Omar Ali"
     assert groupe.students.get().first_name == "Omar Ali"
     c2 = Client()
     c2.force_login(autre)
@@ -97,22 +99,26 @@ def test_identite(c, prof, autre):
                      "numero": "207003"})
     assert r.content.decode().count("Champ obligatoire.") == 4
     c.post(url, _fiche("TOUMI", "Rim", "207003", "11223344", modifier=t.pk,
-                       date_naissance="2005-12-01", etablissement="Lycée Bourguiba"))
+                       date_naissance="2005-12-01"))
     t.refresh_from_db()
-    assert t.fiche_complete and t.etablissement == "Lycée Bourguiba"
+    assert t.fiche_complete
     assert "fiche à compléter" not in c.get(url + "?q=207003").content.decode()
     print("  ancienne fiche incomplète : signalée, complétée par « Modifier » OK")
 
-    # recherche par CIN ou établissement ; carte PDF avec CIN et naissance
+    # recherche par CIN ; carte PDF avec CIN et naissance. Un établissement resté en base
+    # (saisi avant le 7 novembre 2026) ne se cherche ni ne s'imprime plus.
     assert c.get(url + "?q=11223344").context["n_trouves"] == 1
-    assert c.get(url + "?q=Bourguiba").context["n_trouves"] == 1
+    Inscrit.objects.filter(pk=t.pk).update(etablissement="Lycée Bourguiba",
+                                           email="rim@exemple.tn")
+    assert c.get(url + "?q=Bourguiba").context["n_trouves"] == 0
     carte = c.get(reverse("inscriptions_cartes") + f"?choix={t.pk}").content
     texte = pymupdf.open(stream=carte, filetype="pdf")[0].get_text()
-    assert "CIN 11223344" in texte and "01/12/2005" in texte and "Lycée Bourguiba" in texte
+    assert "CIN 11223344" in texte and "01/12/2005" in texte and "Bourguiba" not in texte
+    assert "rim@exemple.tn" not in c.get(url + "?q=207003").content.decode()
     qr = _decode_png(c.get(reverse("inscrit_qr", args=[t.pk])).content)
     assert "11223344" not in qr, "la CIN ne doit pas être dans le QR"
-    print("  recherche par CIN / établissement ; carte avec CIN et date ; "
-          "CIN absente du QR OK")
+    print("  recherche par CIN ; carte avec CIN et date ; ancien établissement ni cherché "
+          "ni imprimé ; CIN absente du QR OK")
 
 
 def _xlsx(lignes):
@@ -142,21 +148,19 @@ def _fiche(nom, prenom, numero, cin, **autres):
     """Envoi complet du formulaire d'inscription."""
     return dict({"inscrire": "1", "nom": nom, "prenom": prenom, "numero": numero,
                  "cin": cin, "cin_lieu": "Tunis", "cin_date": "2023-02-01",
-                 "date_naissance": "2005-06-01",
-                 "email": f"{prenom.lower()}.{cin}@exemple.tn",
-                 "etablissement": "Lycée pilote"}, **autres)
+                 "date_naissance": "2005-06-01"}, **autres)
 
 
 def test_registre(c, prof):
     url = reverse("inscriptions")
     # nom, prénom et n° seuls ne suffisent pas : l'identité de la liste officielle
-    # est obligatoire ; le centre, la salle, l'e-mail et l'établissement non
+    # est obligatoire ; le centre et la salle non
     r = c.post(url, {"inscrire": "1", "nom": "BEN SALEM", "prenom": "Samia",
                      "numero": "104523"})
     assert r.status_code == 200 and r.content.decode().count("Champ obligatoire.") == 4
     assert not Inscrit.objects.filter(numero="104523").exists()
     page = c.get(url).content.decode()
-    assert "Facultatifs : centre, salle, e-mail et établissement" in page
+    assert "Facultatifs : centre et salle." in page
     print("  inscription incomplète refusée : CIN, lieu et date de délivrance, naissance "
           "obligatoires OK")
 
@@ -456,7 +460,7 @@ def main():
     test_scan_et_public(c, prof)
     print("Communiqués :")
     test_communiques(c, prof, autre)
-    print("Identité : CIN, date de naissance, établissement, e-mail :")
+    print("Identité : CIN et date de naissance :")
     test_identite(c, prof, autre)
     print("\n✅ TESTS INSCRIPTIONS ET ESPACE PUBLIC RÉUSSIS")
 

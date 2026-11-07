@@ -23,7 +23,7 @@ import pymupdf
 from PIL import Image
 
 # (django.setup et migrate : à l'import de ce module)
-from test_e2e_etiquette_pages import NB_QCM, copie, creer_quiz, envoyer, lignes, preparer
+from test_e2e_etiquette_pages import NB_QCM, PAGE_1, copie, creer_quiz, envoyer, lignes, preparer
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -90,7 +90,7 @@ def verifier_tiff(teacher):
     print("  image démesurée dans le TIFF : refusée seule, le lot continue")
 
     # Une image seule garde son nom ; un faux .tif reste signalé, sans arrêter le lot.
-    _, quiz, (a, _b) = creer_quiz("SC-TIFF-1", teacher, nb_qcm=42, id_mode="sticker",
+    _, quiz, (a, _b) = creer_quiz("SC-TIFF-1", teacher, nb_qcm=PAGE_1, id_mode="sticker",
                                   auto_enroll=True)
     disposition, pdf = preparer(quiz)
     envoi = SimpleUploadedFile("seule.tif", en_tiff(copie(pdf, disposition, a, {0})))
@@ -118,7 +118,7 @@ def pdf_bitonal(bitonal):
 def verifier_noir_et_blanc(teacher):
     """Mode « noir et blanc » du scanner à 300 ppp : plusieurs étiquettes, car c'est la
     variété des motifs qui fait apparaître la panne du décodeur (1 sur 3 ratée en PDF)."""
-    _, quiz, (a, _b) = creer_quiz("SC-NB", teacher, nb_qcm=42, id_mode="sticker",
+    _, quiz, (a, _b) = creer_quiz("SC-NB", teacher, nb_qcm=PAGE_1, id_mode="sticker",
                                   auto_enroll=True)
     disposition, pdf = preparer(quiz)
     page = disposition["pages"][0]
@@ -174,7 +174,8 @@ def verifier_versos_blancs(teacher):
     assert etats == ["ok", "ignoree", "ok", "ignoree", "ok", "ignoree", "no_match", "ignoree"], etats
     rangs = lignes(quiz)
     assert rangs[a.pk]["score"] == NB_QCM, rangs[a.pk]
-    assert rangs[b.pk]["score"] == 42 and rangs[b.pk]["questions_manquantes"] == 8, rangs[b.pk]
+    assert rangs[b.pk]["score"] == PAGE_1 and rangs[b.pk]["questions_manquantes"] == 8, \
+        rangs[b.pk]["score"]
 
     # Seule la vraie page manquante est signalée, pas les 4 versos.
     ecran = client.get(f"/quiz/{quiz.pk}/resultats/").content.decode()
