@@ -16,7 +16,7 @@ from django.core.files.base import ContentFile
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
-from . import droits, services, sheet_pdf
+from . import droits, journal, services, sheet_pdf
 from . import layout as layout_mod
 from .forms import EpreuveEcritForm, EpreuveOralForm, UploadForm
 
@@ -92,13 +92,18 @@ def _ecrit(request, quiz, fil=None):
     if request.method == "POST":
         droits.exiger(request.user, droits.CREER, "modifier l'épreuve")
         if "reglages" in request.POST:
+            ancienne_note = quiz.note_admission     # avant : le formulaire valide l'instance
             form = EpreuveEcritForm(request.POST, instance=quiz)
             if form.is_valid():
                 _renommer(request, quiz)
                 form.save()
                 services.question_note(quiz)
-                # Le sujet n'est jamais scanné : on le refait tout de suite, comme pour un QCM.
-                if form.has_changed():
+                journal.noter(request.user, "note_admission", quiz=quiz,
+                              objet="Note minimale d'admission",
+                              avant=ancienne_note, apres=quiz.note_admission)
+                # Le sujet n'est jamais scanné : on le refait tout de suite, comme pour un
+                # QCM ; pas pour la note minimale, qui n'y est pas imprimée.
+                if set(form.changed_data) - {"note_admission"}:
                     services.actualiser_sujet(quiz, forcer=True)
                 messages.success(request, "Épreuve enregistrée.")
                 return redirect("quiz_detail", pk=quiz.pk)
@@ -149,11 +154,15 @@ def _oral(request, quiz, fil=None):
     if request.method == "POST":
         if "reglages" in request.POST:
             droits.exiger(request.user, droits.CREER, "modifier l'épreuve")
+            ancienne_note = quiz.note_admission     # avant : le formulaire valide l'instance
             form = EpreuveOralForm(request.POST, instance=quiz)
             if form.is_valid():
                 _renommer(request, quiz)
                 form.save()
                 services.question_note(quiz)
+                journal.noter(request.user, "note_admission", quiz=quiz,
+                              objet="Note minimale d'admission",
+                              avant=ancienne_note, apres=quiz.note_admission)
                 messages.success(request, "Épreuve enregistrée.")
                 return redirect("quiz_detail", pk=quiz.pk)
         elif "generer" in request.POST:

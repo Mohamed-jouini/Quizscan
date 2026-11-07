@@ -139,8 +139,29 @@ def test_ecrit(c, prof, groupe):
     assert rows["CHERIF"]["score"] == 11.5
     print("  écran de vérification : note illisible saisie à la main OK")
 
-    quiz.note_admission = 10
-    quiz.save(update_fields=["note_admission"])
+    # note minimale réglée sur la page de l'écrit (demande de l'utilisateur, 7 novembre 2026)
+    page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
+    assert 'name="note_admission"' in page and "Note minimale de réussite" in page
+    reglages = {"reglages": "1", "title": quiz.title, "sujet_texte": quiz.sujet_texte,
+                "entete": quiz.entete, "duree": quiz.duree, "date_epreuve": "",
+                "note_sur": "20", "id_mode": quiz.id_mode, "id_digits": "6",
+                "pages_redaction": "2", "format_impression": quiz.format_impression}
+    r = c.post(reverse("quiz_detail", args=[quiz.pk]), dict(reglages, note_admission="25"))
+    assert r.status_code == 200 and "Entre 0 et 20" in r.content.decode()
+    quiz.refresh_from_db()
+    assert quiz.note_admission is None
+    sujet_avant = quiz.subject_pdf.name
+    r = c.post(reverse("quiz_detail", args=[quiz.pk]), dict(reglages, note_admission="10,0"))
+    assert r.status_code == 302
+    quiz.refresh_from_db()
+    assert quiz.note_admission == 10.0, quiz.note_admission
+    assert quiz.subject_pdf.name == sujet_avant, "le sujet n'imprime pas la note minimale"
+    assert quiz.modifications.filter(action="note_admission").exists(), "non tracée au journal"
+    c.post(reverse("quiz_detail", args=[quiz.pk]), reglages)          # formulaire d'avant
+    quiz.refresh_from_db()
+    assert quiz.note_admission == 10.0, "un envoi sans le champ garde la note minimale"
+    print("  note minimale de réussite réglée sur la page de l'écrit (10 retenu, 25 refusé), "
+          "tracée au journal OK")
     page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
     assert "<th>Bonnes réponses</th>" not in page and "<th>Note</th>" in page
     assert "79 %" in page and "Non réussi" in page and "Réussi" in page
@@ -195,6 +216,24 @@ def test_oral(c, groupe):
         "notes": "1", f"note_{e['AMRI'].pk}": "15,5"})
     assert services.compute_results(quiz) == []
     print("  oral : plus de saisie à la main (champ absent, envoi fabriqué ignoré) OK")
+
+    # ---- note minimale réglée sur la page de l'oral (demande de l'utilisateur, 7 novembre)
+    assert 'name="note_admission"' in page and "Note minimale de réussite" in page
+    reglages = {"reglages": "1", "title": quiz.title, "note_sur": "20"}
+    r = c.post(reverse("quiz_detail", args=[quiz.pk]), dict(reglages, note_admission="21"))
+    assert r.status_code == 200 and "Entre 0 et 20" in r.content.decode()
+    r = c.post(reverse("quiz_detail", args=[quiz.pk]), dict(reglages, note_admission="12,5"))
+    assert r.status_code == 302
+    quiz.refresh_from_db()
+    assert quiz.note_admission == 12.5, quiz.note_admission
+    assert quiz.modifications.filter(action="note_admission").exists(), "non tracée au journal"
+    c.post(reverse("quiz_detail", args=[quiz.pk]), reglages)          # formulaire d'avant
+    quiz.refresh_from_db()
+    assert quiz.note_admission == 12.5, "un envoi sans le champ garde la note minimale"
+    c.post(reverse("quiz_detail", args=[quiz.pk]), dict(reglages, note_admission=""))
+    quiz.refresh_from_db()
+    assert quiz.note_admission is None, "vide : plus de note minimale"
+    print("  oral : note minimale réglée sur sa page (12,5 retenu, 21 refusé, vide retiré) OK")
 
     # ---- fiches d'évaluation : imprimées, notées par l'examinateur, scannées
     c.post(reverse("quiz_detail", args=[quiz.pk]), {"generer": "1"})

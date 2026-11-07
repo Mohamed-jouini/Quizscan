@@ -7,7 +7,7 @@ de l'application ; pas de menu latéral, une barre de navigation en haut.
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Espace public{% endblock %} — QuizScan</title>
+<title>{% block title %}Espace public{% endblock %}</title>
 <link rel="stylesheet" href="{% statique 'grader/quizscan.css' %}">
 <script src="{% statique 'grader/theme.js' %}"></script>
 </head>
@@ -15,10 +15,7 @@ de l'application ; pas de menu latéral, une barre de navigation en haut.
 {% with un=request.resolver_match.url_name %}
 <header class="pub-tete">
   <div class="pub-tete__dedans">
-    <a class="pub-marque" href="{% url 'public_accueil' %}">
-      <span class="side__mark"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg></span>
-      <span class="pub-marque__nom">QuizScan<small>Espace public</small></span>
-    </a>
+    {# plus de logo QuizScan dans l'espace public (demande de l'utilisateur, 7 novembre 2026) #}
     <nav class="pub-nav" aria-label="Espace public">
       <a class="{% if un == 'public_accueil' %}is-active{% endif %}" href="{% url 'public_accueil' %}">Accueil</a>
       <a class="{% if un == 'public_resultat' or un == 'public_epreuve' %}is-active{% endif %}" href="{% url 'public_resultat' %}">Résultats</a>
@@ -33,7 +30,7 @@ de l'application ; pas de menu latéral, une barre de navigation en haut.
 <main class="pub-page">
 {% block content %}{% endblock %}
 </main>
-<footer class="pub-pied">QuizScan · résultats et communiqués publiés par l'établissement</footer>
+<footer class="pub-pied">Résultats et communiqués publiés par l'établissement</footer>
 {% endwith %}
 </body>
 </html>

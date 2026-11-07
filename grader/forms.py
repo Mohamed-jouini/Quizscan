@@ -429,22 +429,53 @@ class QuizForm(forms.ModelForm):
         return self.cleaned_data.get("note_sur") or 20.0
 
 
-class EpreuveEcritForm(forms.ModelForm):
+class _ChampNoteAdmission:
+    """Note minimale d'admission d'un écrit ou d'un oral, réglée sur la page de l'épreuve
+    comme sur celle d'un QCM, plus seulement depuis les résultats (demande de
+    l'utilisateur, 7 novembre 2026)."""
+    suite_concours = ""         # ce que deviennent les admis, dans un concours
+
+    def _preparer_note_admission(self):
+        note = self.fields["note_admission"]
+        note.required = False
+        note.label = ("Note minimale d'admission" if self.instance.auto_enroll
+                      else "Note minimale de réussite")
+        note.help_text = (f"Sur {self.instance.note_sur or 20:g} (ex. 10 pour 10 / 20). Vide : "
+                          "pas de liste des admis."
+                          + (f" {self.suite_concours}" if self.instance.auto_enroll else ""))
+        note.widget.attrs.update({"class": "champ--court", "placeholder": "—"})
+
+    def clean_note_admission(self):
+        """Vide : pas de note minimale. Un envoi sans ce champ (formulaire d'avant) garde
+        celle de l'épreuve. Pas au-delà du barème : personne ne serait admis."""
+        if "note_admission" not in self.data:
+            return self.instance.note_admission
+        valeur = self.cleaned_data.get("note_admission")
+        if valeur is None:
+            return None
+        bareme = self.cleaned_data.get("note_sur") or self.instance.note_sur or 20.0
+        if not 0 <= valeur <= bareme:
+            raise forms.ValidationError(f"Entre 0 et {bareme:g}, le barème de l'épreuve.")
+        return valeur
+
+
+class EpreuveEcritForm(_ChampNoteAdmission, forms.ModelForm):
     """Réglages d'une épreuve écrite : sujet, barème, copie à imprimer."""
 
     anonymat = _champ_anonymat()
+    suite_concours = "Les admis passent à l'étape suivante du concours."
 
     class Meta:
         model = Quiz
-        fields = ["sujet_texte", "entete", "duree", "date_epreuve", "note_sur", "id_mode",
-                  "id_digits", "anonymat", "pages_redaction", "format_impression"]
+        fields = ["sujet_texte", "entete", "duree", "date_epreuve", "note_sur", "note_admission",
+                  "id_mode", "id_digits", "anonymat", "pages_redaction", "format_impression"]
         widgets = {"sujet_texte": forms.Textarea(attrs={
                        "rows": 9, "placeholder": "Ex. Racontez un voyage qui vous a "
                                                  "marqué…\n\nVous décrirez les lieux "
                                                  "et vos impressions."}),
                    "entete": forms.Textarea(attrs={"rows": 3}),
                    "date_epreuve": SAISIE_DATE}
-        field_classes = {"note_sur": DecimalField}
+        field_classes = {"note_sur": DecimalField, "note_admission": DecimalField}
         labels = {"id_digits": "Nombre de chiffres du n° d'inscription",
                   "pages_redaction": "Pages lignées après la page de garde",
                   "format_impression": "Format des copies"}
@@ -468,6 +499,7 @@ class EpreuveEcritForm(forms.ModelForm):
         if self.instance.language == "ar":
             self.fields["sujet_texte"].widget.attrs["dir"] = "rtl"
         self.fields["anonymat"].initial = self.instance.anonymat
+        self._preparer_note_admission()
 
     def clean_format_impression(self):
         return self.cleaned_data.get("format_impression") or self.instance.format_impression
@@ -478,11 +510,18 @@ class EpreuveEcritForm(forms.ModelForm):
         return data
 
 
-class EpreuveOralForm(forms.ModelForm):
+class EpreuveOralForm(_ChampNoteAdmission, forms.ModelForm):
+    """Réglages d'une épreuve orale : barème et note minimale."""
+    suite_concours = "Les admis de l'oral, dernière étape, sont les admis au concours."
+
     class Meta:
         model = Quiz
-        fields = ["note_sur"]
-        field_classes = {"note_sur": DecimalField}
+        fields = ["note_sur", "note_admission"]
+        field_classes = {"note_sur": DecimalField, "note_admission": DecimalField}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._preparer_note_admission()
 
 
 class QuestionForm(forms.ModelForm):

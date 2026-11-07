@@ -110,10 +110,13 @@
       <input id="id_title" type="text" name="title" value="{{ quiz.title }}" maxlength="200" required>
       {{ form.note_sur.errors }}
       <label for="{{ form.note_sur.id_for_label }}">{{ form.note_sur.label }}</label>{{ form.note_sur }}
+      {{ form.note_admission.errors }}
+      <label for="{{ form.note_admission.id_for_label }}">{{ form.note_admission.label }}</label>{{ form.note_admission }}
+      <span class="helptext">{{ form.note_admission.help_text }}</span>
       <p><button class="btn secondary" name="reglages" value="1" type="submit">Enregistrer</button></p>
     </form>
     {% endif %}
-    <p class="helptext">Note minimale de réussite, liste des admis, bulletins et publication sur l'espace public : page <a href="{% url 'quiz_results' quiz.pk %}">Résultats</a>.</p>
+    <p class="helptext">Liste des admis, bulletins et publication sur l'espace public : page <a href="{% url 'quiz_results' quiz.pk %}">Résultats</a>.</p>
   </div>
 </div>
 
