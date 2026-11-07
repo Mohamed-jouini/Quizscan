@@ -386,6 +386,32 @@ def verifier_deux_feuilles(c, prof):
     assert sheet_pdf._cotes_a3(1, False) == [(4, 1), (2, 3)]
     assert sheet_pdf._cotes_a3(5, True) == [(1, 8), (7, 2), (3, 6), (5, 4)]
 
+    # Copie à talon de 8 pages : la 2e feuille, emboîtée (pages 3 à 6), se détache ; sa
+    # première page, la 3, porte le talon, la bande et le QR (demande de l'utilisateur,
+    # 7 novembre 2026). Les autres pages lignées, rien.
+    talon, groupe = creer_ecrit(c, prof, "A3-LONG-TALON", id_mode="qr", anonymat="talon",
+                                pages_redaction="6")
+    pdf = talon.sheet_pdf.read()
+    doc = ouvrir(pdf)
+    premiere = groupe.students.order_by("pk").first()
+    assert len(doc) == 4 * groupe.students.count(), len(doc)
+    assert pages_des_moities([doc[i] for i in range(4)], talon.title) == \
+        [(8, 1), (2, 7), (6, 3), (4, 5)]
+    avec_nom = {}
+    for index in range(4):
+        for droite in (False, True):
+            texte = doc[index].get_text(clip=moities(doc[index])[droite])
+            numero = int(re.search(rf"{talon.title} — page (\d+)", texte).group(1))
+            avec_nom[numero] = premiere.last_name in texte
+    assert sorted(n for n, oui in avec_nom.items() if oui) == [1, 3], avec_nom
+    texte3 = doc[2].get_text(clip=moities(doc[2])[1])
+    assert "Page 3 / 8" in texte3 and "Talon à découper" in texte3, texte3
+    zone = talon.layout_json["pages"][0]["qr"]
+    assert qr_de_la_moitie(render_page(pdf, 2), True, zone) == f"QS|{talon.pk}|{premiere.pk}"
+    assert qr_de_la_moitie(render_page(pdf, 2), False, zone) == "", "page 6 : rien"
+    print("  copie à talon de 8 pages : talon et QR sur la page de garde et sur la page 3, "
+          "première page de la 2e feuille OK")
+
 
 def verifier_a4_inchange(c, prof):
     quiz, _ = creer_ecrit(c, prof, "A3-COMPAT", format_impression="a4", pages_redaction="2")

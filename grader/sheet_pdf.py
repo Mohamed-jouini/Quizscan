@@ -445,14 +445,15 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
             # talon, quelle que soit la page.
             a3 = layout.get("format") == "a3"
             for k in range(n):
-                # Copie nominative, en A4 recto-verso : le recto de chaque feuille (pages
-                # 3, 5, 7) reprend l'en-tête de la page de garde, talon (nom, n°, à
-                # découper) et bande du titre avec le QR de l'étudiant : une feuille
-                # détachée reste à qui elle est. Le dos n'en porte pas, ni les pages de
-                # l'A3 plié : elles sont sur la même feuille que leur recto, ou que la page
-                # de garde (demandes de l'utilisateur, 6 et 7 novembre 2026). Toujours sans
-                # cadre ni code de page : au scan, une page lignée reste « ignorée ».
-                recto = not a3 and (k + 2) % 2 == 1
+                # Copie nominative : la première page de chaque feuille reprend l'en-tête de
+                # la page de garde, talon (nom, n°, à découper) et bande du titre avec le
+                # QR de l'étudiant : une feuille détachée reste à qui elle est. En A4
+                # recto-verso, ce sont les rectos (pages 3, 5, 7) ; en A3 plié, la page 3
+                # d'une copie de 8 pages, première page de la 2e feuille, emboîtée dans la
+                # 1re (pages 3 à 6). Les autres pages sont sur la même feuille qu'une page à
+                # en-tête : rien (demandes de l'utilisateur, 6 et 7 novembre 2026). Toujours
+                # sans cadre ni code de page : au scan, une page lignée reste « ignorée ».
+                recto = (k + 2) % 2 == 1 and (not a3 or k + 2 <= (n + 1) // 2)
                 if image_qr is not None and recto:
                     page_txt = f"{T['page']} {k + 2} / {n + 1}"
                     if talon:
@@ -466,10 +467,15 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
                     _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T,
                                     lang, image_qr)
                     _, bande_y, _, bande_h = qr_zone["band"]
-                    draw(T["non_lue"], L.PAGE_W / 2,
-                         _y(bande_y + bande_h + 5.0), 7.5, align="center", gray=0.45)
-                    _dessiner_lignes(c, {"y0": bande_y + bande_h + 12.0,
-                                         "y1": L.PAGE_H - 16.0, "pas": L.NOTE_LIGNE})
+                    if a3:
+                        # pas de « ne pas scanner » : la feuille A3 passe entière
+                        _dessiner_lignes(c, L.lignes_a3(bande_y + bande_h + L.A3_LIGNE,
+                                                        lang))
+                    else:
+                        draw(T["non_lue"], L.PAGE_W / 2,
+                             _y(bande_y + bande_h + 5.0), 7.5, align="center", gray=0.45)
+                        _dessiner_lignes(c, {"y0": bande_y + bande_h + 12.0,
+                                             "y1": L.PAGE_H - 16.0, "pas": L.NOTE_LIGNE})
                 elif a3:
                     _dessiner_lignes(c, L.lignes_a3(
                         L.TALON_COUPE + L.A3_LIGNE if talon else L.A3_HAUT, lang))

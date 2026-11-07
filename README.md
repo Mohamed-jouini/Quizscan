@@ -607,8 +607,9 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
 - Copies d'écrit nominatives (talon, nom imprimé ou n° de place) : en A4, le recto de chaque
   feuille (pages 1, 3, 5…) porte l'en-tête de la page de garde (talon à découper, bande du
   titre et QR de l'étudiant), pour qu'une feuille détachée reste à qui elle est ; le dos n'en
-  porte pas, seulement le n° de la page au pied. En A3 plié, seule la page de garde le porte :
-  les quatre pages sont sur la même feuille, et un seul coup de massicot retire le talon. Les
+  porte pas, seulement le n° de la page au pied. En A3 plié, la page de garde le porte, et la
+  page 3 d'une copie de 8 pages, première page de la 2e feuille (emboîtée, pages 3 à 6) ; les
+  autres pages sont sur la même feuille, et un seul coup de massicot retire les talons. Les
   pages lignées n'ont ni cadre ni code de page : scannées avec la copie, elles sont ignorées,
   seule la page de garde porte la note.
 - Si les questions changent après impression, **régénérez la fiche** avant de
