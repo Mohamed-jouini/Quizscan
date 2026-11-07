@@ -213,21 +213,19 @@ def main():
     assert rows == {"CHERIF": 13.5}, rows
     print("  écrit à talon : talon découpé, note 13,5 lue et affectée à CHERIF OK")
 
-    # pages de rédaction (demande de l'utilisateur, 6 novembre 2026) : chacune reprend
-    # l'en-tête de la page de garde, talon avec le nom et le n°, bande du titre et QR de
-    # l'étudiant ; toujours sans cadre ni code de page : au scan, elles restent ignorées
+    # pages de rédaction (demandes de l'utilisateur, 6 et 7 novembre 2026) : en recto-verso,
+    # le recto de chaque feuille reprend l'en-tête de la page de garde (talon, bande et QR),
+    # le dos non ; toujours sans cadre ni code de page : au scan, elles restent ignorées
     doc_e = pymupdf.open(stream=pdf_e, filetype="pdf")
     amri = ecrit.class_group.students.get(last_name="AMRI")
     assert ecrit.pages_redaction >= 1 and f"Page 1 / {pages_par_copie}" in doc_e[0].get_text(), \
         "le talon de la page de garde doit compter toutes les pages de la copie"
-    for k in range(1, pages_par_copie):
-        texte = doc_e[k].get_text()
-        for attendu in ("Sana AMRI", "N° 104501", f"Page {k + 1} / {pages_par_copie}",
-                        "Talon à découper", "Page non lue au scan"):
-            assert attendu in texte, (k, attendu, texte)
-        assert "Ne pas scanner" not in texte, "au dos de la page de garde en recto-verso"
-        lu, _, _ = cv2.QRCodeDetector().detectAndDecode(render_page(pdf_e, k))
-        assert lu == f"QS|{ecrit.pk}|{amri.pk}", (k, lu)
+    assert pages_par_copie == 2
+    texte = doc_e[1].get_text()                       # page 2 : au dos de la page de garde
+    assert not any(t in texte for t in ("AMRI", "104501", "Talon à découper",
+                                        "Page non lue au scan")), texte
+    assert "Rédaction talon — page 2" in texte, texte
+    assert cv2.QRCodeDetector().detectAndDecode(render_page(pdf_e, 1))[0] == ""
     lot = services.process_uploaded_files(ecrit, [
         SimpleUploadedFile("suite_decoupee.jpg",
                            jpg(simulate_scan(couper(render_page(pdf_e, 1), 30.0)))),
@@ -236,8 +234,8 @@ def main():
     assert [s for s, _ in statuts] == ["ignoree", "ignoree"], statuts
     rows = {r["student"].last_name: r["score"] for r in services.compute_results(ecrit)}
     assert rows == {"CHERIF": 13.5}, rows
-    print("  écrit à talon : talon, bande et QR sur chaque page de rédaction, "
-          "ignorées au scan OK")
+    print("  écrit à talon : page 2, au dos de la page de garde, sans en-tête ni QR, "
+          "ignorée au scan OK")
 
     # copie nominative sans talon : le nom, le n° et le QR sur chaque page de rédaction
     nominatif = Quiz.objects.create(title="Rédaction nominative", class_group=groupe,
@@ -254,14 +252,19 @@ def main():
     assert len(doc_n) == 4 * len(ETUDIANTS), len(doc_n)
     gardes = [k for k, p in enumerate(doc_n) if "RÉSERVÉ AU CORRECTEUR" in p.get_text()]
     assert gardes == [0, 4, 8], gardes
-    for k in (1, 2, 3):
+    # page 3, recto de la 2e feuille : l'en-tête ; pages 2 et 4, au dos : rien
+    texte = doc_n[2].get_text()
+    assert "Sana AMRI" in texte and "N° 104501" in texte and "Page 3 / 4" in texte \
+        and "Page non lue au scan" in texte, texte
+    lu, _, _ = cv2.QRCodeDetector().detectAndDecode(render_page(pdf_n, 2))
+    assert lu == f"QS|{nominatif.pk}|{amri.pk}", lu
+    for k in (1, 3):
         texte = doc_n[k].get_text()
-        assert "Sana AMRI" in texte and "N° 104501" in texte and f"Page {k + 1} / 4" in texte \
-            and "Page non lue au scan" in texte, (k, texte)
-        lu, _, _ = cv2.QRCodeDetector().detectAndDecode(render_page(pdf_n, k))
-        assert lu == f"QS|{nominatif.pk}|{amri.pk}", (k, lu)
-    print("  écrit nominatif : nom, n° et QR sur chaque page de rédaction ; 2 pages lignées "
-          "demandées, 3 imprimées, chaque page de garde sur un recto OK")
+        assert "AMRI" not in texte and "104501" not in texte, (k, texte)
+        assert f"Rédaction nominative — page {k + 1}" in texte, (k, texte)
+        assert cv2.QRCodeDetector().detectAndDecode(render_page(pdf_n, k))[0] == "", k
+    print("  écrit nominatif : nom, n° et QR au recto de chaque feuille (page 3), rien au dos "
+          "(pages 2 et 4) ; 2 pages lignées demandées, 3 imprimées OK")
 
     # ---- le prénom d'abord, partout (demande de l'utilisateur, 7 novembre 2026) : en arabe
     # « الاسم واللقب », comme la liste officielle, et de même en lettres latines

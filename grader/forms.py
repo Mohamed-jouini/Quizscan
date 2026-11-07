@@ -455,18 +455,13 @@ class EpreuveEcritForm(forms.ModelForm):
                                          "(2 → 3) ; en A3, 3 ou 7.",
                       "format_impression": "A3 : la page de garde et 3 pages lignées sur une "
                                            "feuille, imprimée recto-verso sur le bord court, à "
-                                           "100 %, puis coupée au milieu : deux feuilles A4, "
-                                           "pages 1/2 et 3/4, comme le format A4. Les pages "
-                                           "lignées vont jusqu'à la fin de la feuille."}
+                                           "100 %, puis pliée au milieu. Les pages lignées "
+                                           "vont jusqu'à la fin de la feuille."}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # facultatif à l'envoi : les formulaires d'avant ce choix gardent le format actuel
         self.fields["format_impression"].required = False
-        # copies d'écrit : la feuille A3 se coupe au milieu (7 novembre 2026) ; le sujet
-        # d'un QCM, lui, reste un livret plié (libellé du modèle)
-        self.fields["format_impression"].choices = [
-            ("a4", "A4"), ("a3", "A3 recto-verso, coupé en deux feuilles A4")]
         if self.instance.auto_enroll:
             self.fields["id_mode"].choices = [
                 c for c in Quiz.ID_MODES if c[0] in CONCOURS_ID_MODES]

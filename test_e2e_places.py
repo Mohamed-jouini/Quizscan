@@ -179,14 +179,14 @@ def main():
     ecrit = Quiz.objects.get(title="Rédaction places")
     assert ecrit.place_anonyme
     c.post(reverse("quiz_detail", args=[ecrit.pk]), {"generer": "1"})
-    # les pages de rédaction reprennent l'en-tête de la page de garde : le n° de place
-    # et le QR, jamais le nom ni le n° d'inscription
+    # le recto de chaque feuille reprend l'en-tête de la page de garde (n° de place et QR),
+    # le dos non (7 novembre 2026) ; jamais le nom ni le n° d'inscription
     ecrit.refresh_from_db()
     pages = textes(open(ecrit.sheet_pdf.path, "rb").read())
     par_copie = 1 + ecrit.layout_json["pages_redaction"]
     assert ecrit.pages_redaction >= 1 and len(pages) % par_copie == 0, len(pages)
-    for suite in pages[1:par_copie]:
-        assert "PLACE N° 1" in suite, suite
+    for numero, suite in enumerate(pages[1:par_copie], start=2):
+        assert ("PLACE N° 1" in suite) == (numero % 2 == 1), (numero, suite)
         assert not any(nom in suite or num in suite for nom, _, num in ETUDIANTS), suite
     page = c.get(reverse("quiz_detail", args=[ecrit.pk])).content.decode()
     assert "Liste de placement et d'émargement" in page

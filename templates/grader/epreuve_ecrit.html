@@ -70,14 +70,14 @@
           <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>
           <span><b>Copies</b>
             {% with n=quiz.layout_json.nb_copies p=quiz.layout_json.nb_pages %}{% if n %}<small>{{ n }} copie{{ n|pluralize }}, soit {{ p }} page{{ p|pluralize }} dans le PDF{% if quiz.layout_json.format == "a3" %} (recto et verso de chaque feuille){% endif %}</small>{% endif %}{% endwith %}
-            <small>{% if quiz.layout_json.format == "a3" %}page de garde + {{ quiz.layout_json.pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à couper au milieu (deux feuilles A4 : pages 1/2 et 3/4){% else %}{% with n=quiz.layout_json.pages_redaction|default:quiz.pages_redaction %}page de garde + {{ n }} page{{ n|pluralize }} lignée{{ n|pluralize }}, en A4 à 100 %, recto-verso sur le bord long{% endwith %}{% endif %}</small></span></a>
+            <small>{% if quiz.layout_json.format == "a3" %}page de garde + {{ quiz.layout_json.pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à plier au milieu{% else %}{% with n=quiz.layout_json.pages_redaction|default:quiz.pages_redaction %}page de garde + {{ n }} page{{ n|pluralize }} lignée{{ n|pluralize }}, en A4 à 100 %, recto-verso sur le bord long{% endwith %}{% endif %}</small></span></a>
         {% if quiz.place_anonyme %}<a class="document" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="M15 16l1.5 1.5L19 15"/></svg>
           <span><b>Liste de placement et d'émargement</b><small>n° de place et nom, pour le surveillant (signatures)</small></span></a>{% endif %}
       </div>
       {% else %}<p class="helptext">Enregistrez le sujet puis générez les documents.</p>{% endif %}
       <span class="helptext">Seule la page de garde est lue ; les pages lignées scannées avec elle (au dos, en recto-verso) sont ignorées.
-        {% if quiz.layout_json.format == "a3" %}Copies A3 : coupez chaque feuille au milieu, puis passez les feuilles A4 au scanner, recto-verso ou recto seul ; une feuille A3 entière se lit aussi.{% endif %}
+        {% if quiz.layout_json.format == "a3" %}Copies A3 : passez les feuilles dépliées, en format A3 et recto seul (le verso n'est pas lu).{% endif %}
         {% if quiz.id_mode == "sticker" or quiz.id_mode == "grid" %}Chaque étudiant colle son étiquette QR sur la page de garde{% if quiz.id_mode == "grid" %} ou noircit son n° d'inscription{% endif %}.{% endif %}</span>
     </div>
 

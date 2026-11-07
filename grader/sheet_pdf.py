@@ -105,7 +105,6 @@ LABELS = {
         # page lignée : en recto-verso, elle passe au scanner avec la page de garde
         "non_lue": "Page non lue au scan : seule la page de garde porte la note.",
         "pli": "pli au milieu",
-        "coupe": "couper au milieu : deux feuilles A4",
     },
     "ar": {
         "last": "اللقب", "first": "الاسم",
@@ -138,7 +137,6 @@ LABELS = {
         "redaction": "ورقة التحرير",
         "non_lue": "هذه الصفحة لا تُقرأ عند المسح الضوئي: العدد على صفحة الغلاف فقط.",
         "pli": "طيّ في الوسط",
-        "coupe": "قصّ في الوسط: ورقتان A4",
     },
 }
 
@@ -442,18 +440,20 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
         if mode == "ecrit" and pidx == len(layout["pages"]) - 1:
             n = int(layout.get("pages_redaction", 0) or 0)
             # A3 : les pages lignées sont sur la feuille de la page de garde (ou sur une
-            # feuille suivante), coupée ensuite au milieu en deux feuilles A4. Le massicot
-            # coupe toute la largeur : rien à écrire au-dessus du trait du talon, quelle
-            # que soit la page.
+            # feuille emboîtée dedans), pliée au milieu, et passent au scanner avec elle.
+            # Le massicot coupe toute la largeur : rien à écrire au-dessus du trait du
+            # talon, quelle que soit la page.
             a3 = layout.get("format") == "a3"
             for k in range(n):
-                if image_qr is not None:
-                    # Copie nominative : chaque page de rédaction reprend l'en-tête de la
-                    # page de garde, talon (nom, n°, à découper) et bande du titre avec le
-                    # QR de l'étudiant : une page détachée reste à qui elle est (demande
-                    # de l'utilisateur, 6 novembre 2026, en A4 puis en A3). Toujours sans
-                    # cadre ni code de page : au scan, elle reste « ignorée », seule la
-                    # page de garde porte la note.
+                # Copie nominative, en A4 recto-verso : le recto de chaque feuille (pages
+                # 3, 5, 7) reprend l'en-tête de la page de garde, talon (nom, n°, à
+                # découper) et bande du titre avec le QR de l'étudiant : une feuille
+                # détachée reste à qui elle est. Le dos n'en porte pas, ni les pages de
+                # l'A3 plié : elles sont sur la même feuille que leur recto, ou que la page
+                # de garde (demandes de l'utilisateur, 6 et 7 novembre 2026). Toujours sans
+                # cadre ni code de page : au scan, une page lignée reste « ignorée ».
+                recto = not a3 and (k + 2) % 2 == 1
+                if image_qr is not None and recto:
                     page_txt = f"{T['page']} {k + 2} / {n + 1}"
                     if talon:
                         _dessiner_talon(c, draw, student, head_title, page_txt,
@@ -466,18 +466,19 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
                     _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T,
                                     lang, image_qr)
                     _, bande_y, _, bande_h = qr_zone["band"]
-                    if a3:
-                        # pas de « ne pas scanner » : la feuille passe entière
-                        _dessiner_lignes(c, L.lignes_a3(bande_y + bande_h + L.A3_LIGNE,
-                                                        lang))
-                    else:
-                        draw(T["non_lue"], L.PAGE_W / 2,
-                             _y(bande_y + bande_h + 5.0), 7.5, align="center", gray=0.45)
-                        _dessiner_lignes(c, {"y0": bande_y + bande_h + 12.0,
-                                             "y1": L.PAGE_H - 16.0, "pas": L.NOTE_LIGNE})
+                    draw(T["non_lue"], L.PAGE_W / 2,
+                         _y(bande_y + bande_h + 5.0), 7.5, align="center", gray=0.45)
+                    _dessiner_lignes(c, {"y0": bande_y + bande_h + 12.0,
+                                         "y1": L.PAGE_H - 16.0, "pas": L.NOTE_LIGNE})
                 elif a3:
                     _dessiner_lignes(c, L.lignes_a3(
                         L.TALON_COUPE + L.A3_LIGNE if talon else L.A3_HAUT, lang))
+                elif image_qr is not None:
+                    # au dos d'une feuille A4 : la bande du talon tombe avec celui du recto
+                    # au massicot, rien à y écrire
+                    _dessiner_lignes(c, {"y0": L.TALON_COUPE + L.NOTE_LIGNE if talon
+                                         else 22.0, "y1": L.PAGE_H - 16.0,
+                                         "pas": L.NOTE_LIGNE})
                 else:
                     draw(f"{T['redaction']} {k + 2} / {n + 1} — {quiz.title}",
                          L.PAGE_W / 2, _y(16.0), 9, bold=True, align="center")
@@ -485,18 +486,16 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
                          align="center", gray=0.45)
                     _dessiner_lignes(c, {"y0": 30.0, "y1": L.PAGE_H - 16.0,
                                          "pas": L.NOTE_LIGNE})
-                if a3:
-                    # n° de la page au pied : l'ordre des pages, une fois la feuille coupée
+                if a3 or (image_qr is not None and not recto):
+                    # n° de la page au pied, sur une page sans en-tête : l'ordre des pages
                     draw(f"{quiz.title} — page {k + 2}", L.PAGE_W / 2,
                          _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
                 c.showPage()
 
     c.save()
     if layout.get("format") == "a3":
-        # feuille coupée au milieu : deux feuilles A4 par copie, pages 1/2 et 3/4
         return _imposer_a3(buf.getvalue(), lang,
-                           len(layout["pages"]) + int(layout.get("pages_redaction", 0)),
-                           coupe=True)
+                           len(layout["pages"]) + int(layout.get("pages_redaction", 0)))
     return buf.getvalue()
 
 
@@ -518,26 +517,10 @@ def _cotes_a3(nb_pages, rtl):
     return cotes
 
 
-def _cotes_a3_coupees(nb_pages, rtl):
-    """Feuille A3 coupée au milieu (copies d'écrit, demande de l'utilisateur, 7 novembre
-    2026) : deux feuilles A4 côte à côte, chacune recto-verso comme une copie A4, pages
-    1/2 puis 3/4 (5/6 et 7/8 sur la feuille suivante). Pages complétées à un multiple de 4.
-    La page 1 reste où était la page de garde du livret : à droite en français, à gauche
-    en arabe. Au verso, retourné sur le bord court, chaque page est au dos de la sienne."""
-    nb = (nb_pages + 3) // 4 * 4
-    cotes = []
-    for f in range(nb // 4):
-        a, b = 4 * f + 1, 4 * f + 3                     # rectos des deux feuilles A4
-        cotes.append((a, b) if rtl else (b, a))
-        cotes.append((b + 1, a + 1) if rtl else (a + 1, b + 1))
-    return cotes
-
-
-def _calque_pli(lang, cle="pli"):
-    """Page A3 transparente : le pointillé du milieu (pli du livret, ou coupe des copies
-    d'écrit), hors du cadre de lecture."""
+def _calque_pli(lang):
+    """Page A3 transparente : le pointillé du pli, hors du cadre de lecture."""
     largeur, hauteur = landscape(A3)
-    texte = LABELS.get(lang, LABELS["fr"])[cle]
+    texte = LABELS.get(lang, LABELS["fr"])["pli"]
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=(largeur, hauteur))
     c.setStrokeGray(0.78)
@@ -554,21 +537,18 @@ def _calque_pli(lang, cle="pli"):
     return buf.getvalue()
 
 
-def _imposer_a3(pdf, lang, par_exemplaire=None, coupe=False):
+def _imposer_a3(pdf, lang, par_exemplaire=None):
     """Pose les pages A4 du PDF sur des feuilles A3 paysage, à imprimer recto-verso sur
-    le bord court puis à plier (livret : sujet d'un QCM) ou à couper au milieu (coupe :
-    copies d'un écrit, deux feuilles A4 comme le format A4). Les pages restent celles de
-    l'A4, au trait près : ce qui est lu au scan ne bouge pas. par_exemplaire : pages d'un
-    exemplaire (copies répétées)."""
+    le bord court puis à plier. Les pages restent celles de l'A4, au trait près : ce qui
+    est lu au scan ne bouge pas. par_exemplaire : pages d'un cahier (copies répétées)."""
     largeur, hauteur = landscape(A3)
     moities = (pymupdf.Rect(0, 0, largeur / 2, hauteur),
                pymupdf.Rect(largeur / 2, 0, largeur, hauteur))
     with pymupdf.open(stream=pdf, filetype="pdf") as source, \
-            pymupdf.open(stream=_calque_pli(lang, "coupe" if coupe else "pli"),
-                         filetype="pdf") as calque, \
+            pymupdf.open(stream=_calque_pli(lang), filetype="pdf") as calque, \
             pymupdf.open() as sortie:
         par_exemplaire = par_exemplaire or source.page_count
-        cotes = (_cotes_a3_coupees if coupe else _cotes_a3)(par_exemplaire, lang == "ar")
+        cotes = _cotes_a3(par_exemplaire, lang == "ar")
         for debut in range(0, source.page_count, par_exemplaire):
             for cote in cotes:
                 feuille = sortie.new_page(width=largeur, height=hauteur)

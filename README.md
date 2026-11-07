@@ -566,7 +566,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_labels.py` | étiquette QR d'un candidat de concours collée sur la copie |
 | `test_e2e_etiquette_pages.py` | feuille à étiquette sur plusieurs pages : une vignette par page, étiquette oubliée signalée (copie incomplète, en attente), présélection d'après l'ordre du scan |
 | `test_e2e_scanner.py` | sorties d'un scanner à chargeur : TIFF multipage lu en entier, versos blancs ignorés, étiquettes lues en noir et blanc |
-| `test_e2e_a3.py` | copies d'écrit en A3 coupées en deux A4 (pages 1/2 et 3/4), sujet de QCM en livret plié : ordre des pages, sans carrés noirs, page de garde lue sur la feuille A3 dans tous les sens, en-tête et QR de l'étudiant repris sur les pages lignées, A4 inchangé |
+| `test_e2e_a3.py` | copies d'écrit et sujet de QCM en A3 recto-verso plié : ordre des pages, sans carrés noirs, page de garde lue sur la feuille A3 dans tous les sens, en-tête et QR de l'étudiant sur la page de garde seulement, A4 inchangé |
 | `test_e2e_import.py` | import de questionnaires et de candidats (Excel, Word, PDF, CSV), banque de questions |
 | `test_e2e_forms.py` | création d'un concours (sans classe ni case « mode concours ») et d'un quiz, nombre de choix par question jusqu'à la lecture de la copie |
 | `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » |
@@ -597,20 +597,20 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   paquet de 500 feuilles en recto-verso reste alors sous les 500 Mo permis par fichier. Le
   recto-verso convient : les versos blancs sont ignorés.
 - Copies d'écrit en A3 (réglage « Format des copies » de l'épreuve) : imprimez recto-verso sur
-  le bord court, à 100 %, puis coupez au milieu : chaque feuille donne deux feuilles A4, pages
-  1/2 et 3/4, comme le format A4. Le sujet d'un QCM peut prendre le même format, en livret plié
-  au milieu ; sa feuille de réponses reste en A4. Au scan, passez les feuilles A4 (ou la feuille
-  A3 entière) : la page de garde est retrouvée dans n'importe quel sens, le reste n'est pas lu.
+  le bord court, à 100 %, et pliez au milieu ; le sujet d'un QCM peut prendre le même format,
+  sa feuille de réponses reste en A4. Au scan, passez les feuilles dépliées, en A3, recto seul :
+  la page de garde est retrouvée sur la feuille dans n'importe quel sens, le reste n'est pas lu.
 - Copies d'écrit en A4 : chaque copie remplit des feuilles entières (une page lignée de plus
   quand le nombre de pages serait impair : 2 demandées donnent 3). Imprimez-les recto-verso sur
-  le bord long, à 100 % : une copie ne commence jamais au dos de la précédente, et le talon de
-  la page 2 tombe au dos de celui de la page de garde (une seule coupe).
-- Copies d'écrit nominatives (talon, nom imprimé ou n° de place), en A4 comme en A3 : chaque
-  page de rédaction reprend l'en-tête de la page de garde (talon à découper, bande du titre et
-  QR de l'étudiant), pour qu'une feuille détachée reste à qui elle est. Elles n'ont toujours ni
-  cadre ni code de page : scannées avec la copie, elles sont ignorées, seule la page de garde
-  porte la note. En A3, un seul coup de massicot sur toute la largeur retire le talon des
-  quatre pages de la feuille.
+  le bord long, à 100 % : une copie ne commence jamais au dos de la précédente, et le dos de
+  chaque feuille n'a rien d'écrit dans la bande du talon (une seule coupe).
+- Copies d'écrit nominatives (talon, nom imprimé ou n° de place) : en A4, le recto de chaque
+  feuille (pages 1, 3, 5…) porte l'en-tête de la page de garde (talon à découper, bande du
+  titre et QR de l'étudiant), pour qu'une feuille détachée reste à qui elle est ; le dos n'en
+  porte pas, seulement le n° de la page au pied. En A3 plié, seule la page de garde le porte :
+  les quatre pages sont sur la même feuille, et un seul coup de massicot retire le talon. Les
+  pages lignées n'ont ni cadre ni code de page : scannées avec la copie, elles sont ignorées,
+  seule la page de garde porte la note.
 - Si les questions changent après impression, **régénérez la fiche** avant de
   scanner (la disposition est figée dans la fiche PDF).
 - L'OCR d'un nom manuscrit n'est jamais parfait : les copies non identifiées
