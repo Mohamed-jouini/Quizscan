@@ -204,9 +204,11 @@ class Quiz(models.Model):
         validators=[MaxValueValidator(6)],
         help_text="Écrit : feuilles lignées imprimées après la page de garde "
                   "(0 à 6). Elles ne se scannent pas.")
-    # Une feuille A3 pliée au milieu porte quatre pages A4 : les copies d'un écrit,
-    # le sujet d'un QCM. La feuille de réponses d'un QCM reste en A4 : sur une feuille
-    # A3 de deux pages à lire, le scan n'en retrouverait qu'une.
+    # Une feuille A3 porte quatre pages A4 : le sujet d'un QCM, en livret plié au milieu ;
+    # les copies d'un écrit, coupées au milieu en deux feuilles A4 (pages 1/2 et 3/4,
+    # demande du 7 novembre 2026 ; libellé dans EpreuveEcritForm). La feuille de réponses
+    # d'un QCM reste en A4 : sur une feuille A3 de deux pages à lire, le scan n'en
+    # retrouverait qu'une.
     FORMATS = [("a4", "A4"), ("a3", "A3 recto-verso, plié au milieu")]
     format_impression = models.CharField(
         "format d'impression", max_length=2, choices=FORMATS, default="a4",

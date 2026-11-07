@@ -1,11 +1,13 @@
-"""Copies d'écrit et sujet de QCM en A3 recto-verso, pliés au milieu (Quiz.format_impression).
+"""Copies d'écrit et sujet de QCM en A3 recto-verso (Quiz.format_impression) : les copies se
+coupent au milieu en deux feuilles A4 (7 novembre 2026), le sujet se plie en livret.
 
 Modèle de l'institut (2 novembre 2026) : une feuille A3 porte la page de garde et trois pages
 lignées, sans les quatre carrés noirs. On vérifie :
-1. l'ordre des pages une fois la feuille pliée, en français et en arabe ;
+1. l'ordre des pages : copie coupée au milieu, pages 1/2 puis 3/4 dos à dos comme en A4, en
+   français et en arabe ;
 2. aucun carré noir, cadre et code de page conservés ;
 3. la note et l'identité lues sur la feuille A3 par le vrai chemin : dépliée, tournée (le
-   chargeur prend l'A3 dans le sens de la longueur), à l'envers, pliée, talon coupé ;
+   chargeur prend l'A3 dans le sens de la longueur), à l'envers, coupée en A4, talon coupé ;
 4. les copies A4 déjà imprimées restent lues après le passage en A3, et l'A4 ne change pas ;
 5. le sujet d'un QCM en A3 sans toucher à la feuille de réponses, qui reste en A4 ;
 6. copie nominative (talon, nom imprimé, n° de place) : les pages lignées reprennent l'en-tête
@@ -183,13 +185,16 @@ def verifier_ecrit(c, prof):
     pdf = quiz.sheet_pdf.read()
     doc = ouvrir(pdf)
     assert len(doc) == 2 and all(format_mm(p) == (420, 297) for p in doc), [format_mm(p) for p in doc]
-    assert pages_des_moities(doc, quiz.title) == [(4, 1), (2, 3)], pages_des_moities(doc, quiz.title)
+    # Coupée au milieu (demande de l'utilisateur, 7 novembre 2026) : recto 3|1, verso 2|4.
+    # Retournée sur le bord court, la page 2 est au dos de la 1, la 4 au dos de la 3 :
+    # deux feuilles A4, pages 1/2 et 3/4, comme le format A4.
+    assert pages_des_moities(doc, quiz.title) == [(3, 1), (2, 4)], pages_des_moities(doc, quiz.title)
     moitie_droite = pymupdf.Rect(doc[0].rect.width / 2, 0, doc[0].rect.width, doc[0].rect.height)
     assert "RÉSERVÉ AU CORRECTEUR" in doc[0].get_text(clip=moitie_droite)
-    assert "pli au milieu" in doc[0].get_text() and "pli au milieu" in doc[1].get_text()
-    assert "Ne pas scanner" not in doc[0].get_text() + doc[1].get_text(), \
-        "sur la même feuille que la page de garde, on ne peut pas ne pas la scanner"
-    print("  français : feuille A3, 2 côtés, page de garde à droite du pli (4|1, 2|3) OK")
+    assert "couper au milieu" in doc[0].get_text() and "couper au milieu" in doc[1].get_text()
+    assert "pli au milieu" not in doc[0].get_text()
+    assert "Ne pas scanner" not in doc[0].get_text() + doc[1].get_text()
+    print("  français : feuille A3, 2 côtés (3|1, 2|4), coupée : feuilles A4 1/2 et 3/4 OK")
 
     # Pas de carrés noirs : ni image dans le PDF (mode grille), ni encre aux emplacements.
     assert not doc[0].get_images(), doc[0].get_images()
@@ -203,7 +208,9 @@ def verifier_ecrit(c, prof):
     # L'énoncé reste en A4 : le format choisi est celui des copies.
     assert all(format_mm(p) == (210, 297) for p in ouvrir(quiz.subject_pdf.read()))
     page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
-    assert "en A3 recto-verso sur le bord court" in page and "recto seul" in page
+    assert "en A3 recto-verso sur le bord court" in page and "à couper au milieu" in page
+    assert "coupez chaque feuille au milieu" in page and "à plier" not in page
+    assert "A3 recto-verso, coupé en deux feuilles A4" in page, "libellé du format"
     assert "régénérez les documents" not in page
 
     disposition_page = quiz.layout_json["pages"][0]
@@ -216,7 +223,7 @@ def verifier_ecrit(c, prof):
             ("tournee270.jpg", "CHERIF", [1, 2, 5, None],
              lambda f: cv2.rotate(f, cv2.ROTATE_90_COUNTERCLOCKWISE)),
             ("envers.jpg", "DALI", [None, 9, 2, 5], lambda f: cv2.rotate(f, cv2.ROTATE_180)),
-            ("pliee.jpg", "ESSID", [1, 1, None, None], lambda f: f[:, mm2px(210):])]
+            ("coupee.jpg", "ESSID", [1, 1, None, None], lambda f: f[:, mm2px(210):])]
     numeros = {e[0]: e[2] for e in ETUDIANTS}
     envois = []
     for nom, etudiant, chiffres, sens_scan in sens:
@@ -235,7 +242,8 @@ def verifier_ecrit(c, prof):
             (nom, s.status, s.error_message)
     attendu = {"AMRI": 15.75, "BAKIR": 8.0, "CHERIF": 12.5, "DALI": 9.25, "ESSID": 11.0}
     assert notes(quiz) == attendu, notes(quiz)
-    print("  lecture : dépliée, tournée à 90° et 270°, à l'envers, pliée : 5 notes justes ; "
+    print("  lecture : feuille A3 entière, tournée à 90° et 270°, à l'envers, coupée en A4 : "
+          "5 notes justes ; "
           "verso écrit ignoré OK")
 
     # Sortie conseillée : un PDF recto-verso à 200 ppp, comme le chargeur la rend.
@@ -258,7 +266,7 @@ def verifier_arabe_et_etiquette(c, prof):
     quiz, groupe = creer_ecrit(c, prof, "A3-AR", langue="ar", id_mode="sticker")
     pdf = quiz.sheet_pdf.read()
     doc = ouvrir(pdf)
-    assert pages_des_moities(doc, quiz.title) == [(1, 4), (3, 2)], pages_des_moities(doc, quiz.title)
+    assert pages_des_moities(doc, quiz.title) == [(1, 3), (4, 2)], pages_des_moities(doc, quiz.title)
     assert quiz.layout_json["pages"][0]["lignes"]["marge"] == 190.0, "marge côté début de ligne"
     candidat = groupe.students.get(last_name="AMRI")
     feuille = copie_remplie(pdf, quiz, 0, "", [1, 6, None, None], gauche=True, etiquette=candidat)
@@ -267,7 +275,7 @@ def verifier_arabe_et_etiquette(c, prof):
     s = lot.sheets.get()
     assert s.status == "ok" and s.student == candidat, (s.status, s.error_message)
     assert notes(quiz)["AMRI"] == 16.0, notes(quiz)
-    print("  arabe, étiquette QR : page de garde à gauche comme sur le modèle (1|4, 3|2), "
+    print("  arabe, étiquette QR : page de garde à gauche comme sur le modèle (1|3, 4|2), "
           "étiquette et note lues OK")
 
 
@@ -301,7 +309,7 @@ def verifier_talon(c, prof):
     zone = quiz.layout_json["pages"][0]["qr"]
     gauche_droite = moities(doc[0])
     assert "Page 1 / 4" in doc[0].get_text(clip=gauche_droite[1])
-    for index, droite, numero in ((0, False, 4), (1, False, 2), (1, True, 3)):
+    for index, droite, numero in ((0, False, 3), (1, False, 2), (1, True, 4)):
         texte = doc[index].get_text(clip=moities(doc[index])[droite])
         for attendu in (premiere.full_name,
                         f"N° {premiere.student_number}", f"Page {numero} / 4",
@@ -344,7 +352,7 @@ def verifier_entete_nominatif(c, prof):
     etudiants = {s.last_name: s for s in groupe.students.all()}
     amri = etudiants["AMRI"]
     zone = quiz.layout_json["pages"][0]["qr"]
-    for index, droite, numero in ((0, False, 4), (1, False, 2), (1, True, 3)):
+    for index, droite, numero in ((0, False, 3), (1, False, 2), (1, True, 4)):
         texte = doc[index].get_text(clip=moities(doc[index])[droite])
         for attendu in ("Sana AMRI", "N° 104501", f"Page {numero} / 4"):
             assert attendu in texte, (numero, attendu, texte)
@@ -388,11 +396,14 @@ def verifier_deux_feuilles(c, prof):
     assert quiz.layout_json["pages_redaction"] == 7
     doc = ouvrir(quiz.sheet_pdf.read())
     assert len(doc) == 4
-    assert pages_des_moities(doc, quiz.title) == [(8, 1), (2, 7), (6, 3), (4, 5)], \
+    assert pages_des_moities(doc, quiz.title) == [(3, 1), (2, 4), (7, 5), (6, 8)], \
         pages_des_moities(doc, quiz.title)
-    print("  6 pages lignées demandées : 2 feuilles emboîtées, 8 pages dans l'ordre OK")
+    print("  6 pages lignées demandées : 2 feuilles A3, coupées : 4 feuilles A4 dans l'ordre "
+          "(1/2, 3/4, 5/6, 7/8) OK")
     assert sheet_pdf._cotes_a3(1, False) == [(4, 1), (2, 3)]
-    assert sheet_pdf._cotes_a3(5, True) == [(1, 8), (7, 2), (3, 6), (5, 4)]
+    assert sheet_pdf._cotes_a3(5, True) == [(1, 8), (7, 2), (3, 6), (5, 4)]       # livret : sujet
+    assert sheet_pdf._cotes_a3_coupees(1, False) == [(3, 1), (2, 4)]
+    assert sheet_pdf._cotes_a3_coupees(5, True) == [(1, 3), (4, 2), (5, 7), (8, 6)]
 
 
 def verifier_a4_inchange(c, prof):
