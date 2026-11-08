@@ -4,6 +4,7 @@ et d'émargement dit au surveillant qui s'assoit où ; au scan, le QR attribue
 la copie au bon étudiant. Les places restent stables si la liste change.
 """
 import os
+import re
 import sys
 from unittest import mock
 
@@ -31,7 +32,7 @@ from django.urls import reverse
 
 from grader import bulletin, services
 from grader.fonts import shape
-from grader.models import ClassGroup, Question, Quiz, Student
+from grader.models import ClassGroup, Inscrit, Question, Quiz, Student
 from test_commun import enseignant_complet
 from test_e2e import fill_sheet, render_page, simulate_scan
 
@@ -193,10 +194,54 @@ def main():
     assert c.get(reverse("quiz_emargement_pdf", args=[ecrit.pk])).status_code == 200
     print("  concours et écrit : copies à n° de place et liste d'émargement OK")
 
-    # liste demandée sans copies anonymes : renvoi vers l'épreuve
+    # liste d'émargement aussi sans copies anonymes (8 novembre 2026) : sans colonne place
     autre = Quiz.objects.create(title="Sans places", class_group=groupe, owner=prof)
     r = c.get(reverse("quiz_emargement_pdf", args=[autre.pk]))
-    assert r.status_code == 302
+    assert r.status_code == 200 and r["Content-Type"] == "application/pdf", r.status_code
+    liste = "\n".join(textes(r.content))
+    assert "Liste d'émargement" in liste and "Place" not in liste and "Ali ABID" in liste
+    print("  liste d'émargement aussi en présentation standard, sans colonne place OK")
+
+    # ---- par salle (demande de l'utilisateur, 8 novembre 2026) : copies dans l'ordre des
+    # salles du registre (2 avant 15), les étudiants sans salle à la fin ; une liste par salle
+    assert services.cle_salle("قاعة عدد 2") < services.cle_salle("قاعة عدد 15") \
+        < services.cle_salle("")
+    classe = ClassGroup.objects.create(name="PLACES salles", owner=prof)
+    for num, nom, prenom, salle in (("104601", "ZAIER", "Amel", "15"),
+                                    ("104602", "YAHIA", "Badis", "2"),
+                                    ("104603", "XUEREB", "Cyrine", ""),
+                                    ("104604", "WALI", "Dora", "2")):
+        Inscrit.objects.filter(numero=num).delete()
+        fiche = Inscrit.objects.create(numero=num, nom=nom, prenom=prenom, salle=salle,
+                                       cree_par=prof)
+        Student.objects.create(class_group=classe, last_name=nom, first_name=prenom,
+                               student_number=num, inscrit=fiche)
+    for anonymat in ("talon", "place"):
+        q = Quiz.objects.create(title=f"Salles {anonymat}", class_group=classe, owner=prof,
+                                sheet_mode="grid", id_mode="qr", talon_nom=anonymat == "talon",
+                                place_anonyme=anonymat == "place")
+        Question.objects.create(quiz=q, order=1, qtype="qcm", correct_choice=0)
+        c.post(reverse("quiz_detail", args=[q.pk]), {"generate_pdf": "1"})
+        q.refresh_from_db()
+        pages = textes(open(q.sheet_pdf.path, "rb").read())
+        assert len(pages) == 4, len(pages)
+        if anonymat == "talon":                 # salle 2 : n° 104602 puis 104604
+            vus = [next(n for n in ("YAHIA", "WALI", "ZAIER", "XUEREB") if n in p)
+                   for p in pages]
+            assert vus == ["YAHIA", "WALI", "ZAIER", "XUEREB"], vus
+        else:                                   # places par n° : ZAIER 1, YAHIA 2, …
+            vus = [re.search(r"PLACE N° (\d+)", p).group(1) for p in pages]
+            assert vus == ["2", "4", "1", "3"], vus
+        r = c.get(reverse("quiz_emargement_pdf", args=[q.pk]))
+        feuilles = textes(r.content)
+        assert len(feuilles) == 3, len(feuilles)                    # une page par salle
+        assert "Salle : 2" in feuilles[0] and "YAHIA" in feuilles[0] and "WALI" in feuilles[0]
+        assert "Salle : 15" in feuilles[1] and "ZAIER" in feuilles[1]
+        assert "XUEREB" in feuilles[2] and "Salle : ………" in feuilles[2], feuilles[2]
+        assert all("Signature" in f and "Présents" in f for f in feuilles)
+        assert ("Place" in feuilles[0]) == (anonymat == "place")
+    print("  par salle : copies (talon, n° de place) dans l'ordre des salles, puis du n° ou "
+          "de la place ; une liste d'émargement par salle, sans salle à la fin OK")
     print("\n✅ TEST DES COPIES ANONYMES À N° DE PLACE RÉUSSI")
 
 

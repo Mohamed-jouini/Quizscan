@@ -1,6 +1,8 @@
 """Bulletins PDF individuels : une page par étudiant avec la note et le
 détail question par question. Gère les noms et textes en arabe."""
 import io
+import itertools
+import re
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -451,59 +453,86 @@ def generate_parcours_pdf(parcours):
     return buf.getvalue()
 
 
-def generate_liste_emargement(quiz, lignes, salle=""):
-    """Liste de placement et d'émargement des copies anonymes.
+def _intitule_salle(salle):
+    """« Salle : 15 » ; une salle déjà nommée (« قاعة عدد 15 », « Salle B ») telle quelle ;
+    sans salle au registre : à remplir à la main."""
+    if not salle:
+        return "Salle : ………………"
+    return salle if re.match(r"\s*(salle|قاعة|القاعة)", salle, re.I) else f"Salle : {salle}"
 
-    lignes : [(n° de place, étudiant)], dans l'ordre des places. Le
-    surveillant y lit qui s'assoit où (la copie ne porte que le n° de place et
-    un QR) ; chaque candidat signe en face de son nom. Pages numérotées,
-    intitulés de colonnes répétés, décompte des présents en fin de liste."""
-    from django.utils import timezone
 
+def generate_liste_emargement(quiz, lignes):
+    """Listes d'émargement, une par salle (demande de l'utilisateur, 8 novembre 2026).
+
+    lignes : [(n° de place ou None, étudiant)] dans l'ordre des salles et des copies
+    (services.par_salle). Chaque salle commence sur une nouvelle page, sa salle imprimée en
+    tête, ses pages numérotées, le décompte des présents à la fin ; les étudiants sans
+    salle au registre viennent en dernier. Copies anonymes à n° de place : colonne
+    « Place », le surveillant y lit qui s'assoit où (la copie ne porte que le n° de place
+    et un QR). Chaque candidat signe en face de son nom."""
     load_fonts()
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
+    avec_place = any(place is not None for place, _ in lignes)
+    groupes = [list(paquet) for _, paquet in
+               itertools.groupby(lignes, key=lambda ligne: ligne[1].salle.casefold())]
+    for paquet in groupes or [[]]:
+        _liste_d_une_salle(c, quiz, paquet, paquet[0][1].salle if paquet else "", avec_place)
+    c.save()
+    return buf.getvalue()
+
+
+def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
+    """Pages de la liste d'une salle : en-tête, tableau, décompte, pieds numérotés."""
+    from django.utils import timezone
+
     X0, X1 = 18.0, 192.0
     LIGNE, BAS = 9.0, 270.0
-    cols = [X0 + 3, X0 + 22, X0 + 52]        # place, n° d'inscription, nom
+    # place, n° d'inscription, nom ; sans place, le n° et le nom passent à gauche
+    cols = [X0 + 3, X0 + 22, X0 + 52] if avec_place else [None, X0 + 3, X0 + 33]
     x_sig = X1 - 48.0                         # début de la case signature
+    titre = "Liste de placement et d'émargement" if avec_place else "Liste d'émargement"
     entete = [t.strip() for t in (quiz.entete or "").splitlines() if t.strip()]
     edite = timezone.localtime().strftime("%d/%m/%Y")
-    debut_p1 = 64.0 + 4.2 * len(entete)
+    debut_p1 = 70.0 + 4.2 * len(entete)
     par_p1 = max(int((BAS - debut_p1 - 9) // LIGNE), 1)
     par_page = int((BAS - 34.0 - 9) // LIGNE)
     reste = max(len(lignes) - par_p1, 0)
     total = 1 + (-(-reste // par_page) if reste else 0)
+    intitule = _intitule_salle(salle)
 
     def tete_tableau(y):
         c.setFillGray(0.92)
         c.rect(X0 * mm, _y(y + 2.6), (X1 - X0) * mm, 8.2 * mm, stroke=0, fill=1)
         c.setFillGray(0.0)
         for texte, x in zip(("Place", "N° d'inscription", "Prénom et nom"), cols):
-            _draw(c, texte, x, y, 9, bold=True, gray=0.2)
+            if x is not None:
+                _draw(c, texte, x, y, 9, bold=True, gray=0.2)
         _draw(c, "Signature", x_sig + 3, y, 9, bold=True, gray=0.2)
         return y + 9.0
 
+    # Le titre de l'épreuve et la salle peuvent être en arabe : chacun sur sa ligne, jamais
+    # dans une phrase française (l'ordre de lecture d'une ligne mêlée se brouille).
     def pied(page):
-        _draw(c, f"{quiz.title} — placement et émargement — édité le {edite}",
-              X0, 287.0, 7.5, gray=0.45)
-        _draw(c, f"page {page} / {total}", X1, 287.0, 7.5, align="right", gray=0.45)
+        _draw(c, quiz.title, X0, 287.0, 7.5, gray=0.45)
+        _draw(c, f"émargement — édité le {edite} — page {page} / {total}", X1, 287.0, 7.5,
+              align="right", gray=0.45)
 
     y = 18.0
     for t in entete:
         _draw(c, t, PAGE_W / 2, y, 9, align="center", gray=0.3)
         y += 4.2
-    _draw(c, "Liste de placement et d'émargement", PAGE_W / 2, y + 6, 16,
-          bold=True, align="center")
+    _draw(c, titre, PAGE_W / 2, y + 6, 16, bold=True, align="center")
     _draw(c, quiz.title, PAGE_W / 2, y + 13, 12, align="center")
-    _draw(c, f"Salle : {salle or '………………'}      Date : ……/……/…………      "
-             f"Surveillant : ……………………………", PAGE_W / 2, y + 20, 9.5,
-          align="center", gray=0.25)
-    _draw(c, "Copies anonymes : chaque copie porte un n° de place et un QR code, "
-             "jamais le nom. Le candidat s'assoit à sa place et signe ci-dessous.",
-          PAGE_W / 2, y + 26, 8, align="center", gray=0.4)
+    _draw(c, intitule, PAGE_W / 2, y + 20.5, 13, bold=True, align="center")
+    _draw(c, "Date : ……/……/…………      Surveillant : ……………………………",
+          PAGE_W / 2, y + 26.5, 9.5, align="center", gray=0.25)
+    consigne = ("Copies anonymes : chaque copie porte un n° de place et un QR code, jamais le "
+                "nom. Le candidat s'assoit à sa place et signe ci-dessous." if avec_place else
+                "Chaque candidat signe en face de son nom ; la liste suit l'ordre des copies.")
+    _draw(c, consigne, PAGE_W / 2, y + 32, 8, align="center", gray=0.4)
     c.setLineWidth(0.5)
-    c.line(X0 * mm, _y(y + 29.5), X1 * mm, _y(y + 29.5))
+    c.line(X0 * mm, _y(y + 35.5), X1 * mm, _y(y + 35.5))
     y = tete_tableau(debut_p1)
     page, sur_page, capacite = 1, 0, par_p1
     for i, (place, s) in enumerate(lignes):
@@ -511,15 +540,16 @@ def generate_liste_emargement(quiz, lignes, salle=""):
             pied(page)
             c.showPage()
             page += 1
-            _draw(c, f"Placement et émargement — {quiz.title} (suite)", X0, 20.0, 10,
-                  bold=True)
+            _draw(c, f"{titre} (suite)", X0, 20.0, 10, bold=True)
+            _draw(c, intitule, X1, 20.0, 10, bold=True, align="right")
             y = tete_tableau(32.0)
             sur_page, capacite = 0, par_page
         if i % 2:
             c.setFillGray(0.965)
             c.rect(X0 * mm, _y(y + 3.4), (X1 - X0) * mm, LIGNE * mm, stroke=0, fill=1)
             c.setFillGray(0.0)
-        _draw(c, str(place), cols[0] + 5, y + 0.6, 12, bold=True, align="center")
+        if avec_place:
+            _draw(c, str(place), cols[0] + 5, y + 0.6, 12, bold=True, align="center")
         _draw(c, s.student_number or "—", cols[1], y + 0.6, 10)
         nom, corps = nom_ajuste(s, x_sig - cols[2] - 3, 10.5, gras=True)
         _draw(c, nom, cols[2], y + 0.6, corps, bold=True)
@@ -534,5 +564,3 @@ def generate_liste_emargement(quiz, lignes, salle=""):
     _draw(c, "Signature du surveillant :", X1 - 70, y, 10, bold=True)
     pied(page)
     c.showPage()
-    c.save()
-    return buf.getvalue()

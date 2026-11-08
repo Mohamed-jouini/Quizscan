@@ -321,9 +321,7 @@
       {% if quiz.sheet_pdf %}
         <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">
           {% if quiz.sheet_mode == "split" %}📝 Feuille de réponses{% else %}📄 Télécharger la fiche{% endif %}</a>
-        {% if quiz.place_anonyme %}
-        <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">📋 Liste de placement et d'émargement</a>
-        {% endif %}
+        <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">📋 {% if quiz.place_anonyme %}Liste de placement et d'émargement{% else %}Liste d'émargement{% endif %} par salle</a>
       {% endif %}
     </form>
     {% endif %}
@@ -336,7 +334,8 @@
         court, à 100 %, puis pliez-le au milieu ; la feuille de réponses en A4 à 100 %.
         {% else %}Imprimez les deux en A4 à 100 %.{% endif %}
       {% elif quiz.id_mode == "qr" and not quiz.exemplaires_anonymes %}
-        Imprimez en A4 à 100 % et distribuez à chacun la sienne.
+        Imprimez en A4 à 100 % et distribuez à chacun la sienne : les copies sortent salle
+        par salle (registre des inscriptions), dans l'ordre de la liste d'émargement.
       {% elif quiz.id_mode == "grid" %}
         Imprimez cette fiche en A4 (100 %, sans mise à l'échelle) : une copie par étudiant.
         Chacun colle son étiquette QR dans le cadre en haut à droite

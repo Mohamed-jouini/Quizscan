@@ -12,6 +12,7 @@ import contextlib
 import io
 import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -1704,6 +1705,37 @@ def places_anonymes(quiz):
     return sorted(places, key=lambda p: p[0])
 
 
+def _cle_naturelle(texte):
+    """« قاعة عدد 2 » avant « قاعة عدد 15 », « 619 » avant « 1782 » : les nombres d'un
+    texte comparés comme des nombres."""
+    from .importers import chiffres_latins
+    return [(0, int(t)) if t.isdigit() else (1, t.casefold())
+            for t in re.split(r"(\d+)", chiffres_latins(texte or "")) if t]
+
+
+def cle_salle(salle):
+    """Ordre des salles : naturel, les étudiants sans salle à la fin."""
+    return (0, _cle_naturelle(salle)) if salle else (1, [])
+
+
+def par_salle(lignes):
+    """Lignes [(n° de place ou None, étudiant)] dans l'ordre de distribution des copies
+    (demande de l'utilisateur, 8 novembre 2026) : par salle du registre des inscriptions,
+    les étudiants sans salle à la fin ; dans une salle, par n° de place (copies anonymes),
+    sinon par n° d'inscription, puis par nom."""
+    def cle(ligne):
+        place, s = ligne
+        return (cle_salle(s.salle), place if place is not None else 0,
+                _cle_naturelle(s.student_number or "~"), s.last_name, s.first_name)
+    return sorted(lignes, key=cle)
+
+
+def etudiants_par_salle(quiz):
+    """Étudiants de l'épreuve dans l'ordre des salles (voir par_salle)."""
+    etudiants = quiz.class_group.students.select_related("inscrit")
+    return [s for _, s in par_salle([(None, s) for s in etudiants])]
+
+
 def copies_nominatives_pdf(quiz, layout):
     """PDF d'une copie par étudiant, QR imprimé : nom imprimé (ou sur le
     talon), ou copie anonyme à n° de place — la correspondance place ->
@@ -1712,11 +1744,12 @@ def copies_nominatives_pdf(quiz, layout):
     if quiz.place_anonyme:
         places = places_anonymes(quiz)
         layout["places"] = {str(s.pk): n for n, s in places}
+        # copies dans l'ordre des salles, puis des places (8 novembre 2026)
         pdf = sheet_pdf.generate_sheet_pdf(
-            quiz, layout, students=[s for _, s in places],
+            quiz, layout, students=[s for _, s in par_salle(places)],
             places={s.pk: n for n, s in places})
         return pdf, len(places)
-    etudiants = list(quiz.class_group.students.all())
+    etudiants = etudiants_par_salle(quiz)          # dans l'ordre des salles
     return sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants), len(etudiants)
 
 
@@ -1726,9 +1759,8 @@ def liste_emargement(quiz):
     places = (quiz.layout_json or {}).get("places")
     if not places:
         return None
-    par_pk = {s.pk: s for s in quiz.class_group.students.all()}
-    return sorted(((n, par_pk[int(k)]) for k, n in places.items() if int(k) in par_pk),
-                  key=lambda p: p[0])
+    par_pk = {s.pk: s for s in quiz.class_group.students.select_related("inscrit")}
+    return par_salle([(n, par_pk[int(k)]) for k, n in places.items() if int(k) in par_pk])
 
 
 # ------------------------------------------- concours en plusieurs étapes

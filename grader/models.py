@@ -136,6 +136,12 @@ class Student(models.Model):
     def full_name(self):
         return nom_et_prenom(self.last_name, self.first_name)
 
+    @property
+    def salle(self):
+        """Salle d'examen, d'après la fiche du registre (vide sans fiche ni salle)."""
+        fiche = self.inscrit if self.inscrit_id else None
+        return " ".join((fiche.salle or "").split()) if fiche else ""
+
     def __str__(self):
         return self.full_name
 

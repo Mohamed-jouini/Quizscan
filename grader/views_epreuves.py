@@ -137,7 +137,7 @@ def _generer_fiches_orales(quiz):
     """Une fiche d'évaluation par étudiant : nom et QR imprimés, grille de la
     note à noircir par l'examinateur. Scannée, la note va à l'étudiant."""
     services.question_note(quiz)
-    etudiants = list(quiz.class_group.students.all())
+    etudiants = services.etudiants_par_salle(quiz)     # dans l'ordre des salles
     quiz.id_mode = "qr"                 # fiches nominatives
     layout = layout_mod.build_layout(quiz)
     pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants)

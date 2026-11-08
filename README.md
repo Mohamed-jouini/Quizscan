@@ -604,6 +604,12 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   quand le nombre de pages serait impair : 2 demandées donnent 3). Imprimez-les recto-verso sur
   le bord long, à 100 % : une copie ne commence jamais au dos de la précédente, et le dos de
   chaque feuille n'a rien d'écrit dans la bande du talon (une seule coupe).
+- Copies nominatives (nom imprimé, talon ou n° de place, en QCM comme à l'écrit) et fiches
+  d'oral : elles sortent salle par salle, d'après la salle du registre des inscriptions
+  (« قاعة عدد 2 » avant « قاعة عدد 15 », les étudiants sans salle à la fin), puis par n°
+  d'inscription, ou par n° de place. La « Liste d'émargement par salle » (page de l'épreuve,
+  pour toute présentation) donne une liste par salle, dans le même ordre, pour la signature
+  de présence ; avec les copies à n° de place, elle porte aussi la place de chacun.
 - Copies d'écrit nominatives (talon, nom imprimé ou n° de place) : en A4, le recto de chaque
   feuille (pages 1, 3, 5…) porte l'en-tête de la page de garde (talon à découper, bande du
   titre et QR de l'étudiant), pour qu'une feuille détachée reste à qui elle est ; le dos n'en

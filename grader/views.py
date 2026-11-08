@@ -1610,13 +1610,21 @@ def quiz_parcours(request, pk):
 
 @login_required
 def quiz_emargement_pdf(request, pk):
-    """Liste de placement et d'émargement des copies anonymes à n° de place :
-    la seule correspondance place -> nom, pour le surveillant."""
+    """Listes d'émargement, une par salle, pour la signature de présence (demande de
+    l'utilisateur, 8 novembre 2026), quelle que soit la présentation des copies. Copies
+    anonymes à n° de place : avec la place de chacun, la seule correspondance place ->
+    nom, pour le surveillant."""
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
-    lignes = services.liste_emargement(quiz) if quiz.place_anonyme else None
-    if not lignes:
-        messages.error(request, "Générez d'abord les copies anonymes à n° de place.")
-        return redirect("quiz_detail", pk=pk)
+    if quiz.place_anonyme:
+        lignes = services.liste_emargement(quiz)
+        if not lignes:
+            messages.error(request, "Générez d'abord les copies anonymes à n° de place.")
+            return redirect("quiz_detail", pk=pk)
+    else:
+        lignes = [(None, s) for s in services.etudiants_par_salle(quiz)]
+        if not lignes:
+            messages.error(request, "Aucun étudiant dans la liste : ajoutez-les d'abord.")
+            return redirect("quiz_detail", pk=pk)
     resp = HttpResponse(bulletin_mod.generate_liste_emargement(quiz, lignes),
                         content_type="application/pdf")
     resp["Content-Disposition"] = f'inline; filename="emargement_{quiz.pk}.pdf"'
