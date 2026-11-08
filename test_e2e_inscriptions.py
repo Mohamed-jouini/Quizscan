@@ -293,9 +293,10 @@ def test_import_base(c, prof, classe):
 
 
 def test_liste_candidats(c, prof, autre):
-    """Page « Candidats » (demande du 8 novembre 2026, écrit d'un concours) : la liste
-    exportée en Excel, réimportable telle quelle ; plusieurs candidats, ou tous, supprimés
-    d'un coup, jamais un candidat qui a des copies corrigées."""
+    """Liste des candidats de l'écrit d'un concours, et d'elle seule (demandes du 8 novembre
+    2026 : « dans écrire de concours seulement ») : la liste exportée en Excel, réimportable
+    telle quelle ; plusieurs candidats, ou tous, supprimés d'un coup, jamais un candidat qui
+    a des copies corrigées."""
     import datetime
     Inscrit.objects.create(numero="207005", nom="الجبالي", prenom="محمد أمين", cin="01999888",
                            cin_lieu="تونس", cin_date=datetime.date(2024, 8, 18),
@@ -303,16 +304,43 @@ def test_liste_candidats(c, prof, autre):
                            cree_par=prof)
     groupe = ClassGroup.objects.create(name="Concours — liste", owner=prof)
     url = reverse("class_detail", args=[groupe.pk])
+    export = reverse("class_candidats_xlsx", args=[groupe.pk])
     c.post(url, {"ajouter_inscrits": "1", "numeros": "104523 104524 104525 104526 207005"})
     Student.objects.create(class_group=groupe, last_name="LIBRE", first_name="Sans",
                            student_number="777001")                    # sans fiche
     attendu = list(groupe.students.select_related("inscrit"))          # ordre de la page
     assert len(attendu) == 6, attendu
+
+    # ni une classe, ni le QCM ou l'oral d'un concours, ni l'écrit d'une classe
+    for type_epreuve, concours in ((None, False), ("qcm", True), ("oral", True),
+                                   ("ecrit", False)):
+        epreuve = type_epreuve and Quiz.objects.create(
+            title=f"Liste — {type_epreuve}", class_group=groupe, owner=prof,
+            type_epreuve=type_epreuve, auto_enroll=concours)
+        page = c.get(url).content.decode()
+        assert "Exporter la liste (Excel)" not in page and 'name="choix"' not in page \
+            and 'name="supprimer_choix"' not in page, type_epreuve
+        assert c.get(export).status_code == 404, type_epreuve
+        r = c.post(url, {"supprimer_choix": "1", "tous": "1"}, follow=True)
+        assert groupe.students.count() == 6, type_epreuve
+        assert "réservée aux candidats de l'écrit d'un concours" in _messages(r), _messages(r)
+        if epreuve:
+            assert "Exporter les candidats" not in c.get(
+                reverse("quiz_detail", args=[epreuve.pk])).content.decode(), type_epreuve
+            epreuve.delete()
+    # l'écrit du concours : export sur sa page même et sur sa liste, cases à cocher
+    quiz = Quiz.objects.create(title="Liste — écrit", class_group=groupe, owner=prof,
+                               type_epreuve="ecrit", auto_enroll=True)
     page = c.get(url).content.decode()
-    export = reverse("class_candidats_xlsx", args=[groupe.pk])
     assert f'href="{export}"' in page and "Exporter la liste (Excel)" in page
     assert 'name="supprimer_choix"' in page and 'class="tout-cocher"' in page
     assert page.count('name="choix"') == 6 and 'name="tous"' not in page    # une page
+    page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
+    assert "Épreuve écrite" in page and f'href="{export}"' in page \
+        and "Exporter les candidats (Excel)" in page, "export absent de la page de l'écrit"
+    assert f'href="{url}"' in page and "Candidats &amp; étiquettes QR" in page
+    print("  écrit d'un concours seulement : rien pour une classe, le QCM ou l'oral d'un "
+          "concours, l'écrit d'une classe ; export et cases à cocher pour lui OK")
 
     r = c.get(export)
     assert r["Content-Disposition"] == f'attachment; filename="candidats_{groupe.pk}.xlsx"'
@@ -335,17 +363,6 @@ def test_liste_candidats(c, prof, autre):
     assert c2.get(export).status_code == 404                                # liste d'un collègue
     print("  export Excel : toute la liste, colonnes et ordre de la page, CIN avec son zéro, "
           "réimportable ; liste d'un collègue refusée OK")
-
-    # l'écrit du concours (demande suivante, « fait pour écrire dans le concours ») : l'export
-    # sur sa page même, la sélection sur sa page « Candidats & étiquettes QR »
-    quiz = Quiz.objects.create(title="Liste — écrit", class_group=groupe, owner=prof,
-                               type_epreuve="ecrit", auto_enroll=True)
-    page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
-    assert "Épreuve écrite" in page and f'href="{export}"' in page \
-        and "Exporter les candidats (Excel)" in page, "export absent de la page de l'écrit"
-    assert f'href="{url}"' in page and "Candidats &amp; étiquettes QR" in page
-    print("  écrit du concours : « Exporter les candidats (Excel) » sur sa page, cases à cocher "
-          "sur sa liste des candidats OK")
 
     # les cochés ; celui qui a des copies corrigées reste
     note = groupe.students.get(student_number="104523")

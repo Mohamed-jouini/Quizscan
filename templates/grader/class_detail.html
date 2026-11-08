@@ -12,7 +12,7 @@
   <div class="page-head__actions">
     <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
     {% if students_total %}
-    <a class="btn small secondary" href="{% url 'class_candidats_xlsx' group.pk %}">Exporter la liste (Excel)</a>
+    {% if ecrit_concours %}<a class="btn small secondary" href="{% url 'class_candidats_xlsx' group.pk %}">Exporter la liste (Excel)</a>{% endif %}
     <a class="btn small" href="{% url 'class_labels_pdf' group.pk %}"
        target="_blank">Planche d'étiquettes (PDF){% if etiquettes_par_candidat > 1 %} : {{ etiquettes_par_candidat }} par candidat{% endif %}</a>
     {% endif %}
@@ -81,9 +81,9 @@
     <h2>Candidats ({{ students_total }})</h2>
   </div>
   {% if students_page.object_list %}
-  {# Un seul formulaire : cases à cocher, « supprimer les cochés » et ✕ de chaque ligne. #}
+  {# Un seul formulaire : cases à cocher (écrit d'un concours seulement), « supprimer les cochés » et ✕ de chaque ligne. #}
   <form method="post">{% csrf_token %}
-  {% if perms.grader.creer_epreuve %}
+  {% if perms.grader.creer_epreuve and ecrit_concours %}
   <div class="barre-choix">
     <button class="btn small danger" name="supprimer_choix" value="1" type="submit"
             data-compter-coches data-total="{{ students_total }}"
@@ -98,10 +98,10 @@
   {% include "grader/_pagination.html" with page=students_page label="Candidats" %}
   <div class="table-wrap table-wrap--ajuste">
     <table>
-    <tr>{% if perms.grader.creer_epreuve %}<th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="Tout cocher"></th>{% endif %}<th>N°</th><th>Prénom</th><th>Nom</th>{% if avec_fiches %}<th>CIN</th><th>Lieu</th><th>Délivrée le</th><th>Né(e) le</th><th>Centre</th><th>Salle</th>{% endif %}<th>QR</th><th></th></tr>
+    <tr>{% if perms.grader.creer_epreuve and ecrit_concours %}<th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="Tout cocher"></th>{% endif %}<th>N°</th><th>Prénom</th><th>Nom</th>{% if avec_fiches %}<th>CIN</th><th>Lieu</th><th>Délivrée le</th><th>Né(e) le</th><th>Centre</th><th>Salle</th>{% endif %}<th>QR</th><th></th></tr>
     {% for s in students_page %}
     <tr class="ligne-lien">
-      {% if perms.grader.creer_epreuve %}<td class="col-choix"><input type="checkbox" name="choix" value="{{ s.pk }}" aria-label="Choisir {{ s.full_name|default:s.student_number }}"></td>{% endif %}
+      {% if perms.grader.creer_epreuve and ecrit_concours %}<td class="col-choix"><input type="checkbox" name="choix" value="{{ s.pk }}" aria-label="Choisir {{ s.full_name|default:s.student_number }}"></td>{% endif %}
       <td>{% if s.inscrit and user.is_superuser or s.inscrit and s.inscrit.cree_par_id == user.pk %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'inscriptions' %}?modifier={{ s.inscrit_id }}#fiche-inscrit"><b>{{ s.student_number }}</b></a>{% else %}{{ s.student_number|default:"—" }}{% endif %}</td>
       <td>{{ s.first_name|default:"—" }}</td><td>{{ s.last_name|default:"—" }}</td>
       {% if avec_fiches %}{% with i=s.inscrit %}

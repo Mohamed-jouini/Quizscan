@@ -10,6 +10,7 @@
   </div>
   <div class="page-head__actions">
     <a class="btn small secondary" href="{% url 'batch_detail' sheet.batch.pk %}">← Retour au lot</a>
+    <a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}">← Retour aux résultats</a>
     {% if prev_id %}<a class="btn small secondary" href="{% url 'sheet_review' prev_id %}">◀ Précédente</a>{% endif %}
     {% if next_id %}<a class="btn small secondary" href="{% url 'sheet_review' next_id %}">Suivante ▶</a>{% endif %}
   </div>
@@ -139,10 +140,12 @@
           Enregistrer et copie suivante ▶</button>
         {% endif %}
         <button class="btn secondary" type="submit">Enregistrer et retour au lot</button>
+        <button class="btn secondary" type="submit" name="retour_resultats" value="1">Enregistrer et retour aux résultats</button>
         {% else %}
         {# Rien à enregistrer : copie reconnue, QCM seuls. #}
         {% if next_id %}<a class="btn" href="{% url 'sheet_review' next_id %}">Copie suivante ▶</a>{% endif %}
         <a class="btn secondary" href="{% url 'batch_detail' sheet.batch.pk %}">Retour au lot</a>
+        <a class="btn secondary" href="{% url 'quiz_results' quiz.pk %}">Retour aux résultats</a>
         {% endif %}
       </p>
     </div>

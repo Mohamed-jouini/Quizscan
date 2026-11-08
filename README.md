@@ -25,11 +25,12 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    « محمد أمين الجبالي », « Mokhtar ARBI » (talon et copies, listes, bulletins,
    exports Excel, étiquettes, cartes, tableaux des écrans). Seules les cases NOM et
    PRÉNOM des feuilles à nom manuscrit gardent leur place : le scan les lit là.
-   Sur la page des candidats (classe ou épreuve), **Exporter la liste (Excel)** donne
-   toute la liste, colonnes de la page comprises : le fichier se réimporte tel quel
-   dans une autre épreuve. Les cases à cocher (celle de l'en-tête coche la page ;
-   « toutes pages comprises » au-delà de 100) suppriment plusieurs candidats d'un
-   coup ; un candidat qui a des copies corrigées n'est jamais supprimé.
+   Pour l'écrit d'un concours seulement (ni les classes, ni le QCM ou l'oral) :
+   **Exporter les candidats (Excel)**, sur sa page et sur sa liste des candidats, donne
+   toute la liste, colonnes de la page comprises ; le fichier se réimporte tel quel
+   dans une autre épreuve. Sur cette liste, des cases à cocher (celle de l'en-tête
+   coche la page ; « toutes pages comprises » au-delà de 100) suppriment plusieurs
+   candidats d'un coup ; un candidat qui a des copies corrigées n'est jamais supprimé.
 2. **Quiz** : créez un quiz en choisissant le **type de fiche** :
    - **Sujet séparé + feuille de réponses** : deux documents — un PDF
      « Sujet » avec les questions et leurs choix (à distribuer, non scanné)

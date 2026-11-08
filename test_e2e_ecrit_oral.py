@@ -310,7 +310,14 @@ def test_oral(c, groupe):
     bloc = revue.split('class="note-lue note-lue--a-saisir"')[1].split("</form>")[0]
     assert f'name="points_{reponse.pk}"' in bloc and "Note sur 20" in bloc
     assert "table-wrap" not in bloc.split(f'name="points_{reponse.pk}"')[0]
-    c.post(reverse("sheet_review", args=[cherif.pk]), {f"points_{reponse.pk}": "17"})
+    # retour aux résultats (demande du 9 novembre 2026) : en tête de page, et après
+    # l'enregistrement de la note
+    resultats = reverse("quiz_results", args=[quiz.pk])
+    assert f'href="{resultats}">← Retour aux résultats</a>' in revue
+    assert 'name="retour_resultats"' in bloc and "Enregistrer et retour aux résultats" in bloc
+    r = c.post(reverse("sheet_review", args=[cherif.pk]),
+               {f"points_{reponse.pk}": "17", "retour_resultats": "1"})
+    assert r.status_code == 302 and r["Location"] == resultats, r.get("Location")
     rows = {r["student"].last_name: r["score"] for r in services.compute_results(quiz)}
     assert rows == {"AMRI": 12.25, "CHERIF": 17.0}, rows
     page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()

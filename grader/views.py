@@ -403,6 +403,9 @@ def _save_candidates(request, group, rows):
 @login_required
 def class_detail(request, pk):
     group = get_object_or_404(_my_classes(request), pk=pk)
+    # Export Excel et suppression groupée : sur la liste de l'écrit d'un concours
+    # seulement (demande du 8 novembre 2026 : « dans écrire de concours seulement »)
+    ecrit_concours = _ecrit_de_concours(group)
     import_form = StudentImportForm()
     xlsx_form = CandidateFileForm()
     if request.method == "POST":
@@ -505,6 +508,10 @@ def class_detail(request, pk):
             # Les cochés de la page, ou toute la liste (case « toutes pages
             # comprises ») ; jamais un candidat qui a des copies corrigées
             # (même règle qu'un par un, ci-dessus).
+            if not ecrit_concours:
+                messages.error(request, "La suppression groupée est réservée aux candidats "
+                                        "de l'écrit d'un concours.")
+                return redirect("class_detail", pk=pk)
             if request.POST.get("tous") == "1":
                 choisis = group.students.all()
             else:
@@ -543,6 +550,7 @@ def class_detail(request, pk):
                                       .annotate(n=Count("students"))
                                       .filter(n__gt=0).order_by("name")),
                    "est_concours": concours is not None,
+                   "ecrit_concours": ecrit_concours,
                    "students_page": _page(request, group.students.select_related("inscrit")),
                    "avec_fiches": group.students.filter(inscrit__isnull=False).exists(),
                    "students_total": group.students.count()})
@@ -557,11 +565,19 @@ def student_qr(request, pk):
                         content_type="image/png")
 
 
+def _ecrit_de_concours(group):
+    """La liste est celle de l'écrit d'un concours : seule à offrir l'export
+    Excel et la suppression groupée."""
+    return group.quizzes.filter(auto_enroll=True, type_epreuve="ecrit").exists()
+
+
 @login_required
 def class_candidats_xlsx(request, pk):
-    """La liste des candidats en Excel, comme la page l'affiche : toutes les
-    pages, mêmes colonnes, même ordre."""
+    """La liste des candidats de l'écrit d'un concours en Excel, comme la page
+    l'affiche : toutes les pages, mêmes colonnes, même ordre."""
     group = get_object_or_404(_my_classes(request), pk=pk)
+    if not _ecrit_de_concours(group):
+        raise Http404("Export réservé à l'écrit d'un concours.")
     etudiants = list(group.students.select_related("inscrit"))
     data = candidats_workbook(group, etudiants, any(s.inscrit_id for s in etudiants))
     resp = HttpResponse(
@@ -1413,6 +1429,8 @@ def sheet_review(request, pk):
                 request, f"Copie {position + 1}/{len(sheet_ids)} enregistrée.")
             return redirect("sheet_review", pk=next_id)
         messages.success(request, "Corrections enregistrées.")
+        if "retour_resultats" in request.POST:       # demande du 9 novembre 2026
+            return redirect("quiz_results", pk=quiz.pk)
         return redirect("batch_detail", pk=sheet.batch_id)
 
     liste = list(students)
