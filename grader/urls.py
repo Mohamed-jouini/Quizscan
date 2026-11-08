@@ -9,6 +9,8 @@ urlpatterns = [
     path("classes/<int:pk>/", views.class_detail, name="class_detail"),
     path("classes/<int:pk>/etiquettes.pdf", views.class_labels_pdf,
          name="class_labels_pdf"),
+    path("classes/<int:pk>/candidats.xlsx", views.class_candidats_xlsx,
+         name="class_candidats_xlsx"),
     path("candidats/<int:pk>/qr.png", views.student_qr, name="student_qr"),
     path("quiz/nouveau/", views.quiz_create, name="quiz_create"),
     path("quiz/<int:pk>/", views.quiz_detail, name="quiz_detail"),

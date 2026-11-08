@@ -163,6 +163,7 @@ def main():
         cl.post(reverse("class_list"), {"name": "SEC lecteur"}),
         cl.post(reverse("class_detail", args=[ga.pk]), {"import": "1", "text": "NOUVEAU Jean 1"}),
         cl.post(reverse("class_detail", args=[ga.pk]), {"delete_student": cand_a.pk}),
+        cl.post(reverse("class_detail", args=[ga.pk]), {"supprimer_choix": "1", "tous": "1"}),
         cl.post(reverse("communiques"), {"titre": "SEC faux", "texte": "x", "publie": "on"}),
         cl.post(reverse("inscriptions"), dict(fiche, numero="990003", cin="SEC990003")),
         cl.post(reverse("quiz_results", args=[qa.pk]), {"masquer_non_identifiees": "1"}),
@@ -174,6 +175,8 @@ def main():
     page = cl.get(reverse("class_detail", args=[ga.pk]))
     assert page.status_code == 200                                    # il consulte
     assert 'name="delete_student"' not in page.content.decode()       # sans bouton inutile
+    assert 'name="supprimer_choix"' not in page.content.decode()      # ni cases à cocher
+    assert 'name="choix"' not in page.content.decode()
     print("  compte lecture seule : classe, liste, registre, communiqué, alerte refusés OK")
 
     # ---- nom piégé : un simple texte dans un attribut, plus du JavaScript

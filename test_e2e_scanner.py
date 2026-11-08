@@ -16,6 +16,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import io
 import logging
+from unittest import mock
 
 import cv2
 import numpy as np
@@ -188,6 +189,108 @@ def verifier_versos_blancs(teacher):
     print("  4 versos blancs ignorés : seule la vraie page sans étiquette est signalée")
 
 
+def jpeg_annonce(largeur, hauteur, progressif=False):
+    """Un JPEG de quelques centaines d'octets dont l'en-tête annonce largeur × hauteur
+    pixels : ce qu'un fichier piégé peut prétendre sans rien contenir."""
+    drapeaux = [cv2.IMWRITE_JPEG_PROGRESSIVE, 1] if progressif else []
+    octets = bytearray(cv2.imencode(".jpg", np.full((16, 16), 255, np.uint8), drapeaux)[1])
+    i = 2
+    while octets[i + 1] not in (0xC0, 0xC2):
+        i += 2 + int.from_bytes(octets[i + 2:i + 4], "big")
+    octets[i + 5:i + 9] = hauteur.to_bytes(2, "big") + largeur.to_bytes(2, "big")
+    return bytes(octets)
+
+
+def pdf_jpeg(flux, largeur_pt, hauteur_pt):
+    """Le PDF d'un scanner : une page, une image JPEG pleine page, telle quelle."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=largeur_pt, height=hauteur_pt)
+    page.insert_image(page.rect, stream=flux)
+    octets = doc.tobytes()
+    doc.close()
+    return octets
+
+
+def verifier_haute_resolution(teacher):
+    """Scanner réglé au-delà de 400 ppp (8 novembre 2026 : PDF à 1200 ppp, chaque page
+    refusée « Image démesurée (9910 × 12694 pixels) ») : le JPEG se décode réduit, la
+    limite porte sur l'image en mémoire ; un fichier piégé reste refusé sans être décodé.
+    Le cas réel, page de garde à talon découpé, est dans test_e2e_talon."""
+    blanc = np.full((40, 30), 255, np.uint8)
+    couleur = cv2.imencode(".jpg", cv2.cvtColor(blanc, cv2.COLOR_GRAY2BGR))[1].tobytes()
+    progressif = cv2.imencode(".jpg", blanc, [cv2.IMWRITE_JPEG_PROGRESSIVE, 1])[1].tobytes()
+    assert services._entete_jpeg(cv2.imencode(".jpg", blanc)[1].tobytes()) == (30, 40, 1, True)
+    assert services._entete_jpeg(couleur) == (30, 40, 3, True)
+    assert services._entete_jpeg(progressif) == (30, 40, 1, False)
+    for autre in (cv2.imencode(".png", blanc)[1].tobytes(), b"\xff\xd8\xff", b"", couleur[:3]):
+        assert services._entete_jpeg(autre) is None, autre[:8]
+    print("  en-tête JPEG lu sans décoder : taille, composantes, en un balayage ou non OK")
+
+    _, quiz, (a, b) = creer_quiz("SC-PPP", teacher, nb_qcm=PAGE_1, id_mode="sticker",
+                                 auto_enroll=True)
+    disposition, pdf = preparer(quiz)
+
+    def page_fine(candidat, ppp):
+        """La copie scannée à ppp (les pages des tests sont rendues à 300 ppp)."""
+        gris = cv2.cvtColor(copie(pdf, disposition, candidat, {0})[0], cv2.COLOR_BGR2GRAY)
+        fine = cv2.resize(gris, None, fx=ppp / 300, fy=ppp / 300, interpolation=cv2.INTER_LINEAR)
+        return fine.shape, cv2.imencode(".jpg", fine, [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
+
+    # PDF à 600 ppp (35 millions de pixels, sous la limite) : décodé à la moitié, ramené à 200
+    (hauteur, largeur), flux = page_fine(a, 600)
+    pdf_600 = pdf_jpeg(flux, largeur * 72 / 600, hauteur * 72 / 600)
+    with pymupdf.open(stream=pdf_600, filetype="pdf") as doc, \
+            mock.patch.object(services.cv2, "imdecode", wraps=cv2.imdecode) as espion:
+        lue = services._image_du_scanner(doc, doc[0])
+    assert espion.call_args.args[1] & ~cv2.IMREAD_IGNORE_ORIENTATION == cv2.IMREAD_REDUCED_COLOR_2
+    assert abs(lue.shape[1] - round(largeur / 3)) <= 2, (lue.shape, largeur)
+    # image seule à 1200 ppp (139 millions) : décodée à la moitié, juste assez pour la limite
+    (hauteur, largeur), flux_1200 = page_fine(b, 1200)
+    assert largeur * hauteur > 3 * services.MAX_PIXELS_PAGE, (largeur, hauteur)
+    with services._open_pages("fine.jpg", flux_1200) as pages:
+        assert pages[0][1]().shape[:2] == (-(-hauteur // 2), -(-largeur // 2))
+    lot = services.process_uploaded_files(quiz, [
+        SimpleUploadedFile("scan600.pdf", pdf_600), SimpleUploadedFile("scan1200.jpg", flux_1200)],
+        label="ppp")
+    feuilles = list(lot.sheets.order_by("pk"))
+    assert [f.student_id for f in feuilles] == [a.pk, b.pk], \
+        [(f.status, f.error_message) for f in feuilles]
+    rangs = lignes(quiz)
+    assert rangs[a.pk]["score"] == rangs[b.pk]["score"] == PAGE_1, rangs
+    print(f"  PDF à 600 ppp et image seule à 1200 ppp ({largeur} × {hauteur} pixels) : décodés "
+          f"à la moitié, identifiés, {PAGE_1}/{PAGE_1} chacun OK")
+
+    # Fichiers piégés : refusés sur leur seul en-tête, le message dit quoi régler.
+    # Progressif au-delà de la limite (libjpeg garderait toute l'image même réduite) ;
+    # séquentiel si grand que même le huitième dépasse la limite.
+    a4_progressif = pdf_jpeg(jpeg_annonce(5400, 7640, progressif=True), 595, 842)
+    carre = pdf_jpeg(jpeg_annonce(60000, 60000), 2268, 2268)          # 80 cm de côté
+    with mock.patch.object(services.cv2, "imdecode", wraps=cv2.imdecode) as espion:
+        for octets, ppp in ((a4_progressif, 653), (carre, 1905)):
+            with services._open_pages("piege.pdf", octets, differer=True) as pages:
+                try:
+                    pages[0][1]()
+                    raise AssertionError(f"image de {ppp} ppp acceptée")
+                except ValueError as exc:
+                    assert "démesurée" in str(exc) and f"{ppp} ppp" in str(exc) \
+                        and "réglez le scanner sur 200 ou 300 ppp" in str(exc), str(exc)
+        for octets in (jpeg_annonce(7000, 9900, progressif=True), jpeg_annonce(60000, 60000)):
+            with services._open_pages("piege.jpg", octets) as pages:
+                try:
+                    pages[0][1]()
+                    raise AssertionError("image piégée décodée")
+                except ValueError as exc:
+                    assert "démesurée" in str(exc) and "piege.jpg" in str(exc), str(exc)
+    assert not espion.called, "une image démesurée a été décodée"
+    lot = services.process_uploaded_files(
+        quiz, [SimpleUploadedFile("progressif.pdf", a4_progressif)], label="piege")
+    feuille = lot.sheets.get()
+    assert lot.status == "done" and feuille.status == "error", (lot.status, feuille.status)
+    assert "réglez le scanner" in feuille.error_message, feuille.error_message
+    print("  JPEG piégés (progressif au-delà de la limite, 60000 × 60000) : refusés sur "
+          "l'en-tête, sans décodage, le message dit quoi régler OK")
+
+
 def main():
     logging.disable(logging.ERROR)     # le faux TIFF, refusé exprès, est journalisé
     Quiz.objects.filter(owner__username=PROF).delete()
@@ -200,6 +303,8 @@ def main():
     verifier_noir_et_blanc(teacher)
     print("Versos blancs :")
     verifier_versos_blancs(teacher)
+    print("Haute résolution :")
+    verifier_haute_resolution(teacher)
     print("\n✅ SORTIES DU SCANNER À CHARGEUR : TEST RÉUSSI")
 
 

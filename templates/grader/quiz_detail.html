@@ -60,7 +60,7 @@
       <label><input type="radio" name="anonymat" value="{{ val }}" {% if quiz.anonymat == val %}checked{% endif %}> {{ libelle }}</label>
       {% endfor %}
     </div>
-    <span class="helptext helptext--serre">Talon : le nom est en haut de la page, découpé au massicot avant la correction. N° de place : aucun nom sur la copie, le surveillant a la liste de placement et d'émargement. Dans les deux cas, une copie par étudiant avec son QR (identification « QR code »).</span>
+    <span class="helptext helptext--serre">Talon : le nom est en haut de la page, découpé au massicot avant la correction. N° de place : aucun nom sur la copie, le surveillant a la liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }} et des places. Dans les deux cas, une copie par étudiant avec son QR (identification « QR code »).</span>
   </div>
   <div id="row_id_digits">
     <label>Chiffres du n° d'inscription</label>
@@ -321,7 +321,7 @@
       {% if quiz.sheet_pdf %}
         <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">
           {% if quiz.sheet_mode == "split" %}📝 Feuille de réponses{% else %}📄 Télécharger la fiche{% endif %}</a>
-        <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">📋 {% if quiz.place_anonyme %}Liste de placement et d'émargement{% else %}Liste d'émargement{% endif %} par salle</a>
+        <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">📋 Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% if quiz.place_anonyme %} et des places{% endif %} par salle</a>
       {% endif %}
     </form>
     {% endif %}
@@ -335,7 +335,7 @@
         {% else %}Imprimez les deux en A4 à 100 %.{% endif %}
       {% elif quiz.id_mode == "qr" and not quiz.exemplaires_anonymes %}
         Imprimez en A4 à 100 % et distribuez à chacun la sienne : les copies sortent salle
-        par salle (registre des inscriptions), dans l'ordre de la liste d'émargement.
+        par salle (registre des inscriptions), dans l'ordre de la liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}.
       {% elif quiz.id_mode == "grid" %}
         Imprimez cette fiche en A4 (100 %, sans mise à l'échelle) : une copie par étudiant.
         Chacun colle son étiquette QR dans le cadre en haut à droite

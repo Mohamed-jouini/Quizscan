@@ -25,6 +25,11 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    « محمد أمين الجبالي », « Mokhtar ARBI » (talon et copies, listes, bulletins,
    exports Excel, étiquettes, cartes, tableaux des écrans). Seules les cases NOM et
    PRÉNOM des feuilles à nom manuscrit gardent leur place : le scan les lit là.
+   Sur la page des candidats (classe ou épreuve), **Exporter la liste (Excel)** donne
+   toute la liste, colonnes de la page comprises : le fichier se réimporte tel quel
+   dans une autre épreuve. Les cases à cocher (celle de l'en-tête coche la page ;
+   « toutes pages comprises » au-delà de 100) suppriment plusieurs candidats d'un
+   coup ; un candidat qui a des copies corrigées n'est jamais supprimé.
 2. **Quiz** : créez un quiz en choisissant le **type de fiche** :
    - **Sujet séparé + feuille de réponses** : deux documents — un PDF
      « Sujet » avec les questions et leurs choix (à distribuer, non scanné)
@@ -565,7 +570,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_concours.py` | mode concours (QR anonyme, grille de n°, import des noms) |
 | `test_e2e_labels.py` | étiquette QR d'un candidat de concours collée sur la copie |
 | `test_e2e_etiquette_pages.py` | feuille à étiquette sur plusieurs pages : une vignette par page, étiquette oubliée signalée (copie incomplète, en attente), présélection d'après l'ordre du scan |
-| `test_e2e_scanner.py` | sorties d'un scanner à chargeur : TIFF multipage lu en entier, versos blancs ignorés, étiquettes lues en noir et blanc |
+| `test_e2e_scanner.py` | sorties d'un scanner à chargeur : TIFF multipage lu en entier, versos blancs ignorés, étiquettes lues en noir et blanc, PDF à 600 dpi et image à 1200 dpi décodés réduits, JPEG piégés refusés sur leur en-tête |
 | `test_e2e_a3.py` | copies d'écrit et sujet de QCM en A3 recto-verso plié : ordre des pages, sans carrés noirs, page de garde lue sur la feuille A3 dans tous les sens, en-tête et QR de l'étudiant sur la page de garde seulement, A4 inchangé |
 | `test_e2e_import.py` | import de questionnaires et de candidats (Excel, Word, PDF, CSV), banque de questions |
 | `test_e2e_forms.py` | création d'un concours (sans classe ni case « mode concours ») et d'un quiz, nombre de choix par question jusqu'à la lecture de la copie |
@@ -596,6 +601,12 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
 - Scanner à chargeur (Canon DR-G2110 à l'institut) : **PDF, niveaux de gris, 200 dpi**. Un
   paquet de 500 feuilles en recto-verso reste alors sous les 500 Mo permis par fichier. Le
   recto-verso convient : les versos blancs sont ignorés.
+- Plus fin (600, 1200 dpi) est accepté en PDF ou en JPEG : l'image est décodée réduite, puis lue
+  à 200 dpi. Cela n'apporte rien et alourdit tout : à 1200 dpi, une page compte 36 fois plus de
+  pixels qu'à 200 dpi, et le paquet dépasse vite les 500 Mo. En TIFF ou PNG, la limite reste de
+  40 millions de pixels (une A4 à 600 dpi passe, une A3 non). Une image démesurée (fichier
+  piégé, JPEG progressif de plus de 40 millions de pixels) est refusée, avec la résolution à
+  régler dans le message.
 - Copies d'écrit en A3 (réglage « Format des copies » de l'épreuve) : imprimez recto-verso sur
   le bord court, à 100 %, et pliez au milieu ; le sujet d'un QCM peut prendre le même format,
   sa feuille de réponses reste en A4. Au scan, passez les feuilles dépliées, en A3, recto seul :
@@ -607,9 +618,10 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
 - Copies nominatives (nom imprimé, talon ou n° de place, en QCM comme à l'écrit) et fiches
   d'oral : elles sortent salle par salle, d'après la salle du registre des inscriptions
   (« قاعة عدد 2 » avant « قاعة عدد 15 », les étudiants sans salle à la fin), puis par n°
-  d'inscription, ou par n° de place. La « Liste d'émargement par salle » (page de l'épreuve,
-  pour toute présentation) donne une liste par salle, dans le même ordre, pour la signature
-  de présence ; avec les copies à n° de place, elle porte aussi la place de chacun.
+  d'inscription, ou par n° de place. La « Liste des candidats par salle » (des étudiants pour
+  une classe ; page de l'épreuve, pour toute présentation) donne une liste par salle, dans le
+  même ordre, pour la signature de présence ; avec les copies à n° de place, elle porte aussi
+  la place de chacun.
 - Copies d'écrit nominatives (talon, nom imprimé ou n° de place) : en A4, le recto de chaque
   feuille (pages 1, 3, 5…) porte l'en-tête de la page de garde (talon à découper, bande du
   titre et QR de l'étudiant), pour qu'une feuille détachée reste à qui elle est ; le dos n'en

@@ -208,12 +208,12 @@ def verifier_ecrit(c, prof):
 
     # Lecture : chaque présentation que le scanner peut rendre.
     sens = [("depliee.jpg", "AMRI", [1, 5, 7, 5], lambda f: f),
-            ("tournee90.jpg", "BAKIR", [None, 8, None, None],
+            ("tournee90.jpg", "BAKIR", [0, 8, 0, 0],
              lambda f: cv2.rotate(f, cv2.ROTATE_90_CLOCKWISE)),
-            ("tournee270.jpg", "CHERIF", [1, 2, 5, None],
+            ("tournee270.jpg", "CHERIF", [1, 2, 5, 0],
              lambda f: cv2.rotate(f, cv2.ROTATE_90_COUNTERCLOCKWISE)),
-            ("envers.jpg", "DALI", [None, 9, 2, 5], lambda f: cv2.rotate(f, cv2.ROTATE_180)),
-            ("pliee.jpg", "ESSID", [1, 1, None, None], lambda f: f[:, mm2px(210):])]
+            ("envers.jpg", "DALI", [0, 9, 2, 5], lambda f: cv2.rotate(f, cv2.ROTATE_180)),
+            ("pliee.jpg", "ESSID", [1, 1, 0, 0], lambda f: f[:, mm2px(210):])]
     numeros = {e[0]: e[2] for e in ETUDIANTS}
     envois = []
     for nom, etudiant, chiffres, sens_scan in sens:
@@ -238,9 +238,9 @@ def verifier_ecrit(c, prof):
     # Sortie conseillée : un PDF recto-verso à 200 ppp, comme le chargeur la rend.
     quiz2, _ = creer_ecrit(c, prof, "A3-PDF")
     pdf2 = quiz2.sheet_pdf.read()
-    images = [copie_remplie(pdf2, quiz2, 0, numeros["AMRI"], [1, 4, None, None], gauche=False),
+    images = [copie_remplie(pdf2, quiz2, 0, numeros["AMRI"], [1, 4, 0, 0], gauche=False),
               griffonner(render_page(pdf2, 1), (22, 28, 190, 276), 11),
-              cv2.rotate(copie_remplie(pdf2, quiz2, 0, numeros["BAKIR"], [None, 7, 5, None],
+              cv2.rotate(copie_remplie(pdf2, quiz2, 0, numeros["BAKIR"], [0, 7, 5, 0],
                                        gauche=False), cv2.ROTATE_90_COUNTERCLOCKWISE),
               cv2.rotate(render_page(pdf2, 1), cv2.ROTATE_90_COUNTERCLOCKWISE)]
     lot = services.process_uploaded_files(
@@ -258,7 +258,7 @@ def verifier_arabe_et_etiquette(c, prof):
     assert pages_des_moities(doc, quiz.title) == [(1, 4), (3, 2)], pages_des_moities(doc, quiz.title)
     assert quiz.layout_json["pages"][0]["lignes"]["marge"] == 190.0, "marge côté début de ligne"
     candidat = groupe.students.get(last_name="AMRI")
-    feuille = copie_remplie(pdf, quiz, 0, "", [1, 6, None, None], gauche=True, etiquette=candidat)
+    feuille = copie_remplie(pdf, quiz, 0, "", [1, 6, 0, 0], gauche=True, etiquette=candidat)
     lot = services.process_uploaded_files(
         quiz, [SimpleUploadedFile("ar.jpg", jpg(simulate_scan(feuille)))], label="A3 arabe")
     s = lot.sheets.get()
@@ -308,7 +308,7 @@ def verifier_talon(c, prof):
 
     # Lecture : la page de garde, à côté de la page 4 et de son QR ; le verso, talon coupé
     # ou non, ignoré (ni cadre ni code de page).
-    feuille = copie_remplie(pdf, quiz, 0, "", [1, 3, None, None], gauche=False)
+    feuille = copie_remplie(pdf, quiz, 0, "", [1, 3, 0, 0], gauche=False)
     coupee = feuille[mm2px(L.TALON_COUPE):]
     haut = debut_du_texte(quiz.layout_json["pages"][0])
     verso = griffonner(griffonner(render_page(pdf, 1), (22, haut, 190, 276), 5),
@@ -345,13 +345,13 @@ def verifier_entete_nominatif(c, prof):
         assert qr_de_la_moitie(render_page(pdf, index), droite, zone) == "", numero
     assert "Ne pas scanner" not in doc[0].get_text() + doc[1].get_text()
     # la page de garde se lit : dépliée, puis tournée
-    recto = simulate_scan(copie_remplie(pdf, quiz, 0, "", [1, 2, None, None], gauche=False))
+    recto = simulate_scan(copie_remplie(pdf, quiz, 0, "", [1, 2, 0, 0], gauche=False))
     haut = debut_du_texte(quiz.layout_json["pages"][0])
     verso = griffonner(render_page(pdf, 1), (232, haut, 400, 276), 9)
     lot = services.process_uploaded_files(quiz, [
         SimpleUploadedFile("amri.jpg", jpg(recto)),
         SimpleUploadedFile("bakir.jpg", jpg(simulate_scan(cv2.rotate(
-            copie_remplie(pdf, quiz, 2, "", [None, 8, 5, None], gauche=False),
+            copie_remplie(pdf, quiz, 2, "", [0, 8, 5, 0], gauche=False),
             cv2.ROTATE_90_CLOCKWISE)))),
         SimpleUploadedFile("verso.jpg", jpg(simulate_scan(verso)))], label="A3 nominatives")
     feuilles = {s.source_name: s for s in lot.sheets.all()}
@@ -463,7 +463,7 @@ def verifier_a4_inchange(c, prof):
     assert {k: quiz.layout_json["pages"][0].get(k) for k in services._ZONES_LUES} == zones_a4, \
         "rien de ce qui est lu ne bouge entre A4 et A3"
     ancienne = fill_sheet(render_page(pdf_a4, 0), {"pages": [page_a4]}, {}, student_number="104501")
-    ancienne = noircir_note(ancienne, page_a4["note_grid"], [1, 0, 5, None])
+    ancienne = noircir_note(ancienne, page_a4["note_grid"], [1, 0, 5, 0])
     lot = services.process_uploaded_files(
         quiz, [SimpleUploadedFile("a4.jpg", jpg(simulate_scan(ancienne)))], label="A4 d'avant")
     s = lot.sheets.get()

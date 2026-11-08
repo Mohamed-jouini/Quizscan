@@ -308,8 +308,8 @@ def _champ_anonymat():
         widget=forms.RadioSelect,
         help_text="Talon ou n° de place : une copie par étudiant, QR imprimé "
                   "(identification « QR code », même en concours). N° de place : "
-                  "aucun nom sur la copie, une liste de placement et "
-                  "d'émargement est imprimée pour le surveillant.")
+                  "aucun nom sur la copie, une liste des candidats et des places "
+                  "est imprimée pour le surveillant.")
 
 
 def _appliquer_anonymat(form, data):

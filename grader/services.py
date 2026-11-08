@@ -299,28 +299,95 @@ def _lire_le_lot(batch_id):
 
 
 # Une page A4 à 200 ppp fait 4 millions de pixels, une A3 8 millions. Au-delà
-# de 40 millions, ce n'est plus une copie : un petit fichier piégé (PDF à
-# page géante, PNG très compressé) ferait sinon allouer des gigaoctets.
+# de 40 millions en mémoire, ce n'est plus une copie : un petit fichier piégé
+# (PDF à page géante, PNG très compressé) ferait sinon allouer des gigaoctets.
+# Un JPEG de scanner plus fin (600, 1200 ppp) passe : il se décode réduit, et
+# seule l'image réduite est en mémoire (8 novembre 2026, pages à 1200 ppp refusées).
 MAX_PIXELS_PAGE = 40_000_000
 FORMATS_SCAN = ("JPEG", "PNG", "TIFF", "BMP", "WEBP")
+# libjpeg décode un JPEG directement à la moitié, au quart ou au huitième de sa
+# taille, sans passer par l'image entière
+_LECTURE_REDUITE = {1: cv2.IMREAD_COLOR, 2: cv2.IMREAD_REDUCED_COLOR_2,
+                    4: cv2.IMREAD_REDUCED_COLOR_4, 8: cv2.IMREAD_REDUCED_COLOR_8}
+
+
+def _image_demesuree(largeur, hauteur, ou, ppp=None):
+    """L'erreur d'une image trop grande pour être lue, avec ce qu'il faut faire."""
+    finesse = f", {ppp} ppp" if ppp else ""
+    return ValueError(f"Image démesurée ({largeur} × {hauteur} pixels{finesse}) {ou} : "
+                      "réglez le scanner sur 200 ou 300 ppp.")
+
+
+def _entete_jpeg(octets):
+    """(largeur, hauteur, composantes, en un balayage) d'un JPEG ordinaire, lus
+    dans ses marqueurs jusqu'au premier balayage, sans rien décoder ; None pour
+    tout autre contenu, JPEG à part compris (sans perte, arithmétique, hiérarchique).
+
+    « En un balayage » : séquentiel, toutes les composantes dans le premier
+    balayage. libjpeg le décode alors bande par bande, réduit s'il le faut :
+    quelques lignes en mémoire, quelle que soit sa taille. Sinon (progressif,
+    composantes balayées à part), il garde les coefficients de toute l'image,
+    deux octets par pixel et par composante, même pour une lecture réduite."""
+    if octets[:2] != b"\xff\xd8":
+        return None
+    trame, i, fin = None, 2, len(octets)
+    while i + 4 <= fin:
+        if octets[i] != 0xFF:
+            return None
+        marqueur = octets[i + 1]
+        if marqueur == 0xFF:                              # octet de remplissage
+            i += 1
+            continue
+        if marqueur == 0x01 or 0xD0 <= marqueur <= 0xD7:  # marqueurs sans longueur
+            i += 2
+            continue
+        if marqueur in (0xD8, 0xD9):                      # autre image, fin d'image
+            return None
+        longueur = int.from_bytes(octets[i + 2:i + 4], "big")
+        if marqueur in (0xC0, 0xC1, 0xC2):                # trame séquentielle, progressive
+            if trame is not None or longueur < 8 or i + 10 > fin or octets[i + 4] != 8:
+                return None
+            trame = (int.from_bytes(octets[i + 7:i + 9], "big"),
+                     int.from_bytes(octets[i + 5:i + 7], "big"),
+                     octets[i + 9], marqueur != 0xC2)
+        elif 0xC3 <= marqueur <= 0xCF and marqueur not in (0xC4, 0xC8, 0xCC):
+            return None
+        elif marqueur == 0xDA:                            # premier balayage
+            if trame is None or i + 5 > fin:
+                return None
+            largeur, hauteur, composantes, sequentiel = trame
+            return largeur, hauteur, composantes, sequentiel and octets[i + 4] == composantes
+        i += 2 + longueur
+    return None
 
 
 def _controler_dimensions(name, data):
     """Refuse une image démesurée, ou d'un autre format qu'un scan, avant de
-    la décoder (l'en-tête suffit). Le format se lit dans le contenu, pas dans
-    l'extension : sans cette liste, un fichier « .png » atteindrait tous les
-    décodeurs de Pillow et d'OpenCV, y compris ceux de formats exotiques qui
-    ont des failles connues (FlashPix, EPS, XBM…)."""
+    la décoder (l'en-tête suffit) ; rend la réduction à demander au décodage
+    (1, 2, 4 ou 8). Le format se lit dans le contenu, pas dans l'extension :
+    sans cette liste, un fichier « .png » atteindrait tous les décodeurs de
+    Pillow et d'OpenCV, y compris ceux de formats exotiques qui ont des failles
+    connues (FlashPix, EPS, XBM…). Un JPEG en un balayage plus grand que la
+    limite (scanner à 1200 ppp) se décode réduit, juste assez pour y tenir."""
+    entete = _entete_jpeg(data)
+    if entete is not None and entete[3] and entete[2] in (1, 3):
+        largeur, hauteur = entete[:2]
+        for reduction in (1, 2, 4, 8):
+            if -(-largeur // reduction) * -(-hauteur // reduction) <= MAX_PIXELS_PAGE:
+                return reduction
+        raise _image_demesuree(largeur, hauteur, f"dans {name}")
     from PIL import Image
     try:
         with Image.open(io.BytesIO(data), formats=FORMATS_SCAN) as im:
             largeur, hauteur = im.size
     except Image.DecompressionBombError as exc:
-        raise ValueError(f"Image démesurée : {name}") from exc
+        raise ValueError(f"Image démesurée dans {name} : réglez le scanner "
+                         "sur 200 ou 300 ppp.") from exc
     except Exception as exc:  # noqa: BLE001 — quelle qu'en soit la raison
         raise ValueError(f"Format d'image non reconnu : {name}") from exc
     if largeur * hauteur > MAX_PIXELS_PAGE:
-        raise ValueError(f"Image démesurée ({largeur} × {hauteur} pixels) : {name}")
+        raise _image_demesuree(largeur, hauteur, f"dans {name}")
+    return 1
 
 
 class _ADecoder:
@@ -348,8 +415,10 @@ def _jpeg_du_scanner(doc, page):
     pour une page qui n'est que cette image, à plat et pleine page, en gris ou
     en couleur : sinon (texte, dessin, rotation, masque, noir et blanc 1 bit,
     CMJN…) None, et la page est dessinée comme avant. Une image plus fine que
-    200 ppp y est ramenée, comme le faisait le rendu. Tout ce qui demande le
-    PDF se fait ici ; le décodage, dans _ADecoder.decoder (None s'il échoue)."""
+    200 ppp y est ramenée, comme le faisait le rendu ; au-delà de 400 ppp, elle
+    se décode d'abord réduite (scanner à 1200 ppp : 125 millions de pixels par
+    page, refusés jusqu'au 8 novembre 2026). Tout ce qui demande le PDF se fait
+    ici ; le décodage, dans _ADecoder.decoder (None s'il échoue)."""
     if page.rotation % 360:
         return None
     images = page.get_images(full=True)
@@ -380,21 +449,28 @@ def _jpeg_du_scanner(doc, page):
         return None
     if not w or not h or abs(w / h - largeur_pt / hauteur_pt) > 0.02 * largeur_pt / hauteur_pt:
         return None                                       # image étirée sur la page
-    if w * h > MAX_PIXELS_PAGE:
-        raise ValueError(f"Image démesurée ({w} × {h} pixels) dans la page.")
+    ppp = round(w / largeur_pt * 72)
     brut = doc.xref_stream_raw(xref)
-    from PIL import Image
-    try:        # l'en-tête seul (une fraction de milliseconde) : un JPEG que le décodage refuserait
-        with Image.open(io.BytesIO(brut), formats=("JPEG",)) as entete:
-            if entete.size != (w, h) or entete.mode not in ("L", "RGB"):
-                return None
-    except Exception:  # noqa: BLE001 — en-tête illisible : la page se dessine
+    entete = _entete_jpeg(brut)      # l'en-tête seul, une fraction de milliseconde
+    if entete is None or entete[:2] != (w, h) or entete[2] not in (1, 3):
+        # JPEG à part (CMJN, taille autre que celle annoncée, arithmétique…) : la
+        # page se dessine, comme avant, si l'image reste à la mesure d'une copie
+        if max(w * h, entete[0] * entete[1] if entete else 0) > MAX_PIXELS_PAGE:
+            raise _image_demesuree(w, h, "dans la page", ppp)
         return None
     cible = (round(largeur_pt / 72 * SCAN_DPI), round(hauteur_pt / 72 * SCAN_DPI))
+    # la plus forte réduction qui garde 200 ppp : à 1200 ppp, le quart (300 ppp),
+    # ramené ensuite à 200 ; l'image entière ne passe jamais en mémoire
+    reduction = 1
+    while reduction < 8 and w // (2 * reduction) >= cible[0]:
+        reduction *= 2
+    decodee = -(-w // reduction) * -(-h // reduction)
+    if decodee > MAX_PIXELS_PAGE or (not entete[3] and w * h > MAX_PIXELS_PAGE):
+        raise _image_demesuree(w, h, "dans la page", ppp)
+    drapeaux = _LECTURE_REDUITE[reduction] | cv2.IMREAD_IGNORE_ORIENTATION
 
     def decoder():
-        img = cv2.imdecode(np.frombuffer(brut, dtype=np.uint8),
-                           cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
+        img = cv2.imdecode(np.frombuffer(brut, dtype=np.uint8), drapeaux)
         if img is not None and img.shape[1] > cible[0] * 1.05:
             img = cv2.resize(img, cible, interpolation=cv2.INTER_AREA)
         return img
@@ -424,15 +500,15 @@ def _open_pages(name, data, differer=False):
                     # seule la première image passe par _controler_dimensions
                     largeur, hauteur = tiff.size
                     if largeur * hauteur > MAX_PIXELS_PAGE:
-                        raise ValueError(f"Image démesurée ({largeur} × {hauteur} pixels) : {name}")
+                        raise _image_demesuree(largeur, hauteur, f"dans {name}")
                     return cv2.cvtColor(np.array(tiff.convert("RGB")), cv2.COLOR_RGB2BGR)
                 yield [(f"{name} (page {i + 1})", (lambda i=i: image_tiff(i)))
                        for i in range(nb_images)]
             return
 
         def decode():
-            _controler_dimensions(name, data)
-            img = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+            reduction = _controler_dimensions(name, data)
+            img = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), _LECTURE_REDUITE[reduction])
             if img is None:
                 raise ValueError(f"Format d'image non reconnu : {name}")
             return img

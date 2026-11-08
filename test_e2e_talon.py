@@ -202,7 +202,7 @@ def main():
     grille = ecrit.layout_json["pages"][0]["note_grid"]
     pages_par_copie = 1 + ecrit.layout_json["pages_redaction"]
     img = render_page(pdf_e, 2 * pages_par_copie)          # copie de CHERIF
-    for row, d in zip(grille["rows"], [1, 3, 5, None]):     # 13,5
+    for row, d in zip(grille["rows"], [1, 3, 5, 0]):        # 13,5 : chaque ligne noircie
         if d is not None:
             cx, cy = row[d]
             cv2.circle(img, (mm2px(cx), mm2px(cy)), mm2px(grille["r"] * 0.9),
@@ -236,6 +236,40 @@ def main():
     assert rows == {"CHERIF": 13.5}, rows
     print("  écrit à talon : page 2, au dos de la page de garde, sans en-tête ni QR, "
           "ignorée au scan OK")
+
+    # ---- PDF du scanner à 1200 ppp (8 novembre 2026 : pages de garde talon découpé,
+    # 9910 × 12694 pixels, toutes refusées « Image démesurée ») : lues, note juste
+    img = render_page(pdf_e, pages_par_copie)               # copie de BAKIR
+    for row, d in zip(grille["rows"], [0, 9, 2, 5]):        # 9,25
+        cx, cy = row[d]
+        cv2.circle(img, (mm2px(cx), mm2px(cy)), mm2px(grille["r"] * 0.9), (20, 20, 20), -1)
+    gris = cv2.cvtColor(simulate_scan(couper(img, 30.0)), cv2.COLOR_BGR2GRAY)
+    fine = cv2.resize(gris, None, fx=4, fy=4, interpolation=cv2.INTER_LINEAR)  # 300 → 1200 ppp
+    hauteur, largeur = fine.shape
+    flux = cv2.imencode(".jpg", fine, [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
+    del fine
+    assert largeur * hauteur > 3 * services.MAX_PIXELS_PAGE, (largeur, hauteur)
+    doc = pymupdf.open()
+    feuille = doc.new_page(width=largeur * 72 / 1200, height=hauteur * 72 / 1200)
+    feuille.insert_image(feuille.rect, stream=flux)
+    pdf_fin = doc.tobytes()
+    doc.close()
+    # décodée au quart (300 ppp) puis ramenée à 200 : jamais l'image entière en mémoire
+    doc = pymupdf.open(stream=pdf_fin, filetype="pdf")
+    with mock.patch.object(services.cv2, "imdecode", wraps=cv2.imdecode) as espion:
+        lue = services._image_du_scanner(doc, doc[0])
+    doc.close()
+    drapeaux = espion.call_args.args[1] & ~cv2.IMREAD_IGNORE_ORIENTATION
+    assert drapeaux == cv2.IMREAD_REDUCED_COLOR_4, drapeaux
+    assert abs(lue.shape[1] - round(largeur / 6)) <= 2, (lue.shape, largeur)
+    lot = services.process_uploaded_files(
+        ecrit, [SimpleUploadedFile("img20261108_21161779.pdf", pdf_fin)])
+    copie_fine = lot.sheets.get()
+    assert copie_fine.status != "error", copie_fine.error_message
+    rows = {r["student"].last_name: r["score"] for r in services.compute_results(ecrit)}
+    assert rows == {"CHERIF": 13.5, "BAKIR": 9.25}, rows
+    print(f"  écrit à talon en PDF à 1200 ppp ({largeur} × {hauteur} pixels) : décodé au "
+          "quart, note 9,25 lue et affectée à BAKIR OK")
 
     # copie nominative sans talon : le nom, le n° et le QR sur chaque page de rédaction
     nominatif = Quiz.objects.create(title="Rédaction nominative", class_group=groupe,

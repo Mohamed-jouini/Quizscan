@@ -21,9 +21,9 @@ de l'application ; pas de menu latéral, une barre de navigation en haut.
       <a class="{% if un == 'public_resultat' or un == 'public_epreuve' %}is-active{% endif %}" href="{% url 'public_resultat' %}">Résultats</a>
       <a class="{% if un == 'public_communiques' or un == 'public_communique' %}is-active{% endif %}" href="{% url 'public_communiques' %}">Communiqués</a>
     </nav>
+    {# plus de bouton « Espace enseignant » (8 novembre 2026) : le personnel se connecte par l'adresse de l'application #}
     <span class="pub-tete__outils">
       {% include "grader/_theme_toggle.html" %}
-      <a class="btn small secondary" href="{% url 'login' %}">Espace enseignant</a>
     </span>
   </div>
 </header>

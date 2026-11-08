@@ -115,7 +115,8 @@ def main():
     r = c.get(reverse("quiz_emargement_pdf", args=[quiz.pk]))
     assert r.status_code == 200 and r["Content-Type"] == "application/pdf"
     liste = textes(r.content)[0]
-    assert "Liste de placement et d'émargement" in liste and "Signature" in liste
+    # « Liste des candidats » (8 novembre 2026), des étudiants pour une classe
+    assert "Liste des étudiants et des places" in liste and "Signature" in liste
     for nom, prenom, num in ETUDIANTS:
         assert f"{prenom} {nom}" in liste and num in liste
     print("  liste d'émargement : place, n°, nom, case de signature OK")
@@ -190,7 +191,7 @@ def main():
         assert ("PLACE N° 1" in suite) == (numero % 2 == 1), (numero, suite)
         assert not any(nom in suite or num in suite for nom, _, num in ETUDIANTS), suite
     page = c.get(reverse("quiz_detail", args=[ecrit.pk])).content.decode()
-    assert "Liste de placement et d'émargement" in page
+    assert "Liste des étudiants et des places par salle" in page
     assert c.get(reverse("quiz_emargement_pdf", args=[ecrit.pk])).status_code == 200
     print("  concours et écrit : copies à n° de place et liste d'émargement OK")
 
@@ -199,7 +200,8 @@ def main():
     r = c.get(reverse("quiz_emargement_pdf", args=[autre.pk]))
     assert r.status_code == 200 and r["Content-Type"] == "application/pdf", r.status_code
     liste = "\n".join(textes(r.content))
-    assert "Liste d'émargement" in liste and "Place" not in liste and "Ali ABID" in liste
+    assert "Liste des étudiants" in liste and "Place" not in liste and "Ali ABID" in liste
+    assert "N° CIN" in liste and "—" in liste, "sans fiche au registre : pas de CIN"
     print("  liste d'émargement aussi en présentation standard, sans colonne place OK")
 
     # ---- par salle (demande de l'utilisateur, 8 novembre 2026) : copies dans l'ordre des
@@ -213,7 +215,7 @@ def main():
                                     ("104604", "WALI", "Dora", "2")):
         Inscrit.objects.filter(numero=num).delete()
         fiche = Inscrit.objects.create(numero=num, nom=nom, prenom=prenom, salle=salle,
-                                       cree_par=prof)
+                                       cin=f"0{num}9", cree_par=prof)
         Student.objects.create(class_group=classe, last_name=nom, first_name=prenom,
                                student_number=num, inscrit=fiche)
     for anonymat in ("talon", "place"):
@@ -240,6 +242,37 @@ def main():
         assert "XUEREB" in feuilles[2] and "Salle : ………" in feuilles[2], feuilles[2]
         assert all("Signature" in f and "Présents" in f for f in feuilles)
         assert ("Place" in feuilles[0]) == (anonymat == "place")
+        # n° de CIN du registre en face de chaque nom (demande du 8 novembre 2026)
+        assert all("N° CIN" in f for f in feuilles)
+        assert "01046029" in feuilles[0] and "01046049" in feuilles[0], feuilles[0]
+        assert "01046039" in feuilles[2], feuilles[2]
+    # l'écrit aussi (« fait aussi pour écrire », 8 novembre 2026) : copies à talon (A4) et à
+    # n° de place (A3, livret plié) dans l'ordre des salles ; liste d'émargement par salle
+    for anonymat, fmt in (("talon", "a4"), ("place", "a3")):
+        ecrit_s = Quiz.objects.create(title=f"Ecrit salles {anonymat}", class_group=classe,
+                                      owner=prof, type_epreuve="ecrit", id_mode="qr",
+                                      talon_nom=anonymat == "talon",
+                                      place_anonyme=anonymat == "place", note_sur=20,
+                                      pages_redaction=1, format_impression=fmt)
+        c.post(reverse("quiz_detail", args=[ecrit_s.pk]), {"generer": "1"})
+        ecrit_s.refresh_from_db()
+        pages = textes(open(ecrit_s.sheet_pdf.path, "rb").read())
+        gardes = pages[::2]         # A4 : garde et page au dos ; A3 : recto et verso
+        assert len(gardes) == 4, len(pages)
+        if anonymat == "talon":
+            vus = [next(n for n in ("YAHIA", "WALI", "ZAIER", "XUEREB") if n in p)
+                   for p in gardes]
+            assert vus == ["YAHIA", "WALI", "ZAIER", "XUEREB"], vus
+        else:
+            vus = [re.search(r"PLACE N° (\d+)", p).group(1) for p in gardes]
+            assert vus == ["2", "4", "1", "3"], vus
+        page = c.get(reverse("quiz_detail", args=[ecrit_s.pk])).content.decode()
+        assert "Liste des étudiants" in page and "par salle" in page, "lien de la liste"
+        feuilles = textes(c.get(reverse("quiz_emargement_pdf", args=[ecrit_s.pk])).content)
+        assert len(feuilles) == 3 and "Salle : 2" in feuilles[0] and "WALI" in feuilles[0], \
+            feuilles
+    print("  écrit aussi : copies à talon (A4) et à n° de place (A3) dans l'ordre des "
+          "salles, liste d'émargement par salle OK")
     print("  par salle : copies (talon, n° de place) dans l'ordre des salles, puis du n° ou "
           "de la place ; une liste d'émargement par salle, sans salle à la fin OK")
     print("\n✅ TEST DES COPIES ANONYMES À N° DE PLACE RÉUSSI")

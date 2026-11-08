@@ -41,13 +41,40 @@
   document.addEventListener("change", montrerBouton);
   document.addEventListener("input", montrerBouton);
 
-  // Registre : case « tout cocher » de l'en-tête du tableau
+  // Registre, candidats : case « tout cocher » de l'en-tête du tableau
   document.querySelectorAll(".tout-cocher").forEach(function (maitre) {
     maitre.addEventListener("change", function () {
       maitre.closest("table").querySelectorAll('input[name="choix"]').forEach(function (c) {
         c.checked = maitre.checked;
       });
     });
+  });
+
+  // Candidats : « Supprimer les cochés » dit combien il en supprime et ne part pas
+  // à vide ; « toutes pages comprises » coche aussi la page affichée.
+  document.querySelectorAll("[data-compter-coches]").forEach(function (bouton) {
+    var form = bouton.form;
+    var tous = form.querySelector('input[name="tous"]');
+    var libelle = bouton.textContent;
+    function maj() {
+      var n = tous && tous.checked ? Number(bouton.dataset.total)
+        : form.querySelectorAll('input[name="choix"]:checked').length;
+      bouton.disabled = n === 0;
+      bouton.textContent = n ? libelle + " (" + n + ")" : libelle;
+      bouton.dataset.confirmer = "Supprimer " + n + " candidat" + (n > 1 ? "s" : "")
+        + " ? Ceux qui ont des copies corrigées sont gardés.";
+    }
+    form.addEventListener("change", function (ev) {
+      if (tous && ev.target === tous) {
+        form.querySelectorAll('input[name="choix"], .tout-cocher').forEach(function (c) {
+          c.checked = tous.checked;
+        });
+      } else if (tous && !ev.target.checked) {
+        tous.checked = false;            // une case décochée : plus « toutes »
+      }
+      maj();
+    });
+    maj();
   });
 
   // Œil « afficher / masquer » du champ mot de passe (pages de connexion)

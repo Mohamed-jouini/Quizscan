@@ -61,7 +61,7 @@ def _generer_documents(quiz, nb_exemplaires=100):
         quoi = f"{n} copies anonymes"
     elif quiz.id_mode == "qr":
         pdf, n = services.copies_nominatives_pdf(quiz, layout)
-        quoi = (f"{n} copies anonymes à n° de place (et la liste d'émargement)"
+        quoi = (f"{n} copies anonymes à n° de place (et la liste des candidats et des places)"
                 if quiz.place_anonyme else
                 f"{n} copies à talon (nom à découper avant la correction, "
                 "QR imprimé)" if quiz.talon_nom else

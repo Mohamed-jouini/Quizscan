@@ -142,6 +142,12 @@ class Student(models.Model):
         fiche = self.inscrit if self.inscrit_id else None
         return " ".join((fiche.salle or "").split()) if fiche else ""
 
+    @property
+    def cin(self):
+        """N° de CIN, d'après la fiche du registre (vide sans fiche ni CIN)."""
+        fiche = self.inscrit if self.inscrit_id else None
+        return (fiche.cin or "") if fiche else ""
+
     def __str__(self):
         return self.full_name
 
@@ -354,7 +360,7 @@ class Quiz(models.Model):
     ANONYMATS = [
         ("", "Standard — selon l'identification choisie"),
         ("talon", "Nom sur un talon à découper avant la correction"),
-        ("place", "Copie anonyme : n° de place + liste d'émargement"),
+        ("place", "Copie anonyme : n° de place + liste des candidats"),
     ]
 
     @property

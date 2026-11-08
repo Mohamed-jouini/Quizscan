@@ -29,7 +29,7 @@ from . import layout as layout_mod
 from . import omr
 from . import qr as qr_mod
 from . import services, sheet_pdf
-from .export import parcours_workbook, results_workbook
+from .export import candidats_workbook, parcours_workbook, results_workbook
 from .forms import (CONCOURS_ID_MODES, AdminLoginForm, AnswerKeyUploadForm,
                     BulkQcmForm, CandidateFileForm, ClassGroupForm, ConnexionForm,
                     QuestionBankForm, QuestionForm, QuestionImportForm,
@@ -501,6 +501,30 @@ def class_detail(request, pk):
             elif etudiant is not None:
                 etudiant.delete()
             return redirect("class_detail", pk=pk)
+        elif "supprimer_choix" in request.POST:
+            # Les cochés de la page, ou toute la liste (case « toutes pages
+            # comprises ») ; jamais un candidat qui a des copies corrigées
+            # (même règle qu'un par un, ci-dessus).
+            if request.POST.get("tous") == "1":
+                choisis = group.students.all()
+            else:
+                choisis = group.students.filter(pk__in=[
+                    p for p in map(_int_or_none, request.POST.getlist("choix"))
+                    if p is not None and 0 < p < 2 ** 63])
+            sans_copie = choisis.filter(sheets__isnull=True)
+            n = sans_copie.count()
+            if n:
+                sans_copie.delete()
+                messages.success(request, f"{n} candidat(s) supprimé(s).")
+            gardes = list(choisis)
+            if gardes:
+                noms = ", ".join(e.full_name or e.student_number for e in gardes[:10])
+                messages.error(request, f"{len(gardes)} candidat(s) gardé(s), car ils ont des "
+                                        f"copies corrigées : {noms}"
+                                        + (" …" if len(gardes) > 10 else "."))
+            elif not n:
+                messages.error(request, "Cochez d'abord les candidats à supprimer.")
+            return redirect("class_detail", pk=pk)
     # Retour : la liste des candidats d'un concours se rejoint depuis la
     # page du concours, on y revient ; une classe, depuis la liste des classes.
     concours = (_my_quizzes(request).filter(class_group=group, auto_enroll=True)
@@ -531,6 +555,19 @@ def student_qr(request, pk):
         Student.objects.filter(class_group__in=_my_classes(request)), pk=pk)
     return HttpResponse(qr_mod.student_qr_png(student),
                         content_type="image/png")
+
+
+@login_required
+def class_candidats_xlsx(request, pk):
+    """La liste des candidats en Excel, comme la page l'affiche : toutes les
+    pages, mêmes colonnes, même ordre."""
+    group = get_object_or_404(_my_classes(request), pk=pk)
+    etudiants = list(group.students.select_related("inscrit"))
+    data = candidats_workbook(group, etudiants, any(s.inscrit_id for s in etudiants))
+    resp = HttpResponse(
+        data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="candidats_{group.pk}.xlsx"'
+    return resp
 
 
 @login_required
@@ -995,7 +1032,7 @@ def quiz_detail(request, pk):
                     if quiz.place_anonyme:
                         msg = (f"Copies anonymes générées : {len(students)} copies "
                                "avec un n° de place et le QR, sans nom. Imprimez "
-                               "aussi la liste de placement et d'émargement pour "
+                               "aussi la liste des candidats et des places pour "
                                "le surveillant.")
                     elif quiz.talon_nom:
                         msg = (f"Copies à talon générées : {len(students)} copies, nom et QR "

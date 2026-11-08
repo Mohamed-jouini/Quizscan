@@ -25,6 +25,49 @@ def _nombre(v):
         return False
 
 
+def candidats_workbook(group, etudiants, avec_fiches):
+    """La liste des candidats en Excel, colonnes et ordre de la page « Candidats »
+    (demande du 8 novembre 2026). Les intitulés sont de ceux que l'import
+    reconnaît : le fichier se réimporte tel quel, dans l'épreuve suivante ou une
+    autre classe. avec_fiches : les colonnes de la fiche au registre (CIN…)."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Candidats"
+    headers = ["N° d'inscription", "Prénom", "Nom"]
+    if avec_fiches:
+        headers += ["CIN", "Lieu de délivrance", "Délivrée le", "Né(e) le", "Centre", "Salle"]
+    ws.append([f"{group.name} — liste des candidats ({len(etudiants)})"])
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+    ws["A1"].font = Font(bold=True, size=13)
+    ws.append(headers)
+    fond = PatternFill("solid", fgColor="1F4E79")
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=2, column=col)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = fond
+        cell.alignment = Alignment(horizontal="center")
+    for s in etudiants:
+        ligne = [s.student_number, s.first_name, s.last_name]
+        if avec_fiches:
+            i = s.inscrit
+            ligne += ([i.cin, i.cin_lieu, i.cin_date, i.date_naissance, i.centre, i.salle]
+                      if i is not None else [None] * 6)
+        ws.append(_sans_formule([v if v != "" else None for v in ligne]))
+        rang = ws.max_row
+        ws.cell(rang, 1).number_format = "@"              # n° et CIN : du texte, zéro
+        if avec_fiches:                                   # de tête compris
+            ws.cell(rang, 4).number_format = "@"
+            for col in (6, 7):
+                ws.cell(rang, col).number_format = "dd/mm/yyyy"
+    largeurs = [16, 20, 22] + ([12, 18, 13, 13, 28, 14] if avec_fiches else [])
+    for i, w in enumerate(largeurs, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    ws.freeze_panes = "A3"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def results_workbook(quiz, rows, stats=None, admission=None):
     wb = Workbook()
     ws = wb.active

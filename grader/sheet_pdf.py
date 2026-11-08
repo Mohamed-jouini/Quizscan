@@ -92,8 +92,8 @@ LABELS = {
         "ecrit_instr": "Rédigez sur les lignes ci-dessous et sur les pages "
                        "suivantes. Ne rien écrire dans le cadre du correcteur.",
         "note_titre": "RÉSERVÉ AU CORRECTEUR — NOTE SUR {n}",
-        "note_aide": "Écrivez chaque chiffre de la note dans sa case puis "
-                     "noircissez-le ; ligne vide = 0. Ex. 15,75 : 1 · 5 · 7 · 5.",
+        "note_aide": "Écrivez chaque chiffre dans sa case puis noircissez-le, 0 compris : "
+                     "une ligne vide est à vérifier. Ex. 8,5 : 0 · 8 · 5 · 0.",
         "note_ecrite": "Note :",
         "signature": "Correcteur :",
         "centaines": "Centaines", "dizaines": "Dizaines", "unites": "Unités",
@@ -127,7 +127,7 @@ LABELS = {
         "ecrit_instr": "اكتب على الأسطر أدناه وفي الصفحات الموالية. "
                        "لا تكتب شيئا في إطار المصحّح.",
         "note_titre": "خاص بالمصحّح — العدد على {n}",
-        "note_aide": "اكتب كل رقم من العدد في خانته ثم املأه؛ السطر الفارغ = 0.",
+        "note_aide": "اكتب كل رقم في خانته ثم املأه، والصفر كذلك؛ السطر الفارغ يُراجَع. مثال 8,5: 0 · 8 · 5 · 0.",
         "note_ecrite": "العدد:",
         "signature": "المصحّح:",
         "centaines": "المئات", "dizaines": "العشرات", "unites": "الآحاد",

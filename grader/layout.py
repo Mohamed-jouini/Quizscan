@@ -509,7 +509,8 @@ def _note_rows(note_sur):
     barème : 20 -> dizaines, unités), puis dixièmes et centièmes — quatre
     champs pour une note sur 20, ex. 15,75 (demande de l'utilisateur, 29
     octobre 2026). Les centièmes s'ajoutent SOUS les dixièmes : une copie
-    imprimée avec trois lignes se lit toujours (ligne absente = vide = 0)."""
+    imprimée avec trois lignes se lit avec sa disposition d'alors ; lue avec la
+    nouvelle, sa ligne absente est vide, donc à vérifier (omr.lire_note)."""
     n = len(str(int(note_sur)))
     entiers = ["centaines", "dizaines", "unites"][-n:] if n <= 3 else \
         ["chiffre"] * n

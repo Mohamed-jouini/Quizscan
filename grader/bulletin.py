@@ -491,7 +491,11 @@ def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
     # place, n° d'inscription, nom ; sans place, le n° et le nom passent à gauche
     cols = [X0 + 3, X0 + 22, X0 + 52] if avec_place else [None, X0 + 3, X0 + 33]
     x_sig = X1 - 48.0                         # début de la case signature
-    titre = "Liste de placement et d'émargement" if avec_place else "Liste d'émargement"
+    x_cin = x_sig - 27.0                      # n° de CIN du registre (8 novembre 2026)
+    # « Liste des candidats » (demande de l'utilisateur, 8 novembre 2026), des étudiants
+    # pour une classe ; avec les places des copies anonymes
+    qui = "candidats" if quiz.auto_enroll else "étudiants"
+    titre = f"Liste des {qui}" + (" et des places" if avec_place else "")
     entete = [t.strip() for t in (quiz.entete or "").splitlines() if t.strip()]
     edite = timezone.localtime().strftime("%d/%m/%Y")
     debut_p1 = 70.0 + 4.2 * len(entete)
@@ -508,6 +512,7 @@ def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
         for texte, x in zip(("Place", "N° d'inscription", "Prénom et nom"), cols):
             if x is not None:
                 _draw(c, texte, x, y, 9, bold=True, gray=0.2)
+        _draw(c, "N° CIN", x_cin, y, 9, bold=True, gray=0.2)
         _draw(c, "Signature", x_sig + 3, y, 9, bold=True, gray=0.2)
         return y + 9.0
 
@@ -515,7 +520,7 @@ def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
     # dans une phrase française (l'ordre de lecture d'une ligne mêlée se brouille).
     def pied(page):
         _draw(c, quiz.title, X0, 287.0, 7.5, gray=0.45)
-        _draw(c, f"émargement — édité le {edite} — page {page} / {total}", X1, 287.0, 7.5,
+        _draw(c, f"liste des {qui} — éditée le {edite} — page {page} / {total}", X1, 287.0, 7.5,
               align="right", gray=0.45)
 
     y = 18.0
@@ -551,7 +556,8 @@ def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
         if avec_place:
             _draw(c, str(place), cols[0] + 5, y + 0.6, 12, bold=True, align="center")
         _draw(c, s.student_number or "—", cols[1], y + 0.6, 10)
-        nom, corps = nom_ajuste(s, x_sig - cols[2] - 3, 10.5, gras=True)
+        _draw(c, s.cin or "—", x_cin, y + 0.6, 10)
+        nom, corps = nom_ajuste(s, x_cin - cols[2] - 3, 10.5, gras=True)
         _draw(c, nom, cols[2], y + 0.6, corps, bold=True)
         c.setStrokeGray(0.55)
         c.setLineWidth(0.5)

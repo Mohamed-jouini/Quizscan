@@ -32,8 +32,9 @@ from django.test.utils import setup_test_environment
 from django.urls import reverse
 from django.utils.html import escape
 
-from grader import inscriptions, layout as L, services, sheet_pdf
-from grader.models import ClassGroup, Communique, Inscrit, Question, Quiz, Student
+from grader import importers, inscriptions, layout as L, services, sheet_pdf
+from grader.models import (ClassGroup, Communique, Inscrit, Question, Quiz, ScanBatch,
+                           SheetScan, Student)
 from test_commun import enseignant_complet
 from test_e2e import fill_sheet, mm2px, render_page, simulate_scan
 
@@ -291,6 +292,91 @@ def test_import_base(c, prof, classe):
           "classe ; liste d'un collègue refusée OK")
 
 
+def test_liste_candidats(c, prof, autre):
+    """Page « Candidats » (demande du 8 novembre 2026, écrit d'un concours) : la liste
+    exportée en Excel, réimportable telle quelle ; plusieurs candidats, ou tous, supprimés
+    d'un coup, jamais un candidat qui a des copies corrigées."""
+    import datetime
+    Inscrit.objects.create(numero="207005", nom="الجبالي", prenom="محمد أمين", cin="01999888",
+                           cin_lieu="تونس", cin_date=datetime.date(2024, 8, 18),
+                           date_naissance=datetime.date(2003, 4, 14), salle="قاعة عدد 15",
+                           cree_par=prof)
+    groupe = ClassGroup.objects.create(name="Concours — liste", owner=prof)
+    url = reverse("class_detail", args=[groupe.pk])
+    c.post(url, {"ajouter_inscrits": "1", "numeros": "104523 104524 104525 104526 207005"})
+    Student.objects.create(class_group=groupe, last_name="LIBRE", first_name="Sans",
+                           student_number="777001")                    # sans fiche
+    attendu = list(groupe.students.select_related("inscrit"))          # ordre de la page
+    assert len(attendu) == 6, attendu
+    page = c.get(url).content.decode()
+    export = reverse("class_candidats_xlsx", args=[groupe.pk])
+    assert f'href="{export}"' in page and "Exporter la liste (Excel)" in page
+    assert 'name="supprimer_choix"' in page and 'class="tout-cocher"' in page
+    assert page.count('name="choix"') == 6 and 'name="tous"' not in page    # une page
+
+    r = c.get(export)
+    assert r["Content-Disposition"] == f'attachment; filename="candidats_{groupe.pk}.xlsx"'
+    lignes = list(openpyxl.load_workbook(io.BytesIO(r.content)).active.iter_rows(values_only=True))
+    assert lignes[1] == ("N° d'inscription", "Prénom", "Nom", "CIN", "Lieu de délivrance",
+                         "Délivrée le", "Né(e) le", "Centre", "Salle"), lignes[1]
+    assert [l[0] for l in lignes[2:]] == [s.student_number for s in attendu], lignes
+    par_numero = {l[0]: l for l in lignes[2:]}
+    fiche = par_numero["207005"]
+    assert fiche[1:5] == ("محمد أمين", "الجبالي", "01999888", "تونس"), fiche
+    assert fiche[5].date() == datetime.date(2024, 8, 18) and fiche[8] == "قاعة عدد 15", fiche
+    assert par_numero["777001"][3:] == (None,) * 6, par_numero["777001"]
+    fiches = importers.parse_fiches_file("candidats.xlsx", r.content)      # réimportable
+    assert [(f["numero"], f["prenom"], f["nom"]) for f in fiches] == \
+        [(s.student_number, s.first_name, s.last_name) for s in attendu], fiches
+    assert next(f for f in fiches if f["numero"] == "207005")["cin"] == "01999888"
+    assert Client().get(export).status_code == 302                         # connexion exigée
+    c2 = Client()
+    c2.force_login(autre)
+    assert c2.get(export).status_code == 404                                # liste d'un collègue
+    print("  export Excel : toute la liste, colonnes et ordre de la page, CIN avec son zéro, "
+          "réimportable ; liste d'un collègue refusée OK")
+
+    # les cochés ; celui qui a des copies corrigées reste
+    quiz = Quiz.objects.create(title="Liste — écrit", class_group=groupe, owner=prof,
+                               type_epreuve="ecrit")
+    note = groupe.students.get(student_number="104523")
+    SheetScan.objects.create(batch=ScanBatch.objects.create(quiz=quiz, label="liste", status="done"),
+                             status="ok", student=note, source_name="p1.jpg")
+    choix = [note.pk] + list(groupe.students.filter(student_number__in=["104524", "104525"])
+                             .values_list("pk", flat=True))
+    r = c.post(url, {"supprimer_choix": "1", "choix": choix}, follow=True)
+    assert set(groupe.students.values_list("student_number", flat=True)) == \
+        {"104523", "104526", "207005", "777001"}
+    assert "2 candidat(s) supprimé(s)." in _messages(r), _messages(r)
+    assert "1 candidat(s) gardé(s), car ils ont des copies corrigées : Samia BEN SALEM." \
+        in _messages(r), _messages(r)
+    # rien de coché ; identifiants bricolés, ou d'une autre liste : rien ne part, aucune 500
+    r = c.post(url, {"supprimer_choix": "1"}, follow=True)
+    assert "Cochez d'abord les candidats à supprimer." in _messages(r), _messages(r)
+    ailleurs = Student.objects.create(class_group=ClassGroup.objects.create(
+        name="Liste — ailleurs", owner=prof), last_name="AILLEURS", first_name="Ali")
+    r = c.post(url, {"supprimer_choix": "1",
+                     "choix": [ailleurs.pk, "abc", "-3", "99999999999999999999999"]})
+    assert r.status_code == 302 and Student.objects.filter(pk=ailleurs.pk).exists()
+    assert groupe.students.count() == 4
+    assert c2.post(url, {"supprimer_choix": "1", "tous": "1"}).status_code == 404
+    assert groupe.students.count() == 4
+    print("  suppression des cochés : candidat corrigé gardé et nommé ; rien de coché, "
+          "identifiants bricolés ou d'une autre liste, collègue : rien ne part OK")
+
+    # plus d'une page : « toutes pages comprises » prend toute la liste
+    Student.objects.bulk_create(
+        Student(class_group=groupe, last_name=f"MASSE{k:03d}", first_name="A",
+                student_number=str(208000 + k)) for k in range(101))
+    page = c.get(url).content.decode()
+    assert 'name="tous"' in page and "les 105 candidats, toutes pages comprises" in page
+    assert page.count('name="choix"') == 100
+    r = c.post(url, {"supprimer_choix": "1", "tous": "1"}, follow=True)
+    assert list(groupe.students.values_list("student_number", flat=True)) == ["104523"]
+    assert "104 candidat(s) supprimé(s)." in _messages(r), _messages(r)
+    print("  « toutes pages comprises » : 104 candidats supprimés d'un coup, le corrigé reste OK")
+
+
 def _qsi(img, page, numero, nom, prenom):
     """Colle un QR de carte d'inscription dans l'emplacement de l'étiquette."""
     import qrcode
@@ -438,7 +524,7 @@ def main():
     User.objects.filter(username__in=noms).delete()
     Inscrit.objects.filter(numero__in=["104523", "104524", "104525", "104526",
                                        "999999", "207001", "207002", "207003",
-                                       "207004"]).delete()
+                                       "207004", "207005"]).delete()
     Communique.objects.filter(titre__in=["Convocation au concours",
                                          "Brouillon secret"]).delete()
     prof = enseignant_complet(User.objects.create_user("prof_insc", password="x-pass-123"))
@@ -456,6 +542,8 @@ def main():
     classe = test_ajout_direct(c, prof)
     print("Import depuis la base de données :")
     test_import_base(c, prof, classe)
+    print("Liste des candidats : export et suppression groupée :")
+    test_liste_candidats(c, prof, autre)
     print("Scan et espace public :")
     test_scan_et_public(c, prof)
     print("Communiqués :")

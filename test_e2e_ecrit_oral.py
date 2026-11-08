@@ -103,8 +103,8 @@ def test_ecrit(c, prof, groupe):
     base = render_page(copies, 0)
     pages = []
     for (nom, prenom, num), chiffres in zip(ETUDIANTS, ([1, 5, 7, 5],
-                                                       [None, 8, None, None],
-                                                       [1, [2, 6], None, None])):
+                                                       [0, 8, 0, 0],
+                                                       [1, [2, 6], 0, 0])):
         img = fill_sheet(base.copy(), layout, {}, student_number=num)
         pages.append((f"{nom}.jpg", jpg(simulate_scan(noircir_note(img, grille, chiffres)))))
     pages.append(("redaction.jpg", jpg(simulate_scan(render_page(copies, 1)))))
@@ -178,9 +178,46 @@ def test_ecrit(c, prof, groupe):
     return quiz
 
 
+def test_ligne_vide_a_verifier(quiz):
+    """Chaque ligne de la note se noircit, 0 compris ; une ligne vide n'est pas lue 0, la
+    note est à vérifier (demande de l'utilisateur, 8 novembre 2026, après une vraie fiche
+    d'oral : « 1 » écrit aux dizaines, rond vide, 19 lu 9)."""
+    from grader import omr
+    grille = quiz.layout_json["pages"][0]["note_grid"]
+    pdf = open(quiz.sheet_pdf.path, "rb").read()
+
+    def ecrire(img, ligne, chiffre="1"):
+        x, y, w, h = grille["write_boxes"][ligne]
+        cv2.putText(img, chiffre, (mm2px(x + 1.6), mm2px(y + h - 0.9)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.6, (40, 40, 40), 4, cv2.LINE_AA)
+        return img
+
+    def lire(img):
+        return omr.lire_note(cv2.resize(img, (int(210 * 8), int(297 * 8))), grille, 20)
+
+    neuf = noircir_note(render_page(pdf, 0), grille, [0, 9, 0, 0])
+    assert lire(neuf.copy())[0] == 9.0, "0 · 9 · 0 · 0 : 9"
+    vide = noircir_note(render_page(pdf, 0), grille, [None, 9, 0, 0])
+    note, lus = lire(vide.copy())
+    assert note is None and lus == ["?", 9, 0, 0], (note, lus)     # dizaines vides
+    note, lus = lire(ecrire(vide.copy(), 0))                       # « 1 » écrit, rond vide
+    assert note is None and lus[0] == "?", (note, lus)
+    complete = ecrire(noircir_note(render_page(pdf, 0), grille, [1, 9, 0, 0]), 0)
+    assert lire(complete)[0] == 19.0, "écrit et noirci : 19"
+    sans_centiemes = noircir_note(render_page(pdf, 0), grille, [1, 5, 7, None])
+    assert lire(sans_centiemes)[0] is None, "centièmes vides : à vérifier, pas 15,7"
+    # par le vrai chemin : feuille scannée (tournée, bruitée), recalée sur son cadre
+    for image, attendu in ((neuf, 9.0), (vide, None), (complete, 19.0)):
+        recalee, _ = omr.detect_and_warp(simulate_scan(image.copy()))
+        assert omr.lire_note(recalee, grille, 20)[0] == attendu, attendu
+    print("  ligne de la note sans case noircie (0 compris) : note à vérifier, et non "
+          "9 pour 19 OK")
+
+
 def test_ancienne_grille(quiz):
-    """Copies imprimées avant les centièmes (grille à 3 lignes, decimales 1) :
-    lues avec leur disposition d'alors comme avec la nouvelle."""
+    """Copies imprimées avant les centièmes (grille à 3 lignes, decimales 1) : lues avec
+    leur disposition d'alors ; avec la nouvelle, leur ligne des centièmes, absente, est
+    vide : note à vérifier, jamais fausse (8 novembre 2026)."""
     from grader import omr
     nouvelle = quiz.layout_json["pages"][0]["note_grid"]
     ancienne = {**nouvelle, "rows": nouvelle["rows"][:3],
@@ -188,11 +225,12 @@ def test_ancienne_grille(quiz):
     img = noircir_note(render_page(open(quiz.sheet_pdf.path, "rb").read(), 0), ancienne, [1, 4, 5])
     warped = cv2.resize(img, (int(210 * 8), int(297 * 8)))   # repère canonique
     assert omr.lire_note(warped, ancienne, 20)[0] == 14.5
-    assert omr.lire_note(warped, nouvelle, 20)[0] == 14.5    # centièmes vides = 0
+    assert omr.lire_note(warped, nouvelle, 20)[0] is None    # centièmes absents : à vérifier
     img = noircir_note(render_page(open(quiz.sheet_pdf.path, "rb").read(), 0), nouvelle, [1, 5, 7, 5])
     warped = cv2.resize(img, (int(210 * 8), int(297 * 8)))
     assert omr.lire_note(warped, nouvelle, 20)[0] == 15.75
-    print("  grille à 4 champs (15,75) ; copies à 3 lignes toujours lues (14,5) OK")
+    print("  grille à 4 champs (15,75) ; copies à 3 lignes lues avec leur disposition "
+          "(14,5), à vérifier avec la nouvelle OK")
 
 
 def test_oral(c, groupe):
@@ -246,7 +284,7 @@ def test_oral(c, groupe):
     grille = quiz.layout_json["pages"][0]["note_grid"]
     scans = []
     # AMRI : 12,25 ; CHERIF : deux cases noircies sur les unités (illisible)
-    for nom, page_k, chiffres in (("AMRI", 0, [1, 2, 2, 5]), ("CHERIF", 2, [1, [7, 3], None, None])):
+    for nom, page_k, chiffres in (("AMRI", 0, [1, 2, 2, 5]), ("CHERIF", 2, [1, [7, 3], 0, 0])):
         img = noircir_note(render_page(fiches, page_k), grille, chiffres)
         scans.append(SimpleUploadedFile(f"oral_{nom}.jpg", jpg(simulate_scan(img))))
     lot = services.process_uploaded_files(quiz, scans, label="Jury 1")
@@ -308,6 +346,7 @@ def main():
     print("Épreuve écrite :")
     quiz = test_ecrit(c, prof, groupe)
     test_ancienne_grille(quiz)
+    test_ligne_vide_a_verifier(quiz)
     print("Épreuve orale :")
     test_oral(c, groupe)
     print("\n✅ TESTS ÉCRIT ET ORAL RÉUSSIS")

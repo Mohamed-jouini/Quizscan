@@ -22,7 +22,7 @@
     <p class="helptext">
       {% if quiz.type_epreuve == "ecrit" or quiz.type_epreuve == "oral" %}
       Cercle <b class="t-ok">vert</b> = chiffre de la note lu,
-      cadre <b class="t-warn">orange</b> = ligne illisible (plusieurs cases noircies).
+      cadre <b class="t-warn">orange</b> = ligne à vérifier (aucune case noircie, 0 compris, ou plusieurs).
       {% else %}
       Cercle <b class="t-info">bleu</b> = bonne réponse attendue,
       <b class="t-ok">vert</b> = réponse de l'étudiant correcte,

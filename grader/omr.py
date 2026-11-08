@@ -276,14 +276,19 @@ def read_bubbles(warped_bgr, page_layout):
     return results
 
 
+def _binaire(warped_bgr):
+    """Encre en blanc sur fond noir, seuil local (ombres et papier gris tolérés)."""
+    gray = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2GRAY)
+    return cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                 cv2.THRESH_BINARY_INV, 41, 12)
+
+
 def _lire_chiffres(warped_bgr, grid):
     """Lit une grille de chiffres (une ligne par position, colonnes 0..9) :
     grille du n° d'inscription ou grille de la note (écrit).
     Retourne une liste, un élément par ligne : le chiffre (int), None si la
     ligne est vide, "?" si plusieurs cases sont noircies sans net gagnant."""
-    gray = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2GRAY)
-    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-                                   cv2.THRESH_BINARY_INV, 41, 12)
+    binary = _binaire(warped_bgr)
     r = _mm(grid["r"] * 0.75)
     lus = []
     for row in grid["rows"]:
@@ -316,17 +321,19 @@ def read_id_grid(warped_bgr, page_layout):
 
 def lire_note(warped_bgr, grille, note_sur):
     """Note noircie par le correcteur dans la grille de la page de garde
-    (épreuve écrite) : une ligne par chiffre — dizaines, unités, dixièmes,
-    centièmes (« decimales » de la grille : 2 ; 1 sur les premières copies).
+    (épreuve écrite, fiche d'oral) : une ligne par chiffre — dizaines, unités,
+    dixièmes, centièmes (« decimales » de la grille : 2 ; 1 sur les premières copies).
 
-    Une ligne laissée vide vaut 0 (« 8,5 » se noircit sans toucher aux
-    dizaines) ; une grille entièrement vide, une ligne ambiguë ou une note
-    au-dessus du barème donnent None : la note reste à saisir à l'écran.
-    Retourne (note | None, chiffres lus)."""
-    lus = _lire_chiffres(warped_bgr, grille)
-    if "?" in lus or all(d is None for d in lus):
+    Chaque ligne doit avoir sa case noircie, 0 compris (« 8,5 » : 0 · 8 · 5 · 0). Une
+    ligne vide n'est pas lue 0 : la note est à vérifier (demande de l'utilisateur, 8
+    novembre 2026, après une vraie fiche d'oral où le « 1 » des dizaines, écrit mais pas
+    noirci, donnait 9 au lieu de 19). Une ligne ambiguë (plusieurs cases) ou une note
+    au-dessus du barème aussi : None, la note reste à saisir à l'écran.
+    Retourne (note | None, chiffres lus : un chiffre, ou « ? » pour une ligne à vérifier)."""
+    lus = ["?" if d is None else d for d in _lire_chiffres(warped_bgr, grille)]
+    if "?" in lus:
         return None, lus
-    chiffres = [d or 0 for d in lus]
+    chiffres = lus
     decimales = grille.get("decimales", 1)
     entier = int("".join(str(d) for d in chiffres[:len(chiffres) - decimales]) or 0)
     fraction = chiffres[len(chiffres) - decimales:]
