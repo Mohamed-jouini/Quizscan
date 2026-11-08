@@ -336,9 +336,18 @@ def test_liste_candidats(c, prof, autre):
     print("  export Excel : toute la liste, colonnes et ordre de la page, CIN avec son zéro, "
           "réimportable ; liste d'un collègue refusée OK")
 
-    # les cochés ; celui qui a des copies corrigées reste
+    # l'écrit du concours (demande suivante, « fait pour écrire dans le concours ») : l'export
+    # sur sa page même, la sélection sur sa page « Candidats & étiquettes QR »
     quiz = Quiz.objects.create(title="Liste — écrit", class_group=groupe, owner=prof,
-                               type_epreuve="ecrit")
+                               type_epreuve="ecrit", auto_enroll=True)
+    page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
+    assert "Épreuve écrite" in page and f'href="{export}"' in page \
+        and "Exporter les candidats (Excel)" in page, "export absent de la page de l'écrit"
+    assert f'href="{url}"' in page and "Candidats &amp; étiquettes QR" in page
+    print("  écrit du concours : « Exporter les candidats (Excel) » sur sa page, cases à cocher "
+          "sur sa liste des candidats OK")
+
+    # les cochés ; celui qui a des copies corrigées reste
     note = groupe.students.get(student_number="104523")
     SheetScan.objects.create(batch=ScanBatch.objects.create(quiz=quiz, label="liste", status="done"),
                              status="ok", student=note, source_name="p1.jpg")

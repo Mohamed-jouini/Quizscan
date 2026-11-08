@@ -11,6 +11,7 @@
   <div class="page-head__actions">
     <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
     <a class="btn small secondary" href="{% url 'class_detail' quiz.class_group.pk %}">{% if quiz.auto_enroll %}Candidats{% else %}Étudiants{% endif %} &amp; étiquettes QR</a>
+    <a class="btn small secondary" href="{% url 'class_candidats_xlsx' quiz.class_group.pk %}">Exporter les {{ quiz.auto_enroll|yesno:"candidats,étudiants" }} (Excel)</a>
     <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">Résultats</a>
   </div>
 </header>
