@@ -35,15 +35,4 @@
   </div>
   {% endif %}
 </div>
-
-<details class="card plie">
-  <summary>Comment ça marche</summary>
-  <ol class="steps">
-    <li>Créez un <a href="{% url 'quiz_create' %}?concours=1">concours</a> (aucune classe à choisir : un conteneur de candidats est créé automatiquement).</li>
-    <li>Sur la page du concours, cliquez sur <b>« Candidats &amp; étiquettes QR »</b> et importez la liste des candidats (Excel : Prénom, Nom, N° d'inscription).</li>
-    <li>Imprimez la <b>planche d'étiquettes QR</b> sur papier autocollant, et collez une étiquette dans l'emplacement réservé de chaque copie.</li>
-    <li>Générez et imprimez la <b>feuille de réponses</b> (et le sujet), faites composer, puis scannez les copies.</li>
-    <li>Chaque copie est identifiée par le QR de l'étiquette, notée automatiquement.</li>
-  </ol>
-</details>
 {% endblock %}
