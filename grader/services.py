@@ -21,6 +21,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 import cv2
 import numpy as np
 import pymupdf
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import DatabaseError, close_old_connections, connection, transaction
@@ -231,6 +232,9 @@ def _lire_le_lot(batch_id):
                 else:
                     sheet.status = "no_markers"
                     sheet.error_message = str(e)
+            except CopieAutreEpreuve as e:
+                sheet.status = "error"
+                sheet.error_message = str(e)
             except Exception as e:  # noqa: BLE001 — page illisible
                 log.exception("Page illisible (%s)", page_name)
                 sheet.status = "error"
@@ -1249,6 +1253,24 @@ def _process_sheet(sheet, img, layout, students, questions, quiz):
     _enregistrer_page(sheet, lecture, students, questions, quiz)
 
 
+class CopieAutreEpreuve(ValueError):
+    """Copie imprimée pour une autre épreuve (9 novembre 2026 : copies de l'épreuve 31
+    envoyées dans une autre, toutes « non identifiées » sans dire pourquoi)."""
+
+
+def _autre_epreuve(quiz, qr_id, etudiant_pk):
+    """L'épreuve pour laquelle la copie a été imprimée, si ce n'est pas celle-ci.
+
+    Le QR d'une copie imprimée porte « QS|épreuve|candidat » ; celui d'une étiquette,
+    « QS|liste|candidat » (comme d'anciennes fiches nominatives) : ces deux-là sont
+    ceux de l'épreuve. Une autre épreuve qui a ce candidat dans sa liste : la copie
+    est la sienne, mise en page pour elle. Une seule requête, et seulement dans ce cas."""
+    if qr_id is None or qr_id in (quiz.pk, quiz.class_group_id):
+        return None
+    return (Quiz.objects.filter(pk=qr_id, class_group__students__pk=etudiant_pk)
+            .only("pk", "title", "owner_id").first())
+
+
 def _enregistrer_page(sheet, lecture, students, questions, quiz):
     """L'identification (liste des candidats, registre, OCR du nom en secours)
     et l'enregistrement d'une page lue : dans le fil qui a la base, page après page."""
@@ -1264,6 +1286,14 @@ def _enregistrer_page(sheet, lecture, students, questions, quiz):
     if page_layout.get("qr"):
         kind, _quiz_id, value = lecture.qr
         if kind == "QS":
+            autre = _autre_epreuve(quiz, _quiz_id, value)
+            if autre is not None:
+                raise CopieAutreEpreuve(
+                    "Copie imprimée pour l'épreuve "
+                    + (f"« {autre.title} » (n° {autre.pk})" if autre.owner_id == quiz.owner_id
+                       else f"n° {autre.pk}")
+                    + " : envoyez ce scan dans cette épreuve-là. Ici, elle n'est ni "
+                    "identifiée ni notée (ses cases ne sont pas forcément à la même place).")
             student = next((s for s in students if s.pk == value), None)
             if student is not None:
                 sheet.id_read = f"QR {student.student_number or student.pk}"[:20]
@@ -1812,21 +1842,129 @@ def etudiants_par_salle(quiz):
     return [s for _, s in par_salle([(None, s) for s in etudiants])]
 
 
-def copies_nominatives_pdf(quiz, layout):
+def copies_nominatives_pdf(quiz, layout, progres=None):
     """PDF d'une copie par étudiant, QR imprimé : nom imprimé (ou sur le
     talon), ou copie anonyme à n° de place — la correspondance place ->
     étudiant est alors gardée dans layout["places"] pour la liste
-    d'émargement. Retourne (octets du PDF, nombre de copies)."""
+    d'émargement. Retourne (octets du PDF, nombre de copies). progres : voir
+    lancer_generation."""
     if quiz.place_anonyme:
         places = places_anonymes(quiz)
         layout["places"] = {str(s.pk): n for n, s in places}
         # copies dans l'ordre des salles, puis des places (8 novembre 2026)
         pdf = sheet_pdf.generate_sheet_pdf(
             quiz, layout, students=[s for _, s in par_salle(places)],
-            places={s.pk: n for n, s in places})
+            places={s.pk: n for n, s in places}, progres=progres)
         return pdf, len(places)
     etudiants = etudiants_par_salle(quiz)          # dans l'ordre des salles
-    return sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants), len(etudiants)
+    return (sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants, progres=progres),
+            len(etudiants))
+
+
+# ------------------------------------------- génération en arrière-plan
+# Au-delà de ce nombre de copies, les documents d'une épreuve se génèrent dans un fil,
+# comme la lecture d'un lot : le serveur coupe une page au bout de 10 minutes (gunicorn
+# --timeout 600), et 15 000 copies de QCM à talon demandent environ 18 minutes (mesuré
+# le 9 novembre 2026). En dessous, rien ne change : la page attend ses documents.
+SEUIL_GENERATION_FOND = 1000
+_DUREE_ETAT = 7 * 24 * 3600
+SANS_NOUVELLES_S = 15 * 60          # plus d'avancée depuis : génération interrompue
+
+
+def _cle_generation(quiz_pk):
+    return f"qs-generation:{quiz_pk}"
+
+
+# Le cache de fichiers, sous Windows, refuse de remplacer un fichier qu'un autre fil
+# lit au même instant (et de le lire pendant qu'on le remplace) : vu au test, la page
+# qui suit l'avancement interrompait la génération. On réessaie ; un avancement non
+# noté n'arrête rien (Linux, le serveur, n'a pas ce verrou).
+def _noter_etat(cle, etat, essais=1):
+    for essai in range(essais):
+        try:
+            cache.set(cle, etat, _DUREE_ETAT)
+            return True
+        except OSError:
+            time.sleep(0.1 * (essai + 1))
+    return False
+
+
+def _lire_etat(cle):
+    for essai in range(5):
+        try:
+            return cache.get(cle)
+        except OSError:
+            time.sleep(0.05 * (essai + 1))
+    return None
+
+
+def etat_generation(quiz):
+    """Génération en arrière-plan des documents de l'épreuve : None, ou
+    {etat, fait, total, pct, messages} ; etat vaut « en_cours », « interrompue »
+    (plus d'avancée depuis 15 min : serveur redémarré), « fini » ou « erreur ».
+    Le cache est celui de tous les processus du serveur (fichiers de data/)."""
+    etat = _lire_etat(_cle_generation(quiz.pk))
+    if not etat:
+        return None
+    etat = dict(etat)
+    if etat["etat"] == "en_cours":
+        if time.time() - etat.get("maj", 0) > SANS_NOUVELLES_S:
+            etat["etat"] = "interrompue"
+        etat["pct"] = round(100 * etat.get("fait", 0) / max(1, etat.get("total", 1)))
+    return etat
+
+
+def oublier_generation(quiz):
+    for essai in range(5):              # même verrou de Windows que _noter_etat
+        try:
+            cache.delete(_cle_generation(quiz.pk))
+            return
+        except OSError:
+            time.sleep(0.05 * (essai + 1))
+
+
+def generation_en_cours(quiz):
+    etat = etat_generation(quiz)
+    return bool(etat) and etat["etat"] == "en_cours"
+
+
+def lancer_generation(quiz, total, travail):
+    """Génère les documents de l'épreuve dans un fil et rend la main.
+
+    travail(quiz, progres) fait exactement ce que fait la page (PDF, disposition,
+    enregistrement des fichiers) et rend les messages à afficher, [(niveau, texte)] ;
+    progres(fait) reçoit le nombre de copies faites. Les documents précédents
+    restent en place jusqu'à la fin : un échec ou une interruption n'en perd aucun."""
+    cle = _cle_generation(quiz.pk)
+    debut = time.time()
+    _noter_etat(cle, {"etat": "en_cours", "fait": 0, "total": total, "debut": debut,
+                      "maj": debut}, essais=10)
+
+    def fil():
+        close_old_connections()
+        derniere = [0.0]
+
+        def progres(fait):
+            maintenant = time.time()
+            if maintenant - derniere[0] >= 2:          # une écriture toutes les 2 s
+                derniere[0] = maintenant
+                _noter_etat(cle, {"etat": "en_cours", "fait": fait, "total": total,
+                                  "debut": debut, "maj": maintenant})
+        try:
+            a_dire = travail(Quiz.objects.get(pk=quiz.pk), progres)
+            etat = {"etat": "fini", "messages": a_dire}
+        except Exception as exc:  # noqa: BLE001 — dit sur la page de l'épreuve
+            log.exception("génération des documents de l'épreuve %s", quiz.pk)
+            etat = {"etat": "erreur", "messages": [
+                ("error", f"La génération des documents a échoué : {exc}")]}
+        finally:
+            connection.close()
+        if not _noter_etat(cle, etat, essais=20):
+            log.error("état de la génération de l'épreuve %s non enregistré", quiz.pk)
+
+    t = threading.Thread(target=fil, name=f"quizscan-generation-{quiz.pk}", daemon=True)
+    t.start()
+    return t
 
 
 def liste_emargement(quiz):

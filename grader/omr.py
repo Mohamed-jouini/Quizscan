@@ -1,12 +1,15 @@
 """Moteur de lecture des fiches scannées : recalage ArUco, lecture des
 cases (OMR), OCR du nom et rapprochement avec la liste de classe."""
+import functools
 import logging
 import re
+import threading
 import unicodedata
 
 import cv2
 import numpy as np
 import pytesseract
+import qrcode
 from rapidfuzz import fuzz, utils as rf_utils
 
 from . import layout as L
@@ -57,11 +60,30 @@ def detect_and_warp(image_bgr):
     resultat = _caler_par_cadre(image_bgr)
     if resultat is not None:
         return resultat
+    # Impression pâle (toner faible) : le noir imprimé reste gris clair, au-dessus des
+    # seuils du code de page et du trait ; contraste étiré, on recommence (9 novembre 2026).
+    contraste = _etirer_contraste(image_bgr)
+    if contraste is not None:
+        resultat = _caler_par_cadre(contraste)
+        if resultat is not None:
+            return resultat
     try:
         return _caler_aruco(image_bgr)
     except MarkerError:
         raise MarkerError("Cadre de la page non détecté (page mal scannée, "
                           "coupée ou sans cadre ?)") from None
+
+
+def _etirer_contraste(image_bgr):
+    """La page au contraste étiré, son encre la plus sombre ramenée au noir ; None si
+    l'encre est déjà assez noire (l'échec du cadre a une autre cause, inutile de
+    recommencer) ou s'il n'y a presque rien d'imprimé (page blanche)."""
+    gris = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    noir, papier = np.percentile(gris[::4, ::4], (0.3, 60))
+    if noir < 100 or papier - noir < 25:
+        return None
+    lut = np.clip((np.arange(256) - noir) * 255.0 / (papier - noir), 0, 255).astype(np.uint8)
+    return cv2.LUT(image_bgr, lut)
 
 
 # Cadre : bord extérieur et bord intérieur du trait (le contour trouvé peut
@@ -392,6 +414,130 @@ def _decode_qr(detector, img):
         data, _, _ = detector.detectAndDecode(img)
     except cv2.error:
         return None
+    return _charge_utile(data)
+
+
+# ------------------------------------------------- QR abîmés (9 novembre 2026)
+# Le décodeur WeChat d'OpenCV-contrib (dérivé de ZXing), employé sans ses modèles :
+# bien plus tolérant que QRCodeDetector aux taches, traits de stylo, effacements et
+# froissures (banc d'essai : 120 -> 153 lectures sur 201 copies abîmées, avec les QR
+# imprimés en correction H). Un décodeur par fil de lecture.
+_LOCAL = threading.local()
+
+
+def _decode_wechat(img):
+    if not hasattr(cv2, "wechat_qrcode_WeChatQRCode"):
+        return None
+    detecteur = getattr(_LOCAL, "wechat", None)
+    if detecteur is None:
+        detecteur = _LOCAL.wechat = cv2.wechat_qrcode_WeChatQRCode()
+    try:
+        textes, _ = detecteur.detectAndDecode(img)
+    except cv2.error:
+        return None
+    for texte in textes:
+        trouve = _charge_utile(texte)
+        if trouve:
+            return trouve
+    return None
+
+
+def _variantes_tolerantes(crop):
+    """Pour le décodeur WeChat : gris, contraste rehaussé, agrandi, seuil aux trous
+    bouchés. Les quatre qui lisaient le plus de QR abîmés, sur 7 essayées (70 ms
+    chacune quand elle échoue) ; la relecture par la grille fait le reste."""
+    gris = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    yield gris
+    yield cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4, 4)).apply(gris)
+    yield cv2.resize(gris, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    _, otsu = cv2.threshold(cv2.GaussianBlur(gris, (3, 3), 0), 0, 255,
+                            cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    yield cv2.morphologyEx(otsu, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+
+
+def _zone_encree(crop):
+    """Il y a quelque chose dans la zone (QR imprimé, étiquette collée) : sinon les
+    essais coûteux ne servent à rien (fiche à grille dont l'élève a noirci son n°
+    au lieu de coller son étiquette)."""
+    gris = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    return np.count_nonzero(gris < 128) > 0.05 * gris.size
+
+
+@functools.lru_cache(maxsize=8)
+def _gabarit_qr(version):
+    """Ce que l'on sait d'un QR de cette version sans le lire : ses modules fixes
+    communs (motifs de position, d'alignement, de synchronisation : -1 = module de
+    données ou de format, 0 blanc, 1 noir), les modules de l'information de format,
+    et, pour chaque correction (H, M) et chaque masque, la grille de ses modules fixes.
+    Construit par la bibliothèque qui imprime les QR."""
+    combinaisons = []
+    for correction in (qrcode.constants.ERROR_CORRECT_H, qrcode.constants.ERROR_CORRECT_M):
+        for masque in range(8):
+            qr = qrcode.QRCode(version=version, error_correction=correction, border=0)
+            n = qr.modules_count = 4 * version + 17
+            qr.modules = [[None] * n for _ in range(n)]
+            qr.setup_position_probe_pattern(0, 0)
+            qr.setup_position_probe_pattern(n - 7, 0)
+            qr.setup_position_probe_pattern(0, n - 7)
+            qr.setup_position_adjust_pattern()
+            qr.setup_timing_pattern()
+            qr.setup_type_info(False, masque)
+            grille = np.array([[-1 if m is None else int(m) for m in ligne] for ligne in qr.modules])
+            combinaisons.append(grille)
+    pile = np.stack(combinaisons)
+    fixes = (pile >= 0).all(axis=0)
+    communs = np.where(fixes & (pile == pile[0]).all(axis=0), pile[0], -1)
+    format_ = fixes & (communs < 0)
+    return communs, format_, combinaisons
+
+
+def _qr_par_la_grille(warped_bgr, rect):
+    """Dernier recours pour un QR IMPRIMÉ (jamais une étiquette, posée à la main) :
+    sa place et sa taille sont connues au dixième de millimètre (l'image du QR, marge
+    d'un module comprise, remplit sa zone). Chaque module est relu à sa place ; la
+    version est celle dont les motifs fixes collent le mieux, la correction et le
+    masque ceux que dit l'information de format lue ; un QR propre est redessiné
+    (motifs fixes tracés à neuf) et donné au décodeur, dont la correction d'erreur
+    fait le reste. Lit un QR dont un coin est taché ou effacé, que les détecteurs ne
+    savent plus situer. Huit essais au plus (0,1 s), et non plus 48 (8 s)."""
+    x, y, w, h = rect
+    gris = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2GRAY)
+    lectures = []
+    for version in (1, 2, 3):
+        n = 4 * version + 17
+        pas = w / (n + 2)                                  # mm par module
+        rayon = max(1, int(pas * L.PX_PER_MM * 0.25))
+        moyennes = cv2.blur(gris, (2 * rayon + 1, 2 * rayon + 1))
+        ys = np.clip([_mm(y + (r + 1.5) * pas) for r in range(n)], 0, gris.shape[0] - 1)
+        xs = np.clip([_mm(x + (c + 1.5) * pas) for c in range(n)], 0, gris.shape[1] - 1)
+        valeurs = moyennes[np.ix_(ys, xs)]
+        seuil, _ = cv2.threshold(valeurs.reshape(-1, 1), 0, 255,
+                                 cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        sombres = (valeurs < seuil).astype(np.int64)
+        communs, format_, combinaisons = _gabarit_qr(version)
+        accord = float((sombres == communs)[communs >= 0].mean())
+        lectures.append((accord, version, sombres))
+    lectures.sort(key=lambda lu: -lu[0])
+    cote = 6                                               # px par module redessiné
+    for _, version, sombres in lectures[:2]:
+        communs, format_, combinaisons = _gabarit_qr(version)
+        classees = sorted(combinaisons, key=lambda g: -int((sombres == g)[format_].sum()))
+        for grille in classees[:4]:
+            noirs = np.where(grille >= 0, grille, sombres).astype(np.uint8)
+            image = np.kron(1 - noirs, np.ones((cote, cote), np.uint8)) * 255
+            image = cv2.copyMakeBorder(image, 4 * cote, 4 * cote, 4 * cote, 4 * cote,
+                                       cv2.BORDER_CONSTANT, value=255)
+            # image propre : WeChat la lit seul ; QRCodeDetector (30 ms) s'il manque
+            trouve = (_decode_wechat(image) if hasattr(cv2, "wechat_qrcode_WeChatQRCode")
+                      else _decode_qr(cv2.QRCodeDetector(), image))
+            if trouve:
+                return trouve
+    return None
+
+
+def _charge_utile(data):
+    """Le contenu d'un QR de QuizScan : (« QS » | « QSA », id, valeur), (« QSI »,
+    None, n° d'inscription), ou None pour tout autre texte."""
     if not data:
         return None
     parts = data.split("|")
@@ -435,6 +581,18 @@ def read_qr(warped_bgr, page_layout):
             found = _decode_qr(cv2.QRCodeDetectorAruco(), crop)
             if found:
                 return found
+            # QR abîmé (tache, trait de stylo, morceau effacé, feuille froissée, scan
+            # pâle) : le décodeur WeChat, puis, pour un QR imprimé, la relecture module
+            # par module. Seulement s'il y a de l'encre dans la zone.
+            if _zone_encree(crop):
+                for img in _variantes_tolerantes(crop):
+                    found = _decode_wechat(img)
+                    if found:
+                        return found
+                if not zone.get("sticker"):
+                    found = _qr_par_la_grille(warped_bgr, zone["rect"])
+                    if found:
+                        return found
     # secours : l'étiquette a pu être collée de travers, on balaie la page
     found = _decode_qr(detector, warped_bgr)
     return found or (None, None, None)

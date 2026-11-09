@@ -15,6 +15,7 @@
 </header>
 {% include "grader/_fil_etapes.html" with lien="quiz_detail" %}
 {% include "grader/_etape_precedente.html" %}
+{% include "grader/_generation.html" %}
 
 {% if perimee %}
 <div class="note note--warn">
@@ -28,7 +29,7 @@
     <h2>1. Fiches d'évaluation</h2>
     {% if perms.grader.creer_epreuve %}
     <form method="post">{% csrf_token %}
-      <p><button class="btn" name="generer" value="1" type="submit" {% if not lignes %}disabled title="Ajoutez d'abord les étudiants"{% endif %}>
+      <p><button class="btn" name="generer" value="1" type="submit" {% if not lignes %}disabled title="Ajoutez d'abord les étudiants"{% elif generation.etat == "en_cours" %}disabled title="Génération en cours"{% endif %}>
         {% if quiz.sheet_pdf %}Régénérer les fiches{% else %}Générer les fiches ({{ lignes|length }}){% endif %}</button></p>
     </form>
     {% endif %}

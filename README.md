@@ -580,7 +580,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
 | `test_e2e_design.py` | une seule feuille de style pour toutes les pages, aucun style redéclaré en ligne, aucun jeton défini deux fois |
 | `test_e2e_corrige.py` | bonne réponse facultative, corrigé scanné et conservé, correction bloquée tant qu'il manque une réponse |
-| `test_e2e_robustesse.py` | pannes d'OCR (Tesseract absent, paquet de langue manquant), fiches de plus de 12 pages, QR collés de travers dans leur cadre, contenu de la planche d'étiquettes, identifiants d'URL bricolés |
+| `test_e2e_robustesse.py` | pannes d'OCR (Tesseract absent, paquet de langue manquant), fiches de plus de 12 pages, QR collés de travers dans leur cadre, QR abîmés (tache sur un coin, stylo, coin arraché, froissé, impression pâle, 100 dpi en JPEG 10, copies d'avant en correction M), contenu de la planche d'étiquettes, identifiants d'URL bricolés |
 
 Pour tout lancer : `for t in test_e2e*.py; do python $t || break; done`
 
@@ -599,6 +599,16 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
 - Demandez aux étudiants de **noircir complètement** les cases (pas de croix
   légères) et d'écrire le nom en **MAJUSCULES**.
 - Scannez à plat, 200 dpi minimum, sans recadrage automatique du scanner.
+- Les QR se lisent abîmés : tache d'encre, traits de stylo, coin arraché, feuille un peu
+  froissée, impression pâle (toner faible), scan à 80-100 dpi ou très compressé. Banc d'essai
+  de 201 copies abîmées : 177 lues (161 pour les copies imprimées avant le 9 novembre 2026, dont
+  les QR sont en correction M ; depuis, en correction H, 30 % du QR peut manquer). Un QR
+  détruit (scan très bougé, feuille très froissée) laisse la copie « à identifier » : on la
+  rattache à la main, l'ordre du scan propose le candidat.
+- Chaque copie imprimée se scanne dans son épreuve : son QR porte le n° de l'épreuve et du
+  candidat (« QS|31|155 »). Envoyée dans une autre épreuve, elle est refusée, et le message
+  nomme celle où l'envoyer (ses cases ne sont pas forcément à la même place). Les étiquettes
+  QR, elles, portent le n° de la liste et servent à toutes les épreuves de cette liste.
 - Scanner à chargeur (Canon DR-G2110 à l'institut) : **PDF, niveaux de gris, 200 dpi**. Un
   paquet de 500 feuilles en recto-verso reste alors sous les 500 Mo permis par fichier. Le
   recto-verso convient : les versos blancs sont ignorés.
@@ -623,6 +633,11 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   une classe ; page de l'épreuve, pour toute présentation) donne une liste par salle, dans le
   même ordre, pour la signature de présence ; avec les copies à n° de place, elle porte aussi
   la place de chacun.
+- Grands concours (15 000 copies) : au-delà de 1 000 copies, « Générer » lance la génération en
+  arrière-plan, la page affiche l'avancement et se met à jour seule ; les documents précédents
+  restent en place jusqu'à la fin. Mesuré sur un poste à 4 cœurs : 15 000 copies de QCM à talon
+  (40 questions) en 18 min, d'écrit à talon en 9 min ; le serveur couperait une page au bout de
+  10 min. Une génération arrêtée par un redémarrage est signalée au bout de 15 min, à relancer.
 - Copies d'écrit nominatives (talon, nom imprimé ou n° de place) : en A4, le recto de chaque
   feuille (pages 1, 3, 5…) porte l'en-tête de la page de garde (talon à découper, bande du
   titre et QR de l'étudiant), pour qu'une feuille détachée reste à qui elle est ; le dos n'en

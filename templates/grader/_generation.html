@@ -1,0 +1,12 @@
+{# Génération des documents en arrière-plan (au-delà de 1 000 copies) : avancement, ou interruption. #}
+{% if generation.etat == "en_cours" %}
+<div class="note note--warn" role="status">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+  <div class="note__body">Génération des documents en cours : <b>{{ generation.fait }} / {{ generation.total }}</b> copies ({{ generation.pct }} %). Les documents précédents restent en place jusqu'à la fin ; la page se met à jour toute seule, vous pouvez la quitter et revenir.<span data-recharger="5000" hidden></span></div>
+</div>
+{% elif generation.etat == "interrompue" %}
+<div class="note note--bad" role="alert">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
+  <div class="note__body">La génération des documents s'est arrêtée à {{ generation.fait }} / {{ generation.total }} copies (serveur redémarré ?). Les documents précédents sont inchangés : relancez la génération.</div>
+</div>
+{% endif %}

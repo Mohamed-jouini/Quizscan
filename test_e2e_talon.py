@@ -271,6 +271,29 @@ def main():
     print(f"  écrit à talon en PDF à 1200 ppp ({largeur} × {hauteur} pixels) : décodé au "
           "quart, note 9,25 lue et affectée à BAKIR OK")
 
+    # ---- copie d'une autre épreuve (9 novembre 2026 : les copies de l'épreuve 31, envoyées
+    # dans une autre, restaient toutes « non identifiées » sans dire pourquoi) : refusée, avec
+    # l'épreuve où l'envoyer ; même quand le candidat est aussi dans cette liste-ci
+    bis = Quiz.objects.create(title="Rédaction talon — bis", class_group=groupe, owner=prof,
+                              type_epreuve="ecrit", language="fr", id_mode="qr", talon_nom=True,
+                              note_sur=20)
+    c.post(reverse("quiz_detail", args=[bis.pk]), {"generer": "1"})
+    bis.refresh_from_db()
+    assert bis.sheet_pdf, "copies de l'épreuve bis non générées"
+    lot = services.process_uploaded_files(bis, [SimpleUploadedFile(
+        "copie_de_l_autre.jpg", jpg(simulate_scan(couper(render_page(pdf_e, 0), 30.0))))])
+    etrangere = lot.sheets.get()
+    assert etrangere.status == "error" and etrangere.student_id is None, \
+        (etrangere.status, etrangere.error_message)
+    assert (f"Copie imprimée pour l'épreuve « {ecrit.title} » (n° {ecrit.pk}) : envoyez ce "
+            "scan dans cette épreuve-là" in etrangere.error_message), etrangere.error_message
+    lot = services.process_uploaded_files(bis, [SimpleUploadedFile(
+        "copie_de_bis.jpg", jpg(simulate_scan(couper(render_page(
+            open(bis.sheet_pdf.path, "rb").read(), 0), 30.0))))])
+    assert lot.sheets.get().status == "ok", "sa propre copie doit rester lue"
+    print("  copie d'une autre épreuve : refusée, l'épreuve où l'envoyer nommée ; la sienne "
+          "lue OK")
+
     # copie nominative sans talon : le nom, le n° et le QR sur chaque page de rédaction
     nominatif = Quiz.objects.create(title="Rédaction nominative", class_group=groupe,
                                     owner=prof, type_epreuve="ecrit", language="fr",
@@ -388,6 +411,57 @@ def main():
     assert nb_pages(etiquette) == 1 + etiquette.pages_redaction
     assert etiquette.layout_json["nb_copies"] == 1 and "colle la sienne" in r.content.decode()
     print("  nombre de copies : suit la liste, champ seulement s'il agit, ajout signalé OK")
+
+    # ---- 15 000 copies (9 novembre 2026) : au-delà d'un seuil, les documents se génèrent en
+    # arrière-plan (le serveur coupe une page au bout de 10 min ; 15 000 copies de QCM à talon
+    # en demandent 18). La page suit l'avancement ; une génération à la fois ; l'arrêt se voit.
+    import time
+    from django.core.cache import cache
+
+    def attendre(quiz):
+        for _ in range(600):
+            etat = services.etat_generation(quiz)
+            if not etat or etat["etat"] != "en_cours":
+                return etat
+            time.sleep(0.1)
+        raise AssertionError("génération jamais finie")
+
+    ancien_seuil = services.SEUIL_GENERATION_FOND
+    services.SEUIL_GENERATION_FOND = 1
+    url_e = reverse("quiz_detail", args=[ecrit.pk])
+    try:
+        assert c.post(url_e, {"generer": "1"}).status_code == 302
+        etat = attendre(ecrit)
+        assert etat and etat["etat"] == "fini", etat
+        page = c.get(url_e).content.decode()
+        assert "Documents prêts : le sujet et 3 copies à talon" in page, "message de fin absent"
+        assert "Documents prêts" not in c.get(url_e).content.decode(), "message affiché deux fois"
+        ecrit.refresh_from_db()
+        assert ecrit.layout_json["nb_copies"] == 3 and ecrit.sheet_pdf
+        url_q = reverse("quiz_detail", args=[concours.pk])           # QCM à talon : même chemin
+        assert c.post(url_q, {"generate_pdf": "1"}).status_code == 302
+        assert attendre(concours)["etat"] == "fini"
+        assert "Copies à talon générées : 2 copies" in c.get(url_q).content.decode()
+        # pendant la génération : l'avancement, le bouton grisé, une seconde génération refusée
+        cle = services._cle_generation(ecrit.pk)
+        cache.set(cle, {"etat": "en_cours", "fait": 1, "total": 3, "debut": time.time(),
+                        "maj": time.time()})
+        page = c.get(url_e).content.decode()
+        assert "Génération des documents en cours : <b>1 / 3</b>" in page and "data-recharger" in page
+        assert 'name="generer" value="1" type="submit" disabled' in page
+        r = c.post(url_e, {"generer": "1"}, follow=True)
+        assert "déjà en cours" in r.content.decode(), "seconde génération acceptée"
+        # plus d'avancée depuis 15 min (serveur redémarré) : arrêt signalé, relance possible
+        cache.set(cle, {"etat": "en_cours", "fait": 1, "total": 3, "debut": 0,
+                        "maj": time.time() - 3600})
+        page = c.get(url_e).content.decode()
+        assert "s'est arrêtée à 1 / 3 copies" in page and "Génération en cours" not in page
+    finally:
+        services.SEUIL_GENERATION_FOND = ancien_seuil
+        services.oublier_generation(ecrit)
+        services.oublier_generation(concours)
+    print("  au-delà du seuil : documents générés en arrière-plan, avancement affiché, "
+          "une génération à la fois, arrêt signalé et relançable OK")
     print("\n✅ TEST DES COPIES À TALON RÉUSSI")
 
 

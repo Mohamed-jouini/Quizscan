@@ -726,6 +726,76 @@ def _liberer_numero(quiz, numero):
     return list(range(numero, libre))
 
 
+def _generer_fiche_qcm(quiz, count, progres=None):
+    """Fiche d'un QCM, et son sujet en mode « sujet séparé » : exemplaires anonymes,
+    copies nominatives (talon, n° de place, nom) ou fiche unique. Rend les messages
+    [(niveau, texte)] ; ValueError si la fiche a trop de pages. Tourne aussi dans un
+    fil (génération en arrière-plan, progres : voir services.lancer_generation)."""
+    layout = layout_mod.build_layout(quiz)          # TooManyPages est une ValueError
+    n_etudiants = quiz.class_group.students.count()
+    if quiz.exemplaires_anonymes:
+        pdf_bytes = sheet_pdf.generate_sheet_pdf(
+            quiz, layout, serials=list(range(1, count + 1)), progres=progres)
+        filename = f"fiches_concours_quiz_{quiz.pk}.pdf"
+        msg = (f"{count} exemplaires de la fiche anonyme générés. "
+               "Chaque copie est identifiée par l'étiquette QR du "
+               "candidat, collée dans l'emplacement réservé : "
+               "imprimez aussi la planche d'étiquettes (page "
+               "« Candidats & étiquettes QR »). Les candidats "
+               "inconnus seront créés automatiquement au scan.")
+    elif quiz.id_mode == "qr":
+        pdf_bytes, _ = services.copies_nominatives_pdf(quiz, layout, progres)
+        filename = f"fiches_nominatives_quiz_{quiz.pk}.pdf"
+        msg = (f"Fiches nominatives générées : {n_etudiants} fiches "
+               "avec nom et QR code — distribuez à chaque étudiant la sienne.")
+        if quiz.place_anonyme:
+            msg = (f"Copies anonymes générées : {n_etudiants} copies "
+                   "avec un n° de place et le QR, sans nom. Imprimez "
+                   "aussi la liste des candidats et des places pour "
+                   "le surveillant.")
+        elif quiz.talon_nom:
+            msg = (f"Copies à talon générées : {n_etudiants} copies, nom et QR "
+                   "imprimés. Avant la correction, découpez le "
+                   "talon au massicot (trait pointillé) : la "
+                   "copie devient anonyme et reste lue par son QR.")
+    else:
+        pdf_bytes = sheet_pdf.generate_sheet_pdf(quiz, layout)
+        filename = f"fiche_quiz_{quiz.pk}.pdf"
+        msg = "Fiche de réponses générée. Imprimez-la pour vos étudiants."
+        if quiz.id_mode == "grid":
+            msg += (" Chaque élève colle son étiquette QR dans le cadre "
+                    "en haut à droite (planche d'étiquettes : page "
+                    "« Candidats & étiquettes QR »), ou à défaut "
+                    "noircit son n° d'inscription dans la grille.")
+        if quiz.id_mode == "sticker" or (quiz.auto_enroll and quiz.id_mode == "qr"):
+            msg += (" Imprimez aussi la planche d'étiquettes QR des candidats "
+                    "(page « Candidats & étiquettes QR ») à coller sur les copies.")
+    layout["signature"] = layout_mod.layout_signature(quiz)
+    # cases déplacées (3 colonnes depuis le 7 novembre 2026, questions
+    # modifiées…) : une feuille imprimée avant serait lue de travers
+    cases_deplacees = bool(quiz.layout_json) and services.zones_lues_changees(
+        quiz.layout_json, layout)
+    quiz.layout_json = layout
+    quiz.sheet_pdf.save(filename, ContentFile(pdf_bytes), save=False)
+    # Mode « sujet séparé » : générer aussi le document des questions
+    if quiz.sheet_mode == "split":
+        subject_bytes = sheet_pdf.generate_subject_pdf(quiz)
+        quiz.subject_pdf.save(f"sujet_quiz_{quiz.pk}.pdf",
+                              ContentFile(subject_bytes), save=False)
+        layout["sujet_version"] = sheet_pdf.SUJET_VERSION
+        msg = ("Deux documents générés : le SUJET (questions) à "
+               "distribuer, et la FEUILLE DE RÉPONSES à imprimer, "
+               "remplir et scanner.")
+    quiz.save()
+    a_dire = [("success", msg)]
+    if cases_deplacees:
+        a_dire.append(("warning", "Les cases de la feuille ont changé de place : "
+                                  "une feuille imprimée avant cette génération "
+                                  "serait lue de travers. Imprimez et "
+                                  "distribuez la nouvelle."))
+    return a_dire
+
+
 @login_required
 def quiz_detail(request, pk):
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
@@ -1022,74 +1092,13 @@ def quiz_detail(request, pk):
                              "(ou activez le mode concours pour des fiches anonymes).")
             else:
                 try:
-                    layout = layout_mod.build_layout(quiz)
-                except layout_mod.TooManyPages as exc:
-                    messages.error(request, str(exc))
-                    return redirect("quiz_detail", pk=pk)
-                if quiz.exemplaires_anonymes:
-                    try:
-                        count = max(1, min(int(request.POST.get("qr_count", 100)), 2000))
-                    except ValueError:
-                        count = 100
-                    pdf_bytes = sheet_pdf.generate_sheet_pdf(
-                        quiz, layout, serials=list(range(1, count + 1)))
-                    filename = f"fiches_concours_quiz_{quiz.pk}.pdf"
-                    msg = (f"{count} exemplaires de la fiche anonyme générés. "
-                           "Chaque copie est identifiée par l'étiquette QR du "
-                           "candidat, collée dans l'emplacement réservé : "
-                           "imprimez aussi la planche d'étiquettes (page "
-                           "« Candidats & étiquettes QR »). Les candidats "
-                           "inconnus seront créés automatiquement au scan.")
-                elif quiz.id_mode == "qr":
-                    pdf_bytes, _ = services.copies_nominatives_pdf(quiz, layout)
-                    filename = f"fiches_nominatives_quiz_{quiz.pk}.pdf"
-                    msg = (f"Fiches nominatives générées : {len(students)} fiches "
-                           "avec nom et QR code — distribuez à chaque étudiant la sienne.")
-                    if quiz.place_anonyme:
-                        msg = (f"Copies anonymes générées : {len(students)} copies "
-                               "avec un n° de place et le QR, sans nom. Imprimez "
-                               "aussi la liste des candidats et des places pour "
-                               "le surveillant.")
-                    elif quiz.talon_nom:
-                        msg = (f"Copies à talon générées : {len(students)} copies, nom et QR "
-                               "imprimés. Avant la correction, découpez le "
-                               "talon au massicot (trait pointillé) : la "
-                               "copie devient anonyme et reste lue par son QR.")
-                else:
-                    pdf_bytes = sheet_pdf.generate_sheet_pdf(quiz, layout)
-                    filename = f"fiche_quiz_{quiz.pk}.pdf"
-                    msg = "Fiche de réponses générée. Imprimez-la pour vos étudiants."
-                    if quiz.id_mode == "grid":
-                        msg += (" Chaque élève colle son étiquette QR dans le cadre "
-                                "en haut à droite (planche d'étiquettes : page "
-                                "« Candidats & étiquettes QR »), ou à défaut "
-                                "noircit son n° d'inscription dans la grille.")
-                    if quiz.id_mode == "sticker" or (quiz.auto_enroll and quiz.id_mode == "qr"):
-                        msg += (" Imprimez aussi la planche d'étiquettes QR des candidats "
-                                "(page « Candidats & étiquettes QR ») à coller sur les copies.")
-                layout["signature"] = layout_mod.layout_signature(quiz)
-                # cases déplacées (3 colonnes depuis le 7 novembre 2026, questions
-                # modifiées…) : une feuille imprimée avant serait lue de travers
-                cases_deplacees = bool(quiz.layout_json) and services.zones_lues_changees(
-                    quiz.layout_json, layout)
-                quiz.layout_json = layout
-                quiz.sheet_pdf.save(filename, ContentFile(pdf_bytes), save=False)
-                # Mode « sujet séparé » : générer aussi le document des questions
-                if quiz.sheet_mode == "split":
-                    subject_bytes = sheet_pdf.generate_subject_pdf(quiz)
-                    quiz.subject_pdf.save(f"sujet_quiz_{quiz.pk}.pdf",
-                                          ContentFile(subject_bytes), save=False)
-                    layout["sujet_version"] = sheet_pdf.SUJET_VERSION
-                    msg = ("Deux documents générés : le SUJET (questions) à "
-                           "distribuer, et la FEUILLE DE RÉPONSES à imprimer, "
-                           "remplir et scanner.")
-                quiz.save()
-                messages.success(request, msg)
-                if cases_deplacees:
-                    messages.warning(request, "Les cases de la feuille ont changé de place : "
-                                              "une feuille imprimée avant cette génération "
-                                              "serait lue de travers. Imprimez et "
-                                              "distribuez la nouvelle.")
+                    count = max(1, min(int(request.POST.get("qr_count", 100)), 2000))
+                except ValueError:
+                    count = 100
+                # au-delà de 1 000 copies : en arrière-plan (9 novembre 2026, 15 000 copies)
+                from .views_epreuves import generer, nombre_de_copies
+                generer(request, quiz, nombre_de_copies(quiz, count),
+                        lambda q, progres: _generer_fiche_qcm(q, count, progres))
             return redirect("quiz_detail", pk=pk)
 
     layout_stale = False
@@ -1110,8 +1119,10 @@ def quiz_detail(request, pk):
     pending = list(quiz.batches.filter(status="pending").order_by("created_at"))
     processing = [b for b in quiz.batches.filter(status="processing")
                   if not services.is_stalled(b)]
+    from .views_epreuves import suivre_generation
     return render(request, "grader/quiz_detail.html", {
         "quiz": quiz, "qform": qform, "bulk_form": bulk_form,
+        "generation": suivre_generation(request, quiz),
         "fil": services.fil_etapes(quiz, _my_quizzes(request)),
         "pages_etiquette": layout_mod.pages_a_etiquette(quiz.layout_json),
         "import_form": import_form, "bank_form": bank_form,

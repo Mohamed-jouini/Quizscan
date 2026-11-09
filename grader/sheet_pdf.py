@@ -14,6 +14,7 @@ import cv2
 import pymupdf
 import qrcode
 from PIL import Image
+from reportlab import rl_config
 from reportlab.lib.pagesizes import A3, A4, landscape
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
@@ -26,6 +27,12 @@ from .fonts import (font_for, has_arabic, load_fonts, runs, shape,
                     text_width_pt, wrap)
 from .labels_pdf import _ellipsize
 from .models import choice_letter
+
+# Images des PDF (QR de chaque copie) en binaire compressé, sans le codage ASCII85 :
+# il grossit le fichier d'un quart et coûtait 14 % de la génération des copies
+# nominatives (9 novembre 2026, 15 000 copies). Réglage de ReportLab, valable pour
+# tous les PDF de l'application.
+rl_config.useA85 = 0
 
 ARUCO_DICT = cv2.aruco.getPredefinedDictionary(L.ARUCO_DICT_ID)
 
@@ -142,14 +149,17 @@ LABELS = {
 
 
 def _qr_image(payload):
+    # correction H (30 % du QR peut manquer) depuis le 9 novembre 2026 : une tache, un
+    # trait de stylo, un coin déchiré n'empêchent plus la lecture ; M (15 %) avant,
+    # toujours lu (omr._qr_par_la_grille essaie les deux)
     qr = qrcode.QRCode(border=1, box_size=8,
-                       error_correction=qrcode.constants.ERROR_CORRECT_M)
+                       error_correction=qrcode.constants.ERROR_CORRECT_H)
     qr.add_data(payload)
     qr.make(fit=True)
     return ImageReader(qr.make_image().get_image())
 
 
-def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
+def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, progres=None):
     """Retourne les octets du PDF de la fiche du quiz.
 
     places : copies ANONYMES à numéro de place ({id étudiant: n° de place}) :
@@ -205,7 +215,10 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
         # requête pour toutes les copies, pas une par copie (des milliers)
         prefetch_related_objects([s for s in students if s is not None], "inscrit")
     units = students or serials or [None]
-    for unit, page in [(u, p) for u in units for p in layout["pages"]]:
+    pages_unite = len(layout["pages"])
+    for rang, (unit, page) in enumerate([(u, p) for u in units for p in layout["pages"]]):
+        if progres is not None and rang and rang % pages_unite == 0:
+            progres(rang // pages_unite)       # copies terminées (génération en arrière-plan)
         student = unit if (students and unit is not None) else None
         pidx = page["page_index"]
 
@@ -498,6 +511,8 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None):
                          _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
                 c.showPage()
 
+    if progres is not None:
+        progres(len(units))
     c.save()
     if layout.get("format") == "a3":
         return _imposer_a3(buf.getvalue(), lang,

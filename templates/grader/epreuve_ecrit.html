@@ -17,6 +17,7 @@
 </header>
 {% include "grader/_fil_etapes.html" with lien="quiz_detail" %}
 {% include "grader/_etape_precedente.html" %}
+{% include "grader/_generation.html" %}
 
 {% if perimee %}
 <div class="note note--warn">
@@ -58,7 +59,7 @@
         {% else %}
         {% include "grader/_nombre_copies.html" %}
         {% endif %}
-        <p><button class="btn" name="generer" value="1" type="submit">
+        <p><button class="btn" name="generer" value="1" type="submit"{% if generation.etat == "en_cours" %} disabled title="Génération en cours"{% endif %}>
           {% if quiz.sheet_pdf %}Régénérer les documents{% else %}Générer le sujet et les copies{% endif %}</button></p>
       </form>
       {% endif %}

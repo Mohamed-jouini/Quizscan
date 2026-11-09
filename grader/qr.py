@@ -18,9 +18,10 @@ def payload(student):
 
 
 def qr_png(data, box_size=6, border=2):
-    """Retourne les octets PNG d'un QR code."""
+    """Retourne les octets PNG d'un QR code. Correction H (30 %) depuis le 9 novembre
+    2026 : une étiquette tachée, rayée ou au coin arraché reste lisible."""
     qr = qrcode.QRCode(border=border, box_size=box_size,
-                       error_correction=qrcode.constants.ERROR_CORRECT_M)
+                       error_correction=qrcode.constants.ERROR_CORRECT_H)
     qr.add_data(data)
     qr.make(fit=True)
     buf = io.BytesIO()

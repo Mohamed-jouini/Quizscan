@@ -50,17 +50,59 @@ def epreuve_detail(request, quiz, fil=None):
 
 # ------------------------------------------------------------------- écrit
 
-def _generer_documents(quiz, nb_exemplaires=100):
+def nombre_de_copies(quiz, nb_exemplaires=1):
+    """Copies que la génération va dessiner : de quoi choisir l'arrière-plan."""
+    if quiz.exemplaires_anonymes:
+        return nb_exemplaires
+    if quiz.id_mode == "qr" or quiz.type_epreuve == "oral":
+        return quiz.class_group.students.count()
+    return 1
+
+
+def suivre_generation(request, quiz):
+    """Génération en arrière-plan, pour la page de l'épreuve : l'état en cours (ou
+    interrompu), sinon None. Les messages d'une génération finie s'affichent une fois."""
+    etat = services.etat_generation(quiz)
+    if etat and etat["etat"] in ("fini", "erreur"):
+        for niveau, texte in etat.get("messages", []):
+            messages.add_message(request, getattr(messages, niveau.upper()), texte)
+        services.oublier_generation(quiz)
+        return None
+    return etat
+
+
+def generer(request, quiz, total, travail):
+    """Génère tout de suite, ou en arrière-plan au-delà de services.SEUIL_GENERATION_FOND
+    copies. travail(quiz, progres) -> [(niveau, texte)] ; il lève ValueError pour un
+    refus à dire tel quel (fiche trop longue…)."""
+    if services.generation_en_cours(quiz):
+        messages.error(request, "Une génération des documents est déjà en cours : attendez "
+                                "qu'elle se termine (l'avancement est affiché en haut).")
+    elif total > services.SEUIL_GENERATION_FOND:
+        services.lancer_generation(quiz, total, travail)
+        messages.info(request, f"Génération de {total} copies lancée en arrière-plan : la page "
+                               "suit l'avancement, vous pouvez la quitter et revenir. Les "
+                               "documents précédents restent en place jusqu'à la fin.")
+    else:
+        try:
+            for niveau, texte in travail(quiz, None):
+                messages.add_message(request, getattr(messages, niveau.upper()), texte)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+
+
+def _generer_documents(quiz, nb_exemplaires=100, progres=None):
     """Copies à imprimer (page de garde + pages lignées) et sujet.
     Retourne le message à afficher."""
     services.question_note(quiz)
     layout = layout_mod.build_layout(quiz)
     if quiz.exemplaires_anonymes:
         n = nb_exemplaires
-        pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, serials=list(range(1, n + 1)))
+        pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, serials=list(range(1, n + 1)),
+                                           progres=progres)
         quoi = f"{n} copies anonymes"
     elif quiz.id_mode == "qr":
-        pdf, n = services.copies_nominatives_pdf(quiz, layout)
+        pdf, n = services.copies_nominatives_pdf(quiz, layout, progres)
         quoi = (f"{n} copies anonymes à n° de place (et la liste des candidats et des places)"
                 if quiz.place_anonyme else
                 f"{n} copies à talon (nom à découper avant la correction, "
@@ -117,13 +159,16 @@ def _ecrit(request, quiz, fil=None):
                     n = max(1, min(int(request.POST.get("nb", 100)), 2000))
                 except ValueError:
                     n = 100
-                messages.success(request, _generer_documents(quiz, n))
+                generer(request, quiz, nombre_de_copies(quiz, n),
+                        lambda q, progres: [("success", _generer_documents(q, n, progres))])
             return redirect("quiz_detail", pk=quiz.pk)
 
+    generation = suivre_generation(request, quiz)
     perimee = bool(quiz.layout_json) and (
         quiz.layout_json.get("signature") != layout_mod.layout_signature(quiz))
     return render(request, "grader/epreuve_ecrit.html", {
         "quiz": quiz, "fil": fil, "form": form, "retour": _retour(quiz),
+        "generation": generation,
         "perimee": perimee, "upload_form": UploadForm(),
         "batches": quiz.batches.all(), "etape": services.etat_etape(quiz),
         "journal": quiz.modifications.all()[:15],
@@ -133,14 +178,14 @@ def _ecrit(request, quiz, fil=None):
 
 # -------------------------------------------------------------------- oral
 
-def _generer_fiches_orales(quiz):
+def _generer_fiches_orales(quiz, progres=None):
     """Une fiche d'évaluation par étudiant : nom et QR imprimés, grille de la
     note à noircir par l'examinateur. Scannée, la note va à l'étudiant."""
     services.question_note(quiz)
     etudiants = services.etudiants_par_salle(quiz)     # dans l'ordre des salles
     quiz.id_mode = "qr"                 # fiches nominatives
     layout = layout_mod.build_layout(quiz)
-    pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants)
+    pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants, progres=progres)
     layout["signature"] = layout_mod.layout_signature(quiz)
     quiz.layout_json = layout
     quiz.sheet_pdf.save(f"fiches_oral_{quiz.pk}.pdf", ContentFile(pdf), save=False)
@@ -171,9 +216,9 @@ def _oral(request, quiz, fil=None):
                 messages.error(request, "Ajoutez d'abord les étudiants : une fiche "
                                         "est imprimée pour chacun.")
             else:
-                n = _generer_fiches_orales(quiz)
-                messages.success(request, f"{n} fiche(s) d'évaluation prête(s), une par "
-                                          "étudiant (nom et QR imprimés).")
+                generer(request, quiz, len(etudiants), lambda q, progres: [(
+                    "success", f"{_generer_fiches_orales(q, progres)} fiche(s) d'évaluation "
+                               "prête(s), une par étudiant (nom et QR imprimés).")])
             return redirect("quiz_detail", pk=quiz.pk)
 
     # Les notes de l'oral ne viennent que des fiches scannées (demande de
@@ -181,10 +226,12 @@ def _oral(request, quiz, fil=None):
     # note illisible se reprend sur l'écran de la fiche, image sous les yeux.
     lignes = services.notes_orales(quiz)
     lot_manuel = quiz.batches.filter(label=services.LOT_ORAL).first()
+    generation = suivre_generation(request, quiz)
     perimee = bool(quiz.layout_json) and (
         quiz.layout_json.get("signature") != layout_mod.layout_signature(quiz))
     return render(request, "grader/epreuve_oral.html", {
         "quiz": quiz, "fil": fil, "form": form, "retour": _retour(quiz), "lignes": lignes,
+        "generation": generation,
         "n_notes": sum(1 for _, etat, _ in lignes if etat in ("lue", "manuelle")),
         "n_illisibles": sum(1 for _, etat, _ in lignes if etat == "illisible"),
         "lot_manuel": lot_manuel,

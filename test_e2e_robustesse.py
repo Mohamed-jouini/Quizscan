@@ -198,6 +198,102 @@ def test_etiquette_qr(teacher):
           f"{nb_pages} page(s), {L.STICKER_COLS}x{L.STICKER_ROWS} par page OK")
 
 
+def test_qr_abimes(teacher):
+    """QR abîmés, scans médiocres (demande du 9 novembre 2026 : « lire les QR dans
+    n'importe quel état, n'importe quelle qualité de fichier »). Copie à talon, QR
+    imprimé en correction H depuis ce jour. Banc complet de 201 copies abîmées : 120
+    lues avant, 177 après (161 pour les copies d'avant, en M) ; restent illisibles un
+    scan très bougé ou une feuille très froissée, que l'on rattache à la main."""
+    from unittest import mock
+
+    import numpy as np
+    import qrcode
+    from reportlab.lib.utils import ImageReader
+
+    from grader import omr
+    groupe = ClassGroup.objects.create(name="ROB QR abîmés", owner=teacher)
+    for k in range(2):
+        Student.objects.create(class_group=groupe, last_name=f"ABIME{k}", first_name="Ali",
+                               student_number=f"8100{k}")
+    quiz = Quiz.objects.create(title="QR abîmés", class_group=groupe, owner=teacher,
+                               type_epreuve="qcm", auto_enroll=True, id_mode="qr",
+                               talon_nom=True, sheet_mode="grid", num_choices=4, language="ar")
+    Question.objects.bulk_create(Question(quiz=quiz, order=o, qtype="qcm",
+                                          correct_choice=o % 4) for o in range(1, 31))
+    layout = L.build_layout(quiz)
+    quiz.layout_json = layout
+    quiz.save(update_fields=["layout_json"])
+    page = layout["pages"][0]
+    etudiant = services.etudiants_par_salle(quiz)[0]
+    attendu = ("QS", quiz.pk, etudiant.pk)
+    px = 300 / 25.4                                        # render_page : 300 ppp
+    x, y, w, h = (int(v * px) for v in page["qr"]["rect"])
+
+    def tache_coin(img, r=5):         # encre sur le repère du coin haut gauche du QR
+        out = img.copy()
+        cv2.circle(out, (x + w // 7, y + h // 7), w // r, (25, 25, 25), -1)
+        return out
+
+    def stylo(img):
+        out = img.copy()
+        for dx in (0.25, 0.55, 0.8):
+            cv2.line(out, (x + int(w * dx), y - 10), (x + int(w * (dx - 0.15)), y + h + 10),
+                     (90, 40, 20), 6)
+        return out
+
+    def arrache(img):                 # coin bas droit déchiré
+        out = img.copy()
+        out[y + h * 2 // 3:y + h + 4, x + w * 2 // 3:x + w + 4] = 255
+        return out
+
+    def froisse(img):
+        m = 30
+        zone = img[y - m:y + h + m, x - m:x + w + m]
+        gx, gy = np.meshgrid(np.arange(zone.shape[1]), np.arange(zone.shape[0]))
+        out = img.copy()
+        out[y - m:y + h + m, x - m:x + w + m] = cv2.remap(
+            zone, (gx + 3 * np.sin(gy / 18.0)).astype(np.float32),
+            (gy + 3 * np.sin(gx / 23.0)).astype(np.float32), cv2.INTER_LINEAR,
+            borderValue=(255, 255, 255))
+        return out
+
+    def pale(img):                    # toner faible : le noir sort gris clair
+        return (180 + img.astype(np.float32) * 75 / 255).astype(np.uint8)
+
+    def mediocre(img):                # 100 ppp, JPEG très compressé
+        petit = cv2.resize(img, None, fx=1 / 3, fy=1 / 3, interpolation=cv2.INTER_AREA)
+        return cv2.imdecode(cv2.imencode(".jpg", petit, [cv2.IMWRITE_JPEG_QUALITY, 10])[1], 1)
+
+    def lire(img):
+        warped, _ = omr.detect_and_warp(img)
+        return omr.read_qr(warped, page)
+
+    copie = render_page(services.copies_nominatives_pdf(quiz, layout)[0], 0)
+    for nom, f in (("tache sur un coin", tache_coin), ("traits de stylo", stylo),
+                   ("coin arraché", arrache), ("feuille froissée", froisse),
+                   ("impression pâle", pale), ("100 ppp en JPEG 10", mediocre)):
+        assert lire(f(copie)) == attendu, f"QR en correction H, {nom} : illisible"
+
+    def qr_m(payload):                # QR des copies imprimées avant ce jour
+        qr = qrcode.QRCode(border=1, box_size=8, error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        return ImageReader(qr.make_image().get_image())
+
+    with mock.patch.object(sheet_pdf, "_qr_image", qr_m):
+        ancienne = render_page(services.copies_nominatives_pdf(quiz, layout)[0], 0)
+    for nom, f in (("tache sur un coin", lambda i: tache_coin(i, 7)), ("impression pâle", pale),
+                   ("100 ppp en JPEG 10", mediocre)):
+        assert lire(f(ancienne)) == attendu, f"QR en correction M (copie d'avant), {nom} : illisible"
+    # par le vrai chemin : la copie tachée et pâle, envoyée, va à son candidat
+    lot = services.process_uploaded_files(quiz, [SimpleUploadedFile(
+        "abimee.jpg", cv2.imencode(".jpg", pale(tache_coin(copie)))[1].tobytes())])
+    lue = lot.sheets.get()
+    assert lue.student_id == etudiant.pk, (lue.status, lue.error_message)
+    print("  QR abîmés (tache sur un coin, stylo, coin arraché, froissé, pâle, 100 ppp en "
+          "JPEG 10) : lus, copies d'avant (QR en M) comprises OK")
+
+
 def test_parametres_bricoles(teacher):
     """Un identifiant non numérique dans l'URL ou le formulaire doit donner
     une page normale ou une redirection, jamais une erreur 500."""
@@ -275,6 +371,8 @@ def main():
     test_fiche_longue(teacher)
     print("Étiquettes QR :")
     test_etiquette_qr(teacher)
+    print("QR abîmés, scans médiocres :")
+    test_qr_abimes(teacher)
     print("Paramètres bricolés :")
     test_parametres_bricoles(teacher)
     print("Gros lot :")
