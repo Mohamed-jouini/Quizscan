@@ -606,9 +606,12 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   détruit (scan très bougé, feuille très froissée) laisse la copie « à identifier » : on la
   rattache à la main, l'ordre du scan propose le candidat.
 - Chaque copie imprimée se scanne dans son épreuve : son QR porte le n° de l'épreuve et du
-  candidat (« QS|31|155 »). Envoyée dans une autre épreuve, elle est refusée, et le message
-  nomme celle où l'envoyer (ses cases ne sont pas forcément à la même place). Les étiquettes
-  QR, elles, portent le n° de la liste et servent à toutes les épreuves de cette liste.
+  candidat (« QS|31|155 »). Envoyée dans une autre épreuve de même mise en page (concours
+  recréé à l'identique), elle est lue, et la page du lot dit d'où elle vient ; de mise en page
+  différente, elle est refusée, le message nomme l'épreuve où l'envoyer. Un candidat absent
+  de la liste (liste réimportée, concours recréé) est retrouvé par son n° d'inscription ; un
+  candidat retiré de la liste depuis l'impression laisse la copie « à identifier », avec le QR
+  lu et la raison. Les étiquettes QR portent le n° de la liste et servent à toutes ses épreuves.
 - Scanner à chargeur (Canon DR-G2110 à l'institut) : **PDF, niveaux de gris, 200 dpi**. Un
   paquet de 500 feuilles en recto-verso reste alors sous les 500 Mo permis par fichier. Le
   recto-verso convient : les versos blancs sont ignorés.

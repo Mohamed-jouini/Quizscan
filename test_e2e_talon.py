@@ -271,28 +271,61 @@ def main():
     print(f"  écrit à talon en PDF à 1200 ppp ({largeur} × {hauteur} pixels) : décodé au "
           "quart, note 9,25 lue et affectée à BAKIR OK")
 
-    # ---- copie d'une autre épreuve (9 novembre 2026 : les copies de l'épreuve 31, envoyées
-    # dans une autre, restaient toutes « non identifiées » sans dire pourquoi) : refusée, avec
-    # l'épreuve où l'envoyer ; même quand le candidat est aussi dans cette liste-ci
+    # ---- copie d'une autre épreuve, candidat absent de la liste (9 novembre 2026 : les
+    # copies de l'épreuve 31 restaient « non identifiées » sans dire pourquoi, QR pourtant lu)
+    def lire_une(quiz_, nom, octets):
+        return services.process_uploaded_files(quiz_, [SimpleUploadedFile(nom, octets)]).sheets.get()
+
+    copie_amri = jpg(simulate_scan(couper(render_page(pdf_e, 0), 30.0)))    # AMRI, « ecrit »
+    amri_e = ecrit.class_group.students.get(last_name="AMRI")
+    origine = f"Copie imprimée pour l'épreuve « {ecrit.title} » (n° {ecrit.pk})"
+    # même mise en page, même liste : lue, et la page du lot dit d'où elle vient
     bis = Quiz.objects.create(title="Rédaction talon — bis", class_group=groupe, owner=prof,
                               type_epreuve="ecrit", language="fr", id_mode="qr", talon_nom=True,
                               note_sur=20)
     c.post(reverse("quiz_detail", args=[bis.pk]), {"generer": "1"})
     bis.refresh_from_db()
-    assert bis.sheet_pdf, "copies de l'épreuve bis non générées"
-    lot = services.process_uploaded_files(bis, [SimpleUploadedFile(
-        "copie_de_l_autre.jpg", jpg(simulate_scan(couper(render_page(pdf_e, 0), 30.0))))])
-    etrangere = lot.sheets.get()
-    assert etrangere.status == "error" and etrangere.student_id is None, \
-        (etrangere.status, etrangere.error_message)
-    assert (f"Copie imprimée pour l'épreuve « {ecrit.title} » (n° {ecrit.pk}) : envoyez ce "
-            "scan dans cette épreuve-là" in etrangere.error_message), etrangere.error_message
-    lot = services.process_uploaded_files(bis, [SimpleUploadedFile(
-        "copie_de_bis.jpg", jpg(simulate_scan(couper(render_page(
-            open(bis.sheet_pdf.path, "rb").read(), 0), 30.0))))])
-    assert lot.sheets.get().status == "ok", "sa propre copie doit rester lue"
-    print("  copie d'une autre épreuve : refusée, l'épreuve où l'envoyer nommée ; la sienne "
-          "lue OK")
+    lue = lire_une(bis, "de_l_autre.jpg", copie_amri)
+    assert lue.status == "ok" and lue.student_id == amri_e.pk, (lue.status, lue.error_message)
+    assert f"{origine}, de même mise en page : lue ici" in lue.error_message, lue.error_message
+    assert lire_une(bis, "la_sienne.jpg", jpg(simulate_scan(couper(render_page(
+        open(bis.sheet_pdf.path, "rb").read(), 0), 30.0)))).status == "ok"
+    # même mise en page, autre liste (concours recréé, liste réimportée) : le candidat
+    # retrouvé par son n° d'inscription
+    autre_liste = ClassGroup.objects.create(name="TALON autre liste", owner=prof)
+    jumeau = Student.objects.create(class_group=autre_liste, last_name="AMRI", first_name="Sana",
+                                    student_number=amri_e.student_number)
+    parti = Student.objects.create(class_group=autre_liste, last_name="PARTI", first_name="Ali",
+                                   student_number="104599")
+    ter = Quiz.objects.create(title="Rédaction talon — autre liste", class_group=autre_liste,
+                              owner=prof, type_epreuve="ecrit", language="fr", id_mode="qr",
+                              talon_nom=True, note_sur=20)
+    c.post(reverse("quiz_detail", args=[ter.pk]), {"generer": "1"})
+    ter.refresh_from_db()
+    lue = lire_une(ter, "par_le_numero.jpg", copie_amri)
+    assert lue.student_id == jumeau.pk, (lue.status, lue.error_message)
+    assert (f"{origine} : candidat retrouvé par son n° d'inscription "
+            f"({amri_e.student_number})" in lue.error_message), lue.error_message
+    # mise en page différente (QCM à talon) : refusée, l'épreuve où l'envoyer nommée
+    lue = lire_une(concours, "autre_mise_en_page.jpg", copie_amri)
+    assert lue.status == "error" and lue.student_id is None, (lue.status, lue.error_message)
+    assert f"{origine}, dont les cases ne sont pas à la même place" in lue.error_message
+    # candidat retiré de la liste depuis l'impression : le QR lu, et la raison
+    rang = list(services.etudiants_par_salle(ter)).index(parti)
+    copie_parti = jpg(simulate_scan(couper(render_page(
+        open(ter.sheet_pdf.path, "rb").read(), rang * (1 + ter.layout_json["pages_redaction"])),
+        30.0)))
+    pk_parti = parti.pk
+    parti.delete()
+    lue = lire_une(ter, "candidat_retire.jpg", copie_parti)
+    assert lue.status == "no_match" and lue.id_read == f"QR {ter.pk}/{pk_parti}", \
+        (lue.status, lue.id_read)
+    assert "son candidat n'existe plus" in lue.error_message, lue.error_message
+    revue = c.get(reverse("sheet_review", args=[lue.pk])).content.decode()
+    assert "son candidat n&#x27;existe plus" in revue and f"QR {ter.pk}/{pk_parti}" in revue
+    print("  copie d'une autre épreuve : même mise en page lue (d'où elle vient dit), autre "
+          "liste retrouvée par le n° d'inscription, autre mise en page refusée ; candidat "
+          "retiré : QR lu et raison dite OK")
 
     # copie nominative sans talon : le nom, le n° et le QR sur chaque page de rédaction
     nominatif = Quiz.objects.create(title="Rédaction nominative", class_group=groupe,

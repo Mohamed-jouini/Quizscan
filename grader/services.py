@@ -1268,7 +1268,52 @@ def _autre_epreuve(quiz, qr_id, etudiant_pk):
     if qr_id is None or qr_id in (quiz.pk, quiz.class_group_id):
         return None
     return (Quiz.objects.filter(pk=qr_id, class_group__students__pk=etudiant_pk)
-            .only("pk", "title", "owner_id").first())
+            .only("pk", "title", "owner_id", "layout_json").first())
+
+
+def _nom_epreuve(autre, quiz):
+    """« titre » (n° …) d'une autre épreuve ; le titre seulement si même auteur."""
+    return (f"« {autre.title} » (n° {autre.pk})" if autre.owner_id == quiz.owner_id
+            else f"n° {autre.pk}")
+
+
+def _meme_mise_en_page(autre, quiz):
+    """Une copie imprimée pour l'autre épreuve se lit-elle juste avec celle-ci ? Mêmes
+    pages, chaque case lue à la même place (concours recréé à l'identique…)."""
+    a, b = autre.layout_json or {}, quiz.layout_json or {}
+    return (bool(a.get("pages")) and len(a["pages"]) == len(b.get("pages", []))
+            and not zones_lues_changees(a, b))
+
+
+def _retrouver_candidat(students, etudiant_pk, autre, quiz):
+    """Le QR désigne un candidat absent de cette liste. Le même candidat, retrouvé par
+    son n° d'inscription ou sa fiche du registre (concours recréé, liste réimportée,
+    étiquette d'une autre liste), sinon la raison, dite sur la page du lot (9 novembre
+    2026 : 7 copies « non identifiées » sans explication). -> (candidat, message)."""
+    ancien = (Student.objects.filter(pk=etudiant_pk)
+              .select_related("class_group").only("student_number", "inscrit_id",
+                                                  "class_group__name",
+                                                  "class_group__owner_id").first())
+    if ancien is None:
+        return None, ("QR lu, mais son candidat n'existe plus : il a été retiré de la liste "
+                      "depuis l'impression des copies. Affectez la copie à la main, ou "
+                      "réimprimez les copies.")
+    numero = (ancien.student_number or "").strip()
+    trouve = next((s for s in students
+                   if numero and (s.student_number or "").strip() == numero), None)
+    if trouve is None and ancien.inscrit_id:
+        trouve = next((s for s in students if s.inscrit_id == ancien.inscrit_id), None)
+    meme_auteur = ancien.class_group.owner_id == quiz.owner_id
+    origine = (f"l'épreuve {_nom_epreuve(autre, quiz)}" if autre is not None
+               else f"la liste « {ancien.class_group.name} »" if meme_auteur
+               else "une autre liste")
+    if trouve is not None:
+        return trouve, (f"Copie imprimée pour {origine} : candidat retrouvé par son n° "
+                        f"d'inscription ({trouve.student_number or numero}).")
+    return None, (f"QR lu : candidat de {origine}"
+                  + (f" (n° {numero})" if numero and meme_auteur else "")
+                  + ", absent de cette épreuve. Ajoutez-le à la liste, ou affectez la "
+                  "copie à la main.")
 
 
 def _enregistrer_page(sheet, lecture, students, questions, quiz):
@@ -1286,18 +1331,26 @@ def _enregistrer_page(sheet, lecture, students, questions, quiz):
     if page_layout.get("qr"):
         kind, _quiz_id, value = lecture.qr
         if kind == "QS":
-            autre = _autre_epreuve(quiz, _quiz_id, value)
-            if autre is not None:
+            # une étiquette collée (« QS|liste|candidat ») est sur une copie de cette
+            # épreuve-ci : seule une copie au QR imprimé peut venir d'une autre épreuve
+            autre = (None if page_layout["qr"].get("sticker")
+                     else _autre_epreuve(quiz, _quiz_id, value))
+            if autre is not None and not _meme_mise_en_page(autre, quiz):
                 raise CopieAutreEpreuve(
-                    "Copie imprimée pour l'épreuve "
-                    + (f"« {autre.title} » (n° {autre.pk})" if autre.owner_id == quiz.owner_id
-                       else f"n° {autre.pk}")
-                    + " : envoyez ce scan dans cette épreuve-là. Ici, elle n'est ni "
-                    "identifiée ni notée (ses cases ne sont pas forcément à la même place).")
+                    f"Copie imprimée pour l'épreuve {_nom_epreuve(autre, quiz)}, dont les "
+                    "cases ne sont pas à la même place : envoyez ce scan dans cette "
+                    "épreuve-là. Ici, elle n'est ni identifiée ni notée.")
             student = next((s for s in students if s.pk == value), None)
+            if student is None:
+                student, sheet.error_message = _retrouver_candidat(students, value, autre, quiz)
+            elif autre is not None:
+                sheet.error_message = (f"Copie imprimée pour l'épreuve {_nom_epreuve(autre, quiz)}, "
+                                       "de même mise en page : lue ici.")
             if student is not None:
                 sheet.id_read = f"QR {student.student_number or student.pk}"[:20]
                 sheet.match_score = 100.0
+            else:
+                sheet.id_read = f"QR {_quiz_id}/{value}"[:20]      # le QR a bien été lu
         elif kind == "QSA":
             serial = value
             sheet.id_read = f"Fiche {value:04d}"[:20]
