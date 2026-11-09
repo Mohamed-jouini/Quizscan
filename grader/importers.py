@@ -830,22 +830,54 @@ def _questions_du_pdf(data, langue):
         import pymupdf
 
         from . import ocr_pdf
+        # La langue de l'épreuve d'abord, puis l'autre : un questionnaire arabe importé dans
+        # une épreuve réglée en français (9 novembre 2026) n'y trouvait aucune question,
+        # l'OCR français ne lisant rien de l'arabe. La page de l'épreuve ajuste ensuite sa
+        # langue (langue_des_questions).
+        lu = None
         try:
             with pymupdf.open(stream=data, filetype="pdf") as doc:
                 if doc.page_count > ocr_pdf.PAGES_MAX:
                     raise ImportError_(
                         f"{sans_texte} La lecture par OCR s'arrête à {ocr_pdf.PAGES_MAX} "
                         f"pages ; ce PDF en a {doc.page_count}.") from None
-                lignes = ocr_pdf.lignes_du_pdf(doc, langue)
+                for essai, code in enumerate((langue, "fr" if langue == "ar" else "ar")):
+                    try:
+                        lignes = ocr_pdf.lignes_du_pdf(doc, code)
+                    except ocr_pdf.OcrIndisponible:
+                        if essai == 0:
+                            raise
+                        break                     # l'autre langue n'est pas installée
+                    questions, erreurs = parse_questions_text(lignes, ocr=True)
+                    if lu is None or questions:
+                        lu = (questions, erreurs)
+                    if questions:
+                        break
         except ocr_pdf.OcrIndisponible:
             raise sans_texte from None
-        questions, erreurs = parse_questions_text(lignes, ocr=True)
+        questions, erreurs = lu
         if not questions and not erreurs:
             raise ImportError_(f"{sans_texte} La lecture par reconnaissance de caractères "
-                               "(OCR) n'y a trouvé aucune question numérotée.") from None
+                               "(OCR), en arabe comme en français, n'y a trouvé aucune "
+                               "question numérotée.") from None
         for q in questions:
             q["ocr"] = True
         return questions, erreurs
+
+
+def langue_des_questions(items):
+    """« ar » ou « fr » : l'écriture de la plupart des intitulés et des choix importés ;
+    None si rien ne le dit (choix chiffrés seulement, intitulés vides)."""
+    from .fonts import has_arabic
+    textes = [t for it in items for t in [it.get("text") or ""] + list(it.get("choices") or [])
+              if t]
+    arabes = sum(1 for t in textes if has_arabic(t))
+    latins = sum(1 for t in textes if not has_arabic(t) and re.search(r"[^\W\d_]{3}", t))
+    if arabes > latins:
+        return "ar"
+    if latins > arabes:
+        return "fr"
+    return None
 
 
 def parse_questions_file(name, data, langue="fr"):

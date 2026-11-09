@@ -302,8 +302,18 @@ def main():
         assert "عاصمة تونس" in items[0]["text"], items[0]
         assert items[1]["choices"] == ["5", "6", "7", "8"], items[1]
         print(f"  PDF sans texte, lu par OCR : 3 questions à 4 choix, en {duree:.1f} s ✔")
+        # épreuve réglée en français (9 novembre 2026, « qcm1.pdf » de l'utilisateur) : l'OCR
+        # français n'y lisait rien, l'arabe est essayé ensuite
+        items_fr, errors_fr = importers.parse_questions_file("scan.pdf", scan, langue="fr")
+        assert not errors_fr and len(items_fr) == 3, (items_fr, errors_fr)
+        assert importers.langue_des_questions(items_fr) == "ar"
+        print("  PDF sans texte arabe, épreuve en français : OCR arabe essayé ensuite, "
+              "3 questions ✔")
     else:
         print("  PDF sans texte, lu par OCR : non essayé ici (Tesseract ou son arabe absent)")
+    assert importers.langue_des_questions([{"text": "Capitale de la Tunisie ?",
+                                            "choices": ["Tunis", "Sfax"]}]) == "fr"
+    assert importers.langue_des_questions([{"text": "", "choices": ["5", "6"]}]) is None
 
     # PDF arabe à vrai texte (écrit ici par PyMuPDF) : relu en formes de présentation,
     # espaces insécables et parenthèse du choix retournée (« ب( ») — remis en ordre
@@ -411,6 +421,27 @@ def main():
         assert any("3 question(s) sans bonne réponse" in texte for _, texte in notes), notes
         assert not any(niveau == "error" for niveau, _ in notes), notes
         print("Web : PDF sans texte importé par OCR, questions à relire et à compléter dites ✔")
+        # le même dans une épreuve réglée en français : vide, elle passe en arabe ; avec
+        # déjà des questions, elle garde sa langue et le dit
+        q_fr = Quiz.objects.create(title="test", class_group=group, owner=teacher, language="fr")
+        r = c.post(f"/quiz/{q_fr.pk}/", {
+            "import_questions": "1", "file": SimpleUploadedFile("qcm1.pdf", scan)}, follow=True)
+        notes = [(m.level_tag, str(m)) for m in r.context["messages"]]
+        q_fr.refresh_from_db()
+        assert q_fr.questions.count() == 3 and q_fr.language == "ar", (q_fr.language, notes)
+        assert any("l'épreuve passe en arabe" in texte for _, texte in notes), notes
+        assert not any(niveau == "error" for niveau, _ in notes), notes
+        q_fr.language = "fr"
+        q_fr.save(update_fields=["language"])
+        r = c.post(f"/quiz/{q_fr.pk}/", {
+            "import_questions": "1", "file": SimpleUploadedFile("qcm1.pdf", scan)}, follow=True)
+        notes = [(m.level_tag, str(m)) for m in r.context["messages"]]
+        q_fr.refresh_from_db()
+        assert q_fr.questions.count() == 6 and q_fr.language == "fr", (q_fr.language, notes)
+        assert any(niveau == "warning" and "Questions en arabe dans une épreuve en français"
+                   in texte for niveau, texte in notes), notes
+        print("Web : questionnaire arabe sans texte dans une épreuve en français : lu, "
+              "l'épreuve vide passe en arabe, sinon averti ✔")
     Quiz.objects.filter(owner=teacher).delete()
     teacher.delete()
     print("\n✅ TEST DES IMPORTS RÉUSSI")

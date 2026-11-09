@@ -892,6 +892,25 @@ def quiz_detail(request, pk):
                     items, errors = [], [str(exc)]
                 except Exception as exc:  # noqa: BLE001 — fichier corrompu
                     items, errors = [], [f"Fichier illisible : {exc}"]
+                # Questionnaire dans l'autre langue (arabe dans une épreuve réglée en
+                # français, 9 novembre 2026) : une épreuve encore vide prend sa langue,
+                # sinon la feuille sortirait de gauche à droite, choix A B C D.
+                langue_lue = importers.langue_des_questions(items)
+                if items and langue_lue and langue_lue != quiz.language:
+                    noms = {"ar": "arabe", "fr": "français"}
+                    if not quiz.questions.exists() and not quiz.batches.exists():
+                        quiz.language = langue_lue
+                        quiz.save(update_fields=["language"])
+                        messages.info(request, f"Questionnaire en {noms[langue_lue]} : "
+                                               f"l'épreuve passe en {noms[langue_lue]}"
+                                               + (" (feuilles de droite à gauche, choix "
+                                                  "أ ب ت ث)." if langue_lue == "ar"
+                                                  else " (choix A, B, C, D)."))
+                    else:
+                        messages.warning(request, f"Questions en {noms[langue_lue]} dans une "
+                                                  f"épreuve en {noms.get(quiz.language, quiz.language)} : "
+                                                  "la feuille garde la langue de l'épreuve. "
+                                                  "Changez-la dans ses réglages s'il le faut.")
                 n = _add_questions(quiz, items, next_order, errors)
                 if n:
                     messages.success(request, f"{n} question(s) importée(s) depuis "

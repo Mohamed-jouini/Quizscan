@@ -182,8 +182,11 @@ par numéro, les notes suivent.
   l'arabe, préférer le Word au PDF : selon le logiciel qui l'a créé, un PDF
   rend ses lettres dans le désordre. Un PDF **sans texte** (scanné, ou imprimé
   avec « Microsoft Print to PDF », qui dessine les lettres) est lu par
-  reconnaissance de caractères (Tesseract, dans la langue du quiz, 40 pages au
-  plus, une quinzaine de secondes pour 8 pages) : la page le signale, et les
+  reconnaissance de caractères (Tesseract, dans la langue du quiz puis dans
+  l'autre s'il n'y trouve rien, 40 pages au plus, une quinzaine de secondes pour
+  8 pages). Un questionnaire dans l'autre langue (arabe dans une épreuve réglée
+  en français) fait passer l'épreuve encore vide dans sa langue (feuille de
+  droite à gauche, choix أ ب ت ث) ; sinon la page avertit. La page le signale, et les
   questions sont **à relire** — une formule en lettres latines dans un
   questionnaire arabe est mal lue, et un choix illisible s'importe
   « (à relire) » pour garder la lettre des suivants :
