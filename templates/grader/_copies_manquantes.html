@@ -1,0 +1,31 @@
+{% comment %}
+Copies manquantes (demande de l'utilisateur, 13 novembre 2026) : après un envoi de scans, les
+candidats dont une copie (une page lue : page de garde de chaque matière à l'écrit, chaque page
+d'un QCM) n'est pas encore scannée et identifiée, avec le code d'anonymat imprimé sur la copie,
+pour la retrouver et la repasser au scanner. Paramètres : manquantes (services.copies_manquantes),
+quiz.
+{% endcomment %}
+{% if manquantes.total %}
+<div class="manquantes" id="copies-manquantes">
+  <h3>Copies manquantes : {{ manquantes.total }} {{ quiz.auto_enroll|yesno:"candidat,étudiant" }}{{ manquantes.total|pluralize }}</h3>
+  <p class="helptext helptext--serre">Pas encore scannées, ou scannées sans être identifiées (voir les pages non identifiées des <a href="{% url 'quiz_results' quiz.pk %}">résultats</a>). Retrouvez chaque copie par son code d'anonymat{% if manquantes.par_matiere %} et sa matière{% endif %}, puis passez-la au scanner : un nouvel envoi l'ajoute aux autres. Un absent reste dans la liste.</p>
+  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Copies manquantes">
+    <table>
+      <tr><th>Code</th><th>N° d'inscription</th><th>Prénom et nom</th><th>Salle</th><th>{% if manquantes.par_matiere %}Matières sans copie{% else %}Manquante{% endif %}</th></tr>
+      {% for m in manquantes.lignes %}
+      <tr>
+        <td><b>{{ m.code|default:"—" }}</b></td>
+        <td>{{ m.etudiant.student_number|default:"—" }}</td>
+        <td>{{ m.etudiant.full_name }}</td>
+        <td dir="auto">{{ m.salle|default:"—" }}</td>
+        <td dir="auto">{% if m.toutes and not manquantes.par_matiere %}copie entière{% else %}{{ m.manquantes|join:" · " }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% if manquantes.total > manquantes.lignes|length %}<p class="helptext">Les {{ manquantes.lignes|length }} premières, dans l'ordre des copies ; toutes dans l'export.</p>{% endif %}
+  <p><a class="btn small secondary" href="{% url 'quiz_copies_manquantes_xlsx' quiz.pk %}">Exporter la liste (Excel)</a></p>
+</div>
+{% elif manquantes.scannees %}
+<p class="helptext" id="copies-manquantes">Toutes les copies sont scannées et identifiées.</p>
+{% endif %}
