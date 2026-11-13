@@ -20,7 +20,7 @@
 <div class="grid2">
   <div class="card">
     <h2>1. Modèle Excel des notes</h2>
-    <p class="helptext">Classeur en arabe, un {{ quiz.auto_enroll|yesno:"candidat,étudiant" }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, n° de CIN, et la colonne de la note (« العدد / {{ quiz.note_sur|floatformat:"-2" }} ») à remplir. Les notes déjà importées y figurent.</p>
+    <p class="helptext">Classeur en arabe, un {{ quiz.auto_enroll|yesno:"candidat,étudiant" }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, n° de CIN, et la colonne de la note (<bdi lang="ar">العدد</bdi>, sur {{ quiz.note_sur|floatformat:"-2" }}) à remplir. Les notes déjà importées y figurent.</p>
     {% if lignes %}
     <div class="documents">
       <a class="document" href="{% url 'quiz_notes_oral_xlsx' quiz.pk %}">
@@ -55,11 +55,12 @@
     {% if lignes %}
     <div class="table-wrap">
       <table>
-        <tr><th>Prénom et nom</th><th>N° d'inscription</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th><th>Origine</th></tr>
+        <tr><th>Prénom et nom</th><th>N° d'inscription</th><th>N° CIN</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th><th>Origine</th></tr>
         {% for e, etat, r in lignes %}
         <tr>
           <td><b>{{ e.full_name }}</b></td>
           <td>{{ e.student_number|default:"—" }}</td>
+          <td>{{ e.cin|default:"—" }}</td>
           <td>{% if r and r.points_awarded is not None %}<span class="score">{{ r.points_awarded|floatformat:"-2" }}</span>{% else %}—{% endif %}</td>
           <td>
             {% if etat == "importee" %}<span class="badge ok">importée</span>

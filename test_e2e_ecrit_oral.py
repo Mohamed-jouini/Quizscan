@@ -282,7 +282,8 @@ def test_oral(c, groupe):
     page = c.get(url).content.decode()
     assert "Notes de l'oral" in page and "Sana AMRI" in page and "pas encore notée" in page
     assert "Importer les notes" in page and reverse("quiz_notes_oral_xlsx", args=[quiz.pk]) in page
-    assert "Classeur en arabe" in page and "n° de CIN" in page and "« العدد / 20 »" in page
+    assert "Classeur en arabe" in page and "n° de CIN" in page
+    assert '(<bdi lang="ar">العدد</bdi>, sur 20)' in page      # l'arabe isolé dans la phrase
     assert "Générer les fiches" not in page and "Lire les notes et les affecter" not in page
     e = {s.last_name: s for s in groupe.students.all()}
     assert f'name="note_{e["AMRI"].pk}"' not in page and "Enregistrer les notes" not in page
@@ -361,6 +362,8 @@ def test_oral(c, groupe):
     assert notes() == {"AMRI": 12.25, "CHERIF": 9.0}, notes()
     page = c.get(url).content.decode()
     assert "importée" in page and "12,25" in page and "pas encore notée" in page
+    # le n° de CIN du registre dans le tableau des notes (13 novembre 2026), « — » sans fiche
+    assert "<th>N° CIN</th>" in page and "<td>01166344</td>" in page, page[-3000:]
     assert quiz.modifications.filter(action="note", objet__contains="import Excel").count() == 2
     # le modèle reprend les notes ; réimporté : une note changée, une nouvelle
     classeur, lignes = modele()
