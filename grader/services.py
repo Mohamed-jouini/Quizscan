@@ -2130,6 +2130,46 @@ def codes_imprimes(quiz):
             for pk, code in ((quiz.layout_json or {}).get("codes") or {}).items()}
 
 
+# Copies manquantes affichées sur la page de l'épreuve ; toutes dans l'export Excel.
+MAX_MANQUANTES_AFFICHEES = 300
+
+
+def copies_manquantes(quiz, limite=MAX_MANQUANTES_AFFICHEES):
+    """Après un envoi de scans, les candidats dont une copie (une page lue : la page de garde
+    de chaque matière à l'écrit, chaque page d'un QCM) n'est pas encore scannée et
+    identifiée, avec le code d'anonymat imprimé dessus, pour la retrouver et la repasser au
+    scanner (demande de l'utilisateur, 13 novembre 2026). Un absent y reste.
+
+    Retourne {total, lignes: [{etudiant, code, salle, manquantes, toutes}] (les « limite »
+    premières, dans l'ordre des copies, salle par salle), par_matiere, scannees (un lot
+    au moins), en_lecture (des lots attendent encore leur lecture)}. Rien pour un oral."""
+    vide = {"total": 0, "lignes": [], "par_matiere": False, "scannees": False,
+            "en_lecture": False}
+    pages = (quiz.layout_json or {}).get("pages") or []
+    if quiz.type_epreuve == "oral" or not pages or not quiz.batches.exists():
+        return vide
+    par_matiere = quiz.type_epreuve == "ecrit" and any(p.get("matiere") for p in pages)
+    if par_matiere:
+        libelles = [p.get("matiere") or f"page {k + 1}" for k, p in enumerate(pages)]
+    elif len(pages) > 1:
+        libelles = [f"page {k + 1}" for k in range(len(pages))]
+    else:
+        libelles = ["copie"]
+    scannees = set(SheetScan.objects.filter(batch__quiz=quiz, student__isnull=False)
+                   .values_list("student_id", "page_index"))
+    codes = codes_imprimes(quiz)
+    lignes, total = [], 0
+    for s in etudiants_par_salle(quiz):
+        absentes = [lib for k, lib in enumerate(libelles) if (s.pk, k) not in scannees]
+        if absentes:
+            total += 1
+            if limite is None or len(lignes) < limite:
+                lignes.append({"etudiant": s, "code": codes.get(s.pk, ""), "salle": s.salle,
+                               "manquantes": absentes, "toutes": len(absentes) == len(libelles)})
+    return {"total": total, "lignes": lignes, "par_matiere": par_matiere, "scannees": True,
+            "en_lecture": quiz.batches.filter(status__in=("pending", "processing")).exists()}
+
+
 def copies_nominatives_pdf(quiz, layout, progres=None, page=None):
     """PDF d'une copie par étudiant, QR imprimé : nom imprimé (ou sur le
     talon), ou copie anonyme à n° de place — la correspondance place ->

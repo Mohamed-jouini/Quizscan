@@ -703,6 +703,12 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   attente ». Résultats, relevés de notes et export Excel donnent la note de chaque matière.
   Un écrit de classe garde une seule note ; un écrit de concours créé avant peut « passer en
   trois matières ».
+- Copies manquantes : après un envoi de scans, la page Résultats de chaque épreuve (QCM ou
+  écrit), sous le tableau des notes, liste les candidats dont une copie n'est pas encore scannée et identifiée (à l'écrit en matières,
+  matière par matière ; pour un QCM de plusieurs pages, page par page), dans l'ordre des
+  copies, avec le code d'anonymat imprimé dessus, le n° d'inscription et la salle : on
+  retrouve chaque copie, on la repasse au scanner, un nouvel envoi l'ajoute. Les 300
+  premières à l'écran, toutes dans l'export Excel. Un absent reste dans la liste.
 - Moyenne finale (المعدل النهائي) : la page « Résultats du concours » donne, pour chaque
   candidat noté à toutes les étapes, la moyenne de ses notes sur 20 (QCM, écrit, oral),
   pondérée par un coefficient par étape (1 par défaut, réglé sur cette page ; 0 : l'étape

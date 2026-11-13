@@ -8,7 +8,8 @@ quiz.
 {% if manquantes.total %}
 <div class="manquantes" id="copies-manquantes">
   <h3>Copies manquantes : {{ manquantes.total }} {{ quiz.auto_enroll|yesno:"candidat,étudiant" }}{{ manquantes.total|pluralize }}</h3>
-  <p class="helptext helptext--serre">Pas encore scannées, ou scannées sans être identifiées (voir les pages non identifiées des <a href="{% url 'quiz_results' quiz.pk %}">résultats</a>). Retrouvez chaque copie par son code d'anonymat{% if manquantes.par_matiere %} et sa matière{% endif %}, puis passez-la au scanner : un nouvel envoi l'ajoute aux autres. Un absent reste dans la liste.</p>
+  {% if manquantes.en_lecture %}<p class="note note--warn">Des lots attendent encore leur lecture : la liste se complète ensuite.</p>{% endif %}
+  <p class="helptext helptext--serre">Pas encore scannées, ou scannées sans être identifiées (voir les pages non identifiées en haut de la page). Retrouvez chaque copie par son code d'anonymat{% if manquantes.par_matiere %} et sa matière{% endif %}, puis passez-la au scanner : un nouvel envoi l'ajoute aux autres. Un absent reste dans la liste.</p>
   <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Copies manquantes">
     <table>
       <tr><th>Code</th><th>N° d'inscription</th><th>Prénom et nom</th><th>Salle</th><th>{% if manquantes.par_matiere %}Matières sans copie{% else %}Manquante{% endif %}</th></tr>
@@ -27,5 +28,6 @@ quiz.
   <p><a class="btn small secondary" href="{% url 'quiz_copies_manquantes_xlsx' quiz.pk %}">Exporter la liste (Excel)</a></p>
 </div>
 {% elif manquantes.scannees %}
-<p class="helptext" id="copies-manquantes">Toutes les copies sont scannées et identifiées.</p>
+<h3 id="copies-manquantes">Copies manquantes</h3>
+<p class="helptext helptext--serre">Aucune : toutes les copies sont scannées et identifiées.</p>
 {% endif %}

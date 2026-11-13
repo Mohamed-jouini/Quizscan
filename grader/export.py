@@ -79,6 +79,36 @@ def notes_orales_workbook(quiz, lignes):
     return buf.getvalue()
 
 
+def copies_manquantes_workbook(quiz, manquantes):
+    """Les copies pas encore scannées d'une épreuve (services.copies_manquantes, toutes) :
+    une ligne par candidat, dans l'ordre des copies, salle par salle (13 novembre 2026)."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Copies manquantes"
+    quoi = "Matières sans copie" if manquantes["par_matiere"] else "Manquante"
+    headers = ["Code d'anonymat", "N° d'inscription", "Prénom", "Nom", "Salle", quoi]
+    ws.append(_sans_formule([f"{quiz.title} — copies manquantes : {manquantes['total']}"]))
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+    ws["A1"].font = Font(bold=True, size=13)
+    ws.append(headers)
+    fond = PatternFill("solid", fgColor="1F4E79")
+    for col in range(1, len(headers) + 1):
+        cellule = ws.cell(row=2, column=col)
+        cellule.font = Font(bold=True, color="FFFFFF")
+        cellule.fill = fond
+    for m in manquantes["lignes"]:
+        s = m["etudiant"]
+        ws.append(_sans_formule([m["code"], s.student_number or "", s.first_name, s.last_name,
+                                 m["salle"], ", ".join(m["manquantes"])]))
+        ws.cell(row=ws.max_row, column=2).number_format = "@"   # zéros de tête gardés
+    for i, largeur in enumerate([16, 16, 20, 22, 16, 40], start=1):
+        ws.column_dimensions[get_column_letter(i)].width = largeur
+    ws.freeze_panes = "A3"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def candidats_workbook(group, etudiants, avec_fiches):
     """La liste des candidats en Excel, colonnes et ordre de la page « Candidats »
     (demande du 8 novembre 2026). Les intitulés sont de ceux que l'import

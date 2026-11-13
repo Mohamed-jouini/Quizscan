@@ -1662,6 +1662,9 @@ def quiz_results(request, pk):
     return render(request, "grader/results.html", {
         "fil": services.fil_etapes(quiz, _my_quizzes(request)),
         "matieres": matieres,
+        # les copies pas encore scannées, à retrouver par leur code (13 novembre 2026) ;
+        # pour toute l'épreuve, pas pour un lot
+        "manquantes": services.copies_manquantes(quiz) if batch is None else {},
         "quiz": quiz, "rows": rows, "rows_page": rows_page,
         "rows_total": len(rows), "batch": batch,
         "recherche": recherche, "n_trouves": len(trouves),
@@ -1710,6 +1713,19 @@ def quiz_admis_pdf(request, pk):
     resp = HttpResponse(data, content_type="application/pdf")
     nom = "liste_admis" if quiz.auto_enroll else "liste_reussites"
     resp["Content-Disposition"] = f'attachment; filename="{nom}_{quiz.pk}.pdf"'
+    return resp
+
+
+@login_required
+def quiz_copies_manquantes_xlsx(request, pk):
+    """Les copies manquantes de l'épreuve, toutes, en Excel : candidat, code d'anonymat,
+    salle, matières ou pages sans copie (13 novembre 2026)."""
+    from .export import copies_manquantes_workbook
+    quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    resp = HttpResponse(
+        copies_manquantes_workbook(quiz, services.copies_manquantes(quiz, limite=None)),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="copies_manquantes_{quiz.pk}.xlsx"'
     return resp
 
 

@@ -244,6 +244,10 @@
   {% include "grader/_pagination.html" with page=rows_page label="Étudiants" querystring=batch_qs ancre="liste-notes" %}
 </div>
 
+{% if manquantes.scannees %}
+<div class="card">{% include "grader/_copies_manquantes.html" %}</div>
+{% endif %}
+
 {% if stats.suspectes %}
 <div class="note note--warn">
   <span class="note__icon">

@@ -147,6 +147,8 @@ def main():
         assert NOMS[k] in texte_liste and "Signature entrée" in texte_liste
     page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
     assert all(default_storage.url(d["copies"]) in page for d in docs)
+    assert "Copies manquantes" not in c.get(reverse("quiz_results", args=[quiz.pk])).content.decode(), \
+        "rien d'envoyé : pas encore de liste"
     print(f"  documents : sujet, copies ({par_copie} pages par copie) et liste par salle de "
           "chaque matière, la page de garde à son nom OK")
 
@@ -164,6 +166,28 @@ def main():
     lot = services.process_uploaded_files(quiz, images, label="Trois matières")
     assert lot.sheets.filter(student__isnull=False).count() == 7, \
         [(s.status, s.error_message) for s in lot.sheets.all()]
+    # copies manquantes (13 novembre 2026) : CHERIF, en droit pénal et en libertés, avec le
+    # code imprimé sur ses copies, pour les retrouver et les repasser au scanner
+    cherif = quiz.class_group.students.get(last_name="CHERIF")
+    code_cherif = services.codes_imprimes(quiz)[cherif.pk]
+    # dans les résultats de l'épreuve (pas sur sa page), pour toute l'épreuve, pas un lot
+    page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
+    assert "Copies manquantes : 1 candidat" in page, page[-3000:]
+    assert f"<b>{code_cherif}</b>" in page and "Droit pénal · Libertés fondamentales" in page
+    assert "Copies manquantes" not in c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
+    assert "Copies manquantes" not in c.get(
+        reverse("quiz_results", args=[quiz.pk]) + f"?batch={lot.pk}").content.decode()
+    manquantes = services.copies_manquantes(quiz)
+    assert [(m["etudiant"].last_name, m["manquantes"]) for m in manquantes["lignes"]] == [
+        ("CHERIF", ["Droit pénal", "Libertés fondamentales"])]
+    from openpyxl import load_workbook as lire_classeur
+    feuille = lire_classeur(io.BytesIO(c.get(reverse(
+        "quiz_copies_manquantes_xlsx", args=[quiz.pk])).content)).active
+    assert [x.value for x in feuille[3]] == [code_cherif, "704503", "Lina", "CHERIF", None,
+                                             "Droit pénal, Libertés fondamentales"], \
+        [x.value for x in feuille[3]]
+    print("  copies manquantes : CHERIF (droit pénal, libertés), son code, sur la page et "
+          "dans l'export Excel OK")
     rows = {r["student"].last_name: r for r in services.compute_results(quiz)}
     assert rows["AMRI"]["notes_matieres"] == [14, 10, 12], rows["AMRI"]["notes_matieres"]
     # moyenne pondérée : (2×14 + 10 + 1,5×12) / 4,5 = 56 / 4,5 = 12,44
@@ -292,6 +316,31 @@ def main():
     assert "a déjà des copies lues" in r.content.decode() and len(quiz.matieres) == 3
     print("  matière ajoutée (documents à régénérer) puis retirée ; une matière notée "
           "reste OK")
+
+    # ---- copies manquantes d'un QCM à talon : la copie entière, puis plus rien
+    from grader.models import Question
+    qcm = Quiz.objects.create(title="QCM manquantes", class_group=classe, owner=prof,
+                              sheet_mode="grid", id_mode="qr", talon_nom=True)
+    Question.objects.create(quiz=qcm, order=1, qtype="qcm", correct_choice=0)
+    for nom, prenom, num in ETUDIANTS[:2]:
+        Student.objects.create(class_group=classe, last_name=nom, first_name=prenom,
+                               student_number=num)
+    c.post(reverse("quiz_detail", args=[qcm.pk]), {"generate_pdf": "1"})
+    qcm.refresh_from_db()
+    pdf_qcm = qcm.sheet_pdf.read()
+    copie = render_page(pdf_qcm, 0)[mm2px(30.0):, :].copy()
+    services.process_uploaded_files(qcm, [SimpleUploadedFile("amri.jpg",
+                                                             jpg(simulate_scan(copie)))])
+    page = c.get(reverse("quiz_results", args=[qcm.pk])).content.decode()
+    assert "Copies manquantes : 1 étudiant" in page, page[-3000:]
+    liste = page.split('id="copies-manquantes"')[1].split("</table>")[0]
+    assert "BAKIR" in liste and "AMRI" not in liste and "copie entière" in liste, liste
+    copie = render_page(pdf_qcm, 1)[mm2px(30.0):, :].copy()
+    services.process_uploaded_files(qcm, [SimpleUploadedFile("bakir.jpg",
+                                                             jpg(simulate_scan(copie)))])
+    page = c.get(reverse("quiz_results", args=[qcm.pk])).content.decode()
+    assert "Aucune : toutes les copies sont scannées et identifiées." in page
+    print("  copies manquantes d'un QCM à talon : la copie entière, puis plus rien OK")
 
     print("\n✅ TEST DE L'ÉCRIT EN MATIÈRES RÉUSSI")
 
