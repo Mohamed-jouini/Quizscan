@@ -22,7 +22,7 @@
 {% if perimee %}
 <div class="note note--warn">
   <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
-  <div class="note__body">Le barème, le format, l'identification{% if quiz.copies_nominatives %} ou la liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% endif %} ont changé depuis l'impression : <b>régénérez les documents</b> avant de distribuer de nouvelles copies.</div>
+  <div class="note__body">Les documents ne suivent plus les réglages (barème, format, nombre de pages, identification{% if quiz.copies_nominatives %} ou liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% endif %}) : <b>régénérez les documents</b> avant de distribuer de nouvelles copies.</div>
 </div>
 {% endif %}
 
@@ -72,7 +72,7 @@
           <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>
           <span><b>Copies</b>
             {% with n=quiz.layout_json.nb_copies p=quiz.layout_json.nb_pages %}{% if n %}<small>{{ n }} copie{{ n|pluralize }}, soit {{ p }} page{{ p|pluralize }} dans le PDF{% if quiz.layout_json.format == "a3" %} (recto et verso de chaque feuille){% endif %}{% if quiz.copies_nominatives or quiz.id_mode == "qr" %}, salle par salle{% endif %}</small>{% endif %}{% endwith %}
-            <small>{% if quiz.layout_json.format == "a3" %}page de garde + {{ quiz.layout_json.pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à plier au milieu{% else %}{% with n=quiz.layout_json.pages_redaction|default:quiz.pages_redaction %}page de garde + {{ n }} page{{ n|pluralize }} lignée{{ n|pluralize }}, en A4 à 100 %, recto-verso sur le bord long{% endwith %}{% endif %}</small></span></a>
+            <small>{% if quiz.layout_json.format == "a3" %}page de garde + {{ quiz.layout_json.pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à plier au milieu{% else %}{% with n=quiz.layout_json.pages_redaction|default:quiz.pages_redaction %}page de garde{% if n %} + {{ n }} page{{ n|pluralize }} lignée{{ n|pluralize }}{% endif %}{% if quiz.layout_json.pages_blanches %} + 1 page blanche au dos de la dernière feuille{% endif %}, en A4 à 100 %, recto-verso sur le bord long{% endwith %}{% endif %}</small></span></a>
         <a class="document" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="M15 16l1.5 1.5L19 15"/></svg>
           <span><b>Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% if quiz.place_anonyme %} et des places{% endif %} par salle</b><small>une liste par salle, dans l'ordre des copies{% if quiz.place_anonyme %}, n° de place et nom{% endif %}, pour la signature de présence</small></span></a>

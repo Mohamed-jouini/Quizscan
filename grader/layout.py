@@ -168,11 +168,11 @@ def layout_signature(quiz):
         data["ecrit"] = [quiz.note_sur, quiz.pages_redaction]
         if quiz.type_epreuve == "ecrit" and quiz.format_impression == "a3":
             data["format"] = "a3"   # seulement si choisi : empreintes inchangées
-        elif quiz.type_epreuve == "ecrit" and \
-                pages_lignees_a4(quiz.pages_redaction) != quiz.pages_redaction:
-            # A4 arrondi à des feuilles entières (6 novembre 2026) : seules les copies
-            # imprimées avant, avec une page de moins, sont à refaire
-            data["feuilles_entieres"] = True
+        elif quiz.type_epreuve == "ecrit" and pages_blanches_a4(quiz.pages_redaction):
+            # A4 en feuilles entières : une page lignée de plus d'abord (6 novembre 2026),
+            # puis le nombre demandé et le dos de la dernière feuille blanc (13 novembre) ;
+            # seules les copies à nombre pair de pages lignées sont à refaire
+            data["page_blanche"] = True
         if quiz.type_epreuve == "oral":
             data["oral"] = [s.pk for s in quiz.class_group.students.all()]
     raw = json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
@@ -619,15 +619,19 @@ def _build_ecrit_layout(quiz):
     page["lignes"] = {"y0": round(y + 12.0, 2), "y1": CONTENT_Y1, "pas": NOTE_LIGNE}
     # A4 : des feuilles entières aussi (demande de l'utilisateur, 6 novembre 2026). Avec un
     # nombre impair de pages par copie, imprimée en recto-verso, la page de garde de la
-    # copie suivante tombait au dos de la dernière page : une page lignée de plus.
+    # copie suivante tombait au dos de la dernière page. Les pages lignées sont celles
+    # demandées (13 novembre 2026 : une de plus était ajoutée, 4 en donnaient 5) ; le dos
+    # de la dernière feuille reste blanc s'il le faut.
     return _checked({"mode": "ecrit", "num_choices": 0, "pages": [page],
-                     "pages_redaction": pages_lignees_a4(n_lignees)})
+                     "pages_redaction": n_lignees,
+                     "pages_blanches": pages_blanches_a4(n_lignees)})
 
 
-def pages_lignees_a4(demandees):
-    """Pages lignées d'une copie A4 : un nombre impair, pour qu'avec la page de garde
-    elle remplisse des feuilles entières en recto-verso (2 demandées -> 3, 0 -> 1)."""
-    return demandees // 2 * 2 + 1
+def pages_blanches_a4(lignees):
+    """Pages blanches au bout d'une copie A4, pour qu'avec la page de garde elle remplisse
+    des feuilles entières en recto-verso : une après un nombre pair de pages lignées (4 :
+    page de garde, 4 pages lignées, dos de la 3e feuille blanc), aucune sinon."""
+    return 0 if lignees % 2 else 1
 
 
 def lignes_a3(y0, langue):

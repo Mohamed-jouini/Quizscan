@@ -645,8 +645,10 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   le bord court, à 100 %, et pliez au milieu ; le sujet d'un QCM peut prendre le même format,
   sa feuille de réponses reste en A4. Au scan, passez les feuilles dépliées, en A3, recto seul :
   la page de garde est retrouvée sur la feuille dans n'importe quel sens, le reste n'est pas lu.
-- Copies d'écrit en A4 : chaque copie remplit des feuilles entières (une page lignée de plus
-  quand le nombre de pages serait impair : 2 demandées donnent 3). Imprimez-les recto-verso sur
+- Copies d'écrit en A4 : chaque copie a exactement les pages lignées demandées et remplit des
+  feuilles entières : avec un nombre pair, le dos de la dernière feuille reste blanc (« Page
+  laissée blanche » ; 4 demandées : page de garde, 4 pages lignées, page blanche, 3 feuilles).
+  Le talon compte les pages de la copie, sans la page blanche. Imprimez-les recto-verso sur
   le bord long, à 100 % : une copie ne commence jamais au dos de la précédente, et le dos de
   chaque feuille n'a rien d'écrit dans la bande du talon (une seule coupe).
 - Copies nominatives (nom imprimé, talon ou n° de place, en QCM comme à l'écrit) et modèle

@@ -487,8 +487,9 @@ class EpreuveEcritForm(_ChampNoteAdmission, forms.ModelForm):
         help_texts = {"entete": AIDE_ENTETE,
                       "pages_redaction": "Elles ne sont pas lues au scan. Chaque copie "
                                          "remplit des feuilles entières, pour le recto-verso : "
-                                         "en A4, un nombre pair prend une page de plus "
-                                         "(2 → 3) ; en A3, 3 ou 7.",
+                                         "en A4, avec un nombre pair, le dos de la dernière "
+                                         "feuille reste blanc ; en A3, 3 ou 7 (une feuille "
+                                         "pliée, ou deux).",
                       "format_impression": "A3 : la page de garde et 3 pages lignées sur une "
                                            "feuille, imprimée recto-verso sur le bord court, à "
                                            "100 %, puis pliée au milieu. Les pages lignées "

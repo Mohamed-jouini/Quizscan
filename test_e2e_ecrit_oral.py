@@ -86,15 +86,23 @@ def test_ecrit(c, prof, groupe):
     assert "Racontez un voyage" in sujet and "note sur 20" in sujet and "1 h 30" in sujet
     copies = quiz.sheet_pdf.read()
     doc = pymupdf.open(stream=copies, filetype="pdf")
-    # 2 pages lignées demandées, 3 imprimées : la copie remplit deux feuilles entières en
-    # recto-verso (demande de l'utilisateur, 6 novembre 2026)
-    assert quiz.layout_json["pages_redaction"] == 3 and len(doc) == 4, len(doc)
+    # 2 pages lignées demandées, 2 imprimées (13 novembre 2026 : une de plus était ajoutée),
+    # le dos de la 2e feuille blanc : la copie remplit deux feuilles entières en recto-verso
+    # (demande de l'utilisateur, 6 novembre 2026)
+    assert quiz.layout_json["pages_redaction"] == 2 and len(doc) == 4, len(doc)
+    assert quiz.layout_json["pages_blanches"] == 1
     assert "RÉSERVÉ AU CORRECTEUR" in doc[0].get_text()
-    assert "Page non lue au scan" in doc[1].get_text() and "Ne pas scanner" not in doc[1].get_text()
+    for k in (1, 2):
+        texte = doc[k].get_text()
+        assert "Page non lue au scan" in texte and "Ne pas scanner" not in texte, texte
+        assert f"Copie — page de rédaction {k + 1} / 3" in texte, texte
+    assert doc[3].get_text().strip() == "Page laissée blanche", doc[3].get_text()
+    assert not doc[3].get_drawings(), "page blanche : ni lignes ni cadre"
     page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
-    assert "page de garde + 3 pages lignées, en A4 à 100 %, recto-verso sur le bord long" in page
-    print("  sujet et copies générés (page de garde + 3 pages lignées : 2 demandées, "
-          "feuilles entières) OK")
+    assert ("page de garde + 2 pages lignées + 1 page blanche au dos de la dernière feuille, "
+            "en A4 à 100 %, recto-verso sur le bord long") in page
+    print("  sujet et copies générés (page de garde + les 2 pages lignées demandées, dos de la "
+          "2e feuille blanc : feuilles entières) OK")
 
     layout = quiz.layout_json
     grille = layout["pages"][0]["note_grid"]

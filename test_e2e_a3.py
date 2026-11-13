@@ -419,8 +419,10 @@ def verifier_a4_inchange(c, prof):
     assert "format" not in quiz.layout_json
     pdf_a4 = quiz.sheet_pdf.read()
     doc = ouvrir(pdf_a4)
-    # 2 pages lignées demandées, 3 imprimées : deux feuilles entières en recto-verso
+    # 2 pages lignées demandées et imprimées, le dos de la 2e feuille blanc : deux feuilles
+    # entières en recto-verso
     assert len(doc) == 4 and all(format_mm(p) == (210, 297) for p in doc), len(doc)
+    assert doc[3].get_text().strip() == "Page laissée blanche", doc[3].get_text()
     assert "Page non lue au scan" in doc[1].get_text()
     signature_a4 = quiz.layout_json["signature"]
     assert L.layout_signature(quiz) == signature_a4
@@ -428,18 +430,25 @@ def verifier_a4_inchange(c, prof):
     page_a4 = quiz.layout_json["pages"][0]
     print("  format A4 : pages séparées, feuilles entières pour le recto-verso OK")
 
-    # Pages lignées imprimées selon le nombre demandé (0 à 6) : feuilles entières, en A4
-    # (demande de l'utilisateur, 6 novembre 2026) comme en A3.
-    for demandees, a4, a3 in zip(range(7), (1, 1, 3, 3, 5, 5, 7), (3, 3, 3, 3, 7, 7, 7)):
+    # Pages lignées selon le nombre demandé (0 à 6), en feuilles entières (demande de
+    # l'utilisateur, 6 novembre 2026). En A4, le nombre demandé, et le dos de la dernière
+    # feuille blanc s'il le faut (13 novembre 2026 : une page lignée de plus était ajoutée,
+    # 4 en donnaient 5). En A3, la feuille pliée entière : 3 ou 7.
+    for demandees, a3 in zip(range(7), (3, 3, 3, 3, 7, 7, 7)):
         quiz.pages_redaction = demandees
-        for fmt, attendu in (("a4", a4), ("a3", a3)):
-            quiz.format_impression = fmt
-            assert L.build_layout(quiz)["pages_redaction"] == attendu, (demandees, fmt)
+        quiz.format_impression = "a4"
+        disposition = L.build_layout(quiz)
+        assert disposition["pages_redaction"] == demandees, disposition["pages_redaction"]
+        assert disposition["pages_blanches"] == (0 if demandees % 2 else 1), demandees
+        assert (1 + demandees + disposition["pages_blanches"]) % 2 == 0, demandees
+        quiz.format_impression = "a3"
+        disposition = L.build_layout(quiz)
+        assert disposition["pages_redaction"] == a3 and not disposition.get("pages_blanches")
     quiz.refresh_from_db()
 
     # Copies A4 générées avant les feuilles entières (3 pages : la copie suivante commençait
     # au dos de la dernière) : la page de l'épreuve demande de les régénérer.
-    with mock.patch.object(L, "pages_lignees_a4", lambda n: n):
+    with mock.patch.object(L, "pages_blanches_a4", lambda n: 0):
         c.post(reverse("quiz_detail", args=[quiz.pk]), {"generer": "1"})
     quiz.refresh_from_db()
     assert len(ouvrir(quiz.sheet_pdf.read())) == 3

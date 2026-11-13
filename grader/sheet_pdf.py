@@ -120,6 +120,8 @@ LABELS = {
         "redaction": "Copie — page de rédaction",
         # page lignée : en recto-verso, elle passe au scanner avec la page de garde
         "non_lue": "Page non lue au scan : seule la page de garde porte la note.",
+        # dos de la dernière feuille d'une copie A4, pour le recto-verso
+        "page_blanche": "Page laissée blanche",
         "pli": "pli au milieu",
     },
     "ar": {
@@ -159,6 +161,7 @@ LABELS = {
         "observations": "ملاحظات الممتحن",
         "redaction": "ورقة التحرير",
         "non_lue": "هذه الصفحة لا تُقرأ عند المسح الضوئي: العدد على صفحة الغلاف فقط.",
+        "page_blanche": "صفحة متروكة فارغة",
         "pli": "طيّ في الوسط",
     },
 }
@@ -504,6 +507,12 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
                     # n° de la page au pied, sur une page sans en-tête : l'ordre des pages
                     draw(f"{quiz.title} — page {k + 2}", L.PAGE_W / 2,
                          _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
+                c.showPage()
+            # A4 : le dos de la dernière feuille, blanc après un nombre pair de pages
+            # lignées (13 novembre 2026) : la copie suivante commence sur une feuille neuve
+            for _ in range(int(layout.get("pages_blanches", 0) or 0)):
+                draw(T["page_blanche"], L.PAGE_W / 2, _y(L.PAGE_H / 2), 9,
+                     align="center", gray=0.6)
                 c.showPage()
 
     if progres is not None:

@@ -386,10 +386,12 @@ def main():
     nominatif.refresh_from_db()
     pdf_n = open(nominatif.sheet_pdf.path, "rb").read()
     doc_n = pymupdf.open(stream=pdf_n, filetype="pdf")
-    # 2 pages lignées demandées, 3 imprimées : 4 pages par copie, deux feuilles entières en
-    # recto-verso ; chaque page de garde tombe sur un recto (demande du 6 novembre 2026 : en
-    # 3 pages, celle de l'étudiant suivant était au dos de la dernière page)
-    assert nominatif.layout_json["pages_redaction"] == 3, nominatif.layout_json["pages_redaction"]
+    # 2 pages lignées demandées, 2 imprimées, le dos de la 2e feuille blanc : 4 pages par
+    # copie, deux feuilles entières en recto-verso ; chaque page de garde tombe sur un recto
+    # (demande du 6 novembre 2026 : en 3 pages, celle de l'étudiant suivant était au dos de la
+    # dernière page ; 13 novembre : plus de page lignée ajoutée, le dos reste blanc)
+    assert nominatif.layout_json["pages_redaction"] == 2, nominatif.layout_json["pages_redaction"]
+    assert nominatif.layout_json["pages_blanches"] == 1
     assert len(doc_n) == 4 * len(ETUDIANTS), len(doc_n)
     gardes = [k for k, p in enumerate(doc_n) if "RÉSERVÉ AU CORRECTEUR" in p.get_text()]
     assert gardes == [0, 4, 8], gardes
@@ -402,11 +404,12 @@ def main():
     for k in (1, 2, 3):
         texte = doc_n[k].get_text()
         assert "AMRI" not in texte and "104501" not in texte, (k, texte)
-        assert f"Rédaction nominative — page {k + 1}" in texte, (k, texte)
+        assert (f"Rédaction nominative — page {k + 1}" in texte) == (k < 3), (k, texte)
         assert cv2.QRCodeDetector().detectAndDecode(render_page(pdf_n, k))[0] == "", k
+    assert doc_n[3].get_text().strip() == "Page laissée blanche", doc_n[3].get_text()
     print("  écrit nominatif : nom, n° et QR sur la page de garde seulement, rien sur les pages "
-          "lignées (page 3, recto de la 2e feuille, comprise) ; 2 pages lignées demandées, "
-          "3 imprimées OK")
+          "lignées (page 3, recto de la 2e feuille, comprise) ; les 2 pages lignées demandées, "
+          "puis le dos de la 2e feuille blanc OK")
     # de même à talon : talon, code d'anonymat et QR sur la page de garde seulement
     longue = Quiz.objects.create(title="Rédaction talon longue", class_group=groupe, owner=prof,
                                  type_epreuve="ecrit", language="fr", id_mode="qr",
@@ -418,6 +421,8 @@ def main():
     code_amri = qr_mod.code_lisible(longue.layout_json["codes"][str(amri.pk)])
     assert len(doc_l) == 4 * len(ETUDIANTS), len(doc_l)
     assert "Sana AMRI" in doc_l[0].get_text() and len(doc_l[0].search_for(code_amri)) == 2
+    # le talon compte la page de garde et les 2 pages lignées, pas la page blanche
+    assert "Page 1 / 3" in doc_l[0].get_text(), doc_l[0].get_text()
     for k in (1, 2, 3):
         texte = doc_l[k].get_text()
         assert not any(t in texte for t in ("AMRI", "Talon à découper", code_amri)), (k, texte)
