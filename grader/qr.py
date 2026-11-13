@@ -18,12 +18,24 @@ import qrcode
 # que l'on confond à la lecture ou à la main : 0/O, 1/I/L, 2/Z, 5/S, 6/G, 8/B.
 ALPHABET_CODE = "ACDEFHJKMNPRTUVWXY3479"
 LONGUEUR_CODE = 6
+# Sa première lettre dit l'année du concours (demande du 13 novembre 2026) : toujours X en
+# 1re année (السنة الأولى), toujours Y en 2e (السنة الثانية).
+PREMIERE_LETTRE = {"1": "X", "2": "Y"}
 
 
-def nouveau_code(pris):
-    """Un code qui n'est pas dans « pris » (22⁶ : 113 millions de codes)."""
+def premiere_lettre(annee):
+    """« X », « Y », ou None pour une épreuve sans année (classe, ancien concours)."""
+    return PREMIERE_LETTRE.get(annee or "")
+
+
+def nouveau_code(pris, premiere=None):
+    """Un code qui n'est pas dans « pris ». premiere : sa première lettre, imposée (X ou Y :
+    22⁵, 5 millions de codes) ; sans elle, jamais X ni Y, pour qu'aucun code ne fasse
+    croire à une année."""
+    debuts = premiere or "".join(c for c in ALPHABET_CODE if c not in PREMIERE_LETTRE.values())
     while True:
-        code = "".join(secrets.choice(ALPHABET_CODE) for _ in range(LONGUEUR_CODE))
+        code = secrets.choice(debuts) + "".join(secrets.choice(ALPHABET_CODE)
+                                                for _ in range(LONGUEUR_CODE - 1))
         if code not in pris:
             return code
 

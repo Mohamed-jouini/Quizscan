@@ -293,7 +293,8 @@ class QuestionBankForm(forms.Form):
 CONCOURS_ID_MODES = ["sticker", "grid"]
 
 AIDE_ENTETE = ("Laissé vide : en-tête de l'institut (المعهد الأعلى للمحاماة). Sinon, une "
-               "ligne par ligne : ministère, établissement… Imprimé dans le cartouche du sujet.")
+               "ligne par ligne : ministère, établissement… Imprimé dans le cartouche du sujet ; "
+               "sa dernière ligne, l'établissement, l'est aussi en haut des copies.")
 # Le champ de date du navigateur n'accepte que ce format. Sans max, Chrome laisse
 # 6 chiffres à l'année.
 SAISIE_DATE = forms.DateInput(attrs={"type": "date", "min": "2000-01-01", "max": "9999-12-31"},
@@ -326,6 +327,14 @@ def _appliquer_anonymat(form, data):
 ETAPE_PRECEDENTE = {"ecrit": "qcm", "oral": "ecrit"}
 
 
+def _preparer_annee(champ):
+    """Le choix de l'année d'un concours : 1re ou 2e, sans « aucune » (13 novembre 2026)."""
+    champ.choices = Quiz.ANNEES
+    champ.label = "Année"
+    champ.help_text = ("Vaut pour toutes les étapes du concours. Le code d'anonymat des "
+                       "copies à talon commence toujours par X en 1re année, par Y en 2e.")
+
+
 class ChoixEpreuvePrecedente(forms.Select):
     """Chaque option porte le type de son épreuve : pages.js ne propose que
     l'étape qui précède le type choisi."""
@@ -348,12 +357,13 @@ class QuizForm(forms.ModelForm):
 
     class Meta:
         model = Quiz
-        fields = ["title", "type_epreuve", "epreuve_precedente", "class_group",
+        fields = ["title", "annee", "type_epreuve", "epreuve_precedente", "class_group",
                   "language", "note_sur",
                   "sheet_mode", "entete", "duree", "date_epreuve",
                   "id_mode", "id_digits", "anonymat", "grading_mode", "wrong_penalty"]
         widgets = {"grading_mode": forms.RadioSelect,
                    "type_epreuve": forms.RadioSelect,
+                   "annee": forms.RadioSelect,
                    "epreuve_precedente": ChoixEpreuvePrecedente,
                    "entete": forms.Textarea(attrs={"rows": 3}),
                    "date_epreuve": SAISIE_DATE}
@@ -387,6 +397,11 @@ class QuizForm(forms.ModelForm):
             for v, libelle in self.fields["type_epreuve"].choices]
         self.fields["note_sur"].required = False
         if concours:
+            # 1re ou 2e année, à choisir à la création (13 novembre 2026) ; une étape
+            # suivante la reprend de la précédente (vue)
+            _preparer_annee(self.fields["annee"])
+            self.fields["annee"].required = True
+            self.fields["annee"].error_messages["required"] = "Choisissez l'année du concours."
             # un concours a sa propre liste de candidats, créée automatiquement
             del self.fields["class_group"]
             self.fields["id_mode"].choices = [
@@ -396,6 +411,7 @@ class QuizForm(forms.ModelForm):
             # loge que 5 QCM : 50 QCM y feraient 10 pages, donc 10 étiquettes.
             self.fields["sheet_mode"].initial = "split"
         else:
+            del self.fields["annee"]            # une année : concours seulement
             # quiz de classe : correction toujours immédiate
             del self.fields["grading_mode"]
             qs = self.fields["class_group"].queryset
@@ -472,14 +488,16 @@ class EpreuveEcritForm(_ChampNoteAdmission, forms.ModelForm):
 
     class Meta:
         model = Quiz
-        fields = ["sujet_texte", "entete", "duree", "date_epreuve", "note_sur", "note_admission",
-                  "id_mode", "id_digits", "anonymat", "pages_redaction", "format_impression"]
+        fields = ["annee", "sujet_texte", "entete", "duree", "date_epreuve", "note_sur",
+                  "note_admission", "id_mode", "id_digits", "anonymat", "pages_redaction",
+                  "format_impression"]
         widgets = {"sujet_texte": forms.Textarea(attrs={
                        "rows": 9, "placeholder": "Ex. Racontez un voyage qui vous a "
                                                  "marqué…\n\nVous décrirez les lieux "
                                                  "et vos impressions."}),
                    "entete": forms.Textarea(attrs={"rows": 3}),
-                   "date_epreuve": SAISIE_DATE}
+                   "date_epreuve": SAISIE_DATE,
+                   "annee": forms.RadioSelect}
         field_classes = {"note_sur": DecimalField, "note_admission": DecimalField}
         labels = {"id_digits": "Nombre de chiffres du n° d'inscription",
                   "pages_redaction": "Pages lignées après la page de garde",
@@ -502,13 +520,27 @@ class EpreuveEcritForm(_ChampNoteAdmission, forms.ModelForm):
         if self.instance.auto_enroll:
             self.fields["id_mode"].choices = [
                 c for c in Quiz.ID_MODES if c[0] in CONCOURS_ID_MODES]
-        if self.instance.language == "ar":
+            # l'année du concours (13 novembre 2026), facultative à l'envoi comme le format :
+            # un formulaire d'avant, ou un concours créé avant ce choix, garde la sienne
+            _preparer_annee(self.fields["annee"])
+            self.fields["annee"].required = False
+        else:
+            del self.fields["annee"]
+        if self.instance.matieres:
+            # écrit en matières (13 novembre 2026) : sujet, durée et date de chacune, réglés
+            # avec elle sur la page (views_epreuves._lire_matieres)
+            for champ in ("sujet_texte", "duree", "date_epreuve"):
+                del self.fields[champ]
+        elif self.instance.language == "ar":
             self.fields["sujet_texte"].widget.attrs["dir"] = "rtl"
         self.fields["anonymat"].initial = self.instance.anonymat
         self._preparer_note_admission()
 
     def clean_format_impression(self):
         return self.cleaned_data.get("format_impression") or self.instance.format_impression
+
+    def clean_annee(self):
+        return self.cleaned_data.get("annee") or self.instance.annee
 
     def clean(self):
         data = super().clean()

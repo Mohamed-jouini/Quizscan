@@ -35,7 +35,7 @@
     <form method="post" data-formulaire-epreuve>{% csrf_token %}
       {{ form.non_field_errors }}
       {% for field in form %}
-        <div id="row_{{ field.name }}"{% if field.name == "grading_mode" or field.name == "type_epreuve" or field.name == "anonymat" %} class="radios"{% endif %}>
+        <div id="row_{{ field.name }}"{% if field.name == "grading_mode" or field.name == "type_epreuve" or field.name == "anonymat" or field.name == "annee" %} class="radios"{% endif %}>
         {{ field.errors }}
         <label>{{ field.label }}</label>{{ field }}
         {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}

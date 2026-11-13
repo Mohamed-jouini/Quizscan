@@ -6,7 +6,7 @@
     <h1>{{ fil.titre|default:quiz.title }}</h1>
     <p class="page-head__meta"><span class="badge info">Épreuve orale</span>
       {% if fil.intitule %}<span>{{ fil.intitule }}</span>{% endif %}
-      <span>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b> · <b>{{ n_notes }}</b> / {{ lignes|length }} noté(s){% if etape %} · candidats : admis <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>{% endif %}</span></p>
+      <span>{% if quiz.auto_enroll %}Concours{% if quiz.annee %} · <bdi lang="ar">{{ quiz.get_annee_display }}</bdi>{% endif %}{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b> · <b>{{ n_notes }}</b> / {{ lignes|length }} noté(s){% if etape %} · candidats : admis <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>{% endif %}</span></p>
   </div>
   <div class="page-head__actions">
     <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
@@ -20,7 +20,11 @@
 <div class="grid2">
   <div class="card">
     <h2>1. Modèle Excel des notes</h2>
+    {% if matieres %}
+    <p class="helptext">Classeur en arabe, un {{ quiz.auto_enroll|yesno:"candidat,étudiant" }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, n° de CIN, et une colonne par note à remplir, sur {{ quiz.note_sur|floatformat:"-2" }} (<bdi dir="rtl" lang="ar">{% for m in matieres %}{{ m.text }}{% if not forloop.last %}، {% endif %}{% endfor %}</bdi>). Les notes déjà importées y figurent.</p>
+    {% else %}
     <p class="helptext">Classeur en arabe, un {{ quiz.auto_enroll|yesno:"candidat,étudiant" }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, n° de CIN, et la colonne de la note (<bdi lang="ar">العدد</bdi>, sur {{ quiz.note_sur|floatformat:"-2" }}) à remplir. Les notes déjà importées y figurent.</p>
+    {% endif %}
     {% if lignes %}
     <div class="documents">
       <a class="document" href="{% url 'quiz_notes_oral_xlsx' quiz.pk %}">
@@ -55,17 +59,19 @@
     {% if lignes %}
     <div class="table-wrap">
       <table>
-        <tr><th>Prénom et nom</th><th>N° d'inscription</th><th>N° CIN</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th><th>Origine</th></tr>
-        {% for e, etat, r in lignes %}
+        <tr><th>Prénom et nom</th><th>N° d'inscription</th><th>N° CIN</th>{% if matieres %}{% for m in matieres %}<th dir="auto">{{ m.text }}{% if m.coefficient != 1 %} <small>× {{ m.coefficient|floatformat:"-2" }}</small>{% endif %}</th>{% endfor %}<th>Moyenne / {{ quiz.note_sur|floatformat:"-2" }}</th>{% else %}<th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th>{% endif %}<th>Origine</th></tr>
+        {% for e, etat, reponses, moyenne in lignes %}
         <tr>
           <td><b>{{ e.full_name }}</b></td>
           <td>{{ e.student_number|default:"—" }}</td>
           <td>{{ e.cin|default:"—" }}</td>
-          <td>{% if r and r.points_awarded is not None %}<span class="score">{{ r.points_awarded|floatformat:"-2" }}</span>{% else %}—{% endif %}</td>
+          {% for r in reponses %}<td>{% if r and r.points_awarded is not None %}<span class="score">{{ r.points_awarded|floatformat:"-2" }}</span>{% else %}—{% endif %}</td>{% endfor %}
+          {% if matieres %}<td>{% if moyenne is not None %}<b>{{ moyenne|floatformat:"-2" }}</b>{% else %}—{% endif %}</td>{% endif %}
           <td>
             {% if etat == "importee" %}<span class="badge ok">importée</span>
-            {% elif etat == "lue" %}<a class="btn small secondary" href="{% url 'sheet_review' r.sheet.pk %}">fiche scannée</a>
-            {% elif etat == "illisible" %}<a class="btn small" href="{% url 'sheet_review' r.sheet.pk %}">fiche scannée, note illisible</a>
+            {% elif etat == "partielle" %}<span class="badge warn">notes incomplètes</span>
+            {% elif etat == "lue" %}<a class="btn small secondary" href="{% url 'sheet_review' reponses.0.sheet.pk %}">fiche scannée</a>
+            {% elif etat == "illisible" %}<a class="btn small" href="{% url 'sheet_review' reponses.0.sheet.pk %}">fiche scannée, note illisible</a>
             {% else %}<span class="badge grey">pas encore notée</span>{% endif %}
           </td>
         </tr>
@@ -91,6 +97,24 @@
       {{ form.note_admission.errors }}
       <label for="{{ form.note_admission.id_for_label }}">{{ form.note_admission.label }}</label>{{ form.note_admission }}
       <span class="helptext">{{ form.note_admission.help_text }}</span>
+      {% if matieres %}
+      {# notes de l'oral par matière (13 novembre 2026) : nom et coefficient de chacune #}
+      <p class="helptext">La note de l'oral est la moyenne de ses notes pondérée par leurs coefficients, sur {{ quiz.note_sur|floatformat:"-2" }} ; la note minimale porte sur elle.</p>
+      {% for m in matieres %}
+      <div class="matiere__tete">
+        <div>
+          <label for="matiere_{{ m.pk }}_nom">Note {{ forloop.counter }}</label>
+          <input id="matiere_{{ m.pk }}_nom" type="text" name="matiere_{{ m.pk }}_nom" value="{{ m.text }}" maxlength="500" required dir="auto">
+        </div>
+        <div>
+          <label for="matiere_{{ m.pk }}_coefficient">Coefficient</label>
+          <input id="matiere_{{ m.pk }}_coefficient" class="champ--court" type="number" step="0.1" min="0.1" max="99" name="matiere_{{ m.pk }}_coefficient" value="{{ m.coefficient|stringformat:'g' }}" required>
+        </div>
+        {% if matieres|length > 2 %}<div><button class="btn small secondary" name="retirer_matiere" value="{{ m.pk }}" type="submit" formnovalidate>Retirer</button></div>{% endif %}
+      </div>
+      {% endfor %}
+      <p><button class="btn small secondary" name="ajouter_matiere" value="1" type="submit" formnovalidate>Ajouter une note</button></p>
+      {% endif %}
       <p><button class="btn secondary" name="reglages" value="1" type="submit">Enregistrer</button></p>
     </form>
     {% endif %}

@@ -52,10 +52,11 @@ def epreuve_detail(request, quiz, fil=None):
 
 def nombre_de_copies(quiz, nb_exemplaires=1):
     """Copies que la génération va dessiner : de quoi choisir l'arrière-plan."""
+    fois = max(len(quiz.matieres), 1)         # écrit en matières : des copies pour chacune
     if quiz.exemplaires_anonymes:
-        return nb_exemplaires
+        return nb_exemplaires * fois
     if quiz.id_mode == "qr" or quiz.type_epreuve == "oral":
-        return quiz.class_group.students.count()
+        return quiz.class_group.students.count() * fois
     return 1
 
 
@@ -101,32 +102,55 @@ def _generer_documents(quiz, nb_exemplaires=100, progres=None):
     ancienne = quiz.layout_json
     zones_changees = bool(ancienne) and services.zones_lues_changees(ancienne, layout)
     grille_avant = ((ancienne or {}).get("pages") or [{}])[0].get("note_grid") or {}
+    # Écrit en matières (13 novembre 2026) : chaque matière a ses copies (sa page de
+    # garde et ses pages lignées) et son sujet, imprimés à part, chacun pour sa séance.
+    matieres = quiz.matieres
+    pdfs, fait = [], [0]
+    for page in (range(len(matieres)) if matieres else [None]):
+        une = layout if page is None else {**layout, "pages": [layout["pages"][page]]}
+        suivi = progres
+        if progres is not None and matieres:
+            def suivi(n, avant=fait[0]):            # copies des matières déjà faites
+                progres(avant + n)
+        if quiz.exemplaires_anonymes:
+            n = nb_exemplaires
+            pdf = sheet_pdf.generate_sheet_pdf(quiz, une, serials=list(range(1, n + 1)),
+                                               progres=suivi)
+        elif quiz.id_mode == "qr":
+            pdf, n = services.copies_nominatives_pdf(quiz, layout, suivi, page=page)
+        else:
+            n = 1
+            pdf = sheet_pdf.generate_sheet_pdf(quiz, une)
+        pdfs.append(pdf)
+        fait[0] += n
     if quiz.exemplaires_anonymes:
-        n = nb_exemplaires
-        pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, serials=list(range(1, n + 1)),
-                                           progres=progres)
         quoi = f"{n} copies anonymes"
     elif quiz.id_mode == "qr":
-        pdf, n = services.copies_nominatives_pdf(quiz, layout, progres)
         quoi = (f"{n} copies anonymes à n° de place (et la liste des candidats et des places)"
                 if quiz.place_anonyme else
                 f"{n} copies à talon (nom à découper avant la correction, "
                 "QR imprimé)" if quiz.talon_nom else
                 f"{n} copies nominatives (nom et QR imprimés)")
     else:
-        n = 1
-        pdf = sheet_pdf.generate_sheet_pdf(quiz, layout)
         quoi = "la copie (une par étudiant)"
     layout["nb_copies"] = n
-    layout["nb_pages"] = sheet_pdf.nombre_de_pages(pdf)
+    layout["nb_pages"] = sheet_pdf.nombre_de_pages(pdfs[0])
     layout["signature"] = layout_mod.layout_signature(quiz)
     layout["sujet_version"] = sheet_pdf.SUJET_VERSION
+    if matieres:
+        layout["documents_matieres"] = services.enregistrer_documents_matieres(
+            quiz, matieres, pdfs, (ancienne or {}).get("documents_matieres", []))
+        # la première matière tient lieu de copies et de sujet de l'épreuve
+        quiz.sheet_pdf.name = layout["documents_matieres"][0]["copies"]
+        quiz.subject_pdf.name = layout["documents_matieres"][0]["sujet"]
+        quoi = f"{quoi}, pour chacune des {len(matieres)} matières"
+    else:
+        quiz.sheet_pdf.save(f"copies_ecrit_{quiz.pk}.pdf", ContentFile(pdfs[0]), save=False)
+        quiz.subject_pdf.save(f"sujet_ecrit_{quiz.pk}.pdf",
+                              ContentFile(sheet_pdf.generate_subject_pdf(quiz)), save=False)
     quiz.layout_json = layout
-    quiz.sheet_pdf.save(f"copies_ecrit_{quiz.pk}.pdf", ContentFile(pdf), save=False)
-    quiz.subject_pdf.save(f"sujet_ecrit_{quiz.pk}.pdf",
-                          ContentFile(sheet_pdf.generate_subject_pdf(quiz)), save=False)
     quiz.save()
-    msg = f"Documents prêts : le sujet et {quoi}."
+    msg = f"Documents prêts : {'les sujets' if matieres else 'le sujet'} et {quoi}."
     # talon ou n° de place : le QR est déjà imprimé sur la copie, rien à coller
     if not quiz.copies_nominatives and (quiz.id_mode in ("sticker", "grid") or quiz.auto_enroll):
         msg += (" Imprimez aussi la planche d'étiquettes QR (page de la classe "
@@ -148,16 +172,95 @@ def _generer_documents(quiz, nb_exemplaires=100, progres=None):
     return a_dire
 
 
+def _lire_matieres(post, matieres):
+    """Réglages des matières d'un écrit, envoyés avec ceux de l'épreuve : les champs
+    « matiere_<pk>_nom », « _coefficient », « _sujet », « _duree », « _date ». Un champ
+    absent garde la valeur de la matière. Retourne ({matière: {champ: valeur}}, erreurs)."""
+    from django.core.exceptions import ValidationError
+
+    from .models import Question
+    champ_date = Question._meta.get_field("date_epreuve").formfield()
+    valeurs, erreurs = {}, []
+    for m in matieres:
+        cle = f"matiere_{m.pk}_"
+        v = {}
+        if cle + "nom" in post:
+            nom = post[cle + "nom"].strip()[:500]
+            if nom:
+                v["text"] = nom
+            else:
+                erreurs.append(f"Donnez un nom à la matière « {m.text} ».")
+        if cle + "coefficient" in post:
+            try:
+                coefficient = float(post[cle + "coefficient"].replace(",", "."))
+            except ValueError:
+                coefficient = None
+            if coefficient is None or not 0.1 <= coefficient <= 99:
+                erreurs.append(f"{m.text} : le coefficient va de 0,1 à 99.")
+            else:
+                v["coefficient"] = coefficient
+        if cle + "sujet" in post:
+            v["sujet"] = post[cle + "sujet"].replace("\r", "").strip()
+        if cle + "duree" in post:
+            v["duree"] = post[cle + "duree"].strip()[:60]
+        if cle + "date" in post:
+            try:
+                v["date_epreuve"] = champ_date.clean(post[cle + "date"])
+            except ValidationError:
+                erreurs.append(f"{m.text} : date invalide.")
+        valeurs[m] = v
+    return valeurs, erreurs
+
+
 def _ecrit(request, quiz, fil=None):
     form = EpreuveEcritForm(instance=quiz)
     if request.method == "POST":
         droits.exiger(request.user, droits.CREER, "modifier l'épreuve")
+        if "creer_matieres" in request.POST:
+            # un écrit de concours créé avant ce choix : ses trois matières
+            services.creer_matieres(quiz)
+            messages.success(request, "L'écrit compte désormais trois matières ; réglez leurs "
+                                      "coefficients et leurs sujets, puis générez les documents.")
+            return redirect("quiz_detail", pk=quiz.pk)
+        if "ajouter_matiere" in request.POST:
+            # une matière de plus (le premier ajout fait d'un écrit d'une note un écrit en
+            # matières, 13 novembre 2026) ; les copies sont alors à régénérer
+            m = services.ajouter_matiere(quiz)
+            messages.success(request, f"Matière ajoutée : « {m.text} ». Donnez-lui son nom "
+                                      "et son sujet, puis régénérez les documents.")
+            return redirect("quiz_detail", pk=quiz.pk)
+        if "retirer_matiere" in request.POST:
+            m = quiz.questions.filter(pk=request.POST["retirer_matiere"]).first()
+            try:
+                if m is None:
+                    raise ValueError("Matière introuvable.")
+                services.retirer_matiere(quiz, m)
+                messages.success(request, f"Matière retirée : « {m.text} ».")
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            return redirect("quiz_detail", pk=quiz.pk)
         if "reglages" in request.POST:
             ancienne_note = quiz.note_admission     # avant : le formulaire valide l'instance
+            ancienne_annee = quiz.annee
+            matieres = quiz.matieres
+            reglages_matieres, erreurs = _lire_matieres(request.POST, matieres)
             form = EpreuveEcritForm(request.POST, instance=quiz)
-            if form.is_valid():
+            for erreur in erreurs:
+                messages.error(request, erreur)
+            if form.is_valid() and not erreurs:
                 _renommer(request, quiz)
                 form.save()
+                changees = False
+                for m, v in reglages_matieres.items():
+                    changees |= any(getattr(m, k) != val for k, val in v.items())
+                    if v:
+                        for k, val in v.items():
+                            setattr(m, k, val)
+                        m.save(update_fields=list(v))
+                if changees and quiz.subject_pdf:
+                    services.actualiser_sujet(quiz, forcer=True)    # sujets des matières
+                if quiz.annee and quiz.annee != ancienne_annee:
+                    services.changer_annee(quiz, quiz.annee)    # toutes les étapes du concours
                 services.question_note(quiz)
                 journal.noter(request.user, "note_admission", quiz=quiz,
                               objet="Note minimale d'admission",
@@ -185,8 +288,16 @@ def _ecrit(request, quiz, fil=None):
     generation = suivre_generation(request, quiz)
     perimee = bool(quiz.layout_json) and (
         quiz.layout_json.get("signature") != layout_mod.layout_signature(quiz))
+    # écrit en matières : les documents de chacune, de la dernière génération
+    from django.core.files.storage import default_storage
+    matieres = quiz.matieres
+    documents = [dict(d, copies_url=default_storage.url(d["copies"]),
+                      sujet_url=default_storage.url(d["sujet"]))
+                 for d in (quiz.layout_json or {}).get("documents_matieres", [])
+                 if matieres and quiz.sheet_pdf]
     return render(request, "grader/epreuve_ecrit.html", {
         "quiz": quiz, "fil": fil, "form": form, "retour": _retour(quiz),
+        "matieres": matieres, "documents_matieres": documents,
         "generation": generation,
         "perimee": perimee, "upload_form": UploadForm(),
         "batches": quiz.batches.all(), "etape": services.etat_etape(quiz),
@@ -203,13 +314,38 @@ def _ecrit(request, quiz, fil=None):
 def _oral(request, quiz, fil=None):
     form = EpreuveOralForm(instance=quiz)
     if request.method == "POST":
+        if "ajouter_matiere" in request.POST or "retirer_matiere" in request.POST:
+            # notes de l'oral par matière (13 novembre 2026) : une de plus, ou une de moins
+            droits.exiger(request.user, droits.CREER, "modifier l'épreuve")
+            if "ajouter_matiere" in request.POST:
+                m = services.ajouter_matiere(quiz)
+                messages.success(request, f"Note ajoutée : « {m.text} ». Donnez-lui son nom, "
+                                          "puis téléchargez le nouveau modèle Excel.")
+            else:
+                m = quiz.questions.filter(pk=request.POST["retirer_matiere"]).first()
+                try:
+                    if m is None:
+                        raise ValueError("Matière introuvable.")
+                    services.retirer_matiere(quiz, m)
+                    messages.success(request, f"Note retirée : « {m.text} ».")
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+            return redirect("quiz_detail", pk=quiz.pk)
         if "reglages" in request.POST:
             droits.exiger(request.user, droits.CREER, "modifier l'épreuve")
             ancienne_note = quiz.note_admission     # avant : le formulaire valide l'instance
+            reglages_matieres, erreurs = _lire_matieres(request.POST, quiz.matieres)
+            for erreur in erreurs:
+                messages.error(request, erreur)
             form = EpreuveOralForm(request.POST, instance=quiz)
-            if form.is_valid():
+            if form.is_valid() and not erreurs:
                 _renommer(request, quiz)
                 form.save()
+                for m, v in reglages_matieres.items():
+                    if v:
+                        for k, val in v.items():
+                            setattr(m, k, val)
+                        m.save(update_fields=list(v))
                 services.question_note(quiz)
                 journal.noter(request.user, "note_admission", quiz=quiz,
                               objet="Note minimale d'admission",
@@ -226,7 +362,8 @@ def _oral(request, quiz, fil=None):
                                         "modèle de l'épreuve, rempli.")
             else:
                 try:
-                    notes = importers.notes_du_classeur(fichier.read(), quiz.note_sur)
+                    notes = importers.notes_du_classeur(fichier.read(), quiz.note_sur,
+                                                        quiz.matieres)
                     nouvelles, modifiees, inchangees = services.enregistrer_notes_orales(
                         quiz, notes, request.user)
                 except ValueError as exc:            # importers.ImportError_ compris
@@ -242,10 +379,20 @@ def _oral(request, quiz, fil=None):
             return redirect("quiz_detail", pk=quiz.pk)
 
     lignes = services.notes_orales(quiz)
+    matieres = quiz.matieres
+    if matieres:
+        # oral en matières : la moyenne pondérée de chacun, comme dans les résultats
+        moyennes = {r["student"].pk: r["score"] for r in services.compute_results(quiz)}
+        lignes = [(e, etat, reponses, moyennes.get(e.pk)) for e, etat, reponses in lignes]
+    else:
+        lignes = [(e, etat, reponses, None) for e, etat, reponses in lignes]
     return render(request, "grader/epreuve_oral.html", {
         "quiz": quiz, "fil": fil, "form": form, "retour": _retour(quiz), "lignes": lignes,
-        "n_notes": sum(1 for _, etat, r in lignes
-                       if etat != "attendue" and r.points_awarded is not None),
+        "matieres": matieres,
+        "n_notes": sum(1 for _, etat, reponses, _ in lignes
+                       if etat != "attendue"
+                       and all(r is not None and r.points_awarded is not None
+                               for r in reponses)),
         "lot_import": quiz.batches.filter(label=services.LOT_ORAL).first(),
         "etape": services.etat_etape(quiz),
         "journal": quiz.modifications.all()[:15],

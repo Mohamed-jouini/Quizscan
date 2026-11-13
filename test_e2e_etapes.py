@@ -38,7 +38,8 @@ CANDIDATS = {"AMRI": 9, "BAKIR": 8, "CHERIF": 7, "DRISS": 5, "ESSID": 4, "FERCHI
 
 def _noter(quiz, notes):
     """Copies déjà corrigées : {étudiant: note} sur la question « Note »
-    (écrit / oral) ou {étudiant: nb de bonnes réponses} (QCM)."""
+    (écrit / oral) ou {étudiant: nb de bonnes réponses} (QCM). L'écrit d'un concours a
+    ses matières (13 novembre 2026) : la même note dans chacune, leur moyenne."""
     lot = ScanBatch.objects.create(quiz=quiz, status="done", total_pages=len(notes))
     for s, note in notes.items():
         copie = SheetScan.objects.create(batch=lot, status="ok", student=s,
@@ -49,8 +50,9 @@ def _noter(quiz, notes):
                 a.points_awarded = services._auto_points(q, a)
                 a.save()
         else:
-            Answer.objects.create(sheet=copie, question=services.question_note(quiz),
-                                  points_awarded=note, manually_set=True)
+            for q in quiz.matieres or [services.question_note(quiz)]:
+                Answer.objects.create(sheet=copie, question=q, points_awarded=note,
+                                      manually_set=True)
 
 
 def main():
@@ -83,7 +85,7 @@ def main():
     form = c.get(url).context["form"]
     assert form.initial["epreuve_precedente"] == qcm.pk
     assert form.initial["type_epreuve"] == "ecrit"
-    r = c.post(url, {"title": "Étapes écrit", "type_epreuve": "ecrit",
+    r = c.post(url, {"title": "Étapes écrit", "type_epreuve": "ecrit", "annee": "1",
                      "epreuve_precedente": qcm.pk, "language": "fr", "note_sur": "20",
                      "sheet_mode": "grid", "id_mode": "sticker", "id_digits": "6",
                      "grading_mode": "immediate", "wrong_penalty": "0"}, follow=True)
@@ -155,6 +157,35 @@ def main():
     page = r.content.decode()
     assert "Admis au concours" in page and "non convoqué" in page
     assert [x["etat"] for x in p["candidats"][-1]["cases"]] == ["note", "non_convoque", "non_convoque"]
+    # moyenne finale (المعدل النهائي, 13 novembre 2026) : la moyenne des notes sur 20 des
+    # trois étapes, pour les candidats notés à chacune ; AMRI (18 + 14,5 + 15) / 3
+    moyennes = {x["etudiant"].last_name: x["moyenne_finale"] for x in p["candidats"]}
+    assert moyennes == {"AMRI": 15.83, "CHERIF": 11.75, "BAKIR": None, "DRISS": None,
+                        "ESSID": None, "FERCHICHI": None}, moyennes
+    assert "Moyenne finale" in page and "15,83 / 20" in page and "المعدل النهائي" in page
+    url_parcours = reverse("quiz_parcours", args=[oral.pk])
+    r = c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1",
+                              f"coef_{ecrit.pk}": "-1", f"coef_{oral.pk}": "1"}, follow=True)
+    assert "Coefficient invalide" in r.content.decode()
+    r = c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "0",
+                              f"coef_{ecrit.pk}": "0", f"coef_{oral.pk}": "0"}, follow=True)
+    assert "Une étape au moins" in r.content.decode()
+    c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1",
+                          f"coef_{ecrit.pk}": "2", f"coef_{oral.pk}": "1"})
+    p = c.get(url_parcours).context["parcours"]
+    moyennes = {x["etudiant"].last_name: x["moyenne_finale"] for x in p["candidats"]}
+    # (18 + 2 × 14,5 + 15) / 4 = 15,5 ; (14 + 2 × 12,25 + 9) / 4 = 11,88
+    assert (moyennes["AMRI"], moyennes["CHERIF"]) == (15.5, 11.88), moyennes
+    c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "0",
+                          f"coef_{ecrit.pk}": "1", f"coef_{oral.pk}": "1"})
+    p = c.get(url_parcours).context["parcours"]
+    assert p["coefficients"] == [0, 1, 1]
+    moyennes = {x["etudiant"].last_name: x["moyenne_finale"] for x in p["candidats"]}
+    assert moyennes["AMRI"] == 14.75, "QCM à 0 : l'écrit et l'oral seulement"
+    c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1",
+                          f"coef_{ecrit.pk}": "1", f"coef_{oral.pk}": "1"})
+    print("  moyenne finale : notes sur 20 des trois étapes (AMRI 15,83), coefficients "
+          "réglables (1 ; 2 ; 1 -> 15,5 ; QCM à 0 -> 14,75), invalides refusés OK")
     # la recherche filtre, l'export Excel reprend tout
     r = c.get(reverse("quiz_parcours", args=[ecrit.pk]) + "?q=driss")
     assert [x["etudiant"].last_name for x in r.context["candidats_page"]] == ["DRISS"]
@@ -168,6 +199,8 @@ def main():
     from openpyxl import load_workbook
     ws = load_workbook(io.BytesIO(r.content)).active
     assert ws.cell(row=2, column=ws.max_column).value == "Résultat final"
+    assert ws.cell(row=2, column=ws.max_column - 1).value == "Moyenne finale (/20)"
+    assert ws.cell(row=3, column=ws.max_column - 1).value == 15.83
     assert ws.cell(row=3, column=2).value == "AMRI"       # Prénom, puis Nom
     assert ws.cell(row=3, column=ws.max_column).value == "Admis au concours"
     assert ws.max_row == 2 + len(attendu)
@@ -191,6 +224,7 @@ def main():
         assert nom in texte and final in texte, (nom, final)
     assert texte.index("AMRI") < texte.index("CHERIF") < texte.index("FERCHICHI"), "même ordre que la page"
     assert "14,50 / 20" in texte and "9 / 10" in texte and "non convoqué" in texte
+    assert "Moy. finale" in texte and "15,83 / 20" in texte
     # beaucoup de candidats : pages numérotées, intitulés répétés, rien hors de la page
     from grader import bulletin as bulletin_mod
     from grader.models import Student as Etudiant
@@ -362,7 +396,7 @@ def main():
                                             ("Écrit après oral", "ecrit", oral),
                                             ("Oral après QCM", "oral", qcm)):
         r = c.post(reverse("quiz_create") + "?concours=1",
-                   {"title": titre, "type_epreuve": type_epreuve,
+                   {"title": titre, "type_epreuve": type_epreuve, "annee": "1",
                     "epreuve_precedente": precedente.pk, "language": "fr", "note_sur": "20",
                     "sheet_mode": "grid", "id_mode": "sticker", "id_digits": "6",
                     "grading_mode": "immediate", "wrong_penalty": "0"})

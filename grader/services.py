@@ -1043,6 +1043,37 @@ def nettoyer_controle(sheet):
     return True
 
 
+def _effacer_fichier(nom):
+    """Fichier remplacé (sujet ou copies d'une matière) : effacé, sans erreur s'il manque."""
+    if nom:
+        try:
+            default_storage.delete(nom)
+        except OSError:
+            log.warning("fichier %s non effacé", nom)
+
+
+def enregistrer_documents_matieres(quiz, matieres, pdfs, anciens=()):
+    """Écrit en matières : les copies (pdfs, une par matière, dans l'ordre) et le sujet de
+    chaque matière, enregistrés ; ceux de la génération précédente, effacés. Retourne
+    [{order, nom, copies, sujet, nb_pages}] (disposition["documents_matieres"])."""
+    documents = []
+    for m, pdf in zip(matieres, pdfs):
+        sujet = sheet_pdf.generate_subject_pdf(sheet_pdf.vue_de_matiere(quiz, m))
+        documents.append({
+            "order": m.order, "nom": m.text,
+            "copies": default_storage.save(f"sheets/copies_ecrit_{quiz.pk}_{m.order}.pdf",
+                                           ContentFile(pdf)),
+            "sujet": default_storage.save(f"sheets/sujet_ecrit_{quiz.pk}_{m.order}.pdf",
+                                          ContentFile(sujet)),
+            "nb_pages": sheet_pdf.nombre_de_pages(pdf)})
+    gardes = {d[cle] for d in documents for cle in ("copies", "sujet")}
+    for ancien in anciens:
+        for cle in ("copies", "sujet"):
+            if ancien.get(cle) not in gardes:
+                _effacer_fichier(ancien.get(cle))
+    return documents
+
+
 def actualiser_sujet(quiz, forcer=False):
     """Refait le SUJET (document des questions : mode « sujet séparé » ou
     épreuve écrite) s'il a été dessiné par une version antérieure — par exemple
@@ -1056,8 +1087,22 @@ def actualiser_sujet(quiz, forcer=False):
         return False
     if not forcer and disposition.get("sujet_version") == sheet_pdf.SUJET_VERSION:
         return False
-    pdf = sheet_pdf.generate_subject_pdf(quiz)
-    quiz.subject_pdf.save(f"sujet_quiz_{quiz.pk}.pdf", ContentFile(pdf), save=False)
+    documents = disposition.get("documents_matieres")
+    if documents and quiz.matieres:
+        # écrit en matières : le sujet de chacune ; les copies ne bougent pas
+        par_ordre = {m.order: m for m in quiz.matieres}
+        for doc in documents:
+            m = par_ordre.get(doc["order"])
+            if m is not None:
+                ancien = doc["sujet"]
+                doc["sujet"] = default_storage.save(
+                    f"sheets/sujet_ecrit_{quiz.pk}_{m.order}.pdf", ContentFile(
+                        sheet_pdf.generate_subject_pdf(sheet_pdf.vue_de_matiere(quiz, m))))
+                _effacer_fichier(ancien)
+        quiz.subject_pdf.name = documents[0]["sujet"]
+    else:
+        pdf = sheet_pdf.generate_subject_pdf(quiz)
+        quiz.subject_pdf.save(f"sujet_quiz_{quiz.pk}.pdf", ContentFile(pdf), save=False)
     quiz.layout_json = {**disposition, "sujet_version": sheet_pdf.SUJET_VERSION}
     quiz.save(update_fields=["layout_json", "subject_pdf"])
     log.info("Sujet du quiz %s mis à jour (version %s)", quiz.pk,
@@ -1480,7 +1525,58 @@ def question_note(quiz):
     elif q.points != quiz.note_sur:
         q.points = quiz.note_sur
         q.save(update_fields=["points"])
+    if quiz.type_epreuve in ("ecrit", "oral"):
+        # écrit ou oral en matières : chacune est notée sur le barème de l'épreuve
+        quiz.questions.filter(qtype="open").exclude(points=quiz.note_sur).update(
+            points=quiz.note_sur)
     return q
+
+
+# Les trois épreuves de l'écrit d'un concours de l'institut (demande de l'utilisateur,
+# 13 novembre 2026), créées avec lui ; noms, coefficients et sujets se règlent sur sa page.
+MATIERES_CONCOURS = ("قانون مدني", "قانون جزائي", "الحريات الأساسية")
+# Les notes de l'oral, selon l'année du concours (même jour) : trois en 1re année, deux en
+# 2e. Abrégées comme l'utilisateur les a écrites ; leur nom se change sur la page de l'oral.
+MATIERES_ORAL = {"1": ("إ م ت", "ن إج", "ق ت"), "2": ("إ م ت", "ن إج")}
+
+
+def creer_matieres(quiz, noms=MATIERES_CONCOURS):
+    """Fait d'un écrit d'une seule note un écrit en matières : sa question notée prend le
+    nom de la première matière (et le sujet de l'épreuve), une question par matière suit.
+    Retourne les matières."""
+    premiere = question_note(quiz)
+    suivant = (quiz.questions.order_by("-order").values_list("order", flat=True).first() or 0) + 1
+    if not quiz.matieres:
+        premiere.text = noms[0]
+        premiere.sujet = premiere.sujet or quiz.sujet_texte
+        premiere.save(update_fields=["text", "sujet"])
+        for k, nom in enumerate(noms[1:]):
+            Question.objects.create(quiz=quiz, order=suivant + k, qtype="open",
+                                    points=quiz.note_sur, text=nom)
+    return quiz.matieres
+
+
+def ajouter_matiere(quiz, nom="Nouvelle matière"):
+    """Une matière de plus à un écrit (le premier ajout fait de l'écrit un écrit en
+    matières : sa note devient la première)."""
+    if not quiz.matieres:
+        return creer_matieres(quiz, ("Matière 1", nom))[-1]
+    suivant = quiz.questions.order_by("-order").values_list("order", flat=True).first() + 1
+    return Question.objects.create(quiz=quiz, order=suivant, qtype="open",
+                                   points=quiz.note_sur, text=nom)
+
+
+def retirer_matiere(quiz, question):
+    """Retire une matière sans note ; il en reste au moins deux (sinon l'écrit n'aurait
+    plus qu'une note : retirer la dernière ne se fait pas). ValueError sinon."""
+    matieres = quiz.matieres
+    if question not in matieres:
+        raise ValueError("Ce n'est pas une matière de cet écrit.")
+    if len(matieres) <= 2:
+        raise ValueError("Un écrit en matières en garde au moins deux.")
+    if Answer.objects.filter(question=question).exists():
+        raise ValueError(f"« {question.text} » a déjà des copies lues : elle reste.")
+    question.delete()
 
 
 # Lot des notes d'oral SAISIES À LA MAIN avant le 30 octobre 2026. Depuis, les
@@ -1501,31 +1597,38 @@ def _reponses_retenues(quiz, q):
 
 
 def notes_orales(quiz):
-    """Pour la page d'un oral : [(étudiant, état, réponse)], dans l'ordre des salles, où
-    l'état est « importee » (note importée d'Excel, seule voie depuis le 13 novembre 2026,
-    ou ancienne saisie à la main), « lue » ou « illisible » (fiche scannée avant cette
-    date), ou « attendue » (pas encore de note)."""
-    retenues = _reponses_retenues(quiz, question_note(quiz))
+    """Pour la page d'un oral : [(étudiant, état, réponses)], dans l'ordre des salles. Les
+    réponses : une par note de l'oral (une seule, ou une par matière depuis le 13 novembre
+    2026), None quand elle manque. L'état est « importee » (notes importées d'Excel, seule
+    voie depuis le 13 novembre 2026, ou ancienne saisie à la main), « partielle » (des
+    matières sans note), « lue » ou « illisible » (fiche scannée avant cette date), ou
+    « attendue » (pas encore de note)."""
+    retenues = [_reponses_retenues(quiz, q) for q in (quiz.matieres or [question_note(quiz)])]
     lignes = []
     for etudiant in etudiants_par_salle(quiz):
-        r = retenues.get(etudiant.pk)
-        if r is None:
+        reponses = [r.get(etudiant.pk) for r in retenues]
+        presentes = [r for r in reponses if r is not None]
+        if not presentes:
             etat = "attendue"
-        elif r.sheet.batch.label == LOT_ORAL and not r.sheet.image:
+        elif len(presentes) < len(reponses):
+            etat = "partielle"
+        elif all(r.sheet.batch.label == LOT_ORAL and not r.sheet.image for r in presentes):
             etat = "importee"
-        elif r.points_awarded is None:
+        elif any(r.points_awarded is None for r in presentes):
             etat = "illisible"
         else:
             etat = "lue"
-        lignes.append((etudiant, etat, r))
+        lignes.append((etudiant, etat, reponses))
     return lignes
 
 
 def enregistrer_notes_orales(quiz, notes, utilisateur):
-    """Notes d'un oral importées d'Excel : [(n° d'inscription, note)]
-    (importers.notes_du_classeur). Tout n° doit être dans la liste de l'épreuve, sinon
-    rien n'est enregistré (ValueError). Une note déjà là est remplacée, et chaque note
-    nouvelle ou changée passe au journal. Retourne (nouvelles, modifiées, inchangées)."""
+    """Notes d'un oral importées d'Excel : [(n° d'inscription, notes)]
+    (importers.notes_du_classeur), notes étant la note de l'oral, ou {n° de la question :
+    note} pour un oral en matières (13 novembre 2026). Tout n° doit être dans la liste de
+    l'épreuve, sinon rien n'est enregistré (ValueError). Une note déjà là est remplacée, et
+    chaque note nouvelle ou changée passe au journal. Retourne (nouvelles, modifiées,
+    inchangées), en notes."""
     from .inscriptions import numero_propre
     etudiants = {}
     for s in quiz.class_group.students.all():
@@ -1536,36 +1639,48 @@ def enregistrer_notes_orales(quiz, notes, utilisateur):
         reste = f" (et {len(inconnus) - 10} autre(s))" if len(inconnus) > 10 else ""
         raise ValueError("Aucune note importée : n° absent(s) de la liste de l'épreuve : "
                          + ", ".join(inconnus[:10]) + reste + ".")
-    question = question_note(quiz)
-    retenues = _reponses_retenues(quiz, question)
+    matieres = quiz.matieres
+    questions = {q.order: q for q in (matieres or [question_note(quiz)])}
+    retenues = {ordre: _reponses_retenues(quiz, q) for ordre, q in questions.items()}
     nouvelles = modifiees = inchangees = 0
     with transaction.atomic():
         lot = None
-        for numero, note in notes:
+        copies = {}         # la copie d'import de chaque étudiant : une pour toutes ses notes
+        for numero, valeurs in notes:
+            if not isinstance(valeurs, dict):
+                valeurs = {next(iter(questions)): valeurs}
             etudiant = etudiants[numero]
-            reponse = retenues.get(etudiant.pk)
-            if reponse is not None and reponse.points_awarded == note:
-                inchangees += 1
-                continue
-            if reponse is None:
-                if lot is None:
-                    lot = (quiz.batches.filter(label=LOT_ORAL).first()
-                           or ScanBatch.objects.create(quiz=quiz, label=LOT_ORAL, status="done"))
-                copie = SheetScan.objects.create(batch=lot, status="ok", student=etudiant,
-                                                 student_confirmed=True,
-                                                 source_name="Import Excel")
-                reponse = Answer.objects.create(sheet=copie, question=question,
-                                                points_awarded=note, manually_set=True)
-                avant = None
-                nouvelles += 1
-            else:
-                avant = reponse.points_awarded
-                reponse.points_awarded, reponse.manually_set = note, True
-                reponse.save(update_fields=["points_awarded", "manually_set"])
-                modifiees += 1
-            journal.noter(utilisateur, "note", copie=reponse.sheet,
-                          objet=f"{etudiant.full_name} — note de l'oral (import Excel)",
-                          avant=avant, apres=note)
+            for ordre, note in valeurs.items():
+                question = questions[ordre]
+                reponse = retenues[ordre].get(etudiant.pk)
+                if reponse is not None and reponse.points_awarded == note:
+                    inchangees += 1
+                    continue
+                if reponse is None:
+                    if lot is None:
+                        lot = (quiz.batches.filter(label=LOT_ORAL).first()
+                               or ScanBatch.objects.create(quiz=quiz, label=LOT_ORAL,
+                                                           status="done"))
+                    copie = copies.get(etudiant.pk) or (
+                        lot.sheets.filter(student=etudiant, image="")
+                        .exclude(answers__question=question).first()
+                        or SheetScan.objects.create(batch=lot, status="ok", student=etudiant,
+                                                    student_confirmed=True,
+                                                    source_name="Import Excel"))
+                    copies[etudiant.pk] = copie
+                    reponse = Answer.objects.create(sheet=copie, question=question,
+                                                    points_awarded=note, manually_set=True)
+                    avant = None
+                    nouvelles += 1
+                else:
+                    avant = reponse.points_awarded
+                    reponse.points_awarded, reponse.manually_set = note, True
+                    reponse.save(update_fields=["points_awarded", "manually_set"])
+                    modifiees += 1
+                quoi = f"{question.text}, oral" if matieres else "note de l'oral"
+                journal.noter(utilisateur, "note", copie=reponse.sheet,
+                              objet=f"{etudiant.full_name} — {quoi} (import Excel)",
+                              avant=avant, apres=note)
     return nouvelles, modifiees, inchangees
 
 
@@ -1723,12 +1838,27 @@ def compute_results(quiz, batch=None, student=None):
     # pourcentage pour un QCM ; l'écrit et l'oral gardent le leur).
     n_qcm = quiz.questions.filter(qtype="qcm").count()
     est_qcm = quiz.est_qcm
+    # Écrit en matières (13 novembre 2026) : la note est la moyenne des matières pondérée
+    # par leurs coefficients, sur le barème (max_score). Une matière sans note y compte
+    # pour 0 et la ligne reste « en attente » tant qu'elle manque (questions_manquantes).
+    matieres = quiz.matieres
+    poids = sum(m.coefficient for m in matieres)
     rows = []
     for entry in per_student.values():
         # Page non identifiée ou non reçue : ses questions ne sont ni justes, ni fausses,
         # ni vides. La note est partielle, et seul ce compte le dit.
         entry["questions_manquantes"] = max(len(questions) - len(entry.pop("seen_questions")), 0)
         entry["score"] = max(round(entry["score"], 2), 0.0)
+        if matieres:
+            notes, somme = [], 0.0
+            for m in matieres:
+                reponse = entry["answers"].get(m.order)
+                note = reponse.points_awarded if reponse is not None else None
+                notes.append(note)
+                if note is not None and m.points:
+                    somme += m.coefficient * note / m.points * quiz.note_sur
+            entry["notes_matieres"] = notes
+            entry["score"] = round(somme / poids, 2) if poids else 0.0
         entry["max_score"] = max_score
         entry["n_qcm"] = n_qcm
         entry["pct"] = round(entry["score"] / max_score * 100) if max_score else 0
@@ -1969,15 +2099,27 @@ def codes_anonymes(quiz):
 
     Unique dans l'épreuve et GARDÉ d'une génération à l'autre (layout_json["codes"]),
     comme les n° de place : un talon déjà imprimé garde le code de sa copie, un étudiant
-    ajouté en reçoit un nouveau, celui d'un étudiant retiré n'est jamais redonné."""
+    ajouté en reçoit un nouveau, celui d'un étudiant retiré n'est jamais redonné.
+
+    Concours de 1re ou 2e année : chaque code commence par X ou par Y (13 novembre 2026).
+    L'année changée depuis la dernière génération, les codes de l'autre lettre sont tirés
+    à nouveau : les copies sont de toute façon à réimprimer (layout_signature)."""
+    premiere = qr_mod.premiere_lettre(getattr(quiz, "annee", ""))
     connus = {int(k): v for k, v in ((quiz.layout_json or {}).get("codes") or {}).items()}
     pris = set(connus.values())
-    codes = dict(connus)
+    codes = {pk: code for pk, code in connus.items() if premiere is None or code[:1] == premiere}
     for pk in quiz.class_group.students.order_by("pk").values_list("pk", flat=True):
         if pk not in codes:
-            codes[pk] = qr_mod.nouveau_code(pris)
+            codes[pk] = qr_mod.nouveau_code(pris, premiere)
             pris.add(codes[pk])
     return codes
+
+
+def changer_annee(quiz, annee):
+    """L'année vaut pour tout le concours : chaque étape la prend (QCM, écrit, oral).
+    Retourne le nombre d'épreuves changées."""
+    pks = [q.pk for q in chaine_epreuves(quiz)]
+    return Quiz.objects.filter(pk__in=pks).exclude(annee=annee).update(annee=annee)
 
 
 def codes_imprimes(quiz):
@@ -1988,27 +2130,31 @@ def codes_imprimes(quiz):
             for pk, code in ((quiz.layout_json or {}).get("codes") or {}).items()}
 
 
-def copies_nominatives_pdf(quiz, layout, progres=None):
+def copies_nominatives_pdf(quiz, layout, progres=None, page=None):
     """PDF d'une copie par étudiant, QR imprimé : nom imprimé (ou sur le
     talon), ou copie anonyme à n° de place — la correspondance place ->
     étudiant est alors gardée dans layout["places"] pour la liste
     d'émargement. Retourne (octets du PDF, nombre de copies). progres : voir
-    lancer_generation."""
+    lancer_generation. page : écrit en matières, la page de garde de la seule matière
+    à imprimer (chacune a ses copies) ; les codes d'anonymat, tirés une fois, valent
+    pour toutes."""
+    imprime = layout if page is None else {**layout, "pages": [layout["pages"][page]]}
     if quiz.place_anonyme:
         places = places_anonymes(quiz)
         layout["places"] = {str(s.pk): n for n, s in places}
         # copies dans l'ordre des salles, puis des places (8 novembre 2026)
         pdf = sheet_pdf.generate_sheet_pdf(
-            quiz, layout, students=[s for _, s in par_salle(places)],
+            quiz, imprime, students=[s for _, s in par_salle(places)],
             places={s.pk: n for n, s in places}, progres=progres)
         return pdf, len(places)
     etudiants = etudiants_par_salle(quiz)          # dans l'ordre des salles
     codes = None
     if quiz.talon_nom:
         # code d'anonymat, sur le talon et sous le QR (13 novembre 2026)
-        codes = codes_anonymes(quiz)
-        layout["codes"] = {str(pk): code for pk, code in codes.items()}
-    return (sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants, progres=progres,
+        if "codes" not in layout:
+            layout["codes"] = {str(pk): code for pk, code in codes_anonymes(quiz).items()}
+        codes = {int(pk): code for pk, code in layout["codes"].items()}
+    return (sheet_pdf.generate_sheet_pdf(quiz, imprime, students=etudiants, progres=progres,
                                          codes=codes),
             len(etudiants))
 
@@ -2277,7 +2423,12 @@ def parcours_concours(chaine):
     final, final_ton, atteinte}]}. Une case : {etat: « note » | « non_note »
     (convoqué : absent, ou copie pas encore scannée) | « non_convoque », row
     (compute_results), resultat}. Le résultat final
-    se lit à la dernière étape où le candidat a été convoqué."""
+    se lit à la dernière étape où le candidat a été convoqué.
+
+    Moyenne finale (المعدل النهائي, 13 novembre 2026) : la moyenne des notes sur 20 des
+    étapes, pondérée par leurs coefficients (Quiz.coefficient_final), pour le candidat noté
+    à chaque étape qui compte (coefficient non nul) ; None sinon. Elle classe les candidats
+    d'un même résultat."""
     etapes, par_epreuve = [], []
     for quiz in chaine:
         rows = compute_results(quiz)
@@ -2295,6 +2446,8 @@ def parcours_concours(chaine):
         for cle, r in notes.items():
             personnes.setdefault(cle, r["student"])
     derniere = len(chaine) - 1
+    coefficients = [q.coefficient_final for q in chaine]
+    poids = sum(coefficients)
     candidats = []
     for cle, etudiant in personnes.items():
         cases, atteinte = [], -1
@@ -2326,13 +2479,20 @@ def parcours_concours(chaine):
                 final, ton = f"Noté : {titre} (sans note minimale)", "grey"
         derniere_note = cases[atteinte]["row"]["score"] if (
             atteinte >= 0 and cases[atteinte]["row"]) else -1
+        moyenne = None
+        if poids and all(case["etat"] == "note" for case, coef in zip(cases, coefficients)
+                         if coef):
+            moyenne = round(sum(coef * case["row"]["note20"]
+                                for case, coef in zip(cases, coefficients) if coef) / poids, 2)
         candidats.append({"etudiant": etudiant, "student": etudiant,
                           "cases": cases, "final": final,
-                          "final_ton": ton, "atteinte": atteinte,
-                          "_tri": (-atteinte, ton != "ok", -derniere_note,
+                          "final_ton": ton, "atteinte": atteinte, "moyenne_finale": moyenne,
+                          "_tri": (-atteinte, ton != "ok",
+                                   -(moyenne if moyenne is not None else -1), -derniere_note,
                                    etudiant.last_name.lower(), etudiant.first_name.lower())})
     candidats.sort(key=lambda c: c["_tri"])
     return {"epreuves": chaine, "etapes": etapes, "candidats": candidats,
+            "coefficients": coefficients,
             "n_admis_final": sum(1 for c in candidats if c["final_ton"] == "ok")}
 
 

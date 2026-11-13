@@ -109,6 +109,10 @@ def main():
         base.execute("DROP TABLE grader_piecejointe")
         base.execute("ALTER TABLE grader_quiz DROP COLUMN format_impression")
         base.execute("ALTER TABLE grader_quiz DROP COLUMN date_epreuve")
+        base.execute("ALTER TABLE grader_quiz DROP COLUMN annee")
+        base.execute("ALTER TABLE grader_quiz DROP COLUMN coefficient_final")
+        for colonne in ("coefficient", "sujet", "duree", "date_epreuve"):
+            base.execute(f"ALTER TABLE grader_question DROP COLUMN {colonne}")
         for colonne in ("cin_lieu", "cin_date", "centre", "salle"):
             base.execute(f"ALTER TABLE grader_inscrit DROP COLUMN {colonne}")
         base.execute("DELETE FROM django_migrations WHERE app='grader' AND name >= '0035'")

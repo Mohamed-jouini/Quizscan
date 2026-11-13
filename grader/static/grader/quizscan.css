@@ -2029,3 +2029,12 @@ a.badge{text-decoration:none}
 .pub-video video{display:block;width:100%;max-height:70vh;border-radius:12px;background:#000}
 .pub-video figcaption{margin-top:6px;font-size:13px;color:var(--qs-muted);overflow-wrap:anywhere}
 .pub-pieces__titre{font-size:16px;margin:24px 0 8px}
+
+/* Écrit et oral en matières (13 novembre 2026) : une matière par cadre, nom et coefficient
+   côte à côte ; les documents de chaque matière sous son nom */
+fieldset.matiere{border:1px solid var(--qs-border,#dfe3dc);border-radius:10px;padding:10px 14px 4px;margin:12px 0}
+fieldset.matiere legend{font-weight:600;font-size:13px;padding:0 6px}
+.matiere__tete{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.matiere__tete > div{flex:1 1 140px;min-width:0}
+.matiere__tete > div:has(.champ--court){flex:0 0 auto}
+.documents__matiere{font-size:15px;margin:14px 0 6px}

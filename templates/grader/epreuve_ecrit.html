@@ -6,7 +6,7 @@
     <h1>{{ fil.titre|default:quiz.title }}</h1>
     <p class="page-head__meta"><span class="badge info">Épreuve écrite</span>
       {% if fil.intitule %}<span>{{ fil.intitule }}</span>{% endif %}
-      <span>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b>{% if etape %} · candidats : admis <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>{% endif %}</span></p>
+      <span>{% if quiz.auto_enroll %}Concours{% if quiz.annee %} · <bdi lang="ar">{{ quiz.get_annee_display }}</bdi>{% endif %}{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b>{% if etape %} · candidats : admis <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>{% endif %}</span></p>
   </div>
   <div class="page-head__actions">
     <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
@@ -28,11 +28,47 @@
 
 <div class="grid2">
   <div class="card">
-    <h2>1. Le sujet</h2>
+    <h2>1. {% if matieres %}Les matières{% else %}Le sujet{% endif %}</h2>
     {% if perms.grader.creer_epreuve %}
     <form method="post">{% csrf_token %}
       <label for="id_title">Titre de l'épreuve</label>
       <input id="id_title" type="text" name="title" value="{{ quiz.title }}" maxlength="200" required>
+      {% if matieres %}
+      {# Écrit en matières (13 novembre 2026) : nom, coefficient, sujet, durée et date de chacune #}
+      <p class="helptext">La note de l'écrit est la moyenne des matières pondérée par leurs coefficients, sur {{ quiz.note_sur|floatformat:"-2" }} ; la note minimale porte sur elle. Chaque matière a sa page de garde, ses copies et son sujet, imprimés à part pour sa séance.</p>
+      {% for m in matieres %}
+      <fieldset class="matiere" id="matiere_{{ m.pk }}">
+        <legend>Matière {{ forloop.counter }}</legend>
+        <div class="matiere__tete">
+          <div>
+            <label for="matiere_{{ m.pk }}_nom">Nom</label>
+            <input id="matiere_{{ m.pk }}_nom" type="text" name="matiere_{{ m.pk }}_nom" value="{{ m.text }}" maxlength="500" required dir="auto">
+          </div>
+          <div>
+            <label for="matiere_{{ m.pk }}_coefficient">Coefficient</label>
+            <input id="matiere_{{ m.pk }}_coefficient" class="champ--court" type="number" step="0.1" min="0.1" max="99" name="matiere_{{ m.pk }}_coefficient" value="{{ m.coefficient|stringformat:'g' }}" required>
+          </div>
+        </div>
+        <label for="matiere_{{ m.pk }}_sujet">Sujet</label>
+        <textarea id="matiere_{{ m.pk }}_sujet" name="matiere_{{ m.pk }}_sujet" rows="5" dir="auto" placeholder="Une ligne vide sépare deux paragraphes.">{{ m.sujet }}</textarea>
+        <div class="matiere__tete">
+          <div>
+            <label for="matiere_{{ m.pk }}_duree">Durée</label>
+            <input id="matiere_{{ m.pk }}_duree" class="champ--duree" type="text" name="matiere_{{ m.pk }}_duree" value="{{ m.duree }}" maxlength="60" placeholder="Ex. 3 h">
+          </div>
+          <div>
+            <label for="matiere_{{ m.pk }}_date">Date</label>
+            <input id="matiere_{{ m.pk }}_date" type="date" name="matiere_{{ m.pk }}_date" value="{{ m.date_epreuve|date:'Y-m-d' }}" min="2000-01-01" max="9999-12-31">
+          </div>
+        </div>
+        {% if matieres|length > 2 %}<p><button class="btn small secondary" name="retirer_matiere" value="{{ m.pk }}" type="submit" formnovalidate>Retirer cette matière</button></p>{% endif %}
+      </fieldset>
+      {% endfor %}
+      <p><button class="btn small secondary" name="ajouter_matiere" value="1" type="submit" formnovalidate>Ajouter une matière</button></p>
+      {% elif quiz.auto_enroll %}
+      <p class="helptext">L'écrit d'un concours compte trois matières (قانون مدني، قانون جزائي، الحريات الأساسية), chacune avec son sujet, ses copies et son coefficient.
+        <button class="btn small secondary" name="creer_matieres" value="1" type="submit" formnovalidate>Passer en trois matières</button></p>
+      {% endif %}
       {{ form.non_field_errors }}
       {% for field in form %}
       <div id="row_{{ field.name }}">
@@ -43,6 +79,9 @@
       {% endfor %}
       <p><button class="btn" name="reglages" value="1" type="submit">Enregistrer</button></p>
     </form>
+    {% elif matieres %}
+    {% for m in matieres %}<h3 dir="auto">{{ m.text }} <small>(coefficient {{ m.coefficient|floatformat:"-2" }})</small></h3>
+    <p class="pre-ligne" dir="auto">{{ m.sujet|default:"Sujet non rédigé." }}</p>{% endfor %}
     {% else %}
     <p class="pre-ligne">{{ quiz.sujet_texte|default:"Sujet non rédigé." }}</p>
     {% endif %}
@@ -63,7 +102,24 @@
           {% if quiz.sheet_pdf %}Régénérer les documents{% else %}Générer le sujet et les copies{% endif %}</button></p>
       </form>
       {% endif %}
-      {% if quiz.sheet_pdf %}
+      {% if documents_matieres %}
+      {# écrit en matières : le sujet, les copies et la liste de chaque séance #}
+      {% for d in documents_matieres %}
+      <h3 class="documents__matiere" dir="auto">{{ d.nom }}</h3>
+      <div class="documents">
+        <a class="document" href="{{ d.sujet_url }}" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>
+          <span><b>Sujet</b><small>énoncé à distribuer (non scanné)</small></span></a>
+        <a class="document" href="{{ d.copies_url }}" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>
+          <span><b>Copies</b><small>{{ quiz.layout_json.nb_copies }} copie{{ quiz.layout_json.nb_copies|pluralize }}, soit {{ d.nb_pages }} page{{ d.nb_pages|pluralize }} dans le PDF{% if quiz.copies_nominatives or quiz.id_mode == "qr" %}, salle par salle{% endif %}</small></span></a>
+        <a class="document" href="{% url 'quiz_emargement_pdf' quiz.pk %}?matiere={{ d.order }}" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="M15 16l1.5 1.5L19 15"/></svg>
+          <span><b>Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }} par salle</b><small>pour la signature de présence à cette séance</small></span></a>
+      </div>
+      {% endfor %}
+      <span class="helptext">Copies de chaque matière : {% if quiz.layout_json.format == "a3" %}page de garde + {{ quiz.layout_json.pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à plier au milieu{% else %}{% with n=quiz.layout_json.pages_redaction %}page de garde{% if n %} + {{ n }} page{{ n|pluralize }} lignée{{ n|pluralize }}{% endif %}{% if quiz.layout_json.pages_blanches %} + 1 page blanche au dos de la dernière feuille{% endif %}, en A4 à 100 %, recto-verso sur le bord long{% endwith %}{% endif %}. La page de garde porte le nom de la matière.</span>
+      {% elif quiz.sheet_pdf %}
       <div class="documents">
         {% if quiz.subject_pdf %}<a class="document" href="{{ quiz.subject_pdf.url }}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>
@@ -78,7 +134,7 @@
           <span><b>Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% if quiz.place_anonyme %} et des places{% endif %} par salle</b><small>une liste par salle, dans l'ordre des copies{% if quiz.place_anonyme %}, n° de place et nom{% endif %}, pour la signature de présence</small></span></a>
       </div>
       {% else %}<p class="helptext">Enregistrez le sujet puis générez les documents.</p>{% endif %}
-      <span class="helptext">Seule la page de garde est lue ; les pages lignées scannées avec elle (au dos, en recto-verso) sont ignorées.
+      <span class="helptext">Seule la page de garde est lue ; les pages lignées scannées avec elle (au dos, en recto-verso) sont ignorées.{% if matieres %} Les copies de toutes les matières peuvent passer ensemble : la page de garde dit sa matière.{% endif %}
         {% if quiz.layout_json.format == "a3" %}Copies A3 : passez les feuilles dépliées, en format A3 et recto seul (le verso n'est pas lu).{% endif %}
         {% if quiz.id_mode == "sticker" or quiz.id_mode == "grid" %}Chaque étudiant colle son étiquette QR sur la page de garde{% if quiz.id_mode == "grid" %} ou noircit son n° d'inscription{% endif %}.{% endif %}</span>
     </div>

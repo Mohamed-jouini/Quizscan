@@ -13,6 +13,7 @@ copies notées, moyenne et admis ; faux : pages Concours et Classes, avec candid
       <div class="groupe__nom">
         <h3 class="groupe__titre"><a href="{% if resultats %}{% url 'quiz_parcours' g.racine.pk %}{% else %}{% url 'quiz_detail' g.racine.pk %}{% endif %}">{{ g.titre }}</a></h3>
         <span class="badge grey">{{ g.etapes|length }} étapes</span>
+        {% if g.racine.annee %}<span class="badge info">{{ g.racine.get_annee_display }}</span>{% endif %}
         {% if not g.concours %}<span class="groupe__classe">{{ g.racine.class_group.name }}</span>{% endif %}
       </div>
       <a class="btn small{% if not resultats %} secondary{% endif %}" href="{% url 'quiz_parcours' g.racine.pk %}">Résultats du concours</a>
@@ -41,6 +42,7 @@ copies notées, moyenne et admis ; faux : pages Concours et Classes, avec candid
       <div class="groupe__nom">
         <h3 class="groupe__titre"><a class="carte-bouton__lien" href="{% if resultats %}{% url 'quiz_results' e.quiz.pk %}{% else %}{% url 'quiz_detail' e.quiz.pk %}{% endif %}">{{ g.titre }}</a></h3>
         <span class="badge grey">{{ e.quiz.type_court }}</span>
+        {% if e.quiz.annee %}<span class="badge info">{{ e.quiz.get_annee_display }}</span>{% endif %}
         {% if not g.concours %}<span class="groupe__classe">{{ e.quiz.class_group.name }}</span>{% endif %}
       </div>
     </header>

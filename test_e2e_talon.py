@@ -116,6 +116,8 @@ def main():
     codes = quiz.layout_json["codes"]
     assert sorted(codes) == sorted(str(pk) for pk in groupe.students.values_list("pk", flat=True))
     assert len(set(codes.values())) == len(codes), codes
+    # épreuve sans année (de classe) : jamais X ni Y en tête, lettres des années de concours
+    assert not any(code[0] in "XY" for code in codes.values()), codes
     qx, qy, qw, qh = quiz.layout_json["pages"][0]["qr"]["rect"]
     forme = re.compile(f"[{qr_mod.ALPHABET_CODE}]{{3}}-[{qr_mod.ALPHABET_CODE}]{{3}}")
     for k, (nom, _, _) in enumerate(ETUDIANTS):
@@ -136,6 +138,35 @@ def main():
     assert "Code " not in sans_code and "le code de la copie" not in sans_code \
         and "reste identifiée par son QR" in sans_code, sans_code
     print("  code d'anonymat : le même sur le talon et sous le QR, un par copie OK")
+
+    # ---- l'établissement en haut des copies (13 novembre 2026 : le logiciel est fait pour
+    # المعهد الأعلى للمحاماة) : sur le talon, au milieu de la ligne du nom, et dans la bande,
+    # au-dessus du titre, qui reste sur la copie talon découpé ; en-tête vide : l'institut
+    amri_t = groupe.students.get(last_name="AMRI")
+    dessines = []
+    with mock.patch.object(sheet_pdf, "shape",
+                           side_effect=lambda t: dessines.append(t) or shape(t)):
+        sheet_pdf.generate_sheet_pdf(quiz, quiz.layout_json, students=[amri_t])
+    assert dessines.count(sheet_pdf.INSTITUT) == 2, dessines
+    quiz.entete = "Ministère de la Justice\n" + "Institut supérieur de la profession d'avocat"
+    page_e = pymupdf.open(stream=sheet_pdf.generate_sheet_pdf(
+        quiz, quiz.layout_json, students=[amri_t]), filetype="pdf")[0]
+    etab = sorted(page_e.search_for("Institut supérieur de la profession d'avocat"), key=lambda r: r.y0)
+    bx, by, bw, bh = quiz.layout_json["pages"][0]["qr"]["band"]
+    titre_bande = [r for r in page_e.search_for(quiz.title) if by <= r.y0 / PT_PAR_MM <= by + bh]
+    assert len(etab) == 2 and etab[0].y1 / PT_PAR_MM < L.TALON_COUPE, etab
+    assert by < etab[1].y0 / PT_PAR_MM and etab[1].y1 <= titre_bande[0].y0, (etab, titre_bande)
+    assert "Ministère de la Justice" not in page_e.get_text(), "une ligne : l'établissement"
+    # empreinte : l'institut, écrit ou non, ne change rien ; un autre établissement, si
+    quiz.entete = ""
+    vide = L.layout_signature(quiz)
+    quiz.entete = sheet_pdf.ENTETE_INSTITUT
+    assert L.layout_signature(quiz) == vide
+    quiz.entete = "Institut supérieur de la profession d'avocat"
+    assert L.layout_signature(quiz) != vide, "établissement changé : copies à régénérer"
+    quiz.entete = ""
+    print("  établissement : sur le talon et dans la bande, au-dessus du titre (l'institut "
+          "par défaut, sinon la dernière ligne de l'en-tête) OK")
 
     # ---- sous le n° : la CIN et la salle de la fiche du registre (5 novembre 2026)
     Inscrit.objects.filter(numero="TAL104501").delete()
@@ -224,7 +255,7 @@ def main():
 
     # ---- concours : copies nominatives à talon (et non fiches anonymes)
     r = c.post(reverse("quiz_create") + "?concours=1", {
-        "title": "Concours talon", "type_epreuve": "qcm", "language": "fr",
+        "title": "Concours talon", "type_epreuve": "qcm", "annee": "1", "language": "fr",
         "sheet_mode": "grid", "id_mode": "sticker", "id_digits": "6",
         "anonymat": "talon", "grading_mode": "immediate", "wrong_penalty": "0"})
     assert r.status_code == 302, r.context["form"].errors
@@ -238,7 +269,10 @@ def main():
     concours.refresh_from_db()
     doc = pymupdf.open(stream=open(concours.sheet_pdf.path, "rb").read(), filetype="pdf")
     assert len(doc) == 2 and "AMRI" in doc[0].get_text() and "BAKIR" in doc[1].get_text()
-    print("  concours : une copie à talon par candidat OK")
+    # concours de 1re année (13 novembre 2026) : chaque code commence par X
+    assert concours.annee == "1" and len(concours.layout_json["codes"]) == 2
+    assert all(code[0] == "X" for code in concours.layout_json["codes"].values())
+    print("  concours : une copie à talon par candidat, codes en X (1re année) OK")
 
     # ---- épreuve écrite à talon : la note lue, talon découpé
     r = c.post(reverse("quiz_create"), {
@@ -410,6 +444,21 @@ def main():
     print("  écrit nominatif : nom, n° et QR sur la page de garde seulement, rien sur les pages "
           "lignées (page 3, recto de la 2e feuille, comprise) ; les 2 pages lignées demandées, "
           "puis le dos de la 2e feuille blanc OK")
+    # sans talon : l'établissement dans le coin haut du cadre, du côté où s'écrit sa langue,
+    # loin des tirets du code de page (au centre, lus)
+    nominatif.entete = "Institut supérieur de la profession d'avocat"
+    page_n = pymupdf.open(stream=sheet_pdf.generate_sheet_pdf(
+        nominatif, nominatif.layout_json, students=[amri]), filetype="pdf")[0]
+    coin = page_n.search_for("Institut supérieur de la profession d'avocat")
+    assert len(coin) == 1 and coin[0].y1 / PT_PAR_MM < 20, coin
+    assert coin[0].x1 / PT_PAR_MM < L.code_cases()[0][0] - 4, coin
+    nominatif.entete = ""
+    dessines = []
+    with mock.patch.object(sheet_pdf, "shape",
+                           side_effect=lambda t: dessines.append(t) or shape(t)):
+        sheet_pdf.generate_sheet_pdf(nominatif, nominatif.layout_json, students=[amri])
+    assert dessines.count(sheet_pdf.INSTITUT) == 1, dessines
+    print("  sans talon : l'établissement dans le coin haut du cadre, loin du code de page OK")
     # de même à talon : talon, code d'anonymat et QR sur la page de garde seulement
     longue = Quiz.objects.create(title="Rédaction talon longue", class_group=groupe, owner=prof,
                                  type_epreuve="ecrit", language="fr", id_mode="qr",
@@ -468,7 +517,7 @@ def main():
     assert nb_pages(concours) == 2, "QCM à talon : le nombre demandé ne compte pas"
 
     r = c.post(reverse("quiz_create") + "?concours=1", {
-        "title": "Écrit concours talon", "type_epreuve": "ecrit", "language": "fr",
+        "title": "Écrit concours talon", "type_epreuve": "ecrit", "annee": "2", "language": "fr",
         "note_sur": "20", "sheet_mode": "grid", "id_mode": "sticker", "id_digits": "6",
         "anonymat": "talon", "grading_mode": "immediate", "wrong_penalty": "0"})
     assert r.status_code == 302, r.context["form"].errors
@@ -501,6 +550,7 @@ def main():
     codes_apres = ecrit_c.layout_json["codes"]
     assert len(codes_avant) == 2 and codes_avant.items() <= codes_apres.items(), codes_apres
     assert codes_apres[str(ajoute.pk)] not in codes_avant.values(), codes_apres
+    assert all(code[0] == "Y" for code in codes_apres.values()), "2e année : en Y"
 
     # ancien concours en « qr », sans talon : là, le nombre demandé est respecté
     anonymes = Quiz.objects.create(title="Fiches anonymes", class_group=ecrit_c.class_group,

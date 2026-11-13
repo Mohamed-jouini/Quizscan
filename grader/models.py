@@ -271,6 +271,23 @@ class Quiz(models.Model):
                   "l'étiquette). La fiche concours ne demande aucune écriture au "
                   "candidat ; importez ensuite une liste « numéro;NOM;Prénom » "
                   "pour attacher les noms officiels aux numéros.")
+    # Moyenne finale d'un concours (المعدل النهائي, demande de l'utilisateur, 13 novembre
+    # 2026) : la moyenne des notes sur 20 de ses étapes (QCM, écrit, oral), pondérée par ce
+    # coefficient de chacune ; réglé sur la page des résultats du concours.
+    coefficient_final = models.FloatField(
+        "coefficient dans la moyenne finale", default=1.0,
+        validators=[MinValueValidator(0), MaxValueValidator(99)],
+        help_text="Concours : poids de l'étape dans la moyenne finale (0 : elle n'y compte "
+                  "pas).")
+    # Année d'un concours de l'institut, choisie à sa création (demande de l'utilisateur,
+    # 13 novembre 2026) et commune à ses étapes. Le code d'anonymat des copies à talon
+    # commence par X en 1re année, par Y en 2e (qr.premiere_lettre). Vide : épreuve de
+    # classe, ou concours créé avant ce choix.
+    ANNEES = [("1", "السنة الأولى"), ("2", "السنة الثانية")]
+    annee = models.CharField(
+        "année", max_length=1, choices=ANNEES, blank=True, default="",
+        help_text="Concours : 1re ou 2e année. Le code d'anonymat des copies à talon "
+                  "commence par X en 1re année, par Y en 2e.")
     language = models.CharField(
         "langue du questionnaire", max_length=2, choices=LANGUAGES, default="fr",
         help_text="Détermine la langue de la fiche de réponses (sens d'écriture, "
@@ -350,7 +367,18 @@ class Quiz(models.Model):
 
     @property
     def max_score(self):
+        if self.matieres:
+            return self.note_sur        # moyenne pondérée des matières, sur le barème
         return sum(q.points for q in self.questions.all())
+
+    @property
+    def matieres(self):
+        """Écrit ou oral en plusieurs matières (13 novembre 2026) : ses questions notées, une
+        par matière, dans l'ordre. Liste vide pour une épreuve d'une seule note, et au QCM."""
+        if self.type_epreuve not in ("ecrit", "oral") or not self.pk:
+            return []
+        notees = list(self.questions.filter(qtype="open").order_by("order"))
+        return notees if len(notees) > 1 else []
 
     @property
     def est_qcm(self):
@@ -450,6 +478,21 @@ class Question(models.Model):
         validators=[MinValueValidator(10), MaxValueValidator(MAX_OPEN_HEIGHT_MM)],
         help_text=f"10 à {MAX_OPEN_HEIGHT_MM} mm (une zone plus haute ne "
                   "tiendrait pas sur une page A4).")
+    # Écrit en plusieurs matières (demande de l'utilisateur, 13 novembre 2026 : à l'écrit
+    # d'un concours, قانون مدني، قانون جزائي، الحريات الأساسية) : chaque matière est une
+    # question notée de l'épreuve, son intitulé est le nom de la matière. Elle a sa page de
+    # garde, son sujet, sa durée et sa date ; la note de l'écrit est la moyenne des
+    # matières pondérée par leurs coefficients (services.compute_results).
+    coefficient = models.FloatField(
+        "coefficient", default=1.0,
+        validators=[MinValueValidator(0.1), MaxValueValidator(99)],
+        help_text="Écrit en matières : poids de la matière dans la moyenne de l'écrit.")
+    sujet = models.TextField(
+        "énoncé du sujet", blank=True,
+        help_text="Écrit en matières : le sujet de la matière. Une ligne vide sépare "
+                  "deux paragraphes.")
+    duree = models.CharField("durée", max_length=60, blank=True)
+    date_epreuve = models.DateField("date", null=True, blank=True)
 
     class Meta:
         verbose_name = "question"

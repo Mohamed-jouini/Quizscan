@@ -157,8 +157,16 @@ def layout_signature(quiz):
                        q.num_bubbles, q.points, q.open_height_mm]
                       for q in quiz.questions.order_by("order")],
     }
+    # l'établissement imprimé en haut des copies (13 novembre 2026), seulement s'il n'est pas
+    # l'institut, imprimé d'office : les empreintes des épreuves d'avant ne changent pas
+    from .sheet_pdf import INSTITUT, ligne_etablissement
+    if ligne_etablissement(quiz) != INSTITUT:
+        data["etablissement"] = ligne_etablissement(quiz)
     if getattr(quiz, "talon_nom", False):
         data["talon"] = True        # seulement si coché : empreintes inchangées
+        if getattr(quiz, "annee", ""):
+            # la première lettre des codes d'anonymat imprimés (X ou Y, 13 novembre 2026)
+            data["annee"] = quiz.annee
     if getattr(quiz, "copies_nominatives", False):
         # une copie par étudiant : un étudiant ajouté demande une régénération
         data["places"] = sorted(quiz.class_group.students.values_list("pk", flat=True))
@@ -589,40 +597,58 @@ def _build_ecrit_layout(quiz):
     observations ; pas de pages de rédaction."""
     oral = getattr(quiz, "type_epreuve", "qcm") == "oral"
     id_mode = "qr" if oral else getattr(quiz, "id_mode", "name")
-    page = {"page_index": 0, "name_boxes": _name_boxes(id_mode),
-            "qcm": [], "open": []}
-    if oral:
-        y = _add_qr_zone(page, 0, sticker=False)
-    elif id_mode == "grid":
-        y = _add_id_grid(page, 48.0, getattr(quiz, "id_digits", 6) or 6)
-        y = _add_qr_corner(page, y)
-    elif id_mode in ("qr", "sticker"):
-        y = _add_qr_zone(page, 0, sticker=_uses_sticker(quiz))
-    else:
-        y = NAME_BOXES_Y + NAME_BOX_H + 6.0
+
+    def page_de_garde(page_index, ordre):
+        """La page lue d'une copie : identification et grille de la note de la question
+        « ordre ». Retourne (page, ordonnée sous la grille)."""
+        page = {"page_index": page_index, "name_boxes": _name_boxes(id_mode),
+                "qcm": [], "open": []}
+        if oral:
+            y = _add_qr_zone(page, page_index, sticker=False)
+        elif id_mode == "grid":
+            y = _add_id_grid(page, 48.0, getattr(quiz, "id_digits", 6) or 6)
+            y = _add_qr_corner(page, y)
+        elif id_mode in ("qr", "sticker"):
+            y = _add_qr_zone(page, page_index, sticker=_uses_sticker(quiz))
+        else:
+            y = NAME_BOXES_Y + NAME_BOX_H + 6.0
+        ajouter = _add_note_grid_demi if note_par_demi_points(quiz) else _add_note_grid
+        return page, ajouter(page, y + 3.0, quiz.note_sur, ordre)
+
     note_q = quiz.questions.filter(qtype="open").order_by("order").first()
-    ajouter = _add_note_grid_demi if note_par_demi_points(quiz) else _add_note_grid
-    y = ajouter(page, y + 3.0, quiz.note_sur, note_q.order if note_q else 1)
     if oral:
+        page, y = page_de_garde(0, note_q.order if note_q else 1)
         page["lignes"] = {"y0": round(y + 16.0, 2), "y1": min(y + 16.0 + 6 * NOTE_LIGNE,
                                                               CONTENT_Y1),
                           "pas": NOTE_LIGNE, "titre": "observations"}
         return _checked({"mode": "oral", "num_choices": 0, "pages": [page],
                          "pages_redaction": 0})
+    # Écrit en matières (13 novembre 2026) : une page de garde par matière, chacune avec
+    # son code de page et la grille de sa note ; au scan, le code dit la matière. Chaque
+    # matière s'imprime à part (sheet_pdf, une page de garde à la fois).
+    matieres = getattr(quiz, "matieres", [])
+    notes = [(m.order, m.text) for m in matieres] or [(note_q.order if note_q else 1, "")]
+    pages, a3 = [], getattr(quiz, "format_impression", "a4") == "a3"
+    for k, (ordre, nom) in enumerate(notes):
+        page, y = page_de_garde(k, ordre)
+        if nom:
+            page["matiere"] = nom
+        # A3 : rien de ce qui est lu ne bouge par rapport à l'A4
+        page["lignes"] = (lignes_a3(round(y + 12.0, 2), getattr(quiz, "language", "fr")) if a3
+                          else {"y0": round(y + 12.0, 2), "y1": CONTENT_Y1, "pas": NOTE_LIGNE})
+        pages.append(page)
     n_lignees = int(getattr(quiz, "pages_redaction", 1) or 0)
-    if getattr(quiz, "format_impression", "a4") == "a3":
-        # Rien de ce qui est lu ne bouge par rapport à l'A4. Feuilles entières :
-        # 3 pages lignées sur la feuille de la page de garde, 4 sur une suivante.
-        page["lignes"] = lignes_a3(round(y + 12.0, 2), getattr(quiz, "language", "fr"))
-        return _checked({"mode": "ecrit", "num_choices": 0, "pages": [page], "format": "a3",
+    if a3:
+        # Feuilles entières : 3 pages lignées sur la feuille de la page de garde, 4 sur
+        # une suivante.
+        return _checked({"mode": "ecrit", "num_choices": 0, "pages": pages, "format": "a3",
                          "pages_redaction": (n_lignees + 4) // 4 * 4 - 1})
-    page["lignes"] = {"y0": round(y + 12.0, 2), "y1": CONTENT_Y1, "pas": NOTE_LIGNE}
     # A4 : des feuilles entières aussi (demande de l'utilisateur, 6 novembre 2026). Avec un
     # nombre impair de pages par copie, imprimée en recto-verso, la page de garde de la
     # copie suivante tombait au dos de la dernière page. Les pages lignées sont celles
     # demandées (13 novembre 2026 : une de plus était ajoutée, 4 en donnaient 5) ; le dos
     # de la dernière feuille reste blanc s'il le faut.
-    return _checked({"mode": "ecrit", "num_choices": 0, "pages": [page],
+    return _checked({"mode": "ecrit", "num_choices": 0, "pages": pages,
                      "pages_redaction": n_lignees,
                      "pages_blanches": pages_blanches_a4(n_lignees)})
 

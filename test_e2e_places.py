@@ -173,7 +173,7 @@ def main():
 
     # ---- concours et écrit : mêmes copies anonymes
     r = c.post(reverse("quiz_create") + "?concours=1", {
-        "title": "Concours places", "type_epreuve": "qcm", "language": "fr",
+        "title": "Concours places", "type_epreuve": "qcm", "annee": "1", "language": "fr",
         "sheet_mode": "grid", "id_mode": "sticker", "id_digits": "6",
         "anonymat": "place", "grading_mode": "immediate", "wrong_penalty": "0"})
     assert r.status_code == 302, r.context["form"].errors

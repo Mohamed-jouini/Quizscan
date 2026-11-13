@@ -44,7 +44,7 @@ def main():
     r = c.get("/quiz/nouveau/?concours=1")
     fields = set(r.context["form"].fields)
     # entete / duree : cartouche du sujet (affichés en mode « sujet séparé »)
-    assert fields == {"title", "type_epreuve", "epreuve_precedente", "anonymat", "note_sur", "language", "sheet_mode", "entete", "duree", "date_epreuve",
+    assert fields == {"title", "annee", "type_epreuve", "epreuve_precedente", "anonymat", "note_sur", "language", "sheet_mode", "entete", "duree", "date_epreuve",
                       "id_mode", "id_digits", "grading_mode", "wrong_penalty"}, fields
     modes = [m for m, _ in r.context["form"].fields["id_mode"].choices]
     assert modes == ["grid", "sticker"], modes
@@ -53,7 +53,7 @@ def main():
                    "concours : créé automatiquement"):
         assert absent not in html, absent
     r = c.post("/quiz/nouveau/?concours=1", {
-        "title": "Concours d'entrée 2026", "language": "ar", "sheet_mode": "split",
+        "title": "Concours d'entrée 2026", "annee": "2", "language": "ar", "sheet_mode": "split",
         "id_mode": "sticker", "id_digits": 6, "grading_mode": "immediate",
         "wrong_penalty": 0})
     assert r.status_code == 302, r.context["form"].errors

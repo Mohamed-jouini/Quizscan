@@ -33,18 +33,22 @@ def notes_orales_workbook(quiz, lignes):
 
     En arabe, la feuille de droite à gauche, avec le n° de CIN du registre (demande de
     l'utilisateur, 13 novembre 2026). Le CIN aide le jury à reconnaître le candidat ;
-    l'import le retrouve par son n° d'inscription."""
+    l'import le retrouve par son n° d'inscription. Oral en matières (même jour) : une
+    colonne par matière, à son nom, que l'import reconnaît."""
     wb = Workbook()
     ws = wb.active
     ws.title = "أعداد الشفاهي"
     ws.sheet_view.rightToLeft = True
     sur = f"{quiz.note_sur:g}"
     qui = "مترشح" if quiz.auto_enroll else "طالب"
-    entetes = ["رقم التسجيل", "الاسم", "اللقب", "رقم بطاقة التعريف الوطنية", f"العدد / {sur}"]
+    matieres = quiz.matieres
+    notes = [f"{m.text} / {sur}" for m in matieres] or [f"العدد / {sur}"]
+    entetes = ["رقم التسجيل", "الاسم", "اللقب", "رقم بطاقة التعريف الوطنية"] + notes
     # le titre de l'épreuve seul sur sa ligne : il peut être en français, et une ligne
     # mêlant les deux sens d'écriture se lit mal
     ws.append(_sans_formule([quiz.title]))
-    ws.append([f"أعداد الاختبار الشفاهي على {sur}: اكتب عدد كل {qui} في العمود الأخير "
+    ou = "في عمود كل مادة" if matieres else "في العمود الأخير"
+    ws.append([f"أعداد الاختبار الشفاهي على {sur}: اكتب عدد كل {qui} {ou} "
                f"(من 0 إلى {sur}، والكسر بعد فاصل)، واترك الخانة فارغة للغائب، ثم استورد "
                "هذا الملف في صفحة الاختبار."])
     for ligne in (1, 2):
@@ -60,13 +64,14 @@ def notes_orales_workbook(quiz, lignes):
         cellule.font = Font(bold=True, color="FFFFFF")
         cellule.fill = fond
         cellule.alignment = Alignment(horizontal="center", vertical="center")
-    for etudiant, _, reponse in lignes:
-        note = reponse.points_awarded if reponse is not None else None
+    for etudiant, _, reponses in lignes:
         ws.append(_sans_formule([etudiant.student_number or "", etudiant.first_name,
-                                 etudiant.last_name, etudiant.cin or None, note]))
+                                 etudiant.last_name, etudiant.cin or None]
+                                + [r.points_awarded if r is not None else None
+                                   for r in reponses]))
         for col in (1, 4):                         # n° et CIN : zéros de tête gardés
             ws.cell(row=ws.max_row, column=col).number_format = "@"
-    for i, largeur in enumerate([16, 20, 22, 27, 12], start=1):
+    for i, largeur in enumerate([16, 20, 22, 27] + [12] * len(notes), start=1):
         ws.column_dimensions[get_column_letter(i)].width = largeur
     ws.freeze_panes = "A4"
     buf = io.BytesIO()
@@ -131,6 +136,9 @@ def results_workbook(quiz, rows, stats=None, admission=None):
                "Questions non lues"]
     if admission:
         headers.append("Résultat")
+    # écrit en matières (13 novembre 2026) : la note de chacune ; « Note » est leur moyenne
+    matieres = quiz.matieres
+    headers += [f"{m.text} (coef. {m.coefficient:g})" for m in matieres]
     ws.append([f"{quiz.title} — {quiz.class_group.name}"])
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
     ws["A1"].font = Font(bold=True, size=13)
@@ -150,6 +158,7 @@ def results_workbook(quiz, rows, stats=None, admission=None):
                  r["note20"] if qcm else r["pct"] / 100, r["questions_manquantes"]]
         if admission:
             ligne.append(RESULTAT.get(r.get("resultat"), ""))
+        ligne += list(r.get("notes_matieres") or [])
         ws.append(_sans_formule(ligne))
         ws.cell(row=ws.max_row, column=11).number_format = "0.00" if qcm else "0%"
 
@@ -251,7 +260,7 @@ def parcours_workbook(parcours):
         headers += [f"{q.title} — {'points' if q.est_qcm else 'note'}",
                     f"{q.title} — {'note sur 20' if q.est_qcm else '%'}",
                     f"{q.title} — résultat"]
-    headers.append("Résultat final")
+    headers += ["Moyenne finale (/20)", "Résultat final"]    # المعدل النهائي
     ws.append([" → ".join(q.title for q in epreuves)])
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
     ws["A1"].font = Font(bold=True, size=13)
@@ -274,12 +283,12 @@ def parcours_workbook(parcours):
                 ligne += [None, None, "Non noté"]
             else:
                 ligne += [None, None, "Non convoqué"]
-        ligne.append(c["final"])
+        ligne += [c.get("moyenne_finale"), c["final"]]
         ws.append(_sans_formule(ligne))
         for k, q in enumerate(epreuves):
             ws.cell(row=ws.max_row, column=5 + 3 * k).number_format = \
                 "0.00" if q.est_qcm else "0%"
-    for i, largeur in enumerate([18, 22, 14] + [11, 8, 13] * len(epreuves) + [34],
+    for i, largeur in enumerate([18, 22, 14] + [11, 8, 13] * len(epreuves) + [12, 34],
                                 start=1):
         ws.column_dimensions[get_column_letter(i)].width = largeur
     ws.freeze_panes = "D3"

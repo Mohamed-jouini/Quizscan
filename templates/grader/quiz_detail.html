@@ -7,6 +7,7 @@
       <span class="badge info">Épreuve QCM</span>
       {% if fil.intitule %}<span>{{ fil.intitule }}</span>{% endif %}
       <span class="badge grey">{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %}</span>
+      {% if quiz.annee %}<span class="badge grey">{{ quiz.get_annee_display }}</span>{% endif %}
       <span class="badge grey">{{ quiz.get_language_display }}</span>
       Barème total : <b>{{ quiz.max_score|floatformat:"-2" }} points</b>
       {% if quiz.wrong_penalty %} — pénalité {{ quiz.wrong_penalty }} pt / faute{% endif %}
@@ -38,6 +39,17 @@
     <input id="id_title_reglages" class="champ--titre" type="text" name="title"
            maxlength="200" required value="{{ quiz.title }}">
   </div>
+  {% if quiz.auto_enroll %}
+  <div class="reglages__large">
+    <div class="radios">
+      <label>Année</label>
+      {% for val, libelle in quiz.ANNEES %}
+      <label><input type="radio" name="annee" value="{{ val }}" {% if quiz.annee == val %}checked{% endif %}> {{ libelle }}</label>
+      {% endfor %}
+    </div>
+    <span class="helptext helptext--serre">Vaut pour toutes les étapes du concours. Le code d'anonymat des copies à talon commence toujours par X en 1re année, par Y en 2e.</span>
+  </div>
+  {% endif %}
   <div class="reglages__large">
     <label>Type de fiche</label>
     <select name="sheet_mode">
@@ -93,7 +105,7 @@
   <div class="reglages__large">
     <label for="id_entete">En-tête du sujet</label>
     <textarea id="id_entete" class="champ--entete" name="entete" rows="3"
-              placeholder="Vide : en-tête de l'institut. Sinon, une ligne par ligne : ministère, établissement…">{{ quiz.entete }}</textarea>
+              placeholder="Vide : en-tête de l'institut. Sinon, une ligne par ligne : ministère, établissement… (la dernière ligne est aussi imprimée en haut des copies)">{{ quiz.entete }}</textarea>
   </div>
   <div>
     <label for="id_duree">Durée de l'épreuve</label>

@@ -632,6 +632,7 @@ def quiz_create(request):
             # le titre part de celui du concours : « jhjh — oral », pas « jhjh — écrit — oral »
             racine = services.chaine_epreuves(prec, _my_quizzes(request))[0]
             initial = {"epreuve_precedente": prec.pk, "language": prec.language,
+                       "annee": prec.annee,         # l'année du concours (13 novembre 2026)
                        "type_epreuve": request.GET.get("type", "ecrit"),
                        "note_sur": 20, "entete": prec.entete,
                        "title": f"{racine.title} — "
@@ -665,7 +666,15 @@ def quiz_create(request):
         quiz.save()
         if not quiz.est_qcm:
             services.question_note(quiz)       # la question qui porte la note
+        if is_concours and quiz.type_epreuve == "ecrit":
+            # l'écrit d'un concours : ses trois matières (13 novembre 2026)
+            services.creer_matieres(quiz)
+        elif is_concours and quiz.type_epreuve == "oral" and quiz.annee in services.MATIERES_ORAL:
+            # l'oral : trois notes en 1re année, deux en 2e (même jour)
+            services.creer_matieres(quiz, services.MATIERES_ORAL[quiz.annee])
         if precedente is not None:
+            if quiz.annee:      # une seule année pour tout le concours, étapes d'avant comprises
+                services.changer_annee(quiz, quiz.annee)
             ajoutes, _, n_admis = services.faire_passer_admis(quiz)
             messages.success(request, f"{ajoutes} admis de « {precedente.title} » "
                                       "ajoutés aux candidats de cette épreuve.")
@@ -1093,10 +1102,16 @@ def quiz_detail(request, pk):
             new_grading = request.POST.get("grading_mode")
             if quiz.auto_enroll and new_grading in dict(Quiz.GRADING_MODES):
                 quiz.grading_mode = new_grading
+            # année du concours (13 novembre 2026) : absente du formulaire, elle reste
+            ancienne_annee = quiz.annee
+            if quiz.auto_enroll and request.POST.get("annee") in dict(Quiz.ANNEES):
+                quiz.annee = request.POST["annee"]
             quiz.save(update_fields=["wrong_penalty", "sheet_mode", "grading_mode",
                                      "id_mode", "id_digits", "entete", "duree", "date_epreuve",
                                      "note_admission", "talon_nom", "place_anonyme",
-                                     "format_impression"])
+                                     "format_impression", "annee"])
+            if quiz.annee != ancienne_annee:
+                services.changer_annee(quiz, quiz.annee)        # toutes les étapes
             # Le cartouche et le format ne concernent que le sujet, jamais scanné : on
             # le refait tout de suite, sans toucher à la feuille de réponses.
             if (quiz.entete, quiz.duree, quiz.date_epreuve, quiz.format_impression) != ancien_sujet:
@@ -1635,9 +1650,19 @@ def quiz_results(request, pk):
     # Les statistiques portent sur toutes les copies ("rows") ; seul le
     # tableau des notes est paginé ("rows_page"), un concours pouvant
     # compter des milliers de candidats.
+    # écrit en matières (13 novembre 2026) : une colonne par matière, et chaque copie
+    # nommée par la sienne (sa page de garde)
+    matieres = quiz.matieres
+    rows_page = _page(request, trouves, PAGE_RESULTATS)
+    if matieres:
+        for r in rows_page:
+            for s in r["sheets"]:
+                s.libelle = (matieres[s.page_index].text
+                             if 0 <= (s.page_index or 0) < len(matieres) else "")
     return render(request, "grader/results.html", {
         "fil": services.fil_etapes(quiz, _my_quizzes(request)),
-        "quiz": quiz, "rows": rows, "rows_page": _page(request, trouves, PAGE_RESULTATS),
+        "matieres": matieres,
+        "quiz": quiz, "rows": rows, "rows_page": rows_page,
         "rows_total": len(rows), "batch": batch,
         "recherche": recherche, "n_trouves": len(trouves),
         # conservés dans les liens de pagination : lot et recherche
@@ -1694,6 +1719,27 @@ def quiz_parcours(request, pk):
     chaque candidat, épreuve par épreuve, et son résultat final."""
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     chaine = services.chaine_epreuves(quiz, _my_quizzes(request))
+    if request.method == "POST" and "coefficients" in request.POST:
+        # coefficients de la moyenne finale (المعدل النهائي, 13 novembre 2026)
+        droits.exiger(request.user, droits.CREER, "régler la moyenne finale")
+        valeurs = {}
+        for q in chaine:
+            brut = (request.POST.get(f"coef_{q.pk}") or "").strip().replace(",", ".")
+            try:
+                valeurs[q] = float(brut) if brut else q.coefficient_final
+            except ValueError:
+                valeurs[q] = None
+        if any(v is None or not 0 <= v <= 99 for v in valeurs.values()):
+            messages.error(request, "Coefficient invalide : de 0 à 99 pour chaque étape.")
+        elif not any(valeurs.values()):
+            messages.error(request, "Une étape au moins doit compter dans la moyenne finale.")
+        else:
+            for q, v in valeurs.items():
+                if q.coefficient_final != v:
+                    q.coefficient_final = v
+                    q.save(update_fields=["coefficient_final"])
+            messages.success(request, "Coefficients de la moyenne finale enregistrés.")
+        return redirect("quiz_parcours", pk=pk)
     parcours = services.parcours_concours(chaine)
     if request.GET.get("format") == "xlsx":
         resp = HttpResponse(
@@ -1732,7 +1778,10 @@ def quiz_emargement_pdf(request, pk):
         if not lignes:
             messages.error(request, "Aucun étudiant dans la liste : ajoutez-les d'abord.")
             return redirect("quiz_detail", pk=pk)
-    resp = HttpResponse(bulletin_mod.generate_liste_emargement(quiz, lignes),
+    # écrit en matières : la liste de la séance d'une matière, à son nom (13 novembre 2026)
+    matiere = next((m.text for m in quiz.matieres
+                    if str(m.order) == request.GET.get("matiere")), "")
+    resp = HttpResponse(bulletin_mod.generate_liste_emargement(quiz, lignes, matiere),
                         content_type="application/pdf")
     resp["Content-Disposition"] = f'inline; filename="emargement_{quiz.pk}.pdf"'
     return resp

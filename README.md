@@ -593,6 +593,8 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_scanner.py` | sorties d'un scanner à chargeur : TIFF multipage lu en entier, versos blancs ignorés, étiquettes lues en noir et blanc, PDF à 600 dpi et image à 1200 dpi décodés réduits, JPEG piégés refusés sur leur en-tête |
 | `test_e2e_a3.py` | copies d'écrit et sujet de QCM en A3 recto-verso plié : ordre des pages, sans carrés noirs, page de garde lue sur la feuille A3 dans tous les sens, en-tête et QR de l'étudiant sur la page de garde seulement, A4 inchangé |
 | `test_e2e_talon.py` | copies à talon : nom seulement sur le talon, code d'anonymat identique sur le talon et sous le QR (un par copie, gardé à la régénération), copie lue talon découpé ou non, QR effacé retrouvé par son code, écrit à talon (talon et QR sur la page de garde seulement), PDF à 1200 dpi, copie d'une autre épreuve, génération en arrière-plan |
+| `test_e2e_annee.py` | année d'un concours (السنة الأولى / السنة الثانية) : choix obligatoire à la création, codes d'anonymat en X ou en Y au QCM et à l'écrit, année reprise par l'étape suivante et changée pour tout le concours |
+| `test_e2e_matieres.py` | écrit d'un concours en trois matières : réglages (noms, coefficients, sujets), sujet, copies et liste par salle de chaque matière, un seul envoi de scans, moyenne pondérée, note minimale, oral des admis, relevé et export par matière |
 | `test_e2e_import.py` | import de questionnaires et de candidats (Excel, Word, PDF, CSV), banque de questions |
 | `test_e2e_forms.py` | création d'un concours (sans classe ni case « mode concours ») et d'un quiz, nombre de choix par question jusqu'à la lecture de la copie |
 | `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » |
@@ -682,6 +684,45 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   affiche le code d'une copie identifiée. Pour une copie au QR illisible, taper le code lu
   sous le QR dans la recherche de « Affecter à » retrouve l'étudiant ; la recherche accepte
   aussi le nom ou le n° d'inscription.
+- Année d'un concours : à sa création, on choisit السنة الأولى ou السنة الثانية (obligatoire).
+  Le code d'anonymat des copies à talon, au QCM comme à l'écrit, commence alors toujours par
+  X en 1re année (« XWJ-V7J »), par Y en 2e. L'étape suivante (écrit, oral) reprend l'année
+  de la précédente ; changée dans les réglages d'une étape, elle vaut pour tout le concours,
+  et les copies à talon sont à régénérer : leurs codes changent de lettre. Sans année
+  (épreuve de classe, concours créé avant ce choix), un code ne commence jamais par X ni
+  par Y.
+- Écrit d'un concours en matières : il naît avec trois matières (قانون مدني، قانون جزائي،
+  الحريات الأساسية), chacune notée sur 20. Sur la page de l'écrit, chaque matière a son nom,
+  son coefficient, son sujet, sa durée et sa date ; on en ajoute ou en retire (une matière
+  déjà notée reste). Chaque matière a sa page de garde (à son nom, avec son propre code de
+  page), ses copies, son sujet et sa liste par salle, imprimés à part pour sa séance ; les
+  codes d'anonymat valent pour toutes. Les copies de toutes les matières peuvent passer au
+  scanner ensemble : la page de garde dit sa matière. La note de l'écrit est la moyenne des
+  matières pondérée par leurs coefficients, sur 20 ; la note minimale porte sur elle, et
+  l'oral reçoit ses admis. Une matière sans note compte pour 0 et le candidat reste « en
+  attente ». Résultats, relevés de notes et export Excel donnent la note de chaque matière.
+  Un écrit de classe garde une seule note ; un écrit de concours créé avant peut « passer en
+  trois matières ».
+- Moyenne finale (المعدل النهائي) : la page « Résultats du concours » donne, pour chaque
+  candidat noté à toutes les étapes, la moyenne de ses notes sur 20 (QCM, écrit, oral),
+  pondérée par un coefficient par étape (1 par défaut, réglé sur cette page ; 0 : l'étape
+  n'y compte pas). Elle classe les candidats d'un même résultat et figure dans les exports
+  Excel et PDF du concours ; l'espace public ne montre toujours que le verdict.
+- Oral d'un concours en plusieurs notes, selon l'année : trois en السنة الأولى (إ م ت، ن إج،
+  ق ت), deux en السنة الثانية (إ م ت، ن إج), créées avec l'oral. Sur sa page, chaque note a son
+  nom et son coefficient (on en ajoute ou en retire). Le modèle Excel a une colonne par note,
+  à son nom (« إ م ت / 20 ») ; l'import les reconnaît, une case vide est passée. La note de
+  l'oral est leur moyenne pondérée, sur 20 ; une note manquante compte 0 et le candidat
+  reste « en attente ». Un oral sans année (classe, concours d'avant) garde une seule note.
+- Établissement en haut des copies : QuizScan est fait pour المعهد الأعلى للمحاماة, dont le
+  nom s'imprime sur les copies, au QCM comme à l'écrit. Copie à talon : au milieu de la
+  ligne du nom sur le talon (s'il tient entre le nom et le n°), et dans la bande de la
+  copie, au-dessus du titre, qui reste une fois le talon découpé. Autres copies : en haut
+  du cadre, du côté où s'écrit sa langue, entre les tirets du code de page et les coins
+  (l'emplacement des anciens carrés noirs reste vide). C'est
+  la dernière ligne de l'« En-tête du sujet » (l'établissement), ou l'institut quand il
+  est vide ; un autre établissement demande de régénérer les copies. Rien de ce qui est lu
+  ne bouge.
 - Note d'un écrit, par demi-points (barème entier jusqu'à 20). Dans le cadre « réservé au
   correcteur », le correcteur écrit la note en clair et signe, puis noircit une case par
   ligne. La première ligne donne la partie entière, de 0 à 20 ; la seconde, la décimale,

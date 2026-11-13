@@ -30,6 +30,21 @@
   <span class="helptext helptext--serre">sur {{ parcours.candidats|length }} candidat{{ parcours.candidats|length|pluralize }}</span>
 </div>
 
+{# Moyenne finale (المعدل النهائي, 13 novembre 2026) : le coefficient de chaque étape #}
+<form class="card reglages" method="post" id="moyenne-finale">{% csrf_token %}
+  <h2>Moyenne finale <bdi lang="ar">(المعدل النهائي)</bdi></h2>
+  <p class="helptext helptext--serre">La moyenne des notes sur 20 de chaque étape, pondérée par ces coefficients, pour les candidats notés à toutes les étapes qui comptent (coefficient 0 : l'étape n'y compte pas). Elle classe les candidats d'un même résultat.</p>
+  <div class="matiere__tete">
+    {% for e in parcours.etapes %}
+    <div>
+      <label for="coef_{{ e.quiz.pk }}">Coefficient {{ e.quiz.type_court }}</label>
+      <input id="coef_{{ e.quiz.pk }}" class="champ--court" type="number" step="0.1" min="0" max="99" name="coef_{{ e.quiz.pk }}" value="{{ e.quiz.coefficient_final|stringformat:'g' }}"{% if not perms.grader.creer_epreuve %} disabled{% endif %}>
+    </div>
+    {% endfor %}
+  </div>
+  {% if perms.grader.creer_epreuve %}<p><button class="btn small" name="coefficients" value="1" type="submit">Enregistrer</button></p>{% endif %}
+</form>
+
 <div class="card" id="liste-candidats">
   {% include "grader/_recherche_liste.html" with ancre="liste-candidats" champ="id_q" sujet="candidat" n=n_trouves %}
   {% include "grader/_pagination.html" with page=candidats_page label="Candidats" querystring=querystring ancre="liste-candidats" %}
@@ -38,6 +53,7 @@
       <tr>
         <th>Candidat</th>
         {% for q in epreuves %}<th title="{{ q.title }}">{{ q.type_court }}</th>{% endfor %}
+        <th>Moyenne finale</th>
         <th>Résultat final</th>
       </tr>
       {% for c in candidats_page %}
@@ -55,10 +71,11 @@
           {% else %}<span class="helptext" title="Pas admis à l'étape précédente">— non convoqué</span>{% endif %}
         </td>
         {% endfor %}
+        <td>{% if c.moyenne_finale is not None %}<b class="score">{{ c.moyenne_finale|floatformat:"-2" }} / 20</b>{% else %}<span class="helptext">—</span>{% endif %}</td>
         <td><span class="badge {{ c.final_ton }}">{{ c.final }}</span></td>
       </tr>
       {% empty %}
-      <tr><td colspan="{{ epreuves|length|add:2 }}">{% if recherche %}Aucun candidat ne correspond à « {{ recherche }} ».{% else %}Aucun candidat pour le moment.{% endif %}</td></tr>
+      <tr><td colspan="{{ epreuves|length|add:3 }}">{% if recherche %}Aucun candidat ne correspond à « {{ recherche }} ».{% else %}Aucun candidat pour le moment.{% endif %}</td></tr>
       {% endfor %}
     </table>
   </div>

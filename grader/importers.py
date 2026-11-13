@@ -938,15 +938,36 @@ def _colonne_numero(entetes):
 _DECIMALE = str.maketrans({",": ".", "٫": ".", "،": "."})
 
 
-def notes_du_classeur(data, note_sur):
+def _colonnes_matieres(noms, matieres):
+    """{n° de la question: colonne} des matières d'un oral : l'en-tête de la colonne est le
+    nom de la matière, suivi ou non du barème (« إ م ت / 20 »). À deux noms possibles, le
+    plus long (« ق ت » plutôt que « ق »). None s'il en manque une."""
+    cles = {m.order: norm(m.text) for m in matieres}
+    colonnes = {}
+    for k, texte in enumerate(noms):
+        prises = [o for o, cle in cles.items()
+                  if cle and (texte == cle or texte.startswith(cle + " "))]
+        if prises:
+            ordre = max(prises, key=lambda o: len(cles[o]))
+            colonnes.setdefault(ordre, k)
+    return colonnes if len(colonnes) == len(cles) else None
+
+
+def notes_du_classeur(data, note_sur, matieres=None):
     """[(n° d'inscription, note)] d'un classeur aux colonnes « N° d'inscription » et
     « Note ». Une note vide est passée. Lève ImportError_ en nommant toutes les lignes
     fausses (note qui n'est pas un nombre de 0 au barème, n° vide ou en double) : rien
-    ne s'importe tant qu'il en reste une."""
+    ne s'importe tant qu'il en reste une.
+
+    matieres : oral en matières (13 novembre 2026), une colonne par matière, à son nom ;
+    retourne alors [(n° d'inscription, {n° de la question: note})], les cases vides en
+    moins."""
     from .inscriptions import numero_propre
     if len(data) > MAX_TAILLE_NOTES:
         raise ImportError_("Fichier trop gros pour une liste de notes (5 Mo au plus).")
     lignes = _xlsx_rows(data)
+    if matieres:
+        return _notes_par_matiere(lignes, note_sur, matieres)
     entete = None
     for i, ligne in enumerate(lignes[:15]):
         noms = [norm(c) for c in ligne]
@@ -980,6 +1001,60 @@ def notes_du_classeur(data, note_sur):
             continue
         vus.add(numero)
         notes.append((numero, round(valeur, 2)))
+    if erreurs:
+        reste = f" (et {len(erreurs) - 10} autre(s))" if len(erreurs) > 10 else ""
+        raise ImportError_("Aucune note importée, corrigez le fichier : "
+                           + " ; ".join(erreurs[:10]) + reste + ".")
+    return notes
+
+
+def _notes_par_matiere(lignes, note_sur, matieres):
+    """notes_du_classeur d'un oral en matières : mêmes règles, cellule par cellule."""
+    from .inscriptions import numero_propre
+    entete = None
+    for i, ligne in enumerate(lignes[:15]):
+        noms = [norm(c) for c in ligne]
+        col_numero = _colonne_numero(noms)
+        colonnes = _colonnes_matieres(noms, matieres)
+        if col_numero is not None and colonnes and col_numero not in colonnes.values():
+            entete = (i, col_numero, colonnes)
+            break
+    if entete is None:
+        raise ImportError_("Colonnes « N° d'inscription » et "
+                           + ", ".join(f"« {m.text} »" for m in matieres)
+                           + " introuvables : partez du modèle Excel de l'épreuve.")
+    debut, col_numero, colonnes = entete
+    noms_matieres = {m.order: m.text for m in matieres}
+    notes, erreurs, vus = [], [], set()
+    for ligne in lignes[debut + 1:]:
+        numero = numero_propre(ligne[col_numero] if col_numero < len(ligne) else "")
+        valeurs, fautes = {}, []
+        for ordre, col in colonnes.items():
+            brut = (ligne[col] if col < len(ligne) else "").strip()
+            if not brut:
+                continue                # pas (encore) de note dans cette matière
+            try:
+                valeur = float(chiffres_latins(brut).translate(_DECIMALE))
+            except ValueError:
+                valeur = None
+            if valeur is None or not 0 <= valeur <= note_sur:
+                fautes.append(f"« {brut} » en {noms_matieres[ordre]} n'est pas une note de 0 "
+                              f"à {note_sur:g}")
+            else:
+                valeurs[ordre] = round(valeur, 2)
+        if not valeurs and not fautes:
+            continue
+        if not numero:
+            erreurs.append("des notes sans n° d'inscription")
+            continue
+        if fautes:
+            erreurs.extend(f"n° {numero} : {f}" for f in fautes)
+            continue
+        if numero in vus:
+            erreurs.append(f"n° {numero} : deux fois dans le fichier")
+            continue
+        vus.add(numero)
+        notes.append((numero, valeurs))
     if erreurs:
         reste = f" (et {len(erreurs) - 10} autre(s))" if len(erreurs) > 10 else ""
         raise ImportError_("Aucune note importée, corrigez le fichier : "

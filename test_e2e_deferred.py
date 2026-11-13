@@ -49,7 +49,7 @@ def main():
     c.force_login(teacher)
 
     r = c.post("/quiz/nouveau/?concours=1", {
-        "title": "Concours après scan", "language": "fr", "sheet_mode": "grid",
+        "title": "Concours après scan", "annee": "1", "language": "fr", "sheet_mode": "grid",
         "id_mode": "sticker", "id_digits": 6, "grading_mode": "deferred",
         "wrong_penalty": 0})
     assert r.status_code == 302, r.context["form"].errors

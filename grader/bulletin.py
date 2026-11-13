@@ -102,6 +102,7 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
     X0, X1 = 22.0, 188.0
+    matieres = quiz.matieres
 
     for r in rows:
         s = r["student"]
@@ -142,7 +143,8 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
         if r["pending_open"]:
             resume += f" — {r['pending_open']} manuscrite(s) non corrigée(s)"
         if r["questions_manquantes"]:
-            resume += f" — {r['questions_manquantes']} question(s) non lue(s)"
+            resume += (f" — {r['questions_manquantes']} matière(s) sans note" if matieres
+                       else f" — {r['questions_manquantes']} question(s) non lue(s)")
         _draw(c, resume, X1, 62.0, 9.5, align="right", gray=0.25)
         texte, couleur = _ligne_resultat(quiz, r, admission)
         if texte:
@@ -152,6 +154,24 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
             _draw(c, f"note minimale {admission['seuil']:g} / {r['max_score']:g}",
                   X1, 72.5, 8, align="right", gray=0.45)
 
+        # Écrit en matières (13 novembre 2026) : la note de chacune, et son coefficient ;
+        # la note ci-dessus est leur moyenne pondérée
+        if matieres:
+            y = 82.0
+            for h, x in zip(("Matière", "Coefficient", "Note"), (X0, X0 + 100, X0 + 132)):
+                _draw(c, h, x, y, 8.5, bold=True, gray=0.35)
+            c.setLineWidth(0.4)
+            c.line(X0 * mm, _y(y + 2.0), X1 * mm, _y(y + 2.0))
+            y += 8.0
+            for m, note in zip(matieres, r.get("notes_matieres") or [None] * len(matieres)):
+                nom, corps = m.text, 10
+                while corps > 7 and text_width_pt(nom, corps, True) > 96 * mm:
+                    corps -= 0.5
+                _draw(c, nom, X0, y, corps, bold=True)
+                _draw(c, f"{m.coefficient:g}", X0 + 100, y, 10)
+                _draw(c, "—" if note is None else f"{note:g} / {m.points:g}", X0 + 132, y, 10,
+                      bold=note is not None)
+                y += 7.0
         # Tableau du détail (pas pour un écrit ou un oral : une seule note)
         if not quiz.a_des_qcm:
             _draw(c, f"QuizScan — {quiz.class_group.name}", PAGE_W / 2, 290.0, 7,
@@ -352,13 +372,14 @@ def generate_parcours_pdf(parcours):
     c = rl_canvas.Canvas(buf, pagesize=A4)
     X0, X1 = 14.0, 196.0
     LIGNE, BAS = 10.6, 277.0
-    L_NOM, L_FINAL = 54.0, 38.0
+    L_NOM, L_FINAL, L_MOY = 54.0, 38.0, 17.0
     etapes, candidats = parcours["etapes"], parcours["candidats"]
     racine = parcours["epreuves"][0]
     edite = timezone.localtime().strftime("%d/%m/%Y")
-    largeur_etape = (X1 - X0 - L_NOM - L_FINAL) / len(etapes)
+    largeur_etape = (X1 - X0 - L_NOM - L_FINAL - L_MOY) / len(etapes)
     x_etapes = [X0 + L_NOM + k * largeur_etape for k in range(len(etapes))]
     x_final = X1 - L_FINAL + 1
+    x_moyenne = x_final - L_MOY             # moyenne finale (المعدل النهائي, 13 novembre 2026)
     verdicts = {"admis": "Admis", "refuse": "Non admis", "en_attente": "En attente"}
 
     def taille_pour(texte, taille, largeur, gras=False):
@@ -374,6 +395,7 @@ def generate_parcours_pdf(parcours):
         _draw(c, "Candidat", X0 + 2, y, 9, bold=True, gray=0.25)
         for etape, x in zip(etapes, x_etapes):
             _draw(c, etape["quiz"].type_court, x, y, 9, bold=True, gray=0.25)
+        _draw(c, "Moy. finale", x_moyenne, y, 9, bold=True, gray=0.25)
         _draw(c, "Résultat final", x_final, y, 9, bold=True, gray=0.25)
         return y + 8.5
 
@@ -447,6 +469,10 @@ def generate_parcours_pdf(parcours):
                 _draw(c, "Non noté", x, y, 8.5, gray=0.3)
             else:
                 _draw(c, "non convoqué", x, y, 8, gray=0.5)
+        moyenne = candidat.get("moyenne_finale")
+        _draw(c, f"{_nombre(moyenne)} / 20" if moyenne is not None else "—", x_moyenne, y,
+              9.5 if moyenne is not None else 8, bold=moyenne is not None,
+              gray=None if moyenne is not None else 0.5)
         for k, morceau in enumerate(wrap(candidat["final"], 8.5, L_FINAL - 2, bold=True)[:2]):
             _draw(c, morceau, x_final, y + k * 4.2, 8.5, bold=True)
         y += LIGNE
@@ -471,7 +497,7 @@ def _intitule_salle(salle):
     return salle if re.match(r"\s*(salle|قاعة|القاعة)", salle, re.I) else f"Salle : {salle}"
 
 
-def generate_liste_emargement(quiz, lignes):
+def generate_liste_emargement(quiz, lignes, matiere=""):
     """Listes d'émargement, une par salle (demande de l'utilisateur, 8 novembre 2026).
 
     lignes : [(n° de place ou None, étudiant)] dans l'ordre des salles et des copies
@@ -480,7 +506,8 @@ def generate_liste_emargement(quiz, lignes):
     salle au registre viennent en dernier. Copies anonymes à n° de place : colonne
     « Place », le surveillant y lit qui s'assoit où (la copie ne porte que le n° de place
     et un QR). Chaque candidat signe en face de son nom, deux fois : « Signature entrée »
-    et « Signature sortie » (demande de l'utilisateur, 13 novembre 2026)."""
+    et « Signature sortie » (demande de l'utilisateur, 13 novembre 2026). matiere :
+    écrit en matières, celle de la séance, imprimée sous le titre."""
     load_fonts()
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
@@ -488,12 +515,13 @@ def generate_liste_emargement(quiz, lignes):
     groupes = [list(paquet) for _, paquet in
                itertools.groupby(lignes, key=lambda ligne: ligne[1].salle.casefold())]
     for paquet in groupes or [[]]:
-        _liste_d_une_salle(c, quiz, paquet, paquet[0][1].salle if paquet else "", avec_place)
+        _liste_d_une_salle(c, quiz, paquet, paquet[0][1].salle if paquet else "", avec_place,
+                           matiere)
     c.save()
     return buf.getvalue()
 
 
-def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
+def _liste_d_une_salle(c, quiz, lignes, salle, avec_place, matiere=""):
     """Pages de la liste d'une salle : en-tête, tableau, décompte, pieds numérotés."""
     from django.utils import timezone
 
@@ -513,7 +541,8 @@ def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
     titre = f"Liste des {qui}" + (" et des places" if avec_place else "")
     entete = [t.strip() for t in (quiz.entete or "").splitlines() if t.strip()]
     edite = timezone.localtime().strftime("%d/%m/%Y")
-    debut_p1 = 70.0 + 4.2 * len(entete)
+    dm = 6.5 if matiere else 0.0               # la ligne de la matière, sous le titre
+    debut_p1 = 70.0 + 4.2 * len(entete) + dm
     par_p1 = max(int((BAS - debut_p1 - 9) // LIGNE), 1)
     par_page = int((BAS - 34.0 - 9) // LIGNE)
     reste = max(len(lignes) - par_p1, 0)
@@ -545,16 +574,18 @@ def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
         y += 4.2
     _draw(c, titre, PAGE_W / 2, y + 6, 16, bold=True, align="center")
     _draw(c, quiz.title, PAGE_W / 2, y + 13, 12, align="center")
-    _draw(c, intitule, PAGE_W / 2, y + 20.5, 13, bold=True, align="center")
+    if matiere:
+        _draw(c, matiere, PAGE_W / 2, y + 19.5, 13, bold=True, align="center")
+    _draw(c, intitule, PAGE_W / 2, y + 20.5 + dm, 13, bold=True, align="center")
     _draw(c, "Date : ……/……/…………      Surveillant : ……………………………",
-          PAGE_W / 2, y + 26.5, 9.5, align="center", gray=0.25)
+          PAGE_W / 2, y + 26.5 + dm, 9.5, align="center", gray=0.25)
     consigne = ("Copies anonymes (n° de place et QR code, jamais le nom) : chaque candidat "
                 "s'assoit à sa place et signe à l'entrée puis à la sortie." if avec_place else
                 "Chaque candidat signe en face de son nom, à l'entrée puis à la sortie ; la "
                 "liste suit l'ordre des copies.")
-    _draw(c, consigne, PAGE_W / 2, y + 32, 8, align="center", gray=0.4)
+    _draw(c, consigne, PAGE_W / 2, y + 32 + dm, 8, align="center", gray=0.4)
     c.setLineWidth(0.5)
-    c.line(X0 * mm, _y(y + 35.5), X1 * mm, _y(y + 35.5))
+    c.line(X0 * mm, _y(y + 35.5 + dm), X1 * mm, _y(y + 35.5 + dm))
     y = tete_tableau(debut_p1)
     page, sur_page, capacite = 1, 0, par_p1
     for i, (place, s) in enumerate(lignes):

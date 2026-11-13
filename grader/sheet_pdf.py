@@ -6,6 +6,7 @@ Deux modes (quiz.sheet_mode, figé dans layout["mode"]) :
 
 Le texte arabe est ligaturé et rendu droite->gauche (module fonts).
 """
+import copy
 import functools
 import io
 import re
@@ -211,9 +212,10 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
     # pas de nom de classe ni de cases nom/prénom manuscrites.
     concours = getattr(quiz, "auto_enroll", False)
     # pages d'une copie : à l'écrit, la page de garde et ses pages de rédaction (le
-    # talon disait « page 1 / 1 » sur une copie de 3 pages)
-    pages_copie = len(layout["pages"]) + (
-        int(layout.get("pages_redaction", 0) or 0) if mode == "ecrit" else 0)
+    # talon disait « page 1 / 1 » sur une copie de 3 pages). Écrit en matières : chaque
+    # page de garde ouvre son cahier, avec ses pages lignées (13 novembre 2026)
+    pages_copie = (1 + int(layout.get("pages_redaction", 0) or 0) if mode == "ecrit"
+                   else len(layout["pages"]))
 
     def draw(text, x_mm_, y_pt, size, bold=False, align="left", gray=None):
         if gray is not None:
@@ -240,11 +242,15 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
         prefetch_related_objects([s for s in students if s is not None], "inscrit")
     units = students or serials or [None]
     pages_unite = len(layout["pages"])
+    etablissement = ligne_etablissement(quiz)       # en haut de chaque page lue
     for rang, (unit, page) in enumerate([(u, p) for u in units for p in layout["pages"]]):
         if progres is not None and rang and rang % pages_unite == 0:
             progres(rang // pages_unite)       # copies terminées (génération en arrière-plan)
         student = unit if (students and unit is not None) else None
-        pidx = page["page_index"]
+        pidx = page["page_index"]              # code de page, lu au scan
+        # n° de la page dans son cahier : à l'écrit, la page de garde est la première
+        numero = 0 if mode == "ecrit" else rang % pages_unite
+        matiere = page.get("matiere", "")       # écrit en matières : à son nom
 
         # Repères ArUco (avec leur marge blanche débordant légèrement)
         # Calage : cadre fin autour de la page et code de page en haut (plus
@@ -255,25 +261,36 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
         # En-tête (concours : titre seul, sans le nom du conteneur de candidats)
         head_title = (quiz.title if concours
                       else f"{quiz.title} — {quiz.class_group.name}")
+        if matiere:
+            head_title = f"{head_title} — {matiere}"
         consigne = {"ecrit": T["ecrit_instr"], "oral": T["oral_instr"]}.get(
             mode, T["instr"])
         code = codes.get(student.pk) if (codes and student is not None) else None
         if talon:
             # nom, titre et consigne sur le talon, au-dessus du trait de coupe
             _dessiner_talon(c, draw, student, head_title,
-                            f"{T['page']} {pidx + 1} / {pages_copie}",
-                            consigne, T, lang, code)
+                            f"{T['page']} {numero + 1} / {pages_copie}",
+                            consigne, T, lang, code, etablissement)
         else:
+            if etablissement:
+                # l'établissement en haut du cadre, du côté où s'écrit sa langue (13 novembre
+                # 2026) : entre les tirets du code de page (au centre, lus) et l'emplacement
+                # des anciens carrés noirs des coins (x < 22 et x > 188 mm), laissé vide
+                arabe = has_arabic(etablissement)
+                taille = _taille_pour(etablissement, 9, 46.0, 6.0, gras=True)
+                draw(_ellipsize(etablissement, taille, 46.0, True),
+                     L.PAGE_W - 25.0 if arabe else 25.0, _y(16.0), taille, bold=True,
+                     align="right" if arabe else "left", gray=0.3)
             draw(head_title, L.PAGE_W / 2, _y(24.0),
                  13, bold=True, align="center")
             if mode in ("ecrit", "oral"):
                 draw(consigne, L.PAGE_W / 2, _y(28.5), 8, align="center")
             elif lang == "ar":
                 draw(consigne, L.PAGE_W / 2, _y(28.5), 8, align="center")
-                draw(f"{T['page']} {pidx + 1} / {len(layout['pages'])}",
+                draw(f"{T['page']} {numero + 1} / {len(layout['pages'])}",
                      L.CONTENT_X1, _y(28.5), 8, align="right")
             else:
-                draw(f"{T['page']} {pidx + 1} / {len(layout['pages'])} — {consigne}",
+                draw(f"{T['page']} {numero + 1} / {len(layout['pages'])} — {consigne}",
                      L.PAGE_W / 2, _y(28.5), 8, align="center")
 
         # Zone nom / prénom  (ou emplacement réservé à une étiquette autocollante)
@@ -363,7 +380,7 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
             # une fois par copie : les pages de rédaction reprennent ce QR
             image_qr = _qr_image(f"QS|{quiz.pk}|{student.pk}")
             _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang,
-                            image_qr, code)
+                            image_qr, code, etablissement if talon else "", matiere)
 
         # Grille de numéro d'inscription
         grid = page.get("id_grid")
@@ -467,7 +484,7 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
                          bold=True)
             _dessiner_lignes(c, page["lignes"])
 
-        draw(f"{quiz.title} — page {pidx + 1}",
+        draw(f"{quiz.title} — page {numero + 1}",
              L.PAGE_W / 2, _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
         c.showPage()
 
@@ -475,7 +492,7 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
         # remplit des feuilles entières (layout). Sans repères : elles ne sont pas lues,
         # et sont ignorées quand elles passent au scanner (au dos de la page de garde,
         # en recto-verso).
-        if mode == "ecrit" and pidx == len(layout["pages"]) - 1:
+        if mode == "ecrit":
             n = int(layout.get("pages_redaction", 0) or 0)
             # A3 : les pages lignées sont sur la feuille de la page de garde (ou sur une
             # feuille emboîtée dedans), pliée au milieu, et passent au scanner avec elle.
@@ -497,7 +514,8 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
                                          else 22.0, "y1": L.PAGE_H - 16.0,
                                          "pas": L.NOTE_LIGNE})
                 else:
-                    draw(f"{T['redaction']} {k + 2} / {n + 1} — {quiz.title}",
+                    draw(f"{T['redaction']} {k + 2} / {n + 1} — {quiz.title}"
+                         + (f" — {matiere}" if matiere else ""),
                          L.PAGE_W / 2, _y(16.0), 9, bold=True, align="center")
                     draw(T["non_lue"], L.PAGE_W / 2, _y(21.0), 7.5,
                          align="center", gray=0.45)
@@ -519,8 +537,7 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
         progres(len(units))
     c.save()
     if layout.get("format") == "a3":
-        return _imposer_a3(buf.getvalue(), lang,
-                           len(layout["pages"]) + int(layout.get("pages_redaction", 0)))
+        return _imposer_a3(buf.getvalue(), lang, pages_copie)
     return buf.getvalue()
 
 
@@ -608,15 +625,15 @@ def _ligne_salle(salle, T):
     return salle if re.match(r"\s*(salle|قاعة|القاعة)", salle, re.I) else f"{T['salle']} {salle}"
 
 
-def _taille_pour(texte, taille, largeur_mm, plancher=7.0):
+def _taille_pour(texte, taille, largeur_mm, plancher=7.0, gras=False):
     """Corps qui fait tenir le texte dans la largeur, sans descendre sous le plancher."""
-    while taille > plancher and text_width_pt(texte, taille) / mm > largeur_mm:
+    while taille > plancher and text_width_pt(texte, taille, gras) / mm > largeur_mm:
         taille -= 0.5
     return taille
 
 
 def _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang, image_qr,
-                    code=None):
+                    code=None, etablissement="", matiere=""):
     """QR de l'étudiant et bande grise d'une copie nominative, à la place que lui
     donne la disposition : sur chaque page lue (page de garde d'un écrit, chaque page
     d'un QCM), jamais sur une page lignée. code : celui du talon, imprimé sous le QR
@@ -633,8 +650,8 @@ def _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang, ima
     sub_txt = num_txt = ""
     if talon:
         # le nom est sur le talon découpé : dans le cadre, rien
-        # qui identifie l'étudiant à l'œil
-        title_txt = quiz.title
+        # qui identifie l'étudiant à l'œil ; écrit en matières, celle de la copie
+        title_txt = matiere or quiz.title
     elif places is not None:
         # copie anonyme : le n° de place, ni nom ni n° d'inscription
         title_txt = T["place"].format(n=places.get(student.pk, "—"))
@@ -642,7 +659,15 @@ def _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang, ima
         title_txt = student.full_name               # en arabe, le prénom d'abord
         sub_txt = T["personal"]
         num_txt = f"N° {student.student_number}" if student.student_number else ""
-    if not sub_txt:
+    if not sub_txt and etablissement:
+        # copie à talon : l'établissement au-dessus du titre, dans la bande, qui reste sur la
+        # copie une fois le talon découpé (13 novembre 2026)
+        place = bw_ - 10
+        taille = _taille_pour(etablissement, 8.5, place, 6.5)
+        draw(_ellipsize(etablissement, taille, place), bx_ + bw_ / 2, _y(by_ + 6.2), taille,
+             align="center", gray=0.35)
+        draw(title_txt, bx_ + bw_ / 2, _y(by_ + 13.8), 14, bold=True, align="center")
+    elif not sub_txt:
         # seul dans la bande : centré
         draw(title_txt, bx_ + bw_ / 2, _y(by_ + bh_ / 2 + 1.7), 14,
              bold=True, align="center")
@@ -658,7 +683,8 @@ def _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang, ima
             draw(num_txt, bx_ + bw_ - 5, _y(by_ + 15.5), 8, align="right", gray=0.4)
 
 
-def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang, code=None):
+def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang, code=None,
+                    etablissement=""):
     """Talon du haut de la copie : nom et n° de l'étudiant, sous le n° sa CIN et
     sa salle (fiche du registre, demande du 5 novembre 2026), sous le nom le code
     d'anonymat, le même que sous le QR de la copie (demande du 13 novembre 2026),
@@ -676,6 +702,16 @@ def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang, code=N
     draw(nom, debut, _y(11.5), 16, bold=True, align=sens_debut)
     if num:
         draw(num, fin, _y(11.5), 12, bold=True, align=sens_fin)
+    if etablissement:
+        # l'établissement au milieu de la ligne du nom (13 novembre 2026), s'il y tient entre
+        # le nom et le n° ; sinon rien : la bande de la copie le porte aussi
+        cote = max(text_width_pt(nom, 16, True) / mm,
+                   text_width_pt(num, 12, True) / mm if num else 0.0) + 4
+        place = L.PAGE_W - 2 * (x0 + cote)
+        taille = _taille_pour(etablissement, 9, place, 7, gras=True)
+        if place > 0 and text_width_pt(etablissement, taille, True) / mm <= place:
+            draw(etablissement, L.PAGE_W / 2, _y(11.5), taille, bold=True, align="center",
+                 gray=0.3)
     for rang, texte in enumerate(details):
         draw(texte, fin, _y(16.8 + 4.4 * rang), 9, align=sens_fin)
     ligne_code = f"{T['code']} {qr_mod.code_lisible(code)}" if code else ""
@@ -815,6 +851,28 @@ SUJET_VERSION = 7
 # « En-tête du sujet » est vide. La ligne vide sépare les ministères de l'établissement.
 ENTETE_INSTITUT = ("الجمهورية التونسية\nوزارة العدل\n"
                    "وزارة التعليم العالي و البحث العلمي\n\nالمعهد الأعلى للمحاماة")
+INSTITUT = ENTETE_INSTITUT.splitlines()[-1]
+
+
+def vue_de_matiere(quiz, matiere):
+    """L'épreuve vue depuis une de ses matières (écrit en matières, 13 novembre 2026), pour
+    dessiner son sujet : le titre suivi du nom de la matière, son énoncé, sa durée et sa
+    date (à défaut, celles de l'épreuve). Une copie en mémoire : rien n'est enregistré."""
+    vue = copy.copy(quiz)
+    vue.title = f"{quiz.title} — {matiere.text}"
+    vue.sujet_texte = matiere.sujet
+    vue.duree = matiere.duree or quiz.duree
+    vue.date_epreuve = matiere.date_epreuve or quiz.date_epreuve
+    return vue
+
+
+def ligne_etablissement(quiz):
+    """Nom de l'établissement imprimé en haut des copies (demande de l'utilisateur, 13
+    novembre 2026 : le logiciel est fait pour المعهد الأعلى للمحاماة) : la dernière ligne de
+    l'en-tête du sujet, celle de l'établissement, ou l'institut quand l'en-tête est vide."""
+    lignes = [t.strip() for t in ((getattr(quiz, "entete", "") or "").strip()
+                                  or ENTETE_INSTITUT).splitlines() if t.strip()]
+    return lignes[-1] if lignes else ""
 
 # Textes du sujet. Les consignes sont écrites d'après ce que QuizScan lit
 # réellement : cases à noircir (pas de croix), et une consigne d'identification
