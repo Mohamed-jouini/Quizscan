@@ -28,32 +28,47 @@ def _nombre(v):
 def notes_orales_workbook(quiz, lignes):
     """Modèle Excel des notes d'un oral (seule voie de saisie depuis le 13 novembre 2026) :
     un candidat par ligne, dans l'ordre des salles, avec la note déjà importée s'il en a
-    une. Rempli puis importé sur la page de l'épreuve (importers.notes_du_classeur).
-    lignes : services.notes_orales."""
+    une. Rempli puis importé sur la page de l'épreuve (importers.notes_du_classeur, qui
+    lit aussi l'ancien modèle en français). lignes : services.notes_orales.
+
+    En arabe, la feuille de droite à gauche, avec le n° de CIN du registre (demande de
+    l'utilisateur, 13 novembre 2026). Le CIN aide le jury à reconnaître le candidat ;
+    l'import le retrouve par son n° d'inscription."""
     wb = Workbook()
     ws = wb.active
-    ws.title = "Notes de l'oral"
+    ws.title = "أعداد الشفاهي"
+    ws.sheet_view.rightToLeft = True
     sur = f"{quiz.note_sur:g}"
-    entetes = ["N° d'inscription", "Prénom", "Nom", f"Note / {sur}"]
-    ws.append(_sans_formule([f"{quiz.title} — notes de l'oral sur {sur} : remplissez la "
-                             "colonne « Note », puis importez ce fichier sur la page de "
-                             "l'épreuve."]))
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(entetes))
-    ws["A1"].font = Font(bold=True, size=12)
+    qui = "مترشح" if quiz.auto_enroll else "طالب"
+    entetes = ["رقم التسجيل", "الاسم", "اللقب", "رقم بطاقة التعريف الوطنية", f"العدد / {sur}"]
+    # le titre de l'épreuve seul sur sa ligne : il peut être en français, et une ligne
+    # mêlant les deux sens d'écriture se lit mal
+    ws.append(_sans_formule([quiz.title]))
+    ws.append([f"أعداد الاختبار الشفاهي على {sur}: اكتب عدد كل {qui} في العمود الأخير "
+               f"(من 0 إلى {sur}، والكسر بعد فاصل)، واترك الخانة فارغة للغائب، ثم استورد "
+               "هذا الملف في صفحة الاختبار."])
+    for ligne in (1, 2):
+        ws.merge_cells(start_row=ligne, start_column=1, end_row=ligne, end_column=len(entetes))
+    ws["A1"].font = Font(bold=True, size=13)
+    ws["A2"].font = Font(italic=True, color="404040")
+    ws["A2"].alignment = Alignment(wrap_text=True, vertical="top")
+    ws.row_dimensions[2].height = 33
     ws.append(entetes)
     fond = PatternFill("solid", fgColor="1F4E79")
     for col in range(1, len(entetes) + 1):
-        cellule = ws.cell(row=2, column=col)
+        cellule = ws.cell(row=3, column=col)
         cellule.font = Font(bold=True, color="FFFFFF")
         cellule.fill = fond
+        cellule.alignment = Alignment(horizontal="center", vertical="center")
     for etudiant, _, reponse in lignes:
         note = reponse.points_awarded if reponse is not None else None
         ws.append(_sans_formule([etudiant.student_number or "", etudiant.first_name,
-                                 etudiant.last_name, note]))
-        ws.cell(row=ws.max_row, column=1).number_format = "@"      # zéros de tête gardés
-    for i, largeur in enumerate([18, 20, 24, 12], start=1):
+                                 etudiant.last_name, etudiant.cin or None, note]))
+        for col in (1, 4):                         # n° et CIN : zéros de tête gardés
+            ws.cell(row=ws.max_row, column=col).number_format = "@"
+    for i, largeur in enumerate([16, 20, 22, 27, 12], start=1):
         ws.column_dimensions[get_column_letter(i)].width = largeur
-    ws.freeze_panes = "A3"
+    ws.freeze_panes = "A4"
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

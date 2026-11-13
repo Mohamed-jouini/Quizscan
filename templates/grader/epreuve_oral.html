@@ -20,7 +20,7 @@
 <div class="grid2">
   <div class="card">
     <h2>1. Modèle Excel des notes</h2>
-    <p class="helptext">Un {{ quiz.auto_enroll|yesno:"candidat,étudiant" }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, et la colonne « Note / {{ quiz.note_sur|floatformat:"-2" }} » à remplir. Les notes déjà importées y figurent.</p>
+    <p class="helptext">Classeur en arabe, un {{ quiz.auto_enroll|yesno:"candidat,étudiant" }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, n° de CIN, et la colonne de la note (« العدد / {{ quiz.note_sur|floatformat:"-2" }} ») à remplir. Les notes déjà importées y figurent.</p>
     {% if lignes %}
     <div class="documents">
       <a class="document" href="{% url 'quiz_notes_oral_xlsx' quiz.pk %}">

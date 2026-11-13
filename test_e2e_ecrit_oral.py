@@ -32,7 +32,7 @@ from django.test.utils import setup_test_environment
 from django.urls import reverse
 
 from grader import services
-from grader.models import ClassGroup, Quiz, Student
+from grader.models import ClassGroup, Inscrit, Quiz, Student
 from test_commun import enseignant_complet
 from test_e2e import fill_sheet, mm2px, render_page, simulate_scan
 
@@ -282,6 +282,7 @@ def test_oral(c, groupe):
     page = c.get(url).content.decode()
     assert "Notes de l'oral" in page and "Sana AMRI" in page and "pas encore notée" in page
     assert "Importer les notes" in page and reverse("quiz_notes_oral_xlsx", args=[quiz.pk]) in page
+    assert "Classeur en arabe" in page and "n° de CIN" in page and "« العدد / 20 »" in page
     assert "Générer les fiches" not in page and "Lire les notes et les affecter" not in page
     e = {s.last_name: s for s in groupe.students.all()}
     assert f'name="note_{e["AMRI"].pk}"' not in page and "Enregistrer les notes" not in page
@@ -316,15 +317,24 @@ def test_oral(c, groupe):
     assert quiz.note_admission is None, "vide : plus de note minimale"
     print("  oral : note minimale réglée sur sa page (12,5 retenu, 21 refusé, vide retiré) OK")
 
-    # ---- modèle Excel : les candidats dans l'ordre des salles, la colonne « Note » vide
+    # ---- modèle Excel : les candidats dans l'ordre des salles, la colonne de la note vide ;
+    # en arabe, de droite à gauche, avec le n° de CIN du registre (13 novembre 2026)
+    Inscrit.objects.filter(numero="ORAL-104501").delete()
+    e["AMRI"].inscrit = Inscrit.objects.create(numero="ORAL-104501", nom="AMRI", prenom="Sana",
+                                               cin="01166344", cree_par=groupe.owner)
+    e["AMRI"].save()
+
     def modele():
         reponse = c.get(reverse("quiz_notes_oral_xlsx", args=[quiz.pk]))
         disposition = reponse["Content-Disposition"]
         assert disposition.startswith("attachment"), disposition
         classeur = load_workbook(io.BytesIO(reponse.content))
         feuille = classeur.active
-        assert [x.value for x in feuille[2]] == ["N° d'inscription", "Prénom", "Nom", "Note / 20"]
-        return classeur, {ligne[0].value: ligne for ligne in feuille.iter_rows(min_row=3)}
+        assert feuille.sheet_view.rightToLeft and feuille["A1"].value == quiz.title
+        assert "أعداد الاختبار الشفاهي على 20" in feuille["A2"].value, feuille["A2"].value
+        assert [x.value for x in feuille[3]] == [
+            "رقم التسجيل", "الاسم", "اللقب", "رقم بطاقة التعريف الوطنية", "العدد / 20"]
+        return classeur, {ligne[0].value: ligne for ligne in feuille.iter_rows(min_row=4)}
 
     def importer(classeur):
         tampon = io.BytesIO()
@@ -339,9 +349,13 @@ def test_oral(c, groupe):
 
     classeur, lignes = modele()
     assert set(lignes) == {num for _, _, num in ETUDIANTS}, set(lignes)
-    assert all(ligne[3].value is None for ligne in lignes.values())
-    lignes["104501"][3].value = "12,25"          # saisie avec une virgule
-    lignes["104503"][3].value = 9                # BAKIR : vide (absent), passé
+    assert all(ligne[4].value is None for ligne in lignes.values())
+    # le CIN en texte, zéro de tête gardé ; vide sans fiche au registre
+    assert lignes["104501"][3].value == "01166344", lignes["104501"][3].value
+    assert lignes["104501"][3].number_format == "@" and lignes["104502"][3].value is None
+    assert [lignes["104501"][k].value for k in (1, 2)] == ["Sana", "AMRI"]   # prénom d'abord
+    lignes["104501"][4].value = "12,25"          # saisie avec une virgule
+    lignes["104503"][4].value = 9                # BAKIR : vide (absent), passé
     page = importer(classeur)
     assert "Notes importées : 2 nouvelle(s), 0 modifiée(s), 0 inchangée(s)" in page, page[-2000:]
     assert notes() == {"AMRI": 12.25, "CHERIF": 9.0}, notes()
@@ -350,9 +364,9 @@ def test_oral(c, groupe):
     assert quiz.modifications.filter(action="note", objet__contains="import Excel").count() == 2
     # le modèle reprend les notes ; réimporté : une note changée, une nouvelle
     classeur, lignes = modele()
-    assert lignes["104501"][3].value == 12.25 and lignes["104502"][3].value is None
-    lignes["104503"][3].value = 17
-    lignes["104502"][3].value = 10.5
+    assert lignes["104501"][4].value == 12.25 and lignes["104502"][4].value is None
+    lignes["104503"][4].value = 17
+    lignes["104502"][4].value = 10.5
     page = importer(classeur)
     assert "Notes importées : 1 nouvelle(s), 1 modifiée(s), 1 inchangée(s)" in page, page[-2000:]
     assert notes() == {"AMRI": 12.25, "BAKIR": 10.5, "CHERIF": 17.0}, notes()
@@ -361,23 +375,23 @@ def test_oral(c, groupe):
 
     # un fichier faux n'importe rien, et le message nomme chaque ligne fausse
     avant = notes()
-    lignes["104501"][3].value = 21
-    lignes["104502"][3].value = "abs"
+    lignes["104501"][4].value = 21
+    lignes["104502"][4].value = "abs"
     page = importer(classeur)
     assert "Aucune note importée" in page and "« abs »" in page, page[-2000:]
     assert "n° 104501 : « 21 » n&#x27;est pas une note de 0 à 20" in page, page[-2000:]
     assert notes() == avant
     classeur, lignes = modele()
-    classeur.active.append(["999999", "Inconnu", "X", 12])
+    classeur.active.append(["999999", "Inconnu", "X", None, 12])
     page = importer(classeur)
     assert "Aucune note importée" in page and "999999" in page and notes() == avant
     classeur, lignes = modele()
-    classeur.active.append(["104501", "Sana", "AMRI", 13])
+    classeur.active.append(["104501", "Sana", "AMRI", "01166344", 13])
     page = importer(classeur)
     assert "n° 104501 : deux fois dans le fichier" in page and notes() == avant
     feuille = load_workbook(io.BytesIO(c.get(reverse("quiz_notes_oral_xlsx",
                                                      args=[quiz.pk])).content)).active
-    feuille.delete_rows(1, 2)                     # plus d'en-têtes
+    feuille.delete_rows(1, 3)                     # plus d'en-têtes
     page = importer(feuille.parent)
     assert "introuvables" in page and notes() == avant
     r = c.post(url, {"importer_notes": "1",
@@ -385,6 +399,35 @@ def test_oral(c, groupe):
     assert "Choisissez le fichier Excel (.xlsx)" in r.content.decode() and notes() == avant
     print("  oral : note hors barème ou illisible, n° inconnu, n° en double, en-têtes absents, "
           "autre format : rien d'importé, chaque ligne nommée OK")
+
+    # l'ancien modèle en français s'importe toujours ; la colonne du CIN n'est jamais prise
+    # pour celle du n°, même placée avant ; décimale après « , », « ٫ » ou « ، »
+    from openpyxl import Workbook
+
+    from grader import importers
+
+    def classeur_de(*rangs):
+        wb = Workbook()
+        for rang in rangs:
+            wb.active.append(rang)
+        tampon = io.BytesIO()
+        wb.save(tampon)
+        return tampon.getvalue()
+
+    assert importers.notes_du_classeur(classeur_de(
+        ["N° d'inscription", "Prénom", "Nom", "Note / 20"], ["104501", "Sana", "AMRI", 12]),
+        20) == [("104501", 12.0)]
+    assert importers.notes_du_classeur(classeur_de(
+        ["N° CIN", "N°", "Note"], ["01166344", "104501", "14,5"]), 20) == [("104501", 14.5)]
+    assert importers.notes_du_classeur(classeur_de(
+        ["رقم بطاقة التعريف الوطنية", "رقم التسجيل", "العدد / 20"],
+        ["01166344", "104502", "١٢٫٥"], [None, "104503", "13،75"]), 20) == [
+        ("104502", 12.5), ("104503", 13.75)]
+    assert importers.notes_du_classeur(classeur_de(
+        ["رقم بطاقة التعريف الوطنية", "رقم", "العدد"], ["01166344", "104502", 8]), 20) == [
+        ("104502", 8.0)]
+    print("  oral : ancien modèle en français, colonne du CIN jamais prise pour le n°, "
+          "décimale après « , », « ٫ » ou « ، » OK")
 
 
 def main():

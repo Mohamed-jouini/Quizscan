@@ -919,6 +919,25 @@ def _colonne(entetes, *motifs):
     return None
 
 
+# Le modèle donne aussi le n° de CIN depuis le 13 novembre 2026 : sa colonne n'est jamais
+# celle du n° d'inscription (« N° CIN » commence par « n », « رقم بطاقة… » par « رقم »).
+_MOTS_CIN = ("cin", "بطاقة", "التعريف", "تعريف", "الهوية", "هوية")
+
+
+def _colonne_numero(entetes):
+    """Colonne du n° d'inscription : « N° d'inscription » ou « رقم التسجيل » d'abord, à
+    défaut un simple « N° » ou « رقم », jamais celle du n° de CIN."""
+    k = _colonne(entetes, "inscription", "التسجيل", "تسجيل")
+    if k is not None:
+        return k
+    return _colonne(["" if any(m in t.split() for m in _MOTS_CIN) else t for t in entetes],
+                    "numero", "n", "no", "رقم")
+
+
+# virgule, ou séparateurs décimaux arabes « ٫ » et « ، », tapés dans le modèle en arabe
+_DECIMALE = str.maketrans({",": ".", "٫": ".", "،": "."})
+
+
 def notes_du_classeur(data, note_sur):
     """[(n° d'inscription, note)] d'un classeur aux colonnes « N° d'inscription » et
     « Note ». Une note vide est passée. Lève ImportError_ en nommant toutes les lignes
@@ -931,7 +950,7 @@ def notes_du_classeur(data, note_sur):
     entete = None
     for i, ligne in enumerate(lignes[:15]):
         noms = [norm(c) for c in ligne]
-        col_numero = _colonne(noms, "inscription", "numero", "n", "no", "رقم")
+        col_numero = _colonne_numero(noms)
         col_note = _colonne(noms, "note", "العدد")
         if col_numero is not None and col_note is not None and col_numero != col_note:
             entete = (i, col_numero, col_note)
@@ -950,7 +969,7 @@ def notes_du_classeur(data, note_sur):
             erreurs.append(f"une note (« {brut} ») sans n° d'inscription")
             continue
         try:
-            valeur = float(brut.replace(",", "."))
+            valeur = float(chiffres_latins(brut).translate(_DECIMALE))
         except ValueError:
             valeur = None
         if valeur is None or not 0 <= valeur <= note_sur:

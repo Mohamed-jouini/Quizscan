@@ -654,7 +654,8 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   (« قاعة عدد 2 » avant « قاعة عدد 15 », les étudiants sans salle à la fin), puis par n°
   d'inscription, ou par n° de place. La « Liste des candidats par salle » (des étudiants pour
   une classe ; page de l'épreuve, pour toute présentation) donne une liste par salle, dans le
-  même ordre, pour la signature de présence ; avec les copies à n° de place, elle porte aussi
+  même ordre, pour la signature de présence, deux cases par candidat (« Signature entrée » et
+  « Signature sortie ») ; avec les copies à n° de place, elle porte aussi
   la place de chacun.
 - Grands concours (15 000 copies) : au-delà de 1 000 copies, « Générer » lance la génération en
   arrière-plan, la page affiche l'avancement et se met à jour seule ; les documents précédents
@@ -689,9 +690,12 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   scannées malgré tout, leur ligne de la décimale tombe sur du blanc, et leur note reste
   « à vérifier », jamais fausse.
 - Notes de l'oral : un fichier Excel, et lui seul. Ni fiche à imprimer ou à scanner, ni
-  saisie à l'écran. La page de l'oral donne le modèle Excel : les candidats dans l'ordre
-  des salles, et leur note s'ils en ont une. Le jury remplit la colonne « Note », puis
-  importe le fichier. Une case vide est passée, une note déjà là est remplacée, et le
+  saisie à l'écran. La page de l'oral donne le modèle Excel, en arabe et de droite à
+  gauche : les candidats dans l'ordre des salles (رقم التسجيل، الاسم، اللقب، رقم بطاقة
+  التعريف الوطنية), et leur note s'ils en ont une. Le jury remplit la colonne « العدد »,
+  puis importe le fichier. L'import retrouve chaque candidat par son n° d'inscription ; le
+  n° de CIN n'est là que pour le reconnaître. L'ancien modèle en français s'importe
+  toujours. Une case vide est passée, une note déjà là est remplacée, et le
   journal garde chaque note. Une seule ligne fausse suffit à ne rien importer, et le
   message la nomme : note hors barème ou illisible, n° absent de la liste, n° en double.
   Les fiches d'oral scannées avant comptent toujours ; un import remplace leur note.

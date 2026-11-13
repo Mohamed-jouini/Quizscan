@@ -116,10 +116,23 @@ def main():
     assert r.status_code == 200 and r["Content-Type"] == "application/pdf"
     liste = textes(r.content)[0]
     # « Liste des candidats » (8 novembre 2026), des étudiants pour une classe
-    assert "Liste des étudiants et des places" in liste and "Signature" in liste
+    assert "Liste des étudiants et des places" in liste
     for nom, prenom, num in ETUDIANTS:
         assert f"{prenom} {nom}" in liste and num in liste
-    print("  liste d'émargement : place, n°, nom, case de signature OK")
+    # deux cases par candidat, côte à côte : « Signature entrée » puis « Signature sortie »
+    # (demande de l'utilisateur, 13 novembre 2026), chaque titre au-dessus de sa case
+    feuille = pymupdf.open(stream=r.content, filetype="pdf")[0]
+    cases = [[v * 25.4 / 72 for v in d["rect"]] for d in feuille.get_drawings()
+             if d["type"] == "s" and abs((d["rect"].x1 - d["rect"].x0) * 25.4 / 72 - 32) < 0.5]
+    assert len(cases) == 2 * len(ETUDIANTS), cases
+    gauches = sorted({round(x0, 1) for x0, _, _, _ in cases})
+    assert len(gauches) == 2 and gauches[1] - gauches[0] > 32, gauches   # sans chevauchement
+    assert max(x1 for _, _, x1, _ in cases) <= 192.0, "case hors du tableau"
+    for libelle, x in zip(("Signature entrée", "Signature sortie"), gauches):
+        titre = feuille.search_for(libelle)
+        assert len(titre) == 1, (libelle, titre)
+        assert x < titre[0].x0 * 25.4 / 72 and titre[0].x1 * 25.4 / 72 < x + 32, (libelle, x)
+    print("  liste d'émargement : place, n°, nom, signatures à l'entrée et à la sortie OK")
     # le prénom d'abord, comme sur la liste officielle et le talon (demande de
     # l'utilisateur, 7 novembre 2026), ici pour un nom écrit en arabe
     dessines = []
@@ -240,7 +253,8 @@ def main():
         assert "Salle : 2" in feuilles[0] and "YAHIA" in feuilles[0] and "WALI" in feuilles[0]
         assert "Salle : 15" in feuilles[1] and "ZAIER" in feuilles[1]
         assert "XUEREB" in feuilles[2] and "Salle : ………" in feuilles[2], feuilles[2]
-        assert all("Signature" in f and "Présents" in f for f in feuilles)
+        assert all("Signature entrée" in f and "Signature sortie" in f and "Présents" in f
+                   for f in feuilles)
         assert ("Place" in feuilles[0]) == (anonymat == "place")
         # n° de CIN du registre en face de chaque nom (demande du 8 novembre 2026)
         assert all("N° CIN" in f for f in feuilles)

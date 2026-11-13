@@ -479,7 +479,8 @@ def generate_liste_emargement(quiz, lignes):
     tête, ses pages numérotées, le décompte des présents à la fin ; les étudiants sans
     salle au registre viennent en dernier. Copies anonymes à n° de place : colonne
     « Place », le surveillant y lit qui s'assoit où (la copie ne porte que le n° de place
-    et un QR). Chaque candidat signe en face de son nom."""
+    et un QR). Chaque candidat signe en face de son nom, deux fois : « Signature entrée »
+    et « Signature sortie » (demande de l'utilisateur, 13 novembre 2026)."""
     load_fonts()
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
@@ -499,9 +500,13 @@ def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
     X0, X1 = 18.0, 192.0
     LIGNE, BAS = 9.0, 270.0
     # place, n° d'inscription, nom ; sans place, le n° et le nom passent à gauche
-    cols = [X0 + 3, X0 + 22, X0 + 52] if avec_place else [None, X0 + 3, X0 + 33]
-    x_sig = X1 - 48.0                         # début de la case signature
-    x_cin = x_sig - 27.0                      # n° de CIN du registre (8 novembre 2026)
+    cols = [X0 + 3, X0 + 16, X0 + 43] if avec_place else [None, X0 + 3, X0 + 33]
+    # deux cases de signature, à l'entrée puis à la sortie (13 novembre 2026)
+    L_SIG = 32.0
+    x_sortie = X1 - 1 - L_SIG
+    x_entree = x_sortie - 2 - L_SIG
+    signatures = (("Signature entrée", x_entree), ("Signature sortie", x_sortie))
+    x_cin = x_entree - 23.0                   # n° de CIN du registre (8 novembre 2026)
     # « Liste des candidats » (demande de l'utilisateur, 8 novembre 2026), des étudiants
     # pour une classe ; avec les places des copies anonymes
     qui = "candidats" if quiz.auto_enroll else "étudiants"
@@ -523,7 +528,8 @@ def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
             if x is not None:
                 _draw(c, texte, x, y, 9, bold=True, gray=0.2)
         _draw(c, "N° CIN", x_cin, y, 9, bold=True, gray=0.2)
-        _draw(c, "Signature", x_sig + 3, y, 9, bold=True, gray=0.2)
+        for texte, x in signatures:
+            _draw(c, texte, x + L_SIG / 2, y, 9, bold=True, align="center", gray=0.2)
         return y + 9.0
 
     # Le titre de l'épreuve et la salle peuvent être en arabe : chacun sur sa ligne, jamais
@@ -542,9 +548,10 @@ def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
     _draw(c, intitule, PAGE_W / 2, y + 20.5, 13, bold=True, align="center")
     _draw(c, "Date : ……/……/…………      Surveillant : ……………………………",
           PAGE_W / 2, y + 26.5, 9.5, align="center", gray=0.25)
-    consigne = ("Copies anonymes : chaque copie porte un n° de place et un QR code, jamais le "
-                "nom. Le candidat s'assoit à sa place et signe ci-dessous." if avec_place else
-                "Chaque candidat signe en face de son nom ; la liste suit l'ordre des copies.")
+    consigne = ("Copies anonymes (n° de place et QR code, jamais le nom) : chaque candidat "
+                "s'assoit à sa place et signe à l'entrée puis à la sortie." if avec_place else
+                "Chaque candidat signe en face de son nom, à l'entrée puis à la sortie ; la "
+                "liste suit l'ordre des copies.")
     _draw(c, consigne, PAGE_W / 2, y + 32, 8, align="center", gray=0.4)
     c.setLineWidth(0.5)
     c.line(X0 * mm, _y(y + 35.5), X1 * mm, _y(y + 35.5))
@@ -571,7 +578,8 @@ def _liste_d_une_salle(c, quiz, lignes, salle, avec_place):
         _draw(c, nom, cols[2], y + 0.6, corps, bold=True)
         c.setStrokeGray(0.55)
         c.setLineWidth(0.5)
-        c.rect(x_sig * mm, _y(y + 2.8), (X1 - x_sig - 1) * mm, (LIGNE - 1.6) * mm)
+        for _, x in signatures:
+            c.rect(x * mm, _y(y + 2.8), L_SIG * mm, (LIGNE - 1.6) * mm)
         c.setStrokeGray(0.0)
         y += LIGNE
         sur_page += 1
