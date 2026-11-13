@@ -10,18 +10,19 @@
 {% if admis is not None %}
 <section class="pub-section">
   <div class="pub-section__tete">
-    <h2>Liste des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %} par ordre de mérite</h2>
+    <h2>Liste des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %}, par n° d'inscription</h2>
     <span class="badge ok">{{ admis|length }} {% if quiz.auto_enroll %}admis{% else %}réussi(s){% endif %}</span>
   </div>
   {% if admis %}
   {% include "grader/_pagination.html" with page=admis_page label="Lignes" %}
+  {# Ni rang ni note : le résultat seul (13 novembre 2026) #}
   <div class="pub-tableau">
     <table>
-      <thead><tr><th>Rang</th><th>N° d'inscription</th><th>Prénom</th><th>Nom</th><th>{% if quiz.a_des_qcm %}Bonnes réponses{% else %}Note{% endif %}</th><th>Pourcentage</th></tr></thead>
+      <thead><tr><th>N° d'inscription</th><th>Prénom</th><th>Nom</th><th>Résultat</th></tr></thead>
       <tbody>
       {% for a in admis_page %}
-      <tr><td>{{ a.rang }}</td><td>{{ a.numero|default:"—" }}</td><td>{{ a.prenom }}</td><td>{{ a.nom }}</td>
-        <td>{% if quiz.a_des_qcm %}<b>{{ a.correct }}</b> / {{ a.n_qcm }}{% else %}<b>{{ a.note|floatformat:"-2" }}</b> / {{ a.sur|floatformat:"-2" }}{% endif %}</td><td>{{ a.pct }} %</td></tr>
+      <tr><td>{{ a.numero|default:"—" }}</td><td>{{ a.prenom }}</td><td>{{ a.nom }}</td>
+        <td><span class="badge ok">{% if quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</span></td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -30,6 +31,6 @@
   {% else %}<p class="pub-vide">Aucun {% if quiz.auto_enroll %}admis{% else %}réussi{% endif %} pour l'instant.</p>{% endif %}
 </section>
 {% elif quiz.resultats_publies %}
-<p class="pub-vide">Les notes de cette épreuve se consultent individuellement, avec le n° d'inscription.</p>
+<p class="pub-vide">Les résultats de cette épreuve se consultent individuellement, avec le n° d'inscription ou la CIN.</p>
 {% endif %}
 {% endblock %}

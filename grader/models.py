@@ -194,7 +194,8 @@ class Quiz(models.Model):
     # Nature de l'épreuve. QCM : cases noircies, lues au scan. Écrit : copie
     # rédigée, corrigée à la main ; le correcteur noircit la note dans la
     # grille de la page de garde, lue au scan avec l'identité (QR ou n°).
-    # Oral : notes saisies à l'écran, sans feuille.
+    # Oral : notes importées d'un fichier Excel, seule voie depuis le 13 novembre 2026
+    # (libellé du choix ci-dessous inchangé : forms.QuizForm l'affiche à jour).
     TYPES = [
         ("qcm", "QCM — cases à noircir, corrigées automatiquement"),
         ("ecrit", "Écrit (rédaction) — copie corrigée à la main, note "

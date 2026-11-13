@@ -517,6 +517,47 @@ def _note_rows(note_sur):
     return entiers + ["dixiemes", "centiemes"]
 
 
+# Écrit : note par demi-points (demande de l'utilisateur, 13 novembre 2026). Une ligne de
+# cases 0..20 pour la partie entière, une ligne « ,0 / ,5 » pour la décimale ; une note
+# au-dessus du barème (20,5) est à vérifier (omr.lire_note). L'oral garde ses chiffres.
+NOTE_DEMI_PAS = 6.2          # 21 cases de 0 à 20 dans la largeur du cadre (mm)
+# Les deux lignes de cases sont imprimées SOUS l'emprise de l'ancienne grille à chiffres
+# (4 lignes, centres de y + 20,5 à y + 39,1) : une copie imprimée avant, lue avec cette
+# disposition, a sa ligne de la décimale vide (et le plus souvent l'autre aussi). Sa note
+# est donc « à vérifier », jamais fausse.
+NOTE_DEMI_Y_ENTIER = 44.0    # centre de la ligne de la partie entière, depuis le haut du cadre
+NOTE_DEMI_Y_DEMI = 51.5      # centre de la ligne de la décimale
+
+
+def note_par_demi_points(quiz):
+    """Grille par demi-points : écrit, barème entier de 1 à 20 (une case par point)."""
+    sur = float(getattr(quiz, "note_sur", 20) or 20)
+    return (getattr(quiz, "type_epreuve", "qcm") == "ecrit" and sur.is_integer()
+            and 1 <= sur <= 20)
+
+
+def _add_note_grid_demi(page, y, note_sur, order):
+    """Cadre « réservé au correcteur » d'un écrit : la note en clair et la signature en
+    haut, puis la partie entière (0..barème) et la décimale (,0 ou ,5) à noircir."""
+    n = int(note_sur)
+    x, w = CONTENT_X0, CONTENT_X1 - CONTENT_X0
+    x0 = CONTENT_X0 + 30.0
+    y_entier, y_demi = y + NOTE_DEMI_Y_ENTIER, y + NOTE_DEMI_Y_DEMI
+    entiers = [[round(x0 + k * NOTE_DEMI_PAS, 2), round(y_entier, 2)] for k in range(n + 1)]
+    demis = [[round(x0 + k * 2 * NOTE_DEMI_PAS, 2), round(y_demi, 2)] for k in range(2)]
+    h = round(NOTE_DEMI_Y_DEMI + ID_BUBBLE_R + 4.4, 2)
+    page["note_grid"] = {
+        "order": order, "r": ID_BUBBLE_R, "rows": [entiers, demis], "write_boxes": [],
+        "kinds": ["entier", "demi"], "modele": "demi", "decimales": 1, "sur": note_sur,
+        "rect": [x, round(y, 2), w, h],
+        "title_y": round(y + 6.0, 2), "header_y": round(y_entier - 4.6, 2),
+        # la note écrite en clair, la signature du correcteur
+        "note_box": [x + 4.0, round(y + 18.0, 2), 71.0, 12.0],
+        "signature_box": [x + 85.0, round(y + 18.0, 2), w - 89.0, 12.0],
+    }
+    return y + h
+
+
 def _add_note_grid(page, y, note_sur, order):
     """Cadre « réservé au correcteur » : une ligne de cases 0..9 par chiffre
     de la note (même dessin et même lecture que la grille de n°)."""
@@ -560,7 +601,8 @@ def _build_ecrit_layout(quiz):
     else:
         y = NAME_BOXES_Y + NAME_BOX_H + 6.0
     note_q = quiz.questions.filter(qtype="open").order_by("order").first()
-    y = _add_note_grid(page, y + 3.0, quiz.note_sur, note_q.order if note_q else 1)
+    ajouter = _add_note_grid_demi if note_par_demi_points(quiz) else _add_note_grid
+    y = ajouter(page, y + 3.0, quiz.note_sur, note_q.order if note_q else 1)
     if oral:
         page["lignes"] = {"y0": round(y + 16.0, 2), "y1": min(y + 16.0 + 6 * NOTE_LIGNE,
                                                               CONTENT_Y1),

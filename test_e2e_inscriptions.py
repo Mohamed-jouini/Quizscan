@@ -454,9 +454,13 @@ def test_scan_et_public(c, prof):
     assert quiz.resultats_publies and not quiz.admis_publies   # pas de note minimale
     r = anonyme.get(reverse("public_resultat") + "?numero=104 525")
     page_pub = r.content.decode()
-    assert "Mohamed ABDELLATIF" in page_pub and "<b>5</b> / 6" in page_pub, page_pub[-1500:]
+    # le résultat seul, jamais la note (13 novembre 2026) ; sans note minimale, pas encore
+    # de verdict à dire
+    assert "Mohamed ABDELLATIF" in page_pub and "Résultat pas encore disponible" in page_pub \
+        and "<b>5</b>" not in page_pub and "bonnes réponses" not in page_pub, page_pub[-1500:]
     assert anonyme.get(reverse("public_accueil")).content.decode().count(escape(quiz.title)) == 1
-    print("  publication : note consultée par n° d'inscription, sans compte OK")
+    print("  publication : résultat consulté par n° d'inscription, sans compte ; sans note "
+          "minimale, « pas encore disponible » OK")
 
     # par le n° de CIN aussi (demande de l'utilisateur, 7 novembre 2026) : le formulaire
     # s'envoie en POST, rien de tapé ne va dans l'adresse ; la page donne le n° d'inscription
@@ -467,7 +471,7 @@ def test_scan_et_public(c, prof):
     assert len(cin) == 8, cin
     for saisie in (cin, f"{cin[:4]} {cin[4:]}"):
         page_cin = anonyme.post(reverse("public_resultat"), {"numero": saisie}).content.decode()
-        assert "Mohamed ABDELLATIF" in page_cin and "<b>5</b> / 6" in page_cin, saisie
+        assert "Mohamed ABDELLATIF" in page_cin and "pas encore disponible" in page_cin, saisie
         assert "N° d'inscription 104525" in page_cin, page_cin[-1500:]
     page_n = anonyme.post(reverse("public_resultat"), {"numero": "104525"}).content.decode()
     assert "Mohamed ABDELLATIF" in page_n, "le n° d'inscription par le formulaire"
@@ -480,7 +484,7 @@ def test_scan_et_public(c, prof):
             reverse("public_resultat"), {"numero": cin[1:]}).content.decode()
     assert "Aucun résultat publié" in anonyme.post(
         reverse("public_resultat"), {"numero": "99999999"}).content.decode()
-    print("  publication : note consultée par n° de CIN (formulaire, jamais dans l'adresse) OK")
+    print("  publication : résultat consulté par n° de CIN (formulaire, jamais dans l'adresse) OK")
 
     quiz.note_admission = 4
     quiz.save(update_fields=["note_admission"])
@@ -488,7 +492,9 @@ def test_scan_et_public(c, prof):
                                                          "admis_publies": "1"})
     r = anonyme.get(reverse("public_epreuve", args=[quiz.pk]))
     assert r.status_code == 200 and "ABDELLATIF" in r.content.decode()
-    assert "Admis" in anonyme.get(reverse("public_resultat") + "?numero=104525").content.decode()
+    verdict = anonyme.get(reverse("public_resultat") + "?numero=104525").content.decode()
+    assert '<p class="pub-verdict pub-verdict--admis">Admis</p>' in verdict \
+        and "<b>5</b>" not in verdict, verdict[-1500:]
     c.post(reverse("quiz_publication", args=[quiz.pk]), {})
     assert anonyme.get(reverse("public_epreuve", args=[quiz.pk])).status_code == 404
     assert "Aucun résultat publié" in anonyme.get(

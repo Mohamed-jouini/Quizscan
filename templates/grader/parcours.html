@@ -47,7 +47,7 @@
         <td>
           {% if case.etat == "note" %}
           <span class="score">{{ case.row.score|floatformat:"-2" }} / {{ case.row.max_score|floatformat:"-2" }}</span>
-          <span class="helptext helptext--serre">{{ case.row.pct }} %</span>
+          <span class="helptext helptext--serre">{% if case.row.est_qcm %}{{ case.row.note20|floatformat:"-2" }} / 20{% else %}{{ case.row.pct }} %{% endif %}</span>
           {% if case.resultat == "admis" %}<span class="badge ok">Admis</span>
           {% elif case.resultat == "refuse" %}<span class="badge bad">Non admis</span>
           {% elif case.resultat == "en_attente" %}<span class="badge warn">En attente</span>{% endif %}

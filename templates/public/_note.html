@@ -1,21 +1,13 @@
 {% comment %}
-Note d'un étudiant à une épreuve, sur la page « Mes résultats ». Paramètres : quiz, row.
+Résultat d'un étudiant à une épreuve, sur la page « Mes résultats ». Paramètres : quiz, row.
+Le verdict seul : « Admis » ou « Non admis » (« Réussi » ou « Non réussi » hors concours),
+ni note, ni bonnes réponses, ni rang (demande de l'utilisateur, 13 novembre 2026). Tant
+qu'il ne peut être dit : correction en cours, ou résultat pas encore disponible (aucune
+note minimale).
 {% endcomment %}
 <div class="pub-note">
-  <div class="pub-note__tete">
-    {% if quiz.a_des_qcm %}
-    <span class="pub-note__chiffre"><b>{{ row.correct }}</b> / {{ row.n_qcm }} bonnes réponses</span>
-    {% else %}
-    <span class="pub-note__chiffre"><b>{{ row.score|floatformat:"-2" }}</b> / {{ row.max_score|floatformat:"-2" }}</span>
-    {% endif %}
-    {% if row.resultat == "admis" %}<span class="badge ok">{% if quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</span>
-    {% elif row.resultat == "refuse" %}<span class="badge bad">{% if quiz.auto_enroll %}Non admis{% else %}Non réussi{% endif %}</span>
-    {% elif row.resultat == "en_attente" %}<span class="badge warn">Correction en cours</span>
-    {% elif row.pending_open or row.questions_manquantes %}<span class="badge warn">Note provisoire : correction en cours</span>{% endif %}
-  </div>
-  <div class="pub-note__jauge">
-    <progress value="{{ row.pct }}" max="100" aria-hidden="true"></progress>
-    <b>{{ row.pct }} %</b>
-  </div>
-  {% if quiz.a_des_qcm %}<span class="pub-note__detail">{% if quiz.note_distincte %}Note {{ row.score|floatformat:"-2" }} / {{ row.max_score|floatformat:"-2" }} · {% endif %}{{ row.wrong }} fausse{% if row.wrong > 1 %}s{% endif %} · {{ row.blank }} sans réponse</span>{% endif %}
+  {% if row.resultat == "admis" %}<p class="pub-verdict pub-verdict--admis">{% if quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</p>
+  {% elif row.resultat == "refuse" %}<p class="pub-verdict pub-verdict--refuse">{% if quiz.auto_enroll %}Non admis{% else %}Non réussi{% endif %}</p>
+  {% elif row.resultat == "en_attente" %}<p class="pub-verdict pub-verdict--attente">Correction en cours</p>
+  {% else %}<p class="pub-verdict">Résultat pas encore disponible</p>{% endif %}
 </div>

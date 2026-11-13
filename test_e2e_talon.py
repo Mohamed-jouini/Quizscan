@@ -2,11 +2,13 @@
 la page, hors du cadre de lecture ; découpé avant la correction, il rend la
 copie anonyme, et le QR (dans le cadre) l'identifie toujours au scan.
 
-Vérifie : nom seulement sur le talon ; copie lue talon découpé (au trait,
-un peu trop haut, un peu trop bas) ou non découpé ; pas de confusion avec
-une copie normale ; concours et épreuve écrite.
+Vérifie : nom seulement sur le talon ; code d'anonymat, le même sur le talon
+et sous le QR ; copie lue talon découpé (au trait, un peu trop haut, un peu
+trop bas) ou non découpé ; pas de confusion avec une copie normale ; concours
+et épreuve écrite.
 """
 import os
+import re
 import sys
 from unittest import mock
 
@@ -33,7 +35,7 @@ from django.test import Client
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from grader import layout as L, services, sheet_pdf
+from grader import layout as L, qr as qr_mod, services, sheet_pdf
 from grader.fonts import shape
 from grader.models import ClassGroup, Inscrit, Question, Quiz, Student
 from test_commun import enseignant_complet
@@ -107,6 +109,34 @@ def main():
         assert abs((r.x0 + r.x1) / 2 / PT_PAR_MM - milieu) < 1.5, (r, milieu)
     print("  copies à talon : nom et n° seulement au-dessus du trait de coupe OK")
 
+    # ---- code d'anonymat (demande du 13 novembre 2026) : le même sur le talon, sous le
+    # nom, et sous le QR de la copie ; le talon détaché se rapproche de sa copie à l'œil.
+    # Un par copie, tiré au hasard (ni le n° d'inscription ni la CIN, que la copie corrigée
+    # montrerait), sans caractères que l'on confond (0/O, 1/I, 5/S, 8/B…)
+    codes = quiz.layout_json["codes"]
+    assert sorted(codes) == sorted(str(pk) for pk in groupe.students.values_list("pk", flat=True))
+    assert len(set(codes.values())) == len(codes), codes
+    qx, qy, qw, qh = quiz.layout_json["pages"][0]["qr"]["rect"]
+    forme = re.compile(f"[{qr_mod.ALPHABET_CODE}]{{3}}-[{qr_mod.ALPHABET_CODE}]{{3}}")
+    for k, (nom, _, _) in enumerate(ETUDIANTS):
+        code = qr_mod.code_lisible(codes[str(groupe.students.get(last_name=nom).pk)])
+        assert forme.fullmatch(code), code
+        trouves = sorted(doc[k].search_for(code), key=lambda r: r.y0)
+        assert len(trouves) == 2 and doc[k].search_for(f"Code {code}"), (nom, code, trouves)
+        sur_le_talon, sous_le_qr = trouves
+        assert sur_le_talon.y1 / PT_PAR_MM < L.TALON_COUPE - 2, (nom, sur_le_talon)
+        milieu = (sous_le_qr.y0 + sous_le_qr.y1) / 2 / PT_PAR_MM    # boîte de la police
+        assert qy + qh + 0.5 < milieu < qy + qh + 3.5, (nom, sous_le_qr, qy + qh)
+        assert abs((sous_le_qr.x0 + sous_le_qr.x1) / 2 / PT_PAR_MM - (qx + qw / 2)) < 1, sous_le_qr
+    assert "le code de la copie, imprimé aussi sous son QR code" in doc[0].get_text()
+    # un talon dessiné sans code (fiche d'oral cochée « talon »…) ne parle pas de code
+    sans_code = pymupdf.open(stream=sheet_pdf.generate_sheet_pdf(
+        quiz, quiz.layout_json, students=[groupe.students.get(last_name="AMRI")]),
+        filetype="pdf")[0].get_text()
+    assert "Code " not in sans_code and "le code de la copie" not in sans_code \
+        and "reste identifiée par son QR" in sans_code, sans_code
+    print("  code d'anonymat : le même sur le talon et sous le QR, un par copie OK")
+
     # ---- sous le n° : la CIN et la salle de la fiche du registre (5 novembre 2026)
     Inscrit.objects.filter(numero="TAL104501").delete()
     amri = groupe.students.get(last_name="AMRI")
@@ -116,6 +146,7 @@ def main():
     disposition = quiz.layout_json
     c.post(reverse("quiz_detail", args=[quiz.pk]), {"generate_pdf": "1"})
     quiz.refresh_from_db()
+    assert quiz.layout_json["codes"] == codes, "régénérées, les copies ont changé de code"
     assert quiz.layout_json == disposition, "la zone lue a bougé"
     doc = pymupdf.open(stream=open(quiz.sheet_pdf.path, "rb").read(), filetype="pdf")
     for texte in ("CIN 08870001", "Salle B12", "Page 1 / 1"):
@@ -153,8 +184,28 @@ def main():
     copie, lus = _lire(quiz, "envers.jpg",
                        cv2.rotate(simulate_scan(couper(page, 30.0)), cv2.ROTATE_180))
     assert copie.student_id == bakir.pk and lus == REPONSES
+    revue = c.get(reverse("sheet_review", args=[copie.pk])).content.decode()
+    assert f"Code <b>{qr_mod.code_lisible(codes[str(bakir.pk)])}</b>" in revue, \
+        "copie identifiée : son code n'est pas affiché"
     print("  talon découpé (au trait, 3 mm trop haut, 4 mm trop bas), non découpé, "
-          "à l'envers : BAKIR et ses réponses lus OK")
+          "à l'envers : BAKIR et ses réponses lus, son code affiché OK")
+
+    # ---- QR effacé (taché, arraché), code intact : la copie n'est pas identifiée ; dans la
+    # liste « Affecter à », chaque étudiant porte son code, celui qu'on lit sous le QR
+    cherif = groupe.students.get(last_name="CHERIF")
+    code_c = qr_mod.code_lisible(codes[str(cherif.pk)])
+    page_c = fill_sheet(render_page(pdf, 2), quiz.layout_json, REPONSES, name_text=("", ""))
+    page_c[mm2px(qy - 1):mm2px(qy + qh + 0.3), mm2px(qx - 1):mm2px(qx + qw + 1)] = 255
+    copie, _ = _lire(quiz, "qr_efface.jpg", simulate_scan(couper(page_c, 30.0)))
+    assert copie.student_id is None, (copie.status, copie.student_id)
+    revue = c.get(reverse("sheet_review", args=[copie.pk])).content.decode()
+    assert f"{cherif.full_name} — code {code_c}</option>" in revue, "code absent de la liste"
+    assert f'data-recherche="{cherif.student_number} {code_c.replace("-", "")}"' in revue
+    assert 'data-filtre-liste="id_student"' in revue and "imprimé sous le QR" in revue
+    c.post(reverse("sheet_review", args=[copie.pk]), {"student": cherif.pk})
+    copie.refresh_from_db()
+    assert copie.student_id == cherif.pk, copie.student_id
+    print("  QR effacé : copie non identifiée, retrouvée dans la liste par son code OK")
 
     # ---- une copie normale n'est pas prise pour une copie à talon
     normal = Quiz.objects.create(title="Contrôle normal", class_group=groupe, owner=prof,
@@ -202,7 +253,7 @@ def main():
     grille = ecrit.layout_json["pages"][0]["note_grid"]
     pages_par_copie = 1 + ecrit.layout_json["pages_redaction"]
     img = render_page(pdf_e, 2 * pages_par_copie)          # copie de CHERIF
-    for row, d in zip(grille["rows"], [1, 3, 5, 0]):        # 13,5 : chaque ligne noircie
+    for row, d in zip(grille["rows"], [13, 1]):             # 13,5 : 13 puis ,5
         if d is not None:
             cx, cy = row[d]
             cv2.circle(img, (mm2px(cx), mm2px(cy)), mm2px(grille["r"] * 0.9),
@@ -240,7 +291,7 @@ def main():
     # ---- PDF du scanner à 1200 ppp (8 novembre 2026 : pages de garde talon découpé,
     # 9910 × 12694 pixels, toutes refusées « Image démesurée ») : lues, note juste
     img = render_page(pdf_e, pages_par_copie)               # copie de BAKIR
-    for row, d in zip(grille["rows"], [0, 9, 2, 5]):        # 9,25
+    for row, d in zip(grille["rows"], [9, 1]):              # 9,5
         cx, cy = row[d]
         cv2.circle(img, (mm2px(cx), mm2px(cy)), mm2px(grille["r"] * 0.9), (20, 20, 20), -1)
     gris = cv2.cvtColor(simulate_scan(couper(img, 30.0)), cv2.COLOR_BGR2GRAY)
@@ -267,9 +318,9 @@ def main():
     copie_fine = lot.sheets.get()
     assert copie_fine.status != "error", copie_fine.error_message
     rows = {r["student"].last_name: r["score"] for r in services.compute_results(ecrit)}
-    assert rows == {"CHERIF": 13.5, "BAKIR": 9.25}, rows
+    assert rows == {"CHERIF": 13.5, "BAKIR": 9.5}, rows
     print(f"  écrit à talon en PDF à 1200 ppp ({largeur} × {hauteur} pixels) : décodé au "
-          "quart, note 9,25 lue et affectée à BAKIR OK")
+          "quart, note 9,5 lue et affectée à BAKIR OK")
 
     # ---- copie d'une autre épreuve, candidat absent de la liste (9 novembre 2026 : les
     # copies de l'épreuve 31 restaient « non identifiées » sans dire pourquoi, QR pourtant lu)
@@ -342,19 +393,36 @@ def main():
     assert len(doc_n) == 4 * len(ETUDIANTS), len(doc_n)
     gardes = [k for k, p in enumerate(doc_n) if "RÉSERVÉ AU CORRECTEUR" in p.get_text()]
     assert gardes == [0, 4, 8], gardes
-    # page 3, recto de la 2e feuille : l'en-tête ; pages 2 et 4, au dos : rien
-    texte = doc_n[2].get_text()
-    assert "Sana AMRI" in texte and "N° 104501" in texte and "Page 3 / 4" in texte \
-        and "Page non lue au scan" in texte, texte
-    lu, _, _ = cv2.QRCodeDetector().detectAndDecode(render_page(pdf_n, 2))
+    # nom, n° et QR sur la page de garde SEULEMENT (demande du 13 novembre 2026) : la page 3,
+    # recto de la 2e feuille, ne les reprend plus (elle le faisait depuis le 6 novembre)
+    texte = doc_n[0].get_text()
+    assert "Sana AMRI" in texte and "N° 104501" in texte, texte
+    lu, _, _ = cv2.QRCodeDetector().detectAndDecode(render_page(pdf_n, 0))
     assert lu == f"QS|{nominatif.pk}|{amri.pk}", lu
-    for k in (1, 3):
+    for k in (1, 2, 3):
         texte = doc_n[k].get_text()
         assert "AMRI" not in texte and "104501" not in texte, (k, texte)
         assert f"Rédaction nominative — page {k + 1}" in texte, (k, texte)
         assert cv2.QRCodeDetector().detectAndDecode(render_page(pdf_n, k))[0] == "", k
-    print("  écrit nominatif : nom, n° et QR au recto de chaque feuille (page 3), rien au dos "
-          "(pages 2 et 4) ; 2 pages lignées demandées, 3 imprimées OK")
+    print("  écrit nominatif : nom, n° et QR sur la page de garde seulement, rien sur les pages "
+          "lignées (page 3, recto de la 2e feuille, comprise) ; 2 pages lignées demandées, "
+          "3 imprimées OK")
+    # de même à talon : talon, code d'anonymat et QR sur la page de garde seulement
+    longue = Quiz.objects.create(title="Rédaction talon longue", class_group=groupe, owner=prof,
+                                 type_epreuve="ecrit", language="fr", id_mode="qr",
+                                 talon_nom=True, note_sur=20, pages_redaction=2)
+    c.post(reverse("quiz_detail", args=[longue.pk]), {"generer": "1"})
+    longue.refresh_from_db()
+    pdf_l = open(longue.sheet_pdf.path, "rb").read()
+    doc_l = pymupdf.open(stream=pdf_l, filetype="pdf")
+    code_amri = qr_mod.code_lisible(longue.layout_json["codes"][str(amri.pk)])
+    assert len(doc_l) == 4 * len(ETUDIANTS), len(doc_l)
+    assert "Sana AMRI" in doc_l[0].get_text() and len(doc_l[0].search_for(code_amri)) == 2
+    for k in (1, 2, 3):
+        texte = doc_l[k].get_text()
+        assert not any(t in texte for t in ("AMRI", "Talon à découper", code_amri)), (k, texte)
+        assert cv2.QRCodeDetector().detectAndDecode(render_page(pdf_l, k))[0] == "", k
+    print("  écrit à talon de 4 pages : talon, code et QR sur la page de garde seulement OK")
 
     # ---- le prénom d'abord, partout (demande de l'utilisateur, 7 novembre 2026) : en arabe
     # « الاسم واللقب », comme la liste officielle, et de même en lettres latines
@@ -372,11 +440,15 @@ def main():
         dessines = []
         with mock.patch.object(sheet_pdf, "shape",
                                side_effect=lambda t: dessines.append(t) or shape(t)):
-            sheet_pdf.generate_sheet_pdf(qcm_ar, L.build_layout(qcm_ar), students=[arabe])
+            sheet_pdf.generate_sheet_pdf(qcm_ar, L.build_layout(qcm_ar), students=[arabe],
+                                         codes={arabe.pk: "K7MR9Q"} if talon_nom else None)
         assert "محمد أمين الجبالي" in dessines and "الجبالي محمد أمين" not in dessines, \
             (talon_nom, [t for t in dessines if "الجبالي" in t])
+        # le code du talon, en arabe : « الرمز » puis le code
+        assert ("الرمز K7M-R9Q" in dessines) == talon_nom, [t for t in dessines if "K7M" in t]
     arabe.delete()
-    print("  prénom d'abord : « محمد أمين الجبالي » sur le talon et la bande, « Sana AMRI » OK")
+    print("  prénom d'abord : « محمد أمين الجبالي » sur le talon et la bande, « Sana AMRI » ; "
+          "code du talon « الرمز K7M-R9Q » OK")
 
     # ---- nombre de copies : il suit la liste, le champ n'apparaît que s'il agit
     def page(q):
@@ -413,12 +485,17 @@ def main():
 
     # candidat ajouté (admis de l'étape précédente) : il n'a pas de copie, la page le dit
     assert "régénérez les documents" not in texte
-    Student.objects.create(class_group=ecrit_c.class_group, last_name=ETUDIANTS[2][0],
-                           first_name=ETUDIANTS[2][1], student_number=ETUDIANTS[2][2])
+    codes_avant = dict(ecrit_c.layout_json["codes"])
+    ajoute = Student.objects.create(class_group=ecrit_c.class_group, last_name=ETUDIANTS[2][0],
+                                    first_name=ETUDIANTS[2][1], student_number=ETUDIANTS[2][2])
     texte = page(ecrit_c)
     assert "régénérez les documents" in texte and "3 copies</b>" in texte
     c.post(reverse("quiz_detail", args=[ecrit_c.pk]), {"generer": "1"})
     assert nb_pages(ecrit_c) == 6 and "régénérez les documents" not in page(ecrit_c)
+    # les copies déjà imprimées gardent leur code ; le nouveau venu en reçoit un autre
+    codes_apres = ecrit_c.layout_json["codes"]
+    assert len(codes_avant) == 2 and codes_avant.items() <= codes_apres.items(), codes_apres
+    assert codes_apres[str(ajoute.pk)] not in codes_avant.values(), codes_apres
 
     # ancien concours en « qr », sans talon : là, le nombre demandé est respecté
     anonymes = Quiz.objects.create(title="Fiches anonymes", class_group=ecrit_c.class_group,

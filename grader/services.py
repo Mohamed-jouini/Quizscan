@@ -29,6 +29,7 @@ from django.db.models import Count, Q, Sum
 
 from . import journal, omr, sheet_pdf
 from . import layout as layout_mod
+from . import qr as qr_mod
 from .models import (Answer, AnswerKeySheet, ClassGroup, Inscrit, Question, Quiz,
                      ScanBatch, SheetScan, Student)
 
@@ -909,11 +910,16 @@ def moderniser_calage(quiz):
     if not quiz.sheet_pdf or not disposition or disposition.get("calage") == "cadre":
         return False
     if quiz.type_epreuve == "oral":
-        from .views_epreuves import _generer_fiches_orales
-        _generer_fiches_orales(quiz)
-        return True
+        return False        # plus de fiches d'oral : les notes s'importent d'Excel
     if quiz.type_epreuve == "ecrit":
         if quiz.exemplaires_anonymes:
+            return False
+        # grille de la note redessinée depuis (demi-points, 13 novembre 2026) : les copies
+        # déjà imprimées gardent l'ancienne, on ne refait rien
+        try:
+            if zones_lues_changees(disposition, layout_mod.build_layout(quiz)):
+                return False
+        except layout_mod.TooManyPages:
             return False
         from .views_epreuves import _generer_documents
         _generer_documents(quiz)
@@ -930,8 +936,12 @@ def moderniser_calage(quiz):
                 for page, avant in zip(nouvelle["pages"], disposition["pages"])
                 for cle in _ZONES_LUES):
             return False
+        codes = None
+        if quiz.talon_nom:              # le code d'anonymat des talons déjà imprimés
+            codes = codes_anonymes(quiz)
+            nouvelle["codes"] = {str(pk): code for pk, code in codes.items()}
         pdf = sheet_pdf.generate_sheet_pdf(
-            quiz, nouvelle, students=list(quiz.class_group.students.all()))
+            quiz, nouvelle, students=list(quiz.class_group.students.all()), codes=codes)
         nouvelle["signature"] = disposition.get("signature",
                                                 layout_mod.layout_signature(quiz))
         if "sujet_version" in disposition:
@@ -1491,24 +1501,72 @@ def _reponses_retenues(quiz, q):
 
 
 def notes_orales(quiz):
-    """Pour la page d'un oral : [(étudiant, état, réponse)] où l'état est
-    « lue » (note lue sur la fiche scannée), « illisible » (fiche scannée,
-    note à vérifier sur la fiche), « manuelle » (ancienne saisie à la main)
-    ou « attendue » (fiche pas encore scannée)."""
+    """Pour la page d'un oral : [(étudiant, état, réponse)], dans l'ordre des salles, où
+    l'état est « importee » (note importée d'Excel, seule voie depuis le 13 novembre 2026,
+    ou ancienne saisie à la main), « lue » ou « illisible » (fiche scannée avant cette
+    date), ou « attendue » (pas encore de note)."""
     retenues = _reponses_retenues(quiz, question_note(quiz))
     lignes = []
-    for etudiant in quiz.class_group.students.all():
+    for etudiant in etudiants_par_salle(quiz):
         r = retenues.get(etudiant.pk)
         if r is None:
             etat = "attendue"
         elif r.sheet.batch.label == LOT_ORAL and not r.sheet.image:
-            etat = "manuelle"
+            etat = "importee"
         elif r.points_awarded is None:
             etat = "illisible"
         else:
             etat = "lue"
         lignes.append((etudiant, etat, r))
     return lignes
+
+
+def enregistrer_notes_orales(quiz, notes, utilisateur):
+    """Notes d'un oral importées d'Excel : [(n° d'inscription, note)]
+    (importers.notes_du_classeur). Tout n° doit être dans la liste de l'épreuve, sinon
+    rien n'est enregistré (ValueError). Une note déjà là est remplacée, et chaque note
+    nouvelle ou changée passe au journal. Retourne (nouvelles, modifiées, inchangées)."""
+    from .inscriptions import numero_propre
+    etudiants = {}
+    for s in quiz.class_group.students.all():
+        if s.student_number:
+            etudiants.setdefault(numero_propre(s.student_number), s)
+    inconnus = [numero for numero, _ in notes if numero not in etudiants]
+    if inconnus:
+        reste = f" (et {len(inconnus) - 10} autre(s))" if len(inconnus) > 10 else ""
+        raise ValueError("Aucune note importée : n° absent(s) de la liste de l'épreuve : "
+                         + ", ".join(inconnus[:10]) + reste + ".")
+    question = question_note(quiz)
+    retenues = _reponses_retenues(quiz, question)
+    nouvelles = modifiees = inchangees = 0
+    with transaction.atomic():
+        lot = None
+        for numero, note in notes:
+            etudiant = etudiants[numero]
+            reponse = retenues.get(etudiant.pk)
+            if reponse is not None and reponse.points_awarded == note:
+                inchangees += 1
+                continue
+            if reponse is None:
+                if lot is None:
+                    lot = (quiz.batches.filter(label=LOT_ORAL).first()
+                           or ScanBatch.objects.create(quiz=quiz, label=LOT_ORAL, status="done"))
+                copie = SheetScan.objects.create(batch=lot, status="ok", student=etudiant,
+                                                 student_confirmed=True,
+                                                 source_name="Import Excel")
+                reponse = Answer.objects.create(sheet=copie, question=question,
+                                                points_awarded=note, manually_set=True)
+                avant = None
+                nouvelles += 1
+            else:
+                avant = reponse.points_awarded
+                reponse.points_awarded, reponse.manually_set = note, True
+                reponse.save(update_fields=["points_awarded", "manually_set"])
+                modifiees += 1
+            journal.noter(utilisateur, "note", copie=reponse.sheet,
+                          objet=f"{etudiant.full_name} — note de l'oral (import Excel)",
+                          avant=avant, apres=note)
+    return nouvelles, modifiees, inchangees
 
 
 def _auto_points(question, answer):
@@ -1661,8 +1719,10 @@ def compute_results(quiz, batch=None, student=None):
 
     max_score = quiz.max_score
     # Une QCM = un point : le résultat se lit en bonnes réponses sur le
-    # nombre de QCM, et en pourcentage de la note maximale.
+    # nombre de QCM, et en note sur 20 (demande du 13 novembre 2026 : plus de
+    # pourcentage pour un QCM ; l'écrit et l'oral gardent le leur).
     n_qcm = quiz.questions.filter(qtype="qcm").count()
+    est_qcm = quiz.est_qcm
     rows = []
     for entry in per_student.values():
         # Page non identifiée ou non reçue : ses questions ne sont ni justes, ni fausses,
@@ -1672,9 +1732,16 @@ def compute_results(quiz, batch=None, student=None):
         entry["max_score"] = max_score
         entry["n_qcm"] = n_qcm
         entry["pct"] = round(entry["score"] / max_score * 100) if max_score else 0
+        entry["note20"] = sur_20(entry["score"], max_score)
+        entry["est_qcm"] = est_qcm          # note sur 20 affichée (sinon le pourcentage)
         rows.append(entry)
     rows.sort(key=lambda r: (r["student"].last_name.lower(), r["student"].first_name.lower()))
     return rows
+
+
+def sur_20(points, bareme):
+    """Points ramenés à une note sur 20, au centième : 37 bonnes réponses sur 50 -> 14,8."""
+    return round(points / bareme * 20, 2) if bareme else 0.0
 
 
 def admissions(quiz, rows):
@@ -1715,8 +1782,10 @@ def admissions(quiz, rows):
         r["rang"] = rang
     admis = [r for r in classement if r["resultat"] == "admis"]
     n = len(rows)
+    bareme = rows[0]["max_score"] if rows else quiz.max_score
     return {
         "seuil": seuil,
+        "seuil20": sur_20(seuil, bareme),       # QCM : la note minimale, lue sur 20
         "max_score": rows[0]["max_score"] if rows else None,
         "n": n,
         "n_admis": len(admis),
@@ -1895,6 +1964,30 @@ def etudiants_par_salle(quiz):
     return [s for _, s in par_salle([(None, s) for s in etudiants])]
 
 
+def codes_anonymes(quiz):
+    """Code d'anonymat de chaque étudiant d'une épreuve à talon : {pk: « K7MR9Q »}.
+
+    Unique dans l'épreuve et GARDÉ d'une génération à l'autre (layout_json["codes"]),
+    comme les n° de place : un talon déjà imprimé garde le code de sa copie, un étudiant
+    ajouté en reçoit un nouveau, celui d'un étudiant retiré n'est jamais redonné."""
+    connus = {int(k): v for k, v in ((quiz.layout_json or {}).get("codes") or {}).items()}
+    pris = set(connus.values())
+    codes = dict(connus)
+    for pk in quiz.class_group.students.order_by("pk").values_list("pk", flat=True):
+        if pk not in codes:
+            codes[pk] = qr_mod.nouveau_code(pris)
+            pris.add(codes[pk])
+    return codes
+
+
+def codes_imprimes(quiz):
+    """{pk: « K7M-R9Q »} : les codes d'anonymat imprimés sur les copies de la dernière
+    génération (vide si elles n'en portent pas). L'écran de vérification les montre : une
+    copie au QR abîmé se retrouve par le code imprimé dessous."""
+    return {int(pk): qr_mod.code_lisible(code)
+            for pk, code in ((quiz.layout_json or {}).get("codes") or {}).items()}
+
+
 def copies_nominatives_pdf(quiz, layout, progres=None):
     """PDF d'une copie par étudiant, QR imprimé : nom imprimé (ou sur le
     talon), ou copie anonyme à n° de place — la correspondance place ->
@@ -1910,7 +2003,13 @@ def copies_nominatives_pdf(quiz, layout, progres=None):
             places={s.pk: n for n, s in places}, progres=progres)
         return pdf, len(places)
     etudiants = etudiants_par_salle(quiz)          # dans l'ordre des salles
-    return (sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants, progres=progres),
+    codes = None
+    if quiz.talon_nom:
+        # code d'anonymat, sur le talon et sous le QR (13 novembre 2026)
+        codes = codes_anonymes(quiz)
+        layout["codes"] = {str(pk): code for pk, code in codes.items()}
+    return (sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants, progres=progres,
+                                         codes=codes),
             len(etudiants))
 
 
@@ -2271,9 +2370,11 @@ def bilan_admissions(quizzes, par_epreuve_max=8):
         pct = round(note / bareme * 100) if bareme else 0
         pcts.append(pct)
         e = epreuves.setdefault(quiz.pk, {"quiz": quiz, "n": 0, "admis": 0,
-                                          "attente": 0, "refuses": 0, "somme": 0})
+                                          "attente": 0, "refuses": 0, "somme": 0,
+                                          "somme20": 0.0})
         e["n"] += 1
         e["somme"] += pct
+        e["somme20"] += note / bareme * 20 if bareme else 0.0
         if quiz.note_admission is None:
             continue
         if note >= quiz.note_admission:
@@ -2285,6 +2386,7 @@ def bilan_admissions(quizzes, par_epreuve_max=8):
 
     for e in epreuves.values():
         e["moyenne_pct"] = round(e["somme"] / e["n"])
+        e["moyenne20"] = round(e["somme20"] / e["n"], 2)        # QCM : moyenne sur 20
         e["seuil"] = e["quiz"].note_admission is not None
         jugees = e["admis"] + e["attente"] + e["refuses"]
         e["pct_admis"] = round(e["admis"] / jugees * 100) if jugees else 0
@@ -2395,6 +2497,7 @@ def resume_epreuve(quiz):
         # Part du barème, pour la jauge : une moyenne de 8,5 ne veut rien
         # dire sans savoir si l'épreuve est sur 14 ou sur 20.
         "pct": round(moyenne / bareme * 100) if bareme else 0,
+        "moyenne20": sur_20(moyenne, bareme),       # QCM : la moyenne, sur 20
         # Avec une note minimale : combien l'atteignent.
         "admis": (sum(1 for t in totaux if t >= quiz.note_admission)
                   if quiz.note_admission is not None else None),
@@ -2416,12 +2519,13 @@ def compute_stats(quiz, rows):
     # n'estime pas celles d'une promotion plus large.
     ecart_type = (sum((x - moyenne) ** 2 for x in scores) / n) ** 0.5
 
-    # histogramme en 5 tranches de 20 % du barème
+    # histogramme en 5 tranches de 20 % du barème ; QCM : de 4 points sur 20
     bins = [0] * 5
     for s in scores:
         bins[min(int(s / max_score * 5), 4)] += 1
     biggest = max(bins) or 1
-    histogram = [{"label": f"{i * 20}–{(i + 1) * 20} %", "count": c,
+    histogram = [{"label": (f"{i * 4}–{(i + 1) * 4}" if quiz.est_qcm
+                            else f"{i * 20}–{(i + 1) * 20} %"), "count": c,
                   "pct": round(c / n * 100), "bar": round(c / biggest * 100)}
                  for i, c in enumerate(bins)]
 
@@ -2469,14 +2573,17 @@ def compute_stats(quiz, rows):
                              if st["graded"] and q.points else 0)
         questions.append(st)
 
+    # QCM : les notes se lisent sur 20 (13 novembre 2026), les statistiques aussi
+    facteur = 20 / max_score if quiz.est_qcm else 1
     return {
         "n": n,
-        "mean": round(moyenne, 2),
-        "median": round(median, 2),
-        "stdev": round(ecart_type, 2),
-        "best": scores[-1],
-        "worst": scores[0],
-        "max_score": quiz.max_score,
+        "mean": round(moyenne * facteur, 2),
+        "median": round(median * facteur, 2),
+        "stdev": round(ecart_type * facteur, 2),
+        "best": round(scores[-1] * facteur, 2),
+        "worst": round(scores[0] * facteur, 2),
+        "max_score": 20 if quiz.est_qcm else quiz.max_score,
+        "sur20": quiz.est_qcm,
         "histogram": histogram,
         "questions": questions,
         # Les questions dont la bonne réponse est probablement fausse :

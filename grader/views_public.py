@@ -3,9 +3,10 @@
   - les communiqués publiés (dates d'examen, convocations, salles…) ;
   - les épreuves dont les résultats sont publiés, et pour un concours la
     liste des admis si elle est publiée ;
-  - la note d'un étudiant, retrouvée par son n° d'inscription (choix de
+  - le résultat d'un étudiant, retrouvé par son n° d'inscription (choix de
     l'établissement : le n° suffit, comme pour les résultats du bac) ou par son
-    n° de CIN, envoyé par le formulaire et jamais dans l'adresse de la page.
+    n° de CIN, envoyé par le formulaire et jamais dans l'adresse de la page. Le
+    résultat seul, « Admis » ou « Non admis », jamais la note (13 novembre 2026).
 
 Rien n'y est visible tant que le personnel n'a pas publié (Quiz.resultats_publies,
 Quiz.admis_publies, Communique.publie). Les recherches par n° sont freinées
@@ -125,16 +126,22 @@ def resultat(request):
 
 
 def _liste_admis(quiz):
-    """Admis par ordre de mérite (rang, n°, nom, prénom), gardés 5 minutes."""
-    cle = f"qs-public-admis3:{quiz.pk}:{quiz.publie_le and quiz.publie_le.timestamp()}"
+    """Admis (n°, prénom, nom), par n° d'inscription, gardés 5 minutes.
+
+    Ni rang ni note : le candidat n'apprend que « Admis » ou « Non admis » (demande de
+    l'utilisateur, 13 novembre 2026). L'ordre de mérite dirait le rang : la liste suit le
+    n° d'inscription, où chacun cherche le sien. La liste complète, rang et notes, reste
+    au personnel (page des résultats, PDF, Excel)."""
+    cle = f"qs-public-admis5:{quiz.pk}:{quiz.publie_le and quiz.publie_le.timestamp()}"
     liste = cache.get(cle)
     if liste is None:
         admission = services.admissions(quiz, services.compute_results(quiz))
-        liste = [{"rang": r["rang"], "numero": r["student"].student_number,
-                  "nom": r["student"].last_name, "prenom": r["student"].first_name,
-                  "correct": r["correct"], "n_qcm": r["n_qcm"], "pct": r["pct"],
-                  "note": r["score"], "sur": r["max_score"]}
+        liste = [{"numero": r["student"].student_number or "",
+                  "nom": r["student"].last_name, "prenom": r["student"].first_name}
                  for r in (admission["admis"] if admission else [])]
+        # n° d'inscription dans l'ordre des nombres (« 9 » avant « 10 »), sans n° à la fin
+        liste.sort(key=lambda a: (not a["numero"], len(a["numero"]), a["numero"],
+                                  a["nom"].lower(), a["prenom"].lower()))
         cache.set(cle, liste, 300)
     return liste
 

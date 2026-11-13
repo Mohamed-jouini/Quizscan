@@ -50,6 +50,7 @@
           <div class="identite-copie__nom">{{ sheet.student.full_name }}</div>
           <div class="identite-copie__meta">
             {% if sheet.student.student_number %}N° {{ sheet.student.student_number }} · {% endif %}
+            {% if code_copie %}Code <b>{{ code_copie }}</b> · {% endif %}
             <span class="badge {% if identification.methode == 'qr' or identification.methode == 'grille' %}ok{% else %}grey{% endif %}">{{ identification.texte }}</span>
           </div>
         </div>
@@ -64,11 +65,20 @@
         {% if suite %}Proposé d'après l'ordre du scan : la page précédente du lot est celle de <b>{{ propose.full_name }}</b>. Rien sur cette page ne le confirme : vérifiez que le paquet n'a pas été mélangé, puis enregistrez.
         {% elif propose %}Étudiant proposé : <b>{{ propose.full_name }}</b> (ressemblance {{ ressemblance }} %, parmi les étudiants sans copie) — vérifiez sur l'image puis enregistrez.{% else %}Choisissez l'étudiant :{% endif %}</p>
       {% if sheet.name_crop %}<p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}" alt="Nom écrit sur la copie"></p>{% endif %}
+      {% if avec_codes %}<p class="helptext helptext--serre">Le code imprimé sous le QR, le même que sur le talon, retrouve l'étudiant : tapez-le dans la recherche ci-dessous.</p>{% endif %}
       <label for="id_student">Affecter à</label>
+      {# Recherche dans la liste (pages.js) : nom, n° d'inscription ou code de la copie #}
+      <div class="recherche-etudiant recherche-etudiant--liste">
+        <div class="recherche-etudiant__champ">
+          <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+          <input type="search" data-filtre-liste="id_student" autocomplete="off" aria-label="Rechercher l'étudiant"
+                 placeholder="Nom, n° d'inscription{% if avec_codes %} ou code de la copie{% endif %}">
+        </div>
+      </div>
       <select id="id_student" name="student">
         <option value="">— non identifié —</option>
         {% for s in students %}
-        <option value="{{ s.pk }}"{% if propose and s.pk == propose.pk %} selected{% endif %}>{{ s.full_name }}</option>
+        <option value="{{ s.pk }}"{% if propose and s.pk == propose.pk %} selected{% endif %} data-recherche="{{ s.student_number|default:'' }} {{ s.code_copie|cut:'-' }}">{{ s.full_name }}{% if s.code_copie %} — code {{ s.code_copie }}{% endif %}</option>
         {% endfor %}
       </select>
       {% endif %}

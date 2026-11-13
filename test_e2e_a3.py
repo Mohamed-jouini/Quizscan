@@ -144,8 +144,8 @@ def copie_remplie(pdf, quiz, index_recto, numero, chiffres, gauche, ecrire=True,
         moitie = griffonner(moitie, (22, haut + 9, 190, 276), graine)
     feuille[:, decalage:decalage + moitie.shape[1]] = moitie
     if ecrire:
-        # l'autre moitié du recto : une page de texte, sous l'en-tête que reprend la page
-        # lignée d'une copie nominative (son QR reste lisible : il ne doit rien gêner)
+        # l'autre moitié du recto : une page lignée remplie de texte (sans en-tête : talon et
+        # QR sont sur la page de garde seulement) ; elle ne doit pas gêner la lecture
         autre = 210 if gauche else 0
         feuille = griffonner(feuille, (autre + 22, debut_du_texte(page), autre + 190, 276),
                              graine + 1)
@@ -207,13 +207,13 @@ def verifier_ecrit(c, prof):
     assert disposition_page["lignes"]["x1"] == 196.0 and disposition_page["lignes"]["pas"] == 9.0
 
     # Lecture : chaque présentation que le scanner peut rendre.
-    sens = [("depliee.jpg", "AMRI", [1, 5, 7, 5], lambda f: f),
-            ("tournee90.jpg", "BAKIR", [0, 8, 0, 0],
+    sens = [("depliee.jpg", "AMRI", [15, 1], lambda f: f),
+            ("tournee90.jpg", "BAKIR", [8, 0],
              lambda f: cv2.rotate(f, cv2.ROTATE_90_CLOCKWISE)),
-            ("tournee270.jpg", "CHERIF", [1, 2, 5, 0],
+            ("tournee270.jpg", "CHERIF", [12, 1],
              lambda f: cv2.rotate(f, cv2.ROTATE_90_COUNTERCLOCKWISE)),
-            ("envers.jpg", "DALI", [0, 9, 2, 5], lambda f: cv2.rotate(f, cv2.ROTATE_180)),
-            ("pliee.jpg", "ESSID", [1, 1, 0, 0], lambda f: f[:, mm2px(210):])]
+            ("envers.jpg", "DALI", [9, 1], lambda f: cv2.rotate(f, cv2.ROTATE_180)),
+            ("pliee.jpg", "ESSID", [11, 0], lambda f: f[:, mm2px(210):])]
     numeros = {e[0]: e[2] for e in ETUDIANTS}
     envois = []
     for nom, etudiant, chiffres, sens_scan in sens:
@@ -230,7 +230,7 @@ def verifier_ecrit(c, prof):
         s = feuilles[nom]
         assert s.status == "ok" and s.student and s.student.last_name == etudiant, \
             (nom, s.status, s.error_message)
-    attendu = {"AMRI": 15.75, "BAKIR": 8.0, "CHERIF": 12.5, "DALI": 9.25, "ESSID": 11.0}
+    attendu = {"AMRI": 15.5, "BAKIR": 8.0, "CHERIF": 12.5, "DALI": 9.5, "ESSID": 11.0}
     assert notes(quiz) == attendu, notes(quiz)
     print("  lecture : dépliée, tournée à 90° et 270°, à l'envers, pliée : 5 notes justes ; "
           "verso écrit ignoré OK")
@@ -238,9 +238,9 @@ def verifier_ecrit(c, prof):
     # Sortie conseillée : un PDF recto-verso à 200 ppp, comme le chargeur la rend.
     quiz2, _ = creer_ecrit(c, prof, "A3-PDF")
     pdf2 = quiz2.sheet_pdf.read()
-    images = [copie_remplie(pdf2, quiz2, 0, numeros["AMRI"], [1, 4, 0, 0], gauche=False),
+    images = [copie_remplie(pdf2, quiz2, 0, numeros["AMRI"], [14, 0], gauche=False),
               griffonner(render_page(pdf2, 1), (22, 28, 190, 276), 11),
-              cv2.rotate(copie_remplie(pdf2, quiz2, 0, numeros["BAKIR"], [0, 7, 5, 0],
+              cv2.rotate(copie_remplie(pdf2, quiz2, 0, numeros["BAKIR"], [7, 1],
                                        gauche=False), cv2.ROTATE_90_COUNTERCLOCKWISE),
               cv2.rotate(render_page(pdf2, 1), cv2.ROTATE_90_COUNTERCLOCKWISE)]
     lot = services.process_uploaded_files(
@@ -258,7 +258,7 @@ def verifier_arabe_et_etiquette(c, prof):
     assert pages_des_moities(doc, quiz.title) == [(1, 4), (3, 2)], pages_des_moities(doc, quiz.title)
     assert quiz.layout_json["pages"][0]["lignes"]["marge"] == 190.0, "marge côté début de ligne"
     candidat = groupe.students.get(last_name="AMRI")
-    feuille = copie_remplie(pdf, quiz, 0, "", [1, 6, 0, 0], gauche=True, etiquette=candidat)
+    feuille = copie_remplie(pdf, quiz, 0, "", [16, 0], gauche=True, etiquette=candidat)
     lot = services.process_uploaded_files(
         quiz, [SimpleUploadedFile("ar.jpg", jpg(simulate_scan(feuille)))], label="A3 arabe")
     s = lot.sheets.get()
@@ -308,7 +308,7 @@ def verifier_talon(c, prof):
 
     # Lecture : la page de garde, à côté de la page 4 et de son QR ; le verso, talon coupé
     # ou non, ignoré (ni cadre ni code de page).
-    feuille = copie_remplie(pdf, quiz, 0, "", [1, 3, 0, 0], gauche=False)
+    feuille = copie_remplie(pdf, quiz, 0, "", [13, 0], gauche=False)
     coupee = feuille[mm2px(L.TALON_COUPE):]
     haut = debut_du_texte(quiz.layout_json["pages"][0])
     verso = griffonner(griffonner(render_page(pdf, 1), (22, haut, 190, 276), 5),
@@ -345,13 +345,13 @@ def verifier_entete_nominatif(c, prof):
         assert qr_de_la_moitie(render_page(pdf, index), droite, zone) == "", numero
     assert "Ne pas scanner" not in doc[0].get_text() + doc[1].get_text()
     # la page de garde se lit : dépliée, puis tournée
-    recto = simulate_scan(copie_remplie(pdf, quiz, 0, "", [1, 2, 0, 0], gauche=False))
+    recto = simulate_scan(copie_remplie(pdf, quiz, 0, "", [12, 0], gauche=False))
     haut = debut_du_texte(quiz.layout_json["pages"][0])
     verso = griffonner(render_page(pdf, 1), (232, haut, 400, 276), 9)
     lot = services.process_uploaded_files(quiz, [
         SimpleUploadedFile("amri.jpg", jpg(recto)),
         SimpleUploadedFile("bakir.jpg", jpg(simulate_scan(cv2.rotate(
-            copie_remplie(pdf, quiz, 2, "", [0, 8, 5, 0], gauche=False),
+            copie_remplie(pdf, quiz, 2, "", [8, 1], gauche=False),
             cv2.ROTATE_90_CLOCKWISE)))),
         SimpleUploadedFile("verso.jpg", jpg(simulate_scan(verso)))], label="A3 nominatives")
     feuilles = {s.source_name: s for s in lot.sheets.all()}
@@ -386,9 +386,9 @@ def verifier_deux_feuilles(c, prof):
     assert sheet_pdf._cotes_a3(1, False) == [(4, 1), (2, 3)]
     assert sheet_pdf._cotes_a3(5, True) == [(1, 8), (7, 2), (3, 6), (5, 4)]
 
-    # Copie à talon de 8 pages : la 2e feuille, emboîtée (pages 3 à 6), se détache ; sa
-    # première page, la 3, porte le talon, la bande et le QR (demande de l'utilisateur,
-    # 7 novembre 2026). Les autres pages lignées, rien.
+    # Copie à talon de 8 pages : talon et QR sur la page de garde SEULEMENT (demande de
+    # l'utilisateur, 13 novembre 2026). La page 3, première de la 2e feuille emboîtée (pages
+    # 3 à 6), les reprenait depuis le 7 novembre : plus rien, comme les autres pages lignées.
     talon, groupe = creer_ecrit(c, prof, "A3-LONG-TALON", id_mode="qr", anonymat="talon",
                                 pages_redaction="6")
     pdf = talon.sheet_pdf.read()
@@ -403,14 +403,15 @@ def verifier_deux_feuilles(c, prof):
             texte = doc[index].get_text(clip=moities(doc[index])[droite])
             numero = int(re.search(rf"{talon.title} — page (\d+)", texte).group(1))
             avec_nom[numero] = premiere.last_name in texte
-    assert sorted(n for n, oui in avec_nom.items() if oui) == [1, 3], avec_nom
+    assert sorted(n for n, oui in avec_nom.items() if oui) == [1], avec_nom
     texte3 = doc[2].get_text(clip=moities(doc[2])[1])
-    assert "Page 3 / 8" in texte3 and "Talon à découper" in texte3, texte3
+    assert "Talon à découper" not in texte3 and "Page 3 / 8" not in texte3, texte3
     zone = talon.layout_json["pages"][0]["qr"]
-    assert qr_de_la_moitie(render_page(pdf, 2), True, zone) == f"QS|{talon.pk}|{premiere.pk}"
-    assert qr_de_la_moitie(render_page(pdf, 2), False, zone) == "", "page 6 : rien"
-    print("  copie à talon de 8 pages : talon et QR sur la page de garde et sur la page 3, "
-          "première page de la 2e feuille OK")
+    for droite, numero in ((True, 3), (False, 6)):
+        assert qr_de_la_moitie(render_page(pdf, 2), droite, zone) == "", f"page {numero}"
+    assert qr_de_la_moitie(render_page(pdf, 0), True, zone) == f"QS|{talon.pk}|{premiere.pk}"
+    print("  copie à talon de 8 pages : talon et QR sur la page de garde seulement, rien sur "
+          "la 2e feuille (page 3 comprise) OK")
 
 
 def verifier_a4_inchange(c, prof):
@@ -463,7 +464,7 @@ def verifier_a4_inchange(c, prof):
     assert {k: quiz.layout_json["pages"][0].get(k) for k in services._ZONES_LUES} == zones_a4, \
         "rien de ce qui est lu ne bouge entre A4 et A3"
     ancienne = fill_sheet(render_page(pdf_a4, 0), {"pages": [page_a4]}, {}, student_number="104501")
-    ancienne = noircir_note(ancienne, page_a4["note_grid"], [1, 0, 5, 0])
+    ancienne = noircir_note(ancienne, page_a4["note_grid"], [10, 1])
     lot = services.process_uploaded_files(
         quiz, [SimpleUploadedFile("a4.jpg", jpg(simulate_scan(ancienne)))], label="A4 d'avant")
     s = lot.sheets.get()

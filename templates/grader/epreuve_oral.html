@@ -15,94 +15,67 @@
 </header>
 {% include "grader/_fil_etapes.html" with lien="quiz_detail" %}
 {% include "grader/_etape_precedente.html" %}
-{% include "grader/_generation.html" %}
 
-{% if perimee %}
-<div class="note note--warn">
-  <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
-  <div class="note__body">La liste des étudiants ou le barème ont changé depuis l'impression : <b>régénérez les fiches</b> pour les nouveaux étudiants (les fiches déjà imprimées restent lisibles).</div>
-</div>
-{% endif %}
-
+{# Notes de l'oral : un fichier Excel, et lui seul (demande de l'utilisateur, 13 novembre 2026). #}
 <div class="grid2">
   <div class="card">
-    <h2>1. Fiches d'évaluation</h2>
-    {% if perms.grader.creer_epreuve %}
-    <form method="post">{% csrf_token %}
-      <p><button class="btn" name="generer" value="1" type="submit" {% if not lignes %}disabled title="Ajoutez d'abord les étudiants"{% elif generation.etat == "en_cours" %}disabled title="Génération en cours"{% endif %}>
-        {% if quiz.sheet_pdf %}Régénérer les fiches{% else %}Générer les fiches ({{ lignes|length }}){% endif %}</button></p>
-    </form>
-    {% endif %}
-    {% if quiz.sheet_pdf %}
+    <h2>1. Modèle Excel des notes</h2>
+    <p class="helptext">Un {{ quiz.auto_enroll|yesno:"candidat,étudiant" }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, et la colonne « Note / {{ quiz.note_sur|floatformat:"-2" }} » à remplir. Les notes déjà importées y figurent.</p>
+    {% if lignes %}
     <div class="documents">
-      <a class="document" href="{{ quiz.sheet_pdf.url }}" target="_blank">
-        <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>
-        <span><b>Fiches d'évaluation</b><small>une par étudiant, en A4 à 100 %, dans l'ordre des salles</small></span></a>
+      <a class="document" href="{% url 'quiz_notes_oral_xlsx' quiz.pk %}">
+        <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 10h16M4 15h16M10 4v16"/></svg>
+        <span><b>Modèle Excel des notes</b><small>{{ lignes|length }} {{ quiz.auto_enroll|yesno:"candidat(s),étudiant(s)" }}, note sur {{ quiz.note_sur|floatformat:"-2" }}</small></span></a>
       <a class="document" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">
         <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="M15 16l1.5 1.5L19 15"/></svg>
-        <span><b>Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }} par salle</b><small>une liste par salle, dans l'ordre des fiches, pour la signature de présence</small></span></a>
+        <span><b>Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }} par salle</b><small>une liste par salle, pour la signature de présence</small></span></a>
     </div>
+    {% else %}
+    <p>Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} :
+      <a href="{% url 'class_detail' quiz.class_group.pk %}">ajoutez-les d'abord</a> (import Excel ou registre des inscriptions).</p>
     {% endif %}
-    <span class="helptext">Chaque fiche porte le nom et le QR de l'étudiant, le cadre de la note (dizaines, unités, dixièmes, centièmes) et des lignes pour les observations.</span>
   </div>
 
   <div class="card">
-    <h2>2. Fiches notées à scanner</h2>
+    <h2>2. Importer les notes</h2>
     {% if perms.grader.corriger_copies %}
-    <form method="post" action="{% url 'quiz_upload' quiz.pk %}" enctype="multipart/form-data">{% csrf_token %}
-      <label>{{ upload_form.label.label }}</label>{{ upload_form.label }}
-      <label>{{ upload_form.files.label }}</label>{{ upload_form.files }}
-      <p><button class="btn" type="submit" {% if not quiz.sheet_pdf %}disabled title="Générez d'abord les fiches"{% endif %}>Lire les notes et les affecter</button></p>
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      <label for="id_fichier_notes">Fichier Excel rempli (.xlsx)</label>
+      <input id="id_fichier_notes" type="file" name="fichier" accept=".xlsx" required>
+      <p><button class="btn" name="importer_notes" value="1" type="submit" {% if not lignes %}disabled title="Ajoutez d'abord les {{ quiz.auto_enroll|yesno:'candidats,étudiants' }}"{% endif %}>Importer les notes</button></p>
     </form>
-    {% else %}<p class="helptext">Votre compte ne téléverse pas de fiches.</p>{% endif %}
-    {% if batches %}
-    <div class="table-wrap">
-      <table>
-        <tr><th>Lot</th><th>Date</th><th>Fiches</th><th>Identifiées</th></tr>
-        {% for b in batches %}
-        <tr class="ligne-lien"><td><a class="ligne-lien__cible" href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
-            {% if b.is_processing %}<span class="badge warn">lecture {{ b.processed_pages }}/{{ b.total_pages }}</span>{% endif %}</td>
-          <td>{{ b.created_at|date:"d/m/Y H:i" }}</td><td>{{ b.sheets.count }}</td><td>{{ b.identified_count }}</td></tr>
-        {% endfor %}
-      </table>
-    </div>
-    {% endif %}
+    <span class="helptext">Seule voie de saisie des notes de l'oral. Une note vide est passée ; une note déjà importée est remplacée, et le journal le garde. Une seule ligne fausse (n° absent de la liste, note qui n'est pas un nombre de 0 à {{ quiz.note_sur|floatformat:"-2" }}, n° en double) et rien n'est importé : le message la nomme.</span>
+    {% else %}<p class="helptext">Votre compte n'importe pas de notes.</p>{% endif %}
   </div>
 </div>
 
 <div class="grid2 grid2--large">
   <div class="card">
     <h2>Notes de l'oral</h2>
-    <p class="helptext helptext--serre">Notes lues au scan des fiches d'évaluation, et seulement elles. Une note illisible se vérifie sur sa fiche (image sous les yeux).</p>
-    {% if lot_manuel %}
-    <div class="note note--warn">
-      <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
-      <div class="note__body">{{ lot_manuel.sheets.count }} note(s) avaient été <b>saisies à la main</b> avant : elles comptent encore dans les résultats.
-        {% if perms.grader.corriger_copies %}<a class="btn small secondary" href="{% url 'batch_delete' lot_manuel.pk %}">Supprimer ces notes saisies</a>{% endif %}</div>
-    </div>
-    {% endif %}
     {% if lignes %}
     <div class="table-wrap">
       <table>
-        <tr><th>Prénom et nom</th><th>N° d'inscription</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th><th>Fiche</th></tr>
+        <tr><th>Prénom et nom</th><th>N° d'inscription</th><th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th><th>Origine</th></tr>
         {% for e, etat, r in lignes %}
-        <tr class="ligne-lien">
-          <td>{% if etat == "lue" or etat == "illisible" %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'sheet_review' r.sheet.pk %}"><b>{{ e.full_name }}</b></a>{% else %}<b>{{ e.full_name }}</b>{% endif %}</td>
+        <tr>
+          <td><b>{{ e.full_name }}</b></td>
           <td>{{ e.student_number|default:"—" }}</td>
-          <td>{% if etat == "lue" or etat == "manuelle" %}<span class="score">{{ r.points_awarded|floatformat:"-2" }}</span>{% else %}—{% endif %}</td>
+          <td>{% if r and r.points_awarded is not None %}<span class="score">{{ r.points_awarded|floatformat:"-2" }}</span>{% else %}—{% endif %}</td>
           <td>
-            {% if etat == "lue" %}<a class="btn small secondary" href="{% url 'sheet_review' r.sheet.pk %}">Voir la fiche</a>
-            {% elif etat == "illisible" %}<a class="btn small" href="{% url 'sheet_review' r.sheet.pk %}">Note illisible : vérifier</a>
-            {% elif etat == "manuelle" %}<span class="badge warn">saisie à la main</span>
-            {% else %}<span class="badge grey">pas encore scannée</span>{% endif %}
+            {% if etat == "importee" %}<span class="badge ok">importée</span>
+            {% elif etat == "lue" %}<a class="btn small secondary" href="{% url 'sheet_review' r.sheet.pk %}">fiche scannée</a>
+            {% elif etat == "illisible" %}<a class="btn small" href="{% url 'sheet_review' r.sheet.pk %}">fiche scannée, note illisible</a>
+            {% else %}<span class="badge grey">pas encore notée</span>{% endif %}
           </td>
         </tr>
         {% endfor %}
       </table>
     </div>
+    {% if lot_import and perms.grader.corriger_copies %}
+    <p><a class="btn small secondary" href="{% url 'batch_delete' lot_import.pk %}">Supprimer les notes importées</a></p>
+    {% endif %}
     {% else %}
-    <p>Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} :
-      <a href="{% url 'class_detail' quiz.class_group.pk %}">ajoutez-les d'abord</a> (import Excel ou registre des inscriptions).</p>
+    <p class="helptext">Pas encore de {{ quiz.auto_enroll|yesno:"candidats,étudiants" }} dans la liste.</p>
     {% endif %}
   </div>
 

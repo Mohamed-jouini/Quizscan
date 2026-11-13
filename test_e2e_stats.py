@@ -140,7 +140,9 @@ def main():
     par_question = {s["question"].order: s for s in stats["questions"]}
 
     # ---------------------------------------------------------------- 1
-    notes = sorted(r["score"] for r in lignes)
+    # QCM : les statistiques se lisent sur 20 (13 novembre 2026)
+    assert stats["sur20"] and stats["max_score"] == 20, stats["max_score"]
+    notes = sorted(r["score"] * 20 / quiz.max_score for r in lignes)
     moyenne = sum(notes) / len(notes)
     attendu = round((sum((x - moyenne) ** 2 for x in notes) / len(notes)) ** 0.5, 2)
     assert stats["stdev"] == attendu, (

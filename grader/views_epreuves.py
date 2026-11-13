@@ -16,7 +16,7 @@ from django.core.files.base import ContentFile
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
-from . import droits, journal, services, sheet_pdf
+from . import droits, importers, journal, services, sheet_pdf
 from . import layout as layout_mod
 from .forms import EpreuveEcritForm, EpreuveOralForm, UploadForm
 
@@ -93,9 +93,14 @@ def generer(request, quiz, total, travail):
 
 def _generer_documents(quiz, nb_exemplaires=100, progres=None):
     """Copies à imprimer (page de garde + pages lignées) et sujet.
-    Retourne le message à afficher."""
+    Retourne les messages à afficher : [(niveau, texte)]."""
     services.question_note(quiz)
     layout = layout_mod.build_layout(quiz)
+    # copies imprimées avant : lues de travers si ce que le scan lit a bougé (comme pour
+    # la feuille d'un QCM, views._generer_fiche_qcm)
+    ancienne = quiz.layout_json
+    zones_changees = bool(ancienne) and services.zones_lues_changees(ancienne, layout)
+    grille_avant = ((ancienne or {}).get("pages") or [{}])[0].get("note_grid") or {}
     if quiz.exemplaires_anonymes:
         n = nb_exemplaires
         pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, serials=list(range(1, n + 1)),
@@ -126,7 +131,21 @@ def _generer_documents(quiz, nb_exemplaires=100, progres=None):
     if not quiz.copies_nominatives and (quiz.id_mode in ("sticker", "grid") or quiz.auto_enroll):
         msg += (" Imprimez aussi la planche d'étiquettes QR (page de la classe "
                 "ou des candidats) : chaque étudiant colle la sienne sur sa copie.")
-    return msg
+    a_dire = [("success", msg)]
+    if zones_changees:
+        grille = layout["pages"][0].get("note_grid") or {}
+        if grille.get("modele") == "demi" and grille_avant and not grille_avant.get("modele"):
+            a_dire.append(("warning", "Nouvelle grille de la note : partie entière de 0 à "
+                                      f"{grille['sur']:g}, décimale ,0 ou ,5. Les copies "
+                                      "imprimées avant cette génération portent l'ancienne "
+                                      "grille : imprimez et distribuez les nouvelles. "
+                                      "Scannée malgré tout, une ancienne copie aurait sa note "
+                                      "« à vérifier », jamais fausse."))
+        else:
+            a_dire.append(("warning", "Ce que le scan lit sur la copie a changé de place : "
+                                      "une copie imprimée avant cette génération serait lue "
+                                      "de travers. Imprimez et distribuez les nouvelles."))
+    return a_dire
 
 
 def _ecrit(request, quiz, fil=None):
@@ -160,7 +179,7 @@ def _ecrit(request, quiz, fil=None):
                 except ValueError:
                     n = 100
                 generer(request, quiz, nombre_de_copies(quiz, n),
-                        lambda q, progres: [("success", _generer_documents(q, n, progres))])
+                        lambda q, progres: _generer_documents(q, n, progres))
             return redirect("quiz_detail", pk=quiz.pk)
 
     generation = suivre_generation(request, quiz)
@@ -177,25 +196,12 @@ def _ecrit(request, quiz, fil=None):
 
 
 # -------------------------------------------------------------------- oral
-
-def _generer_fiches_orales(quiz, progres=None):
-    """Une fiche d'évaluation par étudiant : nom et QR imprimés, grille de la
-    note à noircir par l'examinateur. Scannée, la note va à l'étudiant."""
-    services.question_note(quiz)
-    etudiants = services.etudiants_par_salle(quiz)     # dans l'ordre des salles
-    quiz.id_mode = "qr"                 # fiches nominatives
-    layout = layout_mod.build_layout(quiz)
-    pdf = sheet_pdf.generate_sheet_pdf(quiz, layout, students=etudiants, progres=progres)
-    layout["signature"] = layout_mod.layout_signature(quiz)
-    quiz.layout_json = layout
-    quiz.sheet_pdf.save(f"fiches_oral_{quiz.pk}.pdf", ContentFile(pdf), save=False)
-    quiz.save()
-    return len(etudiants)
-
+# Depuis le 13 novembre 2026, les notes de l'oral s'importent d'un fichier Excel, et de
+# lui seul (plus de fiches d'évaluation imprimées puis scannées). Les fiches déjà scannées
+# avant comptent toujours ; un import remplace leur note.
 
 def _oral(request, quiz, fil=None):
     form = EpreuveOralForm(instance=quiz)
-    etudiants = list(quiz.class_group.students.all())
     if request.method == "POST":
         if "reglages" in request.POST:
             droits.exiger(request.user, droits.CREER, "modifier l'épreuve")
@@ -210,34 +216,50 @@ def _oral(request, quiz, fil=None):
                               avant=ancienne_note, apres=quiz.note_admission)
                 messages.success(request, "Épreuve enregistrée.")
                 return redirect("quiz_detail", pk=quiz.pk)
-        elif "generer" in request.POST:
-            droits.exiger(request.user, droits.CREER, "préparer l'épreuve")
-            if not etudiants:
-                messages.error(request, "Ajoutez d'abord les étudiants : une fiche "
-                                        "est imprimée pour chacun.")
+        elif "importer_notes" in request.POST:
+            # Les notes de l'oral ne viennent QUE d'un fichier Excel (demande de
+            # l'utilisateur, 13 novembre 2026) : ni fiche scannée, ni saisie à l'écran.
+            droits.exiger(request.user, droits.CORRIGER, "saisir les notes")
+            fichier = request.FILES.get("fichier")
+            if fichier is None or not fichier.name.lower().endswith(".xlsx"):
+                messages.error(request, "Choisissez le fichier Excel (.xlsx) des notes : le "
+                                        "modèle de l'épreuve, rempli.")
             else:
-                generer(request, quiz, len(etudiants), lambda q, progres: [(
-                    "success", f"{_generer_fiches_orales(q, progres)} fiche(s) d'évaluation "
-                               "prête(s), une par étudiant (nom et QR imprimés).")])
+                try:
+                    notes = importers.notes_du_classeur(fichier.read(), quiz.note_sur)
+                    nouvelles, modifiees, inchangees = services.enregistrer_notes_orales(
+                        quiz, notes, request.user)
+                except ValueError as exc:            # importers.ImportError_ compris
+                    messages.error(request, str(exc))
+                else:
+                    if not notes:
+                        messages.warning(request, "Aucune note dans le fichier : remplissez "
+                                                  "la colonne « Note » du modèle.")
+                    else:
+                        messages.success(request, f"Notes importées : {nouvelles} nouvelle(s), "
+                                                  f"{modifiees} modifiée(s), {inchangees} "
+                                                  "inchangée(s).")
             return redirect("quiz_detail", pk=quiz.pk)
 
-    # Les notes de l'oral ne viennent que des fiches scannées (demande de
-    # l'utilisateur, 30 octobre 2026) : plus de saisie dans ce tableau. Une
-    # note illisible se reprend sur l'écran de la fiche, image sous les yeux.
     lignes = services.notes_orales(quiz)
-    lot_manuel = quiz.batches.filter(label=services.LOT_ORAL).first()
-    generation = suivre_generation(request, quiz)
-    perimee = bool(quiz.layout_json) and (
-        quiz.layout_json.get("signature") != layout_mod.layout_signature(quiz))
     return render(request, "grader/epreuve_oral.html", {
         "quiz": quiz, "fil": fil, "form": form, "retour": _retour(quiz), "lignes": lignes,
-        "generation": generation,
-        "n_notes": sum(1 for _, etat, _ in lignes if etat in ("lue", "manuelle")),
-        "n_illisibles": sum(1 for _, etat, _ in lignes if etat == "illisible"),
-        "lot_manuel": lot_manuel,
-        "perimee": perimee, "upload_form": UploadForm(),
+        "n_notes": sum(1 for _, etat, r in lignes
+                       if etat != "attendue" and r.points_awarded is not None),
+        "lot_import": quiz.batches.filter(label=services.LOT_ORAL).first(),
         "etape": services.etat_etape(quiz),
-        "batches": quiz.batches.exclude(label=services.LOT_ORAL),
         "journal": quiz.modifications.all()[:15],
         "n_journal": quiz.modifications.count(),
     })
+
+
+def notes_orales_xlsx(request, quiz):
+    """Modèle Excel des notes de l'oral : les candidats, et leur note s'ils en ont une."""
+    from django.http import HttpResponse
+
+    from .export import notes_orales_workbook
+    reponse = HttpResponse(
+        notes_orales_workbook(quiz, services.notes_orales(quiz)),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    reponse["Content-Disposition"] = f'attachment; filename="notes_oral_{quiz.pk}.xlsx"'
+    return reponse

@@ -77,6 +77,34 @@
     maj();
   });
 
+  // Vérification d'une copie : la recherche réduit la liste « Affecter à » aux étudiants
+  // dont le nom, le n° d'inscription ou le code de la copie (imprimé sous le QR et sur le
+  // talon : « K7M-R9Q », « k7mr9q ») contient chaque mot tapé, et choisit le premier.
+  var formeRecherche = function (t) {
+    return (t || "").normalize("NFKD").replace(/[̀-ًͯ-ٰٟ]/g, "")
+      .toLowerCase().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي")
+      .replace(/[\s\-—·]+/g, " ");
+  };
+  document.querySelectorAll("input[data-filtre-liste]").forEach(function (champ) {
+    var liste = document.getElementById(champ.dataset.filtreListe);
+    if (!liste) return;
+    champ.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") e.preventDefault();      // pas d'enregistrement par mégarde
+    });
+    champ.addEventListener("input", function () {
+      var mots = formeRecherche(champ.value).split(" ").filter(Boolean);
+      var premier = null;
+      Array.prototype.forEach.call(liste.options, function (o) {
+        if (!o.value) return;                           // « — non identifié — »
+        var texte = formeRecherche(o.textContent + " " + (o.dataset.recherche || ""));
+        var garde = mots.every(function (m) { return texte.indexOf(m) !== -1; });
+        o.hidden = !garde;
+        if (garde && !premier) premier = o;
+      });
+      if (mots.length) liste.value = premier ? premier.value : "";
+    });
+  });
+
   // Œil « afficher / masquer » du champ mot de passe (pages de connexion)
   document.querySelectorAll(".reveal").forEach(function (btn) {
     var input = document.getElementById(btn.dataset.target);

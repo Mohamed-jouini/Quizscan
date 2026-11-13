@@ -587,6 +587,17 @@ def class_candidats_xlsx(request, pk):
 
 
 @login_required
+def quiz_notes_oral_xlsx(request, pk):
+    """Modèle Excel des notes d'un oral, seule voie de saisie de ces notes (13 novembre
+    2026) : les candidats dans l'ordre des salles, leur note s'ils en ont déjà une."""
+    quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    if quiz.type_epreuve != "oral":
+        raise Http404("Modèle réservé aux épreuves orales.")
+    from .views_epreuves import notes_orales_xlsx
+    return notes_orales_xlsx(request, quiz)
+
+
+@login_required
 def class_labels_pdf(request, pk):
     """Planche A4 d'étiquettes autocollantes (QR + n° d'inscription) des
     candidats du concours — à imprimer sur papier autocollant."""
@@ -1172,6 +1183,11 @@ def quiz_detail(request, pk):
 def quiz_upload(request, pk):
     droits.exiger(request.user, droits.CORRIGER, "téléverser des copies")
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    if quiz.type_epreuve == "oral":
+        # notes de l'oral : un fichier Excel, et lui seul (13 novembre 2026)
+        messages.error(request, "Les notes de l'oral s'importent d'un fichier Excel, sur la "
+                                "page de l'épreuve : plus de fiches scannées.")
+        return redirect("quiz_detail", pk=pk)
     if not quiz.layout_json:
         messages.error(request, "Générez d'abord la fiche de réponses PDF.")
         return redirect("quiz_detail", pk=pk)
@@ -1464,10 +1480,16 @@ def sheet_review(request, pk):
         return redirect("batch_detail", pk=sheet.batch_id)
 
     liste = list(students)
+    # code d'anonymat des copies à talon (13 novembre 2026) : celui de la copie, et dans la
+    # liste « Affecter à », où le code lu sous un QR illisible retrouve l'étudiant
+    codes = services.codes_imprimes(quiz)
+    for s in liste:
+        s.code_copie = codes.get(s.pk, "")
     suite = services.suite_de_copie(sheet, liste)
     propose, ressemblance = services.proposition(sheet, liste)
     return render(request, "grader/sheet_review.html", {
-        "sheet": sheet, "quiz": quiz, "students": students,
+        "sheet": sheet, "quiz": quiz, "students": liste,
+        "code_copie": codes.get(sheet.student_id, ""), "avec_codes": bool(codes),
         "propose": suite or propose, "suite": suite, "ressemblance": round(ressemblance),
         "identification": _identification(sheet),
         "answers": answers,

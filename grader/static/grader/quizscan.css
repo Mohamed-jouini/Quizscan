@@ -1737,17 +1737,12 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .tuile-etape--note .tuile-etape__nom{color:var(--qs-ink)}
 .pub-note{display:flex;flex-direction:column;gap:8px}
 .groupe > .pub-note{margin-top:auto}
-.pub-note__tete{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 10px}
-.pub-note__chiffre{font-size:14px;color:var(--qs-muted)}
-.pub-note__chiffre b{font-size:30px;line-height:1.1;color:var(--qs-ink);letter-spacing:-.5px}
-.pub-note__jauge{display:flex;align-items:center;gap:10px}
-.pub-note__jauge b{font-size:15px;color:var(--qs-blue);white-space:nowrap}
-.pub-note__jauge progress{flex:1;min-width:0;height:8px;border:0;border-radius:999px;overflow:hidden;
-  appearance:none;background:var(--qs-track)}
-.pub-note__jauge progress::-webkit-progress-bar{background:var(--qs-track)}
-.pub-note__jauge progress::-webkit-progress-value{background:var(--qs-grad-chart)}
-.pub-note__jauge progress::-moz-progress-bar{background:var(--qs-grad-chart)}
-.pub-note__detail{font-size:12.5px;color:var(--qs-muted)}
+/* Résultat au candidat : le verdict seul, « Admis » ou « Non admis » (13 novembre 2026) */
+.pub-verdict{align-self:flex-start;margin:0;padding:6px 16px;border-radius:999px;
+  font-size:20px;font-weight:700;line-height:1.25;background:var(--qs-track);color:var(--qs-muted)}
+.pub-verdict--admis{background:var(--qs-ok-bg);color:var(--qs-ok)}
+.pub-verdict--refuse{background:var(--qs-bad-bg);color:var(--qs-bad)}
+.pub-verdict--attente{background:var(--qs-warn-bg);color:var(--qs-warn)}
 .pub-tableau{overflow-x:auto;border:1px solid var(--qs-line);border-radius:var(--qs-r-card);
   background:var(--qs-surface)}
 .pub-tableau table{width:100%;border-collapse:collapse}

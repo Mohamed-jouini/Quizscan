@@ -21,6 +21,8 @@ urlpatterns = [
     path("quiz/<int:pk>/note-admission/", views.quiz_note_admission,
          name="quiz_note_admission"),
     path("quiz/<int:pk>/resultats.xlsx", views.quiz_results_xlsx, name="quiz_results_xlsx"),
+    path("quiz/<int:pk>/notes-oral.xlsx", views.quiz_notes_oral_xlsx,
+         name="quiz_notes_oral_xlsx"),
     path("quiz/<int:pk>/bulletins.pdf", views.quiz_bulletins_pdf, name="quiz_bulletins_pdf"),
     path("quiz/<int:pk>/admis.pdf", views.quiz_admis_pdf, name="quiz_admis_pdf"),
     path("quiz/<int:pk>/concours/", views.quiz_parcours, name="quiz_parcours"),

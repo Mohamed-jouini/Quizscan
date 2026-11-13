@@ -98,13 +98,18 @@ def test_ecrit(c, prof, groupe):
 
     layout = quiz.layout_json
     grille = layout["pages"][0]["note_grid"]
-    # quatre champs : 15,75 = 1 · 5 · 7 · 5
-    assert grille["kinds"] == ["dizaines", "unites", "dixiemes", "centiemes"]
+    # par demi-points (demande du 13 novembre 2026) : partie entière de 0 à 20 sur une
+    # ligne, décimale « ,0 » ou « ,5 » ; 15,5 = 15 puis ,5
+    assert grille["modele"] == "demi" and grille["kinds"] == ["entier", "demi"]
+    assert [len(r) for r in grille["rows"]] == [21, 2], [len(r) for r in grille["rows"]]
+    texte_garde = doc[0].get_text()
+    assert "Partie entière" in texte_garde and "Décimale" in texte_garde \
+        and "avec 20, noircissez ,0" in texte_garde and "Dizaines" not in texte_garde
     base = render_page(copies, 0)
     pages = []
-    for (nom, prenom, num), chiffres in zip(ETUDIANTS, ([1, 5, 7, 5],
-                                                       [0, 8, 0, 0],
-                                                       [1, [2, 6], 0, 0])):
+    for (nom, prenom, num), chiffres in zip(ETUDIANTS, ([15, 1],
+                                                       [8, 0],
+                                                       [[12, 16], 0])):
         img = fill_sheet(base.copy(), layout, {}, student_number=num)
         pages.append((f"{nom}.jpg", jpg(simulate_scan(noircir_note(img, grille, chiffres)))))
     pages.append(("redaction.jpg", jpg(simulate_scan(render_page(copies, 1)))))
@@ -116,11 +121,11 @@ def test_ecrit(c, prof, groupe):
         s = copies_lues[f"{nom}.jpg"]
         assert s.status == "ok" and s.student.student_number == num, (nom, s.status)
     rows = {r["student"].last_name: r for r in services.compute_results(quiz)}
-    assert rows["AMRI"]["score"] == 15.75 and rows["AMRI"]["pct"] == 79, rows["AMRI"]
+    assert rows["AMRI"]["score"] == 15.5 and rows["AMRI"]["pct"] == 78, rows["AMRI"]
     assert rows["BAKIR"]["score"] == 8.0 and rows["BAKIR"]["pending_open"] == 0
     assert rows["CHERIF"]["pending_open"] == 1, "note ambiguë : à saisir"
-    print("  scan : 15,75 et 8 lus et affectés par n° ; note ambiguë à saisir ; "
-          "page de rédaction ignorée OK")
+    print("  scan : 15,5 et 8 lus (partie entière 0 à 20, décimale ,0 ou ,5) et affectés "
+          "par n° ; note ambiguë à saisir ; page de rédaction ignorée OK")
 
     detail = c.get(reverse("batch_detail", args=[lot.pk])).content.decode()
     assert "Page de rédaction" in detail
@@ -164,96 +169,134 @@ def test_ecrit(c, prof, groupe):
           "tracée au journal OK")
     page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
     assert "<th>Bonnes réponses</th>" not in page and "<th>Note</th>" in page
-    assert "79 %" in page and "Non réussi" in page and "Réussi" in page
+    assert "78 %" in page and "Non réussi" in page and "Réussi" in page
     texte = texte_pdf(c.get(reverse("quiz_bulletins_pdf", args=[quiz.pk])).content)
-    assert "NOTE" in texte and "15.75 / 20" in texte and "Épreuve écrite" in texte
+    assert "NOTE" in texte and "15.5 / 20" in texte and "Épreuve écrite" in texte
     c.post(reverse("quiz_publication", args=[quiz.pk]), {"resultats_publies": "1"})
     cache.clear()
     public = Client().get(reverse("public_resultat") + "?numero=104501").content.decode()
-    assert "Rédaction" in public and ("15,75" in public or "15.75" in public) \
-        and "79 %" in public
-    assert "bonnes réponses" not in public
+    # espace public : le verdict seul, jamais la note (demande du 13 novembre 2026)
+    assert "Rédaction" in public and '<p class="pub-verdict pub-verdict--admis">Réussi</p>' \
+        in public, public[-1500:]
+    for absent in ("15,5", "15.5", "78 %", "bonnes réponses"):
+        assert absent not in public, absent
     cache.clear()
-    print("  résultats, bulletin et espace public : note, pourcentage, réussi OK")
+    print("  résultats et bulletin : note, pourcentage, réussi ; espace public : « Réussi » "
+          "seul OK")
     return quiz
 
 
 def test_ligne_vide_a_verifier(quiz):
-    """Chaque ligne de la note se noircit, 0 compris ; une ligne vide n'est pas lue 0, la
-    note est à vérifier (demande de l'utilisateur, 8 novembre 2026, après une vraie fiche
-    d'oral : « 1 » écrit aux dizaines, rond vide, 19 lu 9)."""
+    """Grille par demi-points (13 novembre 2026) : une case noircie par ligne, « ,0 »
+    compris. Une ligne vide n'est pas lue 0 : la note est à vérifier (règle du 8 novembre
+    2026, après une vraie fiche d'oral où 19 était lu 9). 20,5 dépasse le barème : à
+    vérifier aussi."""
     from grader import omr
     grille = quiz.layout_json["pages"][0]["note_grid"]
     pdf = open(quiz.sheet_pdf.path, "rb").read()
 
-    def ecrire(img, ligne, chiffre="1"):
-        x, y, w, h = grille["write_boxes"][ligne]
-        cv2.putText(img, chiffre, (mm2px(x + 1.6), mm2px(y + h - 0.9)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.6, (40, 40, 40), 4, cv2.LINE_AA)
+    def en_clair(img, texte):                   # la note écrite dans sa case
+        x, y, w, h = grille["note_box"]
+        cv2.putText(img, texte, (mm2px(x + 4), mm2px(y + h - 3)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 2.4, (40, 40, 40), 5, cv2.LINE_AA)
         return img
 
     def lire(img):
         return omr.lire_note(cv2.resize(img, (int(210 * 8), int(297 * 8))), grille, 20)
 
-    neuf = noircir_note(render_page(pdf, 0), grille, [0, 9, 0, 0])
-    assert lire(neuf.copy())[0] == 9.0, "0 · 9 · 0 · 0 : 9"
-    vide = noircir_note(render_page(pdf, 0), grille, [None, 9, 0, 0])
+    neuf = noircir_note(render_page(pdf, 0), grille, [9, 0])
+    assert lire(neuf.copy())[0] == 9.0, "9 puis ,0 : 9"
+    vide = noircir_note(render_page(pdf, 0), grille, [None, 0])
     note, lus = lire(vide.copy())
-    assert note is None and lus == ["?", 9, 0, 0], (note, lus)     # dizaines vides
-    note, lus = lire(ecrire(vide.copy(), 0))                       # « 1 » écrit, rond vide
-    assert note is None and lus[0] == "?", (note, lus)
-    complete = ecrire(noircir_note(render_page(pdf, 0), grille, [1, 9, 0, 0]), 0)
-    assert lire(complete)[0] == 19.0, "écrit et noirci : 19"
-    sans_centiemes = noircir_note(render_page(pdf, 0), grille, [1, 5, 7, None])
-    assert lire(sans_centiemes)[0] is None, "centièmes vides : à vérifier, pas 15,7"
+    assert note is None and lus == ["?", 0], (note, lus)          # partie entière vide
+    note, lus = lire(en_clair(render_page(pdf, 0), "19"))         # écrite, rien de noirci
+    assert note is None and lus == ["?", "?"], (note, lus)
+    sans_decimale = noircir_note(render_page(pdf, 0), grille, [15, None])
+    assert lire(sans_decimale)[0] is None, "décimale vide : à vérifier, pas 15"
+    complete = en_clair(noircir_note(render_page(pdf, 0), grille, [19, 1]), "19,5")
+    assert lire(complete)[0] == 19.5, "écrite et noircie : 19,5"
+    assert lire(noircir_note(render_page(pdf, 0), grille, [20, 0]))[0] == 20.0
+    trop = noircir_note(render_page(pdf, 0), grille, [20, 1])
+    assert lire(trop)[0] is None, "20,5 : au-dessus du barème, à vérifier"
+    assert lire(noircir_note(render_page(pdf, 0), grille, [14, [0, 1]]))[0] is None, \
+        ",0 et ,5 noircis : à vérifier"
     # par le vrai chemin : feuille scannée (tournée, bruitée), recalée sur son cadre
-    for image, attendu in ((neuf, 9.0), (vide, None), (complete, 19.0)):
+    for image, attendu in ((neuf, 9.0), (vide, None), (complete, 19.5), (trop, None)):
         recalee, _ = omr.detect_and_warp(simulate_scan(image.copy()))
         assert omr.lire_note(recalee, grille, 20)[0] == attendu, attendu
-    print("  ligne de la note sans case noircie (0 compris) : note à vérifier, et non "
-          "9 pour 19 OK")
+    print("  grille par demi-points : 9, 19,5 et 20 lus ; partie entière ou décimale vide, "
+          "deux décimales, 20,5 : note à vérifier OK")
 
 
 def test_ancienne_grille(quiz):
-    """Copies imprimées avant les centièmes (grille à 3 lignes, decimales 1) : lues avec
-    leur disposition d'alors ; avec la nouvelle, leur ligne des centièmes, absente, est
-    vide : note à vérifier, jamais fausse (8 novembre 2026)."""
-    from grader import omr
+    """Copies imprimées avec l'ancienne grille à chiffres (dizaines, unités, dixièmes,
+    centièmes ; avant elle, trois lignes) : lues avec leur disposition d'alors. Lues avec la
+    nouvelle, si l'épreuve a été régénérée depuis, leur ligne de la décimale tombe sous
+    l'ancienne grille, sur du blanc : note à vérifier, jamais fausse (13 novembre 2026)."""
+    import copy
+
+    from grader import layout as L, omr, sheet_pdf
     nouvelle = quiz.layout_json["pages"][0]["note_grid"]
-    ancienne = {**nouvelle, "rows": nouvelle["rows"][:3],
-                "kinds": nouvelle["kinds"][:3], "decimales": 1}
-    img = noircir_note(render_page(open(quiz.sheet_pdf.path, "rb").read(), 0), ancienne, [1, 4, 5])
-    warped = cv2.resize(img, (int(210 * 8), int(297 * 8)))   # repère canonique
-    assert omr.lire_note(warped, ancienne, 20)[0] == 14.5
-    assert omr.lire_note(warped, nouvelle, 20)[0] is None    # centièmes absents : à vérifier
-    img = noircir_note(render_page(open(quiz.sheet_pdf.path, "rb").read(), 0), nouvelle, [1, 5, 7, 5])
-    warped = cv2.resize(img, (int(210 * 8), int(297 * 8)))
-    assert omr.lire_note(warped, nouvelle, 20)[0] == 15.75
-    print("  grille à 4 champs (15,75) ; copies à 3 lignes lues avec leur disposition "
-          "(14,5), à vérifier avec la nouvelle OK")
+    page = {}
+    L._add_note_grid(page, nouvelle["rect"][1], 20, nouvelle["order"])   # au même endroit
+    ancienne = page["note_grid"]
+    assert ancienne["kinds"] == ["dizaines", "unites", "dixiemes", "centiemes"]
+    disposition = copy.deepcopy(quiz.layout_json)
+    disposition["pages"][0]["note_grid"] = ancienne
+    pdf = sheet_pdf.generate_sheet_pdf(quiz, disposition)        # copie imprimée d'avant
+    x, y, w, h = ancienne["rect"]
+    for chiffres, attendu in (([1, 3, 5, 0], 13.5), ([1, 9, 2, 5], 19.25), ([0, 8, 0, 0], 8.0)):
+        img = noircir_note(render_page(pdf, 0), ancienne, chiffres)
+        # la signature du correcteur, sous l'ancienne grille, sur la ligne des entiers
+        cv2.line(img, (mm2px(x + 112), mm2px(y + h - 1)), (mm2px(x + w - 6), mm2px(y + h - 2)),
+                 (30, 30, 30), mm2px(2.2))
+        warped = cv2.resize(img, (int(210 * 8), int(297 * 8)))   # repère canonique
+        assert omr.lire_note(warped, ancienne, 20)[0] == attendu, chiffres
+        assert omr.lire_note(warped, nouvelle, 20)[0] is None, (chiffres, "lue fausse")
+        recalee, _ = omr.detect_and_warp(simulate_scan(img.copy()))
+        assert omr.lire_note(recalee, nouvelle, 20)[0] is None, (chiffres, "lue fausse")
+    trois = {**ancienne, "rows": ancienne["rows"][:3], "kinds": ancienne["kinds"][:3],
+             "decimales": 1}
+    warped = cv2.resize(noircir_note(render_page(pdf, 0), trois, [1, 4, 5]),
+                        (int(210 * 8), int(297 * 8)))
+    assert omr.lire_note(warped, trois, 20)[0] == 14.5
+    assert omr.lire_note(warped, ancienne, 20)[0] is None       # centièmes absents
+    assert omr.lire_note(warped, nouvelle, 20)[0] is None
+    print("  copies à l'ancienne grille (13,5 ; 19,25 ; 8 ; 14,5 sur trois lignes) lues avec "
+          "leur disposition ; avec la nouvelle : à vérifier, jamais fausses OK")
 
 
 def test_oral(c, groupe):
-    """Oral : les notes ne viennent QUE des fiches scannées (plus de saisie
-    à la main dans le tableau, demande de l'utilisateur, 30 octobre 2026)."""
-    from grader.models import ScanBatch, SheetScan
+    """Oral : les notes s'importent d'un fichier Excel, et de lui seul (demande de
+    l'utilisateur, 13 novembre 2026) : ni saisie à l'écran, ni fiche scannée."""
+    import io
+
+    from openpyxl import load_workbook
     r = c.post(reverse("quiz_create"), {
         "title": "Oral d'anglais", "type_epreuve": "oral", "class_group": groupe.pk,
         "language": "fr", "note_sur": "20", "sheet_mode": "grid", "id_mode": "grid",
         "id_digits": "6", "wrong_penalty": "0"})
     assert r.status_code == 302
     quiz = Quiz.objects.get(title="Oral d'anglais", class_group=groupe)
-    page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
-    assert "Notes de l'oral" in page and "Sana AMRI" in page
-    assert "pas encore scannée" in page and 'class="etapes"' not in page
+    url = reverse("quiz_detail", args=[quiz.pk])
+    page = c.get(url).content.decode()
+    assert "Notes de l'oral" in page and "Sana AMRI" in page and "pas encore notée" in page
+    assert "Importer les notes" in page and reverse("quiz_notes_oral_xlsx", args=[quiz.pk]) in page
+    assert "Générer les fiches" not in page and "Lire les notes et les affecter" not in page
     e = {s.last_name: s for s in groupe.students.all()}
-    assert f'name="note_{e["AMRI"].pk}"' not in page
-    assert "Enregistrer les notes" not in page
-    # un envoi fabriqué « à la main » n'enregistre rien
-    c.post(reverse("quiz_detail", args=[quiz.pk]), {
-        "notes": "1", f"note_{e['AMRI'].pk}": "15,5"})
-    assert services.compute_results(quiz) == []
-    print("  oral : plus de saisie à la main (champ absent, envoi fabriqué ignoré) OK")
+    assert f'name="note_{e["AMRI"].pk}"' not in page and "Enregistrer les notes" not in page
+    # ni saisie fabriquée « à la main », ni fiches : rien n'est enregistré
+    c.post(url, {"notes": "1", f"note_{e['AMRI'].pk}": "15,5"})
+    c.post(url, {"generer": "1"})
+    quiz.refresh_from_db()
+    assert services.compute_results(quiz) == [] and not quiz.sheet_pdf
+    r = c.post(reverse("quiz_upload", args=[quiz.pk]),
+               {"label": "Jury 1", "files": SimpleUploadedFile("fiche.jpg", b"jpeg")}, follow=True)
+    assert "plus de fiches scannées" in r.content.decode() and not quiz.batches.exists()
+    formulaire = c.get(reverse("quiz_create")).content.decode()
+    assert "Oral — notes importées d&#x27;un fichier Excel" in formulaire
+    print("  oral : ni saisie à l'écran, ni fiches générées ou scannées ; import Excel "
+          "seulement OK")
 
     # ---- note minimale réglée sur la page de l'oral (demande de l'utilisateur, 7 novembre)
     assert 'name="note_admission"' in page and "Note minimale de réussite" in page
@@ -273,68 +316,75 @@ def test_oral(c, groupe):
     assert quiz.note_admission is None, "vide : plus de note minimale"
     print("  oral : note minimale réglée sur sa page (12,5 retenu, 21 refusé, vide retiré) OK")
 
-    # ---- fiches d'évaluation : imprimées, notées par l'examinateur, scannées
-    c.post(reverse("quiz_detail", args=[quiz.pk]), {"generer": "1"})
-    quiz.refresh_from_db()
-    fiches = open(quiz.sheet_pdf.path, "rb").read()
-    doc = pymupdf.open(stream=fiches, filetype="pdf")
-    assert len(doc) == 3, len(doc)                      # une fiche par étudiant
-    assert "AMRI" in doc[0].get_text() and "CHERIF" in doc[2].get_text()
-    assert "RÉSERVÉ AU CORRECTEUR" in doc[0].get_text()
-    grille = quiz.layout_json["pages"][0]["note_grid"]
-    scans = []
-    # AMRI : 12,25 ; CHERIF : deux cases noircies sur les unités (illisible)
-    for nom, page_k, chiffres in (("AMRI", 0, [1, 2, 2, 5]), ("CHERIF", 2, [1, [7, 3], 0, 0])):
-        img = noircir_note(render_page(fiches, page_k), grille, chiffres)
-        scans.append(SimpleUploadedFile(f"oral_{nom}.jpg", jpg(simulate_scan(img))))
-    lot = services.process_uploaded_files(quiz, scans, label="Jury 1")
-    assert all(s.status == "ok" for s in lot.sheets.all()), \
-        [(s.source_name, s.status, s.error_message) for s in lot.sheets.all()]
-    rows = {r["student"].last_name: r for r in services.compute_results(quiz)}
-    assert rows["AMRI"]["score"] == 12.25 and rows["CHERIF"]["pending_open"] == 1, rows
-    page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
-    assert "12,25" in page and "Voir la fiche" in page
-    assert "Note illisible : vérifier" in page and "pas encore scannée" in page
-    print("  oral scanné : 12,25 lue et affectée par QR ; note illisible à "
-          "vérifier ; BAKIR pas encore scannée OK")
+    # ---- modèle Excel : les candidats dans l'ordre des salles, la colonne « Note » vide
+    def modele():
+        reponse = c.get(reverse("quiz_notes_oral_xlsx", args=[quiz.pk]))
+        disposition = reponse["Content-Disposition"]
+        assert disposition.startswith("attachment"), disposition
+        classeur = load_workbook(io.BytesIO(reponse.content))
+        feuille = classeur.active
+        assert [x.value for x in feuille[2]] == ["N° d'inscription", "Prénom", "Nom", "Note / 20"]
+        return classeur, {ligne[0].value: ligne for ligne in feuille.iter_rows(min_row=3)}
 
-    # la note illisible se reprend sur la fiche scannée (image sous les yeux)
-    cherif = SheetScan.objects.get(batch=lot, student=e["CHERIF"])
-    reponse = cherif.answers.get()
-    # résultats : la pastille « note à saisir » mène droit à la fiche
-    page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
-    assert f'href="{reverse("sheet_review", args=[cherif.pk])}" title="Ouvrir la copie pour saisir la note"' in page
-    # sur la fiche, le champ de la note est dans le bloc « Note », hors du
-    # tableau défilant où l'image de la grille le repoussait hors de l'écran
-    revue = c.get(reverse("sheet_review", args=[cherif.pk])).content.decode()
-    bloc = revue.split('class="note-lue note-lue--a-saisir"')[1].split("</form>")[0]
-    assert f'name="points_{reponse.pk}"' in bloc and "Note sur 20" in bloc
-    assert "table-wrap" not in bloc.split(f'name="points_{reponse.pk}"')[0]
-    # retour aux résultats (demande du 9 novembre 2026) : en tête de page, et après
-    # l'enregistrement de la note
-    resultats = reverse("quiz_results", args=[quiz.pk])
-    assert f'href="{resultats}">← Retour aux résultats</a>' in revue
-    assert 'name="retour_resultats"' in bloc and "Enregistrer et retour aux résultats" in bloc
-    r = c.post(reverse("sheet_review", args=[cherif.pk]),
-               {f"points_{reponse.pk}": "17", "retour_resultats": "1"})
-    assert r.status_code == 302 and r["Location"] == resultats, r.get("Location")
-    rows = {r["student"].last_name: r["score"] for r in services.compute_results(quiz)}
-    assert rows == {"AMRI": 12.25, "CHERIF": 17.0}, rows
-    page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
-    assert ">fiche</a>" in page
-    print("  note illisible vérifiée sur la fiche scannée : 17 OK")
+    def importer(classeur):
+        tampon = io.BytesIO()
+        classeur.save(tampon)
+        envoi = c.post(url, {"importer_notes": "1",
+                             "fichier": SimpleUploadedFile("notes.xlsx", tampon.getvalue())},
+                       follow=True)
+        return envoi.content.decode()
 
-    # anciennes notes saisies à la main (avant ce changement) : signalées
-    ancien = ScanBatch.objects.create(quiz=quiz, label=services.LOT_ORAL, status="done")
-    vieille = SheetScan.objects.create(batch=ancien, student=e["BAKIR"], status="ok",
-                                       source_name="oral", student_confirmed=True)
-    from grader.models import Answer
-    Answer.objects.create(sheet=vieille, question=services.question_note(quiz),
-                          points_awarded=9.0, manually_set=True)
-    page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
-    assert "saisies à la main" in page and "Supprimer ces notes saisies" in page
-    assert reverse("batch_delete", args=[ancien.pk]) in page
-    print("  anciennes notes saisies à la main : signalées, avec lien de suppression OK")
+    def notes():
+        return {r["student"].last_name: r["score"] for r in services.compute_results(quiz)}
+
+    classeur, lignes = modele()
+    assert set(lignes) == {num for _, _, num in ETUDIANTS}, set(lignes)
+    assert all(ligne[3].value is None for ligne in lignes.values())
+    lignes["104501"][3].value = "12,25"          # saisie avec une virgule
+    lignes["104503"][3].value = 9                # BAKIR : vide (absent), passé
+    page = importer(classeur)
+    assert "Notes importées : 2 nouvelle(s), 0 modifiée(s), 0 inchangée(s)" in page, page[-2000:]
+    assert notes() == {"AMRI": 12.25, "CHERIF": 9.0}, notes()
+    page = c.get(url).content.decode()
+    assert "importée" in page and "12,25" in page and "pas encore notée" in page
+    assert quiz.modifications.filter(action="note", objet__contains="import Excel").count() == 2
+    # le modèle reprend les notes ; réimporté : une note changée, une nouvelle
+    classeur, lignes = modele()
+    assert lignes["104501"][3].value == 12.25 and lignes["104502"][3].value is None
+    lignes["104503"][3].value = 17
+    lignes["104502"][3].value = 10.5
+    page = importer(classeur)
+    assert "Notes importées : 1 nouvelle(s), 1 modifiée(s), 1 inchangée(s)" in page, page[-2000:]
+    assert notes() == {"AMRI": 12.25, "BAKIR": 10.5, "CHERIF": 17.0}, notes()
+    print("  oral : modèle Excel téléchargé, rempli (12,25 ; 9 ; une case vide), importé ; "
+          "réimporté : note remplacée, journal tenu OK")
+
+    # un fichier faux n'importe rien, et le message nomme chaque ligne fausse
+    avant = notes()
+    lignes["104501"][3].value = 21
+    lignes["104502"][3].value = "abs"
+    page = importer(classeur)
+    assert "Aucune note importée" in page and "« abs »" in page, page[-2000:]
+    assert "n° 104501 : « 21 » n&#x27;est pas une note de 0 à 20" in page, page[-2000:]
+    assert notes() == avant
+    classeur, lignes = modele()
+    classeur.active.append(["999999", "Inconnu", "X", 12])
+    page = importer(classeur)
+    assert "Aucune note importée" in page and "999999" in page and notes() == avant
+    classeur, lignes = modele()
+    classeur.active.append(["104501", "Sana", "AMRI", 13])
+    page = importer(classeur)
+    assert "n° 104501 : deux fois dans le fichier" in page and notes() == avant
+    feuille = load_workbook(io.BytesIO(c.get(reverse("quiz_notes_oral_xlsx",
+                                                     args=[quiz.pk])).content)).active
+    feuille.delete_rows(1, 2)                     # plus d'en-têtes
+    page = importer(feuille.parent)
+    assert "introuvables" in page and notes() == avant
+    r = c.post(url, {"importer_notes": "1",
+                     "fichier": SimpleUploadedFile("notes.csv", b"104501;12")}, follow=True)
+    assert "Choisissez le fichier Excel (.xlsx)" in r.content.decode() and notes() == avant
+    print("  oral : note hors barème ou illisible, n° inconnu, n° en double, en-têtes absents, "
+          "autre format : rien d'importé, chaque ligne nommée OK")
 
 
 def main():

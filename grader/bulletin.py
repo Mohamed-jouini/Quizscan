@@ -118,21 +118,27 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
         if s.student_number:
             _draw(c, f"N° {s.student_number}", X1, 48.0, 10, align="right", gray=0.3)
 
-        # Résultat : bonnes réponses (une QCM = 1 point) et pourcentage
+        # Résultat : bonnes réponses (une QCM = 1 point) et note sur 20 (QCM, demande du
+        # 13 novembre 2026), ou pourcentage (écrit, oral)
         if quiz.a_des_qcm:
             _draw(c, f"{r['correct']} / {r['n_qcm']}", X0, 62.0, 22, bold=True)
             _draw(c, "BONNES RÉPONSES", X0, 67.5, 8, gray=0.45)
         else:                       # écrit ou oral : la note elle-même
             _draw(c, f"{r['score']:g} / {r['max_score']:g}", X0, 62.0, 22, bold=True)
             _draw(c, "NOTE", X0, 67.5, 8, gray=0.45)
-        _draw(c, f"{r['pct']} %", X0 + 46, 62.0, 22, bold=True)
-        _draw(c, "POURCENTAGE", X0 + 46, 67.5, 8, gray=0.45)
+        if quiz.est_qcm:
+            _draw(c, f"{_nombre(r['note20'])} / 20", X0 + 46, 62.0, 22, bold=True)
+            _draw(c, "NOTE SUR 20", X0 + 46, 67.5, 8, gray=0.45)
+        else:
+            _draw(c, f"{r['pct']} %", X0 + 46, 62.0, 22, bold=True)
+            _draw(c, "POURCENTAGE", X0 + 46, 67.5, 8, gray=0.45)
         resume = f"{r['wrong']} fausse(s) — {r['blank']} sans réponse"
         if not quiz.a_des_qcm:
             resume = {"ecrit": "Épreuve écrite", "oral": "Épreuve orale"}.get(
                 quiz.type_epreuve, "")
         elif quiz.note_distincte:
-            resume = f"note {r['score']:g} / {r['max_score']:g} — " + resume
+            resume = (f"{'points' if quiz.est_qcm else 'note'} {r['score']:g} / "
+                      f"{r['max_score']:g} — " + resume)
         if r["pending_open"]:
             resume += f" — {r['pending_open']} manuscrite(s) non corrigée(s)"
         if r["questions_manquantes"]:
@@ -245,7 +251,8 @@ def generate_liste_admis_pdf(quiz, admission, batch=None):
             _draw(c, texte, x, y, 9, bold=True, gray=0.25)
         _draw(c, "Bonnes rép." if quiz.a_des_qcm else "Note", X1 - 24, y, 9,
               bold=True, align="right", gray=0.25)
-        _draw(c, "%", X1 - 2, y, 9, bold=True, align="right", gray=0.25)
+        _draw(c, "Note / 20" if quiz.est_qcm else "%", X1 - 2, y, 9, bold=True,
+              align="right", gray=0.25)
         return y + 8.5
 
     # En-tête de la première page : quelques lignes de plus que les suivantes.
@@ -274,8 +281,9 @@ def generate_liste_admis_pdf(quiz, admission, batch=None):
     if batch is not None:
         sous_titre += f" — lot {batch}"
     _draw(c, sous_titre, PAGE_W / 2, y + 17.0, 9.5, align="center", gray=0.35)
+    sur20 = f" ({_nombre(admission['seuil20'])} / 20)" if quiz.est_qcm else ""
     resume = (f"Note minimale {'d’admission' if concours else 'de réussite'} : "
-              f"{admission['seuil']:g} / {admission['max_score'] or 0:g}   —   "
+              f"{admission['seuil']:g} / {admission['max_score'] or 0:g}{sur20}   —   "
               f"{admission['n_admis']} {qui} sur {admission['n']} "
               f"{'candidats notés' if concours else 'étudiants notés'} "
               f"({admission['pct']} %)")
@@ -306,7 +314,8 @@ def generate_liste_admis_pdf(quiz, admission, batch=None):
         _draw(c, (f"{r['correct']} / {r['n_qcm']}" if quiz.a_des_qcm
                   else f"{r['score']:g} / {r['max_score']:g}"), X1 - 24, y, 10,
               bold=True, align="right")
-        _draw(c, f"{r['pct']} %", X1 - 2, y, 10, align="right")
+        _draw(c, _nombre(r["note20"]) if quiz.est_qcm else f"{r['pct']} %", X1 - 2, y, 10,
+              align="right")
         y += LIGNE
         sur_la_page += 1
 
@@ -431,8 +440,9 @@ def generate_parcours_pdf(parcours):
                 row = case["row"]
                 _draw(c, f"{_nombre(row['score'])} / {_nombre(row['max_score'])}", x, y, 9.5, bold=True)
                 verdict = verdicts.get(case["resultat"])
-                _draw(c, f"{row['pct']} %" + (f" · {verdict}" if verdict else ""), x, y + 4.2, 8,
-                      gray=0.3)
+                part = (f"{_nombre(row['note20'])} / 20" if row.get("est_qcm")
+                        else f"{row['pct']} %")
+                _draw(c, part + (f" · {verdict}" if verdict else ""), x, y + 4.2, 8, gray=0.3)
             elif case["etat"] == "non_note":
                 _draw(c, "Non noté", x, y, 8.5, gray=0.3)
             else:

@@ -380,6 +380,11 @@ class QuizForm(forms.ModelForm):
         # Facultatifs à l'envoi : QCM sur 20 par défaut (formulaires et
         # scripts d'avant les épreuves écrites et orales).
         self.fields["type_epreuve"].required = False
+        # oral : notes importées d'Excel, seule voie depuis le 13 novembre 2026 (libellé du
+        # modèle laissé tel quel : le changer demanderait une migration)
+        self.fields["type_epreuve"].choices = [
+            (v, "Oral — notes importées d'un fichier Excel" if v == "oral" else libelle)
+            for v, libelle in self.fields["type_epreuve"].choices]
         self.fields["note_sur"].required = False
         if concours:
             # un concours a sa propre liste de candidats, créée automatiquement

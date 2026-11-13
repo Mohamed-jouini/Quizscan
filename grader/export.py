@@ -25,6 +25,40 @@ def _nombre(v):
         return False
 
 
+def notes_orales_workbook(quiz, lignes):
+    """Modèle Excel des notes d'un oral (seule voie de saisie depuis le 13 novembre 2026) :
+    un candidat par ligne, dans l'ordre des salles, avec la note déjà importée s'il en a
+    une. Rempli puis importé sur la page de l'épreuve (importers.notes_du_classeur).
+    lignes : services.notes_orales."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Notes de l'oral"
+    sur = f"{quiz.note_sur:g}"
+    entetes = ["N° d'inscription", "Prénom", "Nom", f"Note / {sur}"]
+    ws.append(_sans_formule([f"{quiz.title} — notes de l'oral sur {sur} : remplissez la "
+                             "colonne « Note », puis importez ce fichier sur la page de "
+                             "l'épreuve."]))
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(entetes))
+    ws["A1"].font = Font(bold=True, size=12)
+    ws.append(entetes)
+    fond = PatternFill("solid", fgColor="1F4E79")
+    for col in range(1, len(entetes) + 1):
+        cellule = ws.cell(row=2, column=col)
+        cellule.font = Font(bold=True, color="FFFFFF")
+        cellule.fill = fond
+    for etudiant, _, reponse in lignes:
+        note = reponse.points_awarded if reponse is not None else None
+        ws.append(_sans_formule([etudiant.student_number or "", etudiant.first_name,
+                                 etudiant.last_name, note]))
+        ws.cell(row=ws.max_row, column=1).number_format = "@"      # zéros de tête gardés
+    for i, largeur in enumerate([18, 20, 24, 12], start=1):
+        ws.column_dimensions[get_column_letter(i)].width = largeur
+    ws.freeze_panes = "A3"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def candidats_workbook(group, etudiants, avec_fiches):
     """La liste des candidats en Excel, colonnes et ordre de la page « Candidats »
     (demande du 8 novembre 2026). Les intitulés sont de ceux que l'import
@@ -73,9 +107,13 @@ def results_workbook(quiz, rows, stats=None, admission=None):
     ws = wb.active
     ws.title = "Résultats"
 
-    headers = ["Prénom", "Nom", "N° inscription", "Note", "Sur",
+    # QCM : la note sur 20 au lieu du pourcentage (13 novembre 2026), et « Points » pour
+    # les points bruts, pour ne pas lire deux colonnes « Note »
+    qcm = quiz.est_qcm
+    headers = ["Prénom", "Nom", "N° inscription", "Points" if qcm else "Note", "Sur",
                "Répondues", "Correctes", "Fausses", "Sans réponse",
-               "Manuscrites à corriger", "Pourcentage", "Questions non lues"]
+               "Manuscrites à corriger", "Note sur 20" if qcm else "Pourcentage",
+               "Questions non lues"]
     if admission:
         headers.append("Résultat")
     ws.append([f"{quiz.title} — {quiz.class_group.name}"])
@@ -93,12 +131,12 @@ def results_workbook(quiz, rows, stats=None, admission=None):
         s = r["student"]
         ligne = [s.first_name, s.last_name, s.student_number,
                  r["score"], r["max_score"], r["answered"], r["correct"],
-                 r["wrong"], r["blank"], r["pending_open"], r["pct"] / 100,
-                 r["questions_manquantes"]]
+                 r["wrong"], r["blank"], r["pending_open"],
+                 r["note20"] if qcm else r["pct"] / 100, r["questions_manquantes"]]
         if admission:
             ligne.append(RESULTAT.get(r.get("resultat"), ""))
         ws.append(_sans_formule(ligne))
-        ws.cell(row=ws.max_row, column=11).number_format = "0%"
+        ws.cell(row=ws.max_row, column=11).number_format = "0.00" if qcm else "0%"
 
     widths = [18, 22, 14, 8, 6, 11, 10, 8, 13, 20, 12, 12, 12]
     for i, w in enumerate(widths, start=1):
@@ -108,12 +146,13 @@ def results_workbook(quiz, rows, stats=None, admission=None):
     if admission:
         # Liste des admis, par ordre de mérite : ce qui s'affiche ou se publie.
         wa = wb.create_sheet("Admis")
+        sur20 = f", soit {admission['seuil20']:g} / 20" if qcm else ""
         wa.append([f"{quiz.title} — admis (note minimale "
-                   f"{admission['seuil']:g} / {admission['max_score'] or 0:g}) : "
+                   f"{admission['seuil']:g} / {admission['max_score'] or 0:g}{sur20}) : "
                    f"{admission['n_admis']} sur {admission['n']}"])
         wa["A1"].font = Font(bold=True, size=12)
-        entetes = ["Rang", "Prénom", "Nom", "N° inscription", "Note", "Sur",
-                   "Bonnes réponses", "Pourcentage"]
+        entetes = ["Rang", "Prénom", "Nom", "N° inscription", "Points" if qcm else "Note",
+                   "Sur", "Bonnes réponses", "Note sur 20" if qcm else "Pourcentage"]
         wa.append(entetes)
         for col in range(1, len(entetes) + 1):
             cell = wa.cell(row=2, column=col)
@@ -122,8 +161,9 @@ def results_workbook(quiz, rows, stats=None, admission=None):
         for r in admission["admis"]:
             s = r["student"]
             wa.append([r["rang"], s.first_name, s.last_name, s.student_number,
-                       r["score"], r["max_score"], r["correct"], r["pct"] / 100])
-            wa.cell(row=wa.max_row, column=8).number_format = "0%"
+                       r["score"], r["max_score"], r["correct"],
+                       r["note20"] if qcm else r["pct"] / 100])
+            wa.cell(row=wa.max_row, column=8).number_format = "0.00" if qcm else "0%"
         for i, w in enumerate([7, 18, 22, 14, 8, 6, 15, 12], start=1):
             wa.column_dimensions[get_column_letter(i)].width = w
         wa.freeze_panes = "A3"
@@ -136,7 +176,8 @@ def results_workbook(quiz, rows, stats=None, admission=None):
         ws2.append(["Écart-type", stats["stdev"]])
         ws2.append(["Meilleure note", stats["best"]])
         ws2.append(["Note la plus basse", stats["worst"]])
-        ws2.append(["Barème total", stats["max_score"]])
+        # QCM : notes sur 20 (le nombre de questions est dans la feuille « Résultats »)
+        ws2.append(["Notes sur" if stats.get("sur20") else "Barème total", stats["max_score"]])
         if stats["suspectes"]:
             ws2.append(["Bonne réponse à vérifier (questions)",
                         ", ".join(str(n) for n in stats["suspectes"])])
@@ -184,15 +225,17 @@ ETATS_CASE = {"admis": "Admis", "refuse": "Non admis", "en_attente": "En attente
 
 def parcours_workbook(parcours):
     """Résultats d'un concours en étapes : une ligne par candidat, pour
-    chaque épreuve la note, le pourcentage et le résultat, puis le résultat
-    final (services.parcours_concours)."""
+    chaque épreuve la note, le pourcentage (QCM : la note sur 20) et le résultat,
+    puis le résultat final (services.parcours_concours)."""
     wb = Workbook()
     ws = wb.active
     ws.title = "Concours"
     epreuves = parcours["epreuves"]
     headers = ["Prénom", "Nom", "N° inscription"]
-    for q in epreuves:
-        headers += [f"{q.title} — note", f"{q.title} — %", f"{q.title} — résultat"]
+    for q in epreuves:          # QCM : note sur 20 au lieu du pourcentage
+        headers += [f"{q.title} — {'points' if q.est_qcm else 'note'}",
+                    f"{q.title} — {'note sur 20' if q.est_qcm else '%'}",
+                    f"{q.title} — résultat"]
     headers.append("Résultat final")
     ws.append([" → ".join(q.title for q in epreuves)])
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
@@ -210,7 +253,7 @@ def parcours_workbook(parcours):
         for case in c["cases"]:
             if case["etat"] == "note":
                 r = case["row"]
-                ligne += [r["score"], r["pct"] / 100,
+                ligne += [r["score"], r["note20"] if r["est_qcm"] else r["pct"] / 100,
                           ETATS_CASE.get(case["resultat"], "")]
             elif case["etat"] == "non_note":
                 ligne += [None, None, "Non noté"]
@@ -218,8 +261,9 @@ def parcours_workbook(parcours):
                 ligne += [None, None, "Non convoqué"]
         ligne.append(c["final"])
         ws.append(_sans_formule(ligne))
-        for k in range(len(epreuves)):
-            ws.cell(row=ws.max_row, column=5 + 3 * k).number_format = "0%"
+        for k, q in enumerate(epreuves):
+            ws.cell(row=ws.max_row, column=5 + 3 * k).number_format = \
+                "0.00" if q.est_qcm else "0%"
     for i, largeur in enumerate([18, 22, 14] + [11, 8, 13] * len(epreuves) + [34],
                                 start=1):
         ws.column_dimensions[get_column_letter(i)].width = largeur

@@ -351,10 +351,17 @@ def lire_note(warped_bgr, grille, note_sur):
     novembre 2026, après une vraie fiche d'oral où le « 1 » des dizaines, écrit mais pas
     noirci, donnait 9 au lieu de 19). Une ligne ambiguë (plusieurs cases) ou une note
     au-dessus du barème aussi : None, la note reste à saisir à l'écran.
+    Écrit depuis le 13 novembre 2026 (grille « demi ») : la partie entière (0..20) puis la
+    décimale (,0 ou ,5), une case noircie par ligne ; 20,5 dépasse le barème : à vérifier.
+
     Retourne (note | None, chiffres lus : un chiffre, ou « ? » pour une ligne à vérifier)."""
     lus = ["?" if d is None else d for d in _lire_chiffres(warped_bgr, grille)]
     if "?" in lus:
         return None, lus
+    if grille.get("modele") == "demi":
+        entier, demi = lus                      # demi : 0 pour « ,0 », 1 pour « ,5 »
+        note = entier + 0.5 * demi
+        return (None, lus) if note > note_sur else (float(note), lus)
     chiffres = lus
     decimales = grille.get("decimales", 1)
     entier = int("".join(str(d) for d in chiffres[:len(chiffres) - decimales]) or 0)

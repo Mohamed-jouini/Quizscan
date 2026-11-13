@@ -7,8 +7,30 @@ QR et la planche d'étiquettes n'ont donc aucune incidence sur les feuilles
 de questions / réponses, ni sur le pipeline de correction.
 """
 import io
+import secrets
 
 import qrcode
+
+# Code d'anonymat d'une copie à talon (demande du 13 novembre 2026) : imprimé sur le
+# talon et sous le QR de la copie, il rapproche à l'œil le talon détaché de sa copie.
+# Ni le n° d'inscription ni la CIN : la copie corrigée le montre, l'anonymat tomberait.
+# Tiré au hasard (ni l'ordre de la liste ni la salle ne s'y lisent), sans caractères
+# que l'on confond à la lecture ou à la main : 0/O, 1/I/L, 2/Z, 5/S, 6/G, 8/B.
+ALPHABET_CODE = "ACDEFHJKMNPRTUVWXY3479"
+LONGUEUR_CODE = 6
+
+
+def nouveau_code(pris):
+    """Un code qui n'est pas dans « pris » (22⁶ : 113 millions de codes)."""
+    while True:
+        code = "".join(secrets.choice(ALPHABET_CODE) for _ in range(LONGUEUR_CODE))
+        if code not in pris:
+            return code
+
+
+def code_lisible(code):
+    """« K7MR9Q » -> « K7M-R9Q » : en deux groupes, comme il s'imprime et se lit."""
+    return f"{code[:3]}-{code[3:]}" if code and len(code) == LONGUEUR_CODE else (code or "")
 
 
 def payload(student):

@@ -903,3 +903,66 @@ def parse_questions_file(name, data, langue="fr"):
         return parse_questions_text(_text_lines(data))
     raise ImportError_("Format non pris en charge : utilisez un fichier "
                        "Excel, CSV, Word (.docx), PDF, texte ou Markdown (.md).")
+
+
+# --------------------------------------------------- notes d'un oral (Excel)
+# Seule voie de saisie des notes d'un oral depuis le 13 novembre 2026 (demande de
+# l'utilisateur) : le modèle Excel de l'épreuve (export.notes_orales_workbook), rempli
+# puis importé sur la page de l'oral.
+MAX_TAILLE_NOTES = 5 * 1024 * 1024
+
+
+def _colonne(entetes, *motifs):
+    for k, texte in enumerate(entetes):
+        if any(texte == m or texte.startswith(m + " ") or m in texte.split() for m in motifs):
+            return k
+    return None
+
+
+def notes_du_classeur(data, note_sur):
+    """[(n° d'inscription, note)] d'un classeur aux colonnes « N° d'inscription » et
+    « Note ». Une note vide est passée. Lève ImportError_ en nommant toutes les lignes
+    fausses (note qui n'est pas un nombre de 0 au barème, n° vide ou en double) : rien
+    ne s'importe tant qu'il en reste une."""
+    from .inscriptions import numero_propre
+    if len(data) > MAX_TAILLE_NOTES:
+        raise ImportError_("Fichier trop gros pour une liste de notes (5 Mo au plus).")
+    lignes = _xlsx_rows(data)
+    entete = None
+    for i, ligne in enumerate(lignes[:15]):
+        noms = [norm(c) for c in ligne]
+        col_numero = _colonne(noms, "inscription", "numero", "n", "no", "رقم")
+        col_note = _colonne(noms, "note", "العدد")
+        if col_numero is not None and col_note is not None and col_numero != col_note:
+            entete = (i, col_numero, col_note)
+            break
+    if entete is None:
+        raise ImportError_("Colonnes « N° d'inscription » et « Note » introuvables : "
+                           "partez du modèle Excel de l'épreuve.")
+    debut, col_numero, col_note = entete
+    notes, erreurs, vus = [], [], set()
+    for ligne in lignes[debut + 1:]:
+        numero = numero_propre(ligne[col_numero] if col_numero < len(ligne) else "")
+        brut = (ligne[col_note] if col_note < len(ligne) else "").strip()
+        if not brut:
+            continue                    # pas (encore) de note : rien à importer
+        if not numero:
+            erreurs.append(f"une note (« {brut} ») sans n° d'inscription")
+            continue
+        try:
+            valeur = float(brut.replace(",", "."))
+        except ValueError:
+            valeur = None
+        if valeur is None or not 0 <= valeur <= note_sur:
+            erreurs.append(f"n° {numero} : « {brut} » n'est pas une note de 0 à {note_sur:g}")
+            continue
+        if numero in vus:
+            erreurs.append(f"n° {numero} : deux fois dans le fichier")
+            continue
+        vus.add(numero)
+        notes.append((numero, round(valeur, 2)))
+    if erreurs:
+        reste = f" (et {len(erreurs) - 10} autre(s))" if len(erreurs) > 10 else ""
+        raise ImportError_("Aucune note importée, corrigez le fichier : "
+                           + " ; ".join(erreurs[:10]) + reste + ".")
+    return notes

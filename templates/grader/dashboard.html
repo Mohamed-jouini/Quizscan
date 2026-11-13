@@ -214,7 +214,7 @@
       <span class="tile__label">Dernière épreuve corrigée</span>
       <div class="tile__row tile__row--gauche">
         <span class="tile__value">{{ derniere.moyenne|floatformat:"-2" }}<span class="tile__unit">/ {{ derniere.bareme|floatformat:"-2" }}</span></span>
-        <span class="chip {% if derniere.pct < 50 %}bad{% elif derniere.pct < 65 %}warn{% endif %}">{{ derniere.pct }} %</span>
+        <span class="chip {% if derniere.pct < 50 %}bad{% elif derniere.pct < 65 %}warn{% endif %}">{% if derniere.quiz.est_qcm %}{{ derniere.moyenne20|floatformat:"-2" }} / 20{% else %}{{ derniere.pct }} %{% endif %}</span>
       </div>
       <span class="tile__note"><b>{{ derniere.nom_court|truncatechars:40 }}</b> — {{ derniere.n }} copie{{ derniere.n|pluralize }} notée{{ derniere.n|pluralize }}, de {{ derniere.plus_basse|floatformat:"-2" }} à {{ derniere.meilleure|floatformat:"-2" }}.</span>
     </a>

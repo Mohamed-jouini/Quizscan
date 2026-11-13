@@ -328,8 +328,11 @@ def main():
     page = mes_resultats("5500")
     assert page.count('class="groupe__titre"') == 1 and "3 étapes" in page
     assert page.index(">QCM<") < page.index(">Écrit<") < page.index(">Oral<")
-    for note in ("<b>9</b> / 10 bonnes réponses", "<b>14,50</b> / 20", "<b>15</b> / 20"):
-        assert note in page, note
+    # le verdict de chaque étape, jamais la note (demande du 13 novembre 2026)
+    # (l'oral, créé sans « concours », dit « Réussi » : le même verdict favorable)
+    assert page.count("pub-verdict--admis") == 3, page.count("pub-verdict--admis")
+    for note in ("bonnes réponses", "<b>9</b>", "14,50", "<b>15</b>", "18 / 20"):
+        assert note not in page, note
     # éliminé à l'écrit : ses deux étapes seulement, et le verdict de chacune
     page = mes_resultats("5501")
     assert "2 étapes" in page and ">Oral<" not in page

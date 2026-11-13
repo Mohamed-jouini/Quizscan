@@ -23,6 +23,7 @@ from django.db.models import prefetch_related_objects
 from reportlab.pdfgen import canvas as rl_canvas
 
 from . import layout as L
+from . import qr as qr_mod
 from .fonts import (font_for, has_arabic, load_fonts, runs, shape,
                     text_width_pt, wrap)
 from .labels_pdf import _ellipsize
@@ -86,7 +87,9 @@ LABELS = {
         "place": "PLACE N° {n}",
         "talon_coupe": "Talon à découper avant la correction : il porte votre nom. "
                        "La copie reste identifiée par son QR code.",
-        "cin": "CIN", "salle": "Salle",
+        "talon_coupe_code": "Talon à découper avant la correction : il porte votre nom et "
+                            "le code de la copie, imprimé aussi sous son QR code.",
+        "cin": "CIN", "salle": "Salle", "code": "Code",
         "writename": "Écrivez votre nom et votre prénom dans les cases ci-dessus.",
         "fiche": "Fiche",
         "sticker": "Emplacement réservé — collez ici le QR code qui vous a été remis",
@@ -105,6 +108,12 @@ LABELS = {
         "signature": "Correcteur :",
         "centaines": "Centaines", "dizaines": "Dizaines", "unites": "Unités",
         "dixiemes": "Dixièmes", "centiemes": "Centièmes", "chiffre": "Chiffre",
+        # écrit, note par demi-points (13 novembre 2026)
+        "note_aide_demi": "Écrivez la note en clair, puis noircissez sa partie entière "
+                          "(0 à {n}) et sa décimale (,0 ou ,5) : une case par ligne, ,0 "
+                          "compris.",
+        "entier": "Partie entière", "demi": "Décimale",
+        "note_max_demi": "La note ne dépasse pas {n} : avec {n}, noircissez ,0.",
         "oral_instr": "Fiche d'évaluation orale — l'examinateur noircit la note "
                       "puis scanne la fiche : la note est affectée à l'étudiant.",
         "observations": "Observations de l'examinateur",
@@ -122,7 +131,9 @@ LABELS = {
         "place": "المكان رقم {n}",
         "talon_coupe": "قسيمة تُقصّ قبل الإصلاح: تحمل اسمك. تبقى الورقة معرّفة "
                        "برمز QR.",
-        "cin": "ب.ت.و", "salle": "القاعة",
+        "talon_coupe_code": "قسيمة تُقصّ قبل الإصلاح: تحمل اسمك ورمز الورقة، وهو مطبوع "
+                            "أيضا تحت رمز QR.",
+        "cin": "ب.ت.و", "salle": "القاعة", "code": "الرمز",
         "writename": "اكتب لقبك واسمك بخط واضح في الخانات أعلاه.",
         "fiche": "بطاقة",
         "sticker": "مكان مخصّص — ألصق هنا رمز QR الذي سُلّم إليك",
@@ -139,6 +150,11 @@ LABELS = {
         "signature": "المصحّح:",
         "centaines": "المئات", "dizaines": "العشرات", "unites": "الآحاد",
         "dixiemes": "الأعشار", "centiemes": "أجزاء المائة", "chiffre": "رقم",
+        # sans « ,0 » dans la phrase : de droite à gauche, la virgule passerait après le 0
+        "note_aide_demi": "اكتب العدد بوضوح، ثم املأ جزأه الصحيح (من 0 إلى {n}) وكسره "
+                          "(0 أو 5): خانة واحدة في كل سطر، والصفر كذلك.",
+        "entier": "الجزء الصحيح", "demi": "الكسر",
+        "note_max_demi": "لا يتجاوز العدد {n}: مع {n} املأ خانة الصفر في الكسر.",
         "oral_instr": "بطاقة تقييم شفاهي — يملأ الممتحن العدد ثم تُمسح البطاقة ضوئيا.",
         "observations": "ملاحظات الممتحن",
         "redaction": "ورقة التحرير",
@@ -159,7 +175,8 @@ def _qr_image(payload):
     return ImageReader(qr.make_image().get_image())
 
 
-def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, progres=None):
+def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, progres=None,
+                       codes=None):
     """Retourne les octets du PDF de la fiche du quiz.
 
     places : copies ANONYMES à numéro de place ({id étudiant: n° de place}) :
@@ -173,6 +190,10 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
     autant de fois qu'il y a d'éléments, pour imprimer N exemplaires
     identiques, avec l'emplacement réservé à l'étiquette du candidat
     (aucune case nom/prénom : le candidat n'écrit rien).
+
+    codes : copies à talon ({id étudiant: code d'anonymat}) : le code est imprimé sur
+    le talon et sous le QR de la copie, pour rapprocher l'un de l'autre à l'œil une
+    fois le talon détaché (services.codes_anonymes).
 
     Lève layout.TooManyPages si la fiche dépasse le nombre de pages que les
     repères de calibration peuvent numéroter."""
@@ -233,11 +254,12 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
                       else f"{quiz.title} — {quiz.class_group.name}")
         consigne = {"ecrit": T["ecrit_instr"], "oral": T["oral_instr"]}.get(
             mode, T["instr"])
+        code = codes.get(student.pk) if (codes and student is not None) else None
         if talon:
             # nom, titre et consigne sur le talon, au-dessus du trait de coupe
             _dessiner_talon(c, draw, student, head_title,
                             f"{T['page']} {pidx + 1} / {pages_copie}",
-                            consigne, T, lang)
+                            consigne, T, lang, code)
         else:
             draw(head_title, L.PAGE_W / 2, _y(24.0),
                  13, bold=True, align="center")
@@ -338,7 +360,7 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
             # une fois par copie : les pages de rédaction reprennent ce QR
             image_qr = _qr_image(f"QS|{quiz.pk}|{student.pk}")
             _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang,
-                            image_qr)
+                            image_qr, code)
 
         # Grille de numéro d'inscription
         grid = page.get("id_grid")
@@ -458,43 +480,16 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
             # talon, quelle que soit la page.
             a3 = layout.get("format") == "a3"
             for k in range(n):
-                # Copie nominative : la première page de chaque feuille reprend l'en-tête de
-                # la page de garde, talon (nom, n°, à découper) et bande du titre avec le
-                # QR de l'étudiant : une feuille détachée reste à qui elle est. En A4
-                # recto-verso, ce sont les rectos (pages 3, 5, 7) ; en A3 plié, la page 3
-                # d'une copie de 8 pages, première page de la 2e feuille, emboîtée dans la
-                # 1re (pages 3 à 6). Les autres pages sont sur la même feuille qu'une page à
-                # en-tête : rien (demandes de l'utilisateur, 6 et 7 novembre 2026). Toujours
+                # Talon et QR sur la page de garde SEULEMENT (demande de l'utilisateur, 13
+                # novembre 2026) : les pages lignées n'en portent plus, ni au recto des
+                # feuilles suivantes (repris là les 6 et 7 novembre, abandonné). Toujours
                 # sans cadre ni code de page : au scan, une page lignée reste « ignorée ».
-                recto = (k + 2) % 2 == 1 and (not a3 or k + 2 <= (n + 1) // 2)
-                if image_qr is not None and recto:
-                    page_txt = f"{T['page']} {k + 2} / {n + 1}"
-                    if talon:
-                        _dessiner_talon(c, draw, student, head_title, page_txt,
-                                        T["redaction"], T, lang)
-                    else:
-                        draw(head_title, L.PAGE_W / 2, _y(24.0), 13, bold=True,
-                             align="center")
-                        draw(f"{T['redaction']} — {page_txt}", L.PAGE_W / 2, _y(28.5), 8,
-                             align="center")
-                    _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T,
-                                    lang, image_qr)
-                    _, bande_y, _, bande_h = qr_zone["band"]
-                    if a3:
-                        # pas de « ne pas scanner » : la feuille A3 passe entière
-                        _dessiner_lignes(c, L.lignes_a3(bande_y + bande_h + L.A3_LIGNE,
-                                                        lang))
-                    else:
-                        draw(T["non_lue"], L.PAGE_W / 2,
-                             _y(bande_y + bande_h + 5.0), 7.5, align="center", gray=0.45)
-                        _dessiner_lignes(c, {"y0": bande_y + bande_h + 12.0,
-                                             "y1": L.PAGE_H - 16.0, "pas": L.NOTE_LIGNE})
-                elif a3:
+                if a3:
                     _dessiner_lignes(c, L.lignes_a3(
                         L.TALON_COUPE + L.A3_LIGNE if talon else L.A3_HAUT, lang))
                 elif image_qr is not None:
-                    # au dos d'une feuille A4 : la bande du talon tombe avec celui du recto
-                    # au massicot, rien à y écrire
+                    # copie nominative : la bande du talon tombe au massicot avec celui de
+                    # la page de garde, rien à y écrire
                     _dessiner_lignes(c, {"y0": L.TALON_COUPE + L.NOTE_LIGNE if talon
                                          else 22.0, "y1": L.PAGE_H - 16.0,
                                          "pas": L.NOTE_LIGNE})
@@ -505,7 +500,7 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
                          align="center", gray=0.45)
                     _dessiner_lignes(c, {"y0": 30.0, "y1": L.PAGE_H - 16.0,
                                          "pas": L.NOTE_LIGNE})
-                if a3 or (image_qr is not None and not recto):
+                if a3 or image_qr is not None:
                     # n° de la page au pied, sur une page sans en-tête : l'ordre des pages
                     draw(f"{quiz.title} — page {k + 2}", L.PAGE_W / 2,
                          _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
@@ -611,12 +606,17 @@ def _taille_pour(texte, taille, largeur_mm, plancher=7.0):
     return taille
 
 
-def _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang, image_qr):
+def _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang, image_qr,
+                    code=None):
     """QR de l'étudiant et bande grise d'une copie nominative, à la place que lui
-    donne la disposition : sur la page de garde et, à l'identique, sur les pages de
-    rédaction d'un écrit."""
+    donne la disposition : sur chaque page lue (page de garde d'un écrit, chaque page
+    d'un QCM), jamais sur une page lignée. code : celui du talon, imprimé sous le QR
+    (hors des zones lues : entre le bas du QR et le contenu de la page, 4 mm)."""
     qx, qy, qw, qh = qr_zone["rect"]
     c.drawImage(image_qr, qx * mm, _y(qy, qh), qw * mm, qh * mm)
+    if code:
+        draw(qr_mod.code_lisible(code), qx + qw / 2, _y(qy + qh + 2.9), 8.5, bold=True,
+             align="center")
     bx_, by_, bw_, bh_ = qr_zone["band"]
     c.setFillGray(0.955)
     c.roundRect(bx_ * mm, _y(by_, bh_), bw_ * mm, bh_ * mm, 2 * mm, stroke=0, fill=1)
@@ -649,11 +649,12 @@ def _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang, ima
             draw(num_txt, bx_ + bw_ - 5, _y(by_ + 15.5), 8, align="right", gray=0.4)
 
 
-def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang):
+def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang, code=None):
     """Talon du haut de la copie : nom et n° de l'étudiant, sous le n° sa CIN et
-    sa salle (fiche du registre, demande du 5 novembre 2026), épreuve, consigne,
-    puis le trait pointillé « couper ici » (hors du cadre de lecture : ce qu'on y
-    ajoute ne change rien à la lecture)."""
+    sa salle (fiche du registre, demande du 5 novembre 2026), sous le nom le code
+    d'anonymat, le même que sous le QR de la copie (demande du 13 novembre 2026),
+    épreuve, consigne, puis le trait pointillé « couper ici » (hors du cadre de
+    lecture : ce qu'on y ajoute ne change rien à la lecture)."""
     x0, x1 = 14.0, L.PAGE_W - 14.0
     rtl = lang == "ar"
     nom = student.full_name if student else ""      # en arabe, le prénom d'abord
@@ -668,10 +669,16 @@ def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang):
         draw(num, fin, _y(11.5), 12, bold=True, align=sens_fin)
     for rang, texte in enumerate(details):
         draw(texte, fin, _y(16.8 + 4.4 * rang), 9, align=sens_fin)
+    ligne_code = f"{T['code']} {qr_mod.code_lisible(code)}" if code else ""
+    if ligne_code:
+        draw(ligne_code, debut, _y(17.8), 11, bold=True, align=sens_debut)
     # Le titre, au milieu, et la consigne laissent la place à ce qui est imprimé
-    # sous le n° (la page, ou la CIN et la salle) : ils se resserrent au besoin.
+    # sous le n° (la page, ou la CIN et la salle) et au code : ils se resserrent.
     bloc = max(text_width_pt(t, 9 if details else 8) / mm for t in (details or [page_txt]))
-    place = L.PAGE_W - 2 * (x0 + bloc + 4)
+    # le titre, centré, s'écarte des deux colonnes ; la consigne, du côté du code mais
+    # plus bas que lui, seulement de celle d'en face
+    bloc_titre = max(bloc, text_width_pt(ligne_code, 11, bold=True) / mm) if ligne_code else bloc
+    place = L.PAGE_W - 2 * (x0 + bloc_titre + 4)
     taille = _taille_pour(titre, 9.5, place)
     draw(_ellipsize(titre, taille, place), L.PAGE_W / 2, _y(18.0), taille,
          align="center", gray=0.3)
@@ -689,7 +696,9 @@ def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang):
     c.setFillGray(0.35)
     c.drawString(5 * mm, _y(L.TALON_COUPE + 1.3), "✂")
     c.setFillGray(0.0)
-    draw(T["talon_coupe"], L.PAGE_W / 2, _y(L.TALON_COUPE - 1.6), 6.8,
+    # sans code (talon dessiné hors des copies à talon générées) : le texte n'en parle pas
+    draw(T["talon_coupe_code" if code else "talon_coupe"], L.PAGE_W / 2,
+         _y(L.TALON_COUPE - 1.6), 6.8,
          align="center", gray=0.45)
 
 
@@ -711,6 +720,9 @@ def _dessiner_lignes(c, zone):
 def _dessiner_grille_note(c, draw, g, T, lang):
     """Cadre « réservé au correcteur » : grille de la note à noircir (même
     dessin que la grille de n° d'inscription), note en clair et signature."""
+    if g.get("modele") == "demi":
+        _dessiner_grille_demi(c, draw, g, T)
+        return
     x, y, w, h = g["rect"]
     c.setLineWidth(1.1)
     c.roundRect(x * mm, _y(y, h), w * mm, h * mm, 2.5 * mm, stroke=1, fill=0)
@@ -738,6 +750,41 @@ def _dessiner_grille_note(c, draw, g, T, lang):
     c.rect(xr * mm, _y(y + 18.0, 11.0), (x + w - 4.0 - xr) * mm, 11.0 * mm)
     draw(f"/ {g['sur']:g}", x + w - 6.0, _y(y + 25.5), 10, bold=True, align="right")
     draw(T["signature"], xr, _y(y + h - 3.0), 8, gray=0.35)
+
+
+def _dessiner_grille_demi(c, draw, g, T):
+    """Grille de la note d'un écrit par demi-points (demande de l'utilisateur, 13 novembre
+    2026) : la note en clair et la signature en haut ; dessous, la partie entière de 0 au
+    barème sur une ligne, puis la décimale, « ,0 » ou « ,5 » (layout._add_note_grid_demi)."""
+    x, y, w, h = g["rect"]
+    sur = f"{g['sur']:g}"
+    c.setLineWidth(1.1)
+    c.roundRect(x * mm, _y(y, h), w * mm, h * mm, 2.5 * mm, stroke=1, fill=0)
+    draw(T["note_titre"].format(n=sur), x + 4.0, _y(g["title_y"]), 9.5, bold=True)
+    draw(T["note_aide_demi"].format(n=sur), x + 4.0, _y(g["title_y"] + 4.5), 6.8, gray=0.35)
+    # la note en clair, la signature du correcteur
+    c.setLineWidth(0.8)
+    nx, ny, nw, nh = g["note_box"]
+    draw(T["note_ecrite"], nx, _y(ny - 1.4), 9, bold=True)
+    c.rect(nx * mm, _y(ny, nh), nw * mm, nh * mm)
+    draw(f"/ {sur}", nx + nw - 2.0, _y(ny + nh - 3.6), 10, bold=True, align="right")
+    sx, sy, sw, sh = g["signature_box"]
+    draw(T["signature"], sx, _y(sy - 1.4), 9, bold=True)
+    c.rect(sx * mm, _y(sy, sh), sw * mm, sh * mm)
+    # cases à noircir : partie entière (n° au-dessus de chaque case), puis décimale
+    entiers, demis = g["rows"]
+    for k, (cx, _) in enumerate(entiers):
+        draw(str(k), cx, _y(g["header_y"]), 6.5, align="center", gray=0.35)
+    c.setLineWidth(0.6)
+    for kind, row, textes in (("entier", entiers, [str(k) for k in range(len(entiers))]),
+                              ("demi", demis, [",0", ",5"])):
+        draw(T[kind], x + 4.0, _y(row[0][1] + 1.2), 8, bold=True)
+        for (cx, cy), texte in zip(row, textes):
+            c.circle(cx * mm, _y(cy), g["r"] * mm, stroke=1, fill=0)
+            draw(texte, cx, _y(cy + 0.7), 5, align="center", gray=0.6)
+    # la note ne dépasse pas le barème : avec 20, « ,0 »
+    draw(T["note_max_demi"].format(n=sur), demis[-1][0] + 6.0, _y(demis[0][1] + 1.0), 7,
+         gray=0.35)
 
 
 # Version du dessin du SUJET. À augmenter à chaque changement de ce qu'il

@@ -94,13 +94,13 @@
   </div>
   <form method="post" action="{% url 'quiz_publication' quiz.pk %}" class="publication__form">{% csrf_token %}
     <label class="case"><input type="checkbox" name="resultats_publies" value="1" {% if quiz.resultats_publies %}checked{% endif %}>
-      Chaque {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} consulte son résultat (bonnes réponses, pourcentage, admis ou non) avec son n° d'inscription</label>
+      Chaque {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} consulte son résultat avec son n° d'inscription ou sa CIN : {% if quiz.auto_enroll %}admis ou non{% else %}réussi ou non{% endif %}, sans sa note{% if quiz.note_admission is None %} (indiquez d'abord la note minimale : sans elle, il lit « Résultat pas encore disponible »){% endif %}</label>
     <label class="case"><input type="checkbox" name="admis_publies" value="1" {% if quiz.admis_publies %}checked{% endif %} {% if quiz.note_admission is None %}disabled{% endif %}>
-      Afficher la liste des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %} (rang, n°, nom, bonnes réponses, pourcentage){% if quiz.note_admission is None %} — indiquez d'abord la note minimale{% endif %}</label>
+      Afficher la liste des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %} (n° d'inscription, prénom et nom, sans rang ni note){% if quiz.note_admission is None %} — indiquez d'abord la note minimale{% endif %}</label>
     <p><button class="btn small" type="submit">Enregistrer la publication</button>
       {% if quiz.resultats_publies or quiz.admis_publies %}<a class="btn small secondary" href="{% url 'public_epreuve' quiz.pk %}" target="_blank" rel="noopener">Voir la page publique</a>{% endif %}</p>
   </form>
-  {% if unmatched_total or pending_pages %}<p class="helptext">Attention : {% if unmatched_total %}{{ unmatched_total }} copie(s) non identifiée(s){% endif %}{% if unmatched_total and pending_pages %} et {% endif %}{% if pending_pages %}{{ pending_pages }} page(s) non corrigée(s){% endif %} — leurs notes manqueront ou seront incomplètes sur l'espace public.</p>{% endif %}
+  {% if unmatched_total or pending_pages %}<p class="helptext">Attention : {% if unmatched_total %}{{ unmatched_total }} copie(s) non identifiée(s){% endif %}{% if unmatched_total and pending_pages %} et {% endif %}{% if pending_pages %}{{ pending_pages }} page(s) non corrigée(s){% endif %} — leurs résultats manqueront sur l'espace public, ou y resteront « Correction en cours ».</p>{% endif %}
 </div>
 {% endif %}
 
@@ -108,7 +108,7 @@
 <div class="card admission" id="admission">
   <div class="card__head">
     <h2>{% if quiz.auto_enroll %}Admission{% else %}Réussite{% endif %}</h2>
-    <span class="badge grey">{% if quiz.note_distincte %}note minimale {{ admission.seuil|floatformat:"-2" }} / {{ admission.max_score|floatformat:"-2" }}{% else %}au moins {{ admission.seuil|floatformat:"-2" }} bonnes réponses sur {{ admission.max_score|floatformat:"-2" }}{% endif %}</span>
+    <span class="badge grey">{% if quiz.note_distincte %}note minimale {{ admission.seuil|floatformat:"-2" }} / {{ admission.max_score|floatformat:"-2" }}{% else %}au moins {{ admission.seuil|floatformat:"-2" }} bonnes réponses sur {{ admission.max_score|floatformat:"-2" }}{% endif %}{% if quiz.est_qcm %}, soit {{ admission.seuil20|floatformat:"-2" }} / 20{% endif %}</span>
     {% if perms.grader.creer_epreuve %}
     <details class="admission__regler">
       <summary>Modifier la note minimale</summary>
@@ -158,14 +158,14 @@
   {% include "grader/_recherche_liste.html" with ancre="liste-admis" champ="id_q_admis" sujet=quiz.auto_enroll|yesno:"admis,étudiant ayant réussi" n=admission.admis_affiches|length %}
   <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Liste par ordre de mérite">
     <table>
-    <tr><th>Rang</th><th>Prénom et nom</th><th>N° d'inscription</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>Pourcentage</th>{% if quiz.note_distincte %}<th>Note</th>{% endif %}</tr>
+    <tr><th>Rang</th><th>Prénom et nom</th><th>N° d'inscription</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>{% if quiz.est_qcm %}Note sur 20{% else %}Pourcentage{% endif %}</th>{% if quiz.note_distincte %}<th>{% if quiz.est_qcm %}Points{% else %}Note{% endif %}</th>{% endif %}</tr>
     {% for r in admission.admis_affiches %}
     <tr class="ligne-lien">
       <td>{{ r.rang }}</td>
       <td>{% if r.copie %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'sheet_review' r.copie.pk %}"><b>{{ r.student.full_name }}</b></a>{% else %}<b>{{ r.student.full_name }}</b>{% endif %}</td>
       <td>{{ r.student.student_number|default:"—" }}</td>
       {% if quiz.a_des_qcm %}<td class="score">{{ r.correct }} / {{ r.n_qcm }}</td>{% endif %}
-      <td>{% include "grader/_pourcentage.html" with pct=r.pct %}</td>
+      <td>{% if quiz.est_qcm %}{% include "grader/_note20.html" with note=r.note20 %}{% else %}{% include "grader/_pourcentage.html" with pct=r.pct %}{% endif %}</td>
       {% if quiz.note_distincte %}<td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>{% endif %}
     </tr>
     {% empty %}
@@ -204,8 +204,8 @@
   <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Notes de tous les étudiants">
     <table>
     <tr>
-      <th>Étudiant</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>Pourcentage</th>
-      {% if quiz.note_distincte %}<th>Note</th>{% endif %}
+      <th>Étudiant</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>{% if quiz.est_qcm %}Note sur 20{% else %}Pourcentage{% endif %}</th>
+      {% if quiz.note_distincte %}<th>{% if quiz.est_qcm %}Points{% else %}Note{% endif %}</th>{% endif %}
       {% if quiz.a_des_qcm %}<th>Fausses</th><th>Sans réponse</th>{% endif %}
       {% if quiz.note_distincte %}<th>{% if quiz.a_des_qcm %}Manuscrites à corriger{% else %}Note à saisir{% endif %}</th>{% endif %}
       <th>Résultat</th><th></th>
@@ -216,7 +216,7 @@
           {% if r.student.student_number %}<span class="helptext">n° {{ r.student.student_number }}</span>{% endif %}
           {% if r.questions_manquantes %}<span class="badge warn" title="Page non identifiée ou non reçue : ces questions ne comptent pas dans la note">Incomplète : {{ r.questions_manquantes }} question{{ r.questions_manquantes|pluralize }}</span>{% endif %}</td>
       {% if quiz.a_des_qcm %}<td class="score">{{ r.correct }} / {{ r.n_qcm }}</td>{% endif %}
-      <td>{% include "grader/_pourcentage.html" with pct=r.pct %}</td>
+      <td>{% if quiz.est_qcm %}{% include "grader/_note20.html" with note=r.note20 %}{% else %}{% include "grader/_pourcentage.html" with pct=r.pct %}{% endif %}</td>
       {% if quiz.note_distincte %}<td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>{% endif %}
       {% if quiz.a_des_qcm %}<td><span class="badge bad">{{ r.wrong }}</span></td>
       <td><span class="badge grey">{{ r.blank }}</span></td>{% endif %}
@@ -274,7 +274,7 @@
     <p class="helptext helptext--serre">L'écart-type mesure la dispersion :
       petit, les notes se serrent autour de la moyenne ; grand, la classe se
       partage entre deux groupes très inégaux.</p>
-    <h2 style="margin-top:16px">Répartition des notes</h2>
+    <h2 style="margin-top:16px">Répartition des notes{% if stats.sur20 %} sur 20{% endif %}</h2>
     <div class="table-wrap">
       <table>
       {% for h in stats.histogram %}

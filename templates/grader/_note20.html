@@ -1,0 +1,2 @@
+{# Note d'un QCM ramenée sur 20 (note, nombre) : chiffre et petite jauge, comme _pourcentage.html. #}
+<span class="pourcentage"><b>{{ note|floatformat:"-2" }} / 20</b><span class="pourcentage__jauge" aria-hidden="true"><i style="width:{% widthratio note 20 100 %}%"></i></span></span>

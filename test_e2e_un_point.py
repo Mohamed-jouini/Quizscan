@@ -1,6 +1,7 @@
-"""Une QCM = un point ; le résultat se lit en bonnes réponses, en pourcentage,
-et admis / non admis — sur la page des résultats, l'espace public, les
-bulletins, la liste des admis et l'export Excel.
+"""Une QCM = un point ; le résultat se lit en bonnes réponses, en note sur 20
+(plus en pourcentage depuis le 13 novembre 2026), et admis / non admis — sur la
+page des résultats, l'espace public, les bulletins, la liste des admis et
+l'export Excel.
 """
 import io
 import os
@@ -73,57 +74,91 @@ def main():
         "une QCM créée avec 3 points doit valoir 1 point"
     rows = {r["student"].last_name: r for r in services.compute_results(quiz)}
     a = rows["AMRI"]
-    assert (a["correct"], a["n_qcm"], a["pct"], a["score"]) == (5, 6, 83, 5.0), a
+    assert (a["correct"], a["n_qcm"], a["score"], a["note20"]) == (5, 6, 5.0, 16.67), a
+    assert rows["BAKIR"]["note20"] == 10.0 and rows["CHERIF"]["note20"] == 6.67
     assert not quiz.note_distincte
-    print("  une QCM vaut 1 point : 5 bonnes réponses = 5 / 6 = 83 % OK")
+    print("  une QCM vaut 1 point : 5 bonnes réponses = 5 / 6 = 16,67 / 20 OK")
 
+    # la note sur 20, nulle part le pourcentage (demande du 13 novembre 2026)
     page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
-    for attendu in ("<th>Bonnes réponses</th>", "<th>Pourcentage</th>", "5 / 6",
-                    "83 %", "50 %", "Réussi", "Non réussi",
-                    "au moins 3 bonnes réponses sur 6"):
+    for attendu in ("<th>Bonnes réponses</th>", "<th>Note sur 20</th>", "5 / 6",
+                    "<b>16,67 / 20</b>", "<b>10 / 20</b>", "Réussi", "Non réussi",
+                    "au moins 3 bonnes réponses sur 6, soit 10 / 20",
+                    "réussi ou non, sans sa note",
+                    "Répartition des notes sur 20", ">8–12<", "meilleure note <b>16,67</b>",
+                    "(sur 20)"):
         assert attendu in page, f"« {attendu} » absent de la page des résultats"
-    assert "<th>Note</th>" not in page, "la note répète les bonnes réponses"
-    print("  page des résultats : bonnes réponses, pourcentage, réussi / non réussi OK")
+    for absent in ("<th>Pourcentage</th>", "83 %", "<th>Note</th>", "<th>Points</th>",
+                   "80–100 %"):
+        assert absent not in page, f"« {absent} » encore sur la page des résultats"
+    print("  page des résultats : bonnes réponses, note sur 20 (seuil compris), "
+          "réussi / non réussi, sans pourcentage OK")
 
     xl = load_workbook(io.BytesIO(c.get(reverse("quiz_results_xlsx", args=[quiz.pk])).content))
     ws = xl["Résultats"]
     entetes = [x.value for x in ws[2]]
+    assert "Pourcentage" not in entetes and "Note" not in entetes, entetes
     ligne = {r[entetes.index("Nom")].value: r for r in ws.iter_rows(min_row=3)}["AMRI"]
-    assert round(ligne[entetes.index("Pourcentage")].value, 2) == 0.83
+    assert ligne[entetes.index("Note sur 20")].value == 16.67
+    assert ligne[entetes.index("Note sur 20")].number_format == "0.00"
+    assert ligne[entetes.index("Points")].value == 5
     assert ligne[entetes.index("Correctes")].value == 5
     assert ligne[entetes.index("Résultat")].value == "Admis"
-    print("  Excel : colonnes « Correctes », « Pourcentage », « Résultat » OK")
+    admis = [x.value for x in xl["Admis"][2]]
+    assert "Note sur 20" in admis and "Pourcentage" not in admis, admis
+    print("  Excel : colonnes « Correctes », « Note sur 20 », « Résultat » OK")
 
     pdf = c.get(reverse("quiz_bulletins_pdf", args=[quiz.pk]) + "?student="
                 + str(a["student"].pk)).content
     texte = pymupdf.open(stream=pdf, filetype="pdf")[0].get_text()
-    assert "BONNES RÉPONSES" in texte and "5 / 6" in texte and "83 %" in texte
+    assert "BONNES RÉPONSES" in texte and "5 / 6" in texte and "NOTE SUR 20" in texte \
+        and "16,67 / 20" in texte and "%" not in texte, texte
     texte = pymupdf.open(stream=c.get(reverse("quiz_admis_pdf", args=[quiz.pk])).content,
                          filetype="pdf")[0].get_text()
-    assert "Bonnes rép." in texte and "5 / 6" in texte and "83 %" in texte
+    assert "Bonnes rép." in texte and "5 / 6" in texte and "Note / 20" in texte \
+        and "16,67" in texte and "3 / 6 (10 / 20)" in texte and "83 %" not in texte, texte
     assert "CHERIF" not in texte
-    print("  bulletin et liste des réussis en PDF : bonnes réponses et pourcentage OK")
+    print("  bulletin et liste des réussis en PDF : bonnes réponses et note sur 20 OK")
 
     c.post(reverse("quiz_publication", args=[quiz.pk]), {"resultats_publies": "1",
                                                          "admis_publies": "1"})
+    # espace public : le résultat seul, « Réussi » ou « Non réussi » (« Admis » ou « Non
+    # admis » en concours) : ni note, ni bonnes réponses, ni rang (13 novembre 2026)
     cache.clear()
     anonyme = Client()
     page = anonyme.get(reverse("public_resultat") + "?numero=8800").content.decode()
-    assert "<b>5</b> / 6 bonnes réponses" in page and "83 %" in page and "Réussi" in page
-    page = anonyme.get(reverse("public_resultat") + "?numero=8802").content.decode()
-    assert "<b>2</b> / 6 bonnes réponses" in page and "33 %" in page and "Non réussi" in page
-    page = anonyme.get(reverse("public_epreuve", args=[quiz.pk])).content.decode()
-    assert "<b>5</b> / 6" in page and "83 %" in page
+    assert '<p class="pub-verdict pub-verdict--admis">Réussi</p>' in page, page[-1500:]
+    refus = anonyme.get(reverse("public_resultat") + "?numero=8802").content.decode()
+    assert '<p class="pub-verdict pub-verdict--refuse">Non réussi</p>' in refus, refus[-1500:]
+    liste = anonyme.get(reverse("public_epreuve", args=[quiz.pk])).content.decode()
+    assert "<th>Résultat</th>" in liste and "<th>Rang</th>" not in liste
+    assert "8800" in liste and "8801" in liste and "8802" not in liste, "réussis seulement"
+    for texte in (page, refus, liste):
+        for absent in ("bonnes réponses", "16,67", "6,67", "/ 20", "83 %", "<progress",
+                       "<b>5</b>", "Note sur 20", "Pourcentage", "ordre de mérite"):
+            assert absent not in texte, absent
+    # la liste suit le n° d'inscription, pas le mérite (l'ordre dirait le rang) : AMRI, la
+    # meilleure, sous un n° plus grand que celui de BAKIR passe après lui
+    amri = Student.objects.get(class_group=quiz.class_group, last_name="AMRI")
+    amri.student_number = "8809"
+    amri.save(update_fields=["student_number"])
     cache.clear()
-    print("  espace public : bonnes réponses, pourcentage, réussi / non réussi OK")
+    liste = anonyme.get(reverse("public_epreuve", args=[quiz.pk])).content.decode()
+    assert liste.index("8801") < liste.index("8809"), "liste par ordre de mérite"
+    amri.student_number = "8800"
+    amri.save(update_fields=["student_number"])
+    cache.clear()
+    print("  espace public : « Réussi » ou « Non réussi » seulement ; liste des réussis par "
+          "n° d'inscription, sans rang ni note OK")
 
-    # avec une réponse manuscrite, la note ne se confond plus avec les bonnes réponses
+    # avec une réponse manuscrite, les points ne se confondent plus avec les bonnes
+    # réponses : colonne « Points » en plus de la note sur 20
     quiz2 = _epreuve(prof, avec_redaction=True)
     assert quiz2.questions.get(order=7).points == 4.0
     assert quiz2.note_distincte
     page = c.get(reverse("quiz_results", args=[quiz2.pk])).content.decode()
-    assert "<th>Note</th>" in page and "/ 10" in page
-    print("  réponse manuscrite : barème libre, colonne « Note » en plus OK")
+    assert "<th>Points</th>" in page and "/ 10" in page and "<th>Note sur 20</th>" in page
+    print("  réponse manuscrite : barème libre, colonne « Points » en plus OK")
 
     # reprise des épreuves existantes (migration 0028)
     q = quiz.questions.get(order=1)

@@ -103,7 +103,23 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    (moyenne, médiane, histogramme des notes, taux de réussite par question —
    les questions les plus ratées sont surlignées), **export Excel** (résultats
    + feuille statistiques) et **bulletins PDF** (relevé individuel par
-   étudiant, en un seul PDF pour toute la classe ou un par un).
+   étudiant, en un seul PDF pour toute la classe ou un par un). Le résultat d'un
+   **QCM se lit en bonnes réponses et en note sur 20** (37 bonnes réponses sur 50
+   donnent 14,80 / 20), jamais en pourcentage. C'est vrai partout : page des
+   résultats, statistiques et histogramme (tranches de 4 points), bulletins, liste des
+   admis en PDF, Excel, parcours du concours, tableau de bord. La note minimale d'un
+   QCM se règle toujours en bonnes réponses (ou en points), et son équivalent sur 20
+   s'affiche à côté. Avec une pénalité ou une réponse manuscrite, une colonne
+   « Points » donne en plus les points bruts. L'écrit et l'oral gardent leur note sur
+   leur barème et leur pourcentage.
+8. **Espace public** (résultats publiés) : le candidat n'y lit que son résultat, quelle
+   que soit l'épreuve. C'est « Admis » ou « Non admis » (« Réussi » ou « Non réussi »
+   hors concours), ou « Correction en cours » tant qu'une page reste à noter ou à
+   identifier. Jamais sa note, ses bonnes réponses ni son rang. Sans note minimale, il
+   lit « Résultat pas encore disponible ». La liste publique des admis donne le n°
+   d'inscription, le prénom et le nom, dans l'ordre des n° d'inscription : l'ordre de
+   mérite dirait le rang. Rang et notes restent au personnel : page des résultats,
+   liste des admis en PDF, Excel, bulletins.
 
 ### Identification des copies : trois modes au choix (par quiz)
 
@@ -576,6 +592,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_etiquette_pages.py` | feuille à étiquette sur plusieurs pages : une vignette par page, étiquette oubliée signalée (copie incomplète, en attente), présélection d'après l'ordre du scan |
 | `test_e2e_scanner.py` | sorties d'un scanner à chargeur : TIFF multipage lu en entier, versos blancs ignorés, étiquettes lues en noir et blanc, PDF à 600 dpi et image à 1200 dpi décodés réduits, JPEG piégés refusés sur leur en-tête |
 | `test_e2e_a3.py` | copies d'écrit et sujet de QCM en A3 recto-verso plié : ordre des pages, sans carrés noirs, page de garde lue sur la feuille A3 dans tous les sens, en-tête et QR de l'étudiant sur la page de garde seulement, A4 inchangé |
+| `test_e2e_talon.py` | copies à talon : nom seulement sur le talon, code d'anonymat identique sur le talon et sous le QR (un par copie, gardé à la régénération), copie lue talon découpé ou non, QR effacé retrouvé par son code, écrit à talon (talon et QR sur la page de garde seulement), PDF à 1200 dpi, copie d'une autre épreuve, génération en arrière-plan |
 | `test_e2e_import.py` | import de questionnaires et de candidats (Excel, Word, PDF, CSV), banque de questions |
 | `test_e2e_forms.py` | création d'un concours (sans classe ni case « mode concours ») et d'un quiz, nombre de choix par question jusqu'à la lecture de la copie |
 | `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » |
@@ -632,8 +649,8 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   quand le nombre de pages serait impair : 2 demandées donnent 3). Imprimez-les recto-verso sur
   le bord long, à 100 % : une copie ne commence jamais au dos de la précédente, et le dos de
   chaque feuille n'a rien d'écrit dans la bande du talon (une seule coupe).
-- Copies nominatives (nom imprimé, talon ou n° de place, en QCM comme à l'écrit) et fiches
-  d'oral : elles sortent salle par salle, d'après la salle du registre des inscriptions
+- Copies nominatives (nom imprimé, talon ou n° de place, en QCM comme à l'écrit) et modèle
+  Excel des notes d'oral : ils sortent salle par salle, d'après la salle du registre des inscriptions
   (« قاعة عدد 2 » avant « قاعة عدد 15 », les étudiants sans salle à la fin), puis par n°
   d'inscription, ou par n° de place. La « Liste des candidats par salle » (des étudiants pour
   une classe ; page de l'épreuve, pour toute présentation) donne une liste par salle, dans le
@@ -644,14 +661,40 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   restent en place jusqu'à la fin. Mesuré sur un poste à 4 cœurs : 15 000 copies de QCM à talon
   (40 questions) en 18 min, d'écrit à talon en 9 min ; le serveur couperait une page au bout de
   10 min. Une génération arrêtée par un redémarrage est signalée au bout de 15 min, à relancer.
-- Copies d'écrit nominatives (talon, nom imprimé ou n° de place) : en A4, le recto de chaque
-  feuille (pages 1, 3, 5…) porte l'en-tête de la page de garde (talon à découper, bande du
-  titre et QR de l'étudiant), pour qu'une feuille détachée reste à qui elle est ; le dos n'en
-  porte pas, seulement le n° de la page au pied. En A3 plié, la page de garde le porte, et la
-  page 3 d'une copie de 8 pages, première page de la 2e feuille (emboîtée, pages 3 à 6) ; les
-  autres pages sont sur la même feuille, et un seul coup de massicot retire les talons. Les
-  pages lignées n'ont ni cadre ni code de page : scannées avec la copie, elles sont ignorées,
-  seule la page de garde porte la note.
+- Copies d'écrit nominatives (talon, nom imprimé ou n° de place) : seule la page de garde
+  porte le talon à découper, la bande du titre et le QR de l'étudiant. C'est vrai en A4 comme
+  en A3, quel que soit le nombre de pages. Les pages lignées n'ont que leur n° au pied. Sur
+  une copie à talon, rien ne s'écrit dans la bande du talon, sur aucune page : un seul coup
+  de massicot retire le talon. Les pages lignées n'ont ni cadre ni code de page : scannées
+  avec la copie, elles sont ignorées, et seule la page de garde porte la note. Un QCM de
+  plusieurs pages garde au contraire son QR sur chaque page : chacune est lue au scan et
+  s'identifie seule.
+- Copies à talon, code d'anonymat : un code de six caractères (« K7M-R9Q ») est imprimé sur le
+  talon, sous le nom, et sous le QR de la copie (page de garde d'un écrit, chaque page d'un
+  QCM). Le talon détaché se rapproche ainsi de sa copie à l'œil. Le code est propre à
+  chaque copie et tiré au hasard : ni le n° d'inscription ni la CIN, que la copie corrigée
+  montrerait. Il n'utilise aucun caractère que l'on confond (0/O, 1/I, 5/S, 8/B…). Une
+  copie régénérée garde son code, un candidat ajouté en reçoit un nouveau, et le code d'un
+  candidat retiré n'est jamais redonné (`layout_json["codes"]`). L'écran de vérification
+  affiche le code d'une copie identifiée. Pour une copie au QR illisible, taper le code lu
+  sous le QR dans la recherche de « Affecter à » retrouve l'étudiant ; la recherche accepte
+  aussi le nom ou le n° d'inscription.
+- Note d'un écrit, par demi-points (barème entier jusqu'à 20). Dans le cadre « réservé au
+  correcteur », le correcteur écrit la note en clair et signe, puis noircit une case par
+  ligne. La première ligne donne la partie entière, de 0 à 20 ; la seconde, la décimale,
+  « ,0 » ou « ,5 ». Une ligne vide, deux cases sur une ligne ou 20,5 donnent une note
+  « à vérifier », à saisir sur l'écran de la copie. Les copies imprimées avant avec la
+  grille à chiffres (dizaines, unités, dixièmes, centièmes) se lisent toujours avec leur
+  disposition. Régénérer leurs documents prévient que ces copies ne se liraient plus :
+  scannées malgré tout, leur ligne de la décimale tombe sur du blanc, et leur note reste
+  « à vérifier », jamais fausse.
+- Notes de l'oral : un fichier Excel, et lui seul. Ni fiche à imprimer ou à scanner, ni
+  saisie à l'écran. La page de l'oral donne le modèle Excel : les candidats dans l'ordre
+  des salles, et leur note s'ils en ont une. Le jury remplit la colonne « Note », puis
+  importe le fichier. Une case vide est passée, une note déjà là est remplacée, et le
+  journal garde chaque note. Une seule ligne fausse suffit à ne rien importer, et le
+  message la nomme : note hors barème ou illisible, n° absent de la liste, n° en double.
+  Les fiches d'oral scannées avant comptent toujours ; un import remplace leur note.
 - Si les questions changent après impression, **régénérez la fiche** avant de
   scanner (la disposition est figée dans la fiche PDF).
 - L'OCR d'un nom manuscrit n'est jamais parfait : les copies non identifiées
