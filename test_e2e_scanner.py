@@ -77,18 +77,27 @@ def verifier_tiff(teacher):
         list(lot.sheets.values_list("status", "error_message"))
     print("  TIFF noir et blanc compressé (G4) : 4 pages lues")
 
-    # Une image démesurée dans le fichier : elle seule est refusée, le lot continue.
+    # Une grande page dans le fichier (9000 × 9000, 81 millions de pixels) : décodée seule,
+    # réduite, plus refusée (toutes les résolutions, 15 novembre 2026) ; au-delà du budget
+    # de décodage, elle seule est refusée et le lot continue.
     tampon = io.BytesIO()
     Image.fromarray(cv2.cvtColor(pages[0], cv2.COLOR_BGR2RGB)).convert("1").save(
         tampon, format="TIFF", save_all=True, compression="group4",
         append_images=[Image.new("1", (9000, 9000), 1)])
     lot = services.process_uploaded_files(
-        quiz, [SimpleUploadedFile("demesure.tif", tampon.getvalue())], label="demesure")
+        quiz, [SimpleUploadedFile("grande.tif", tampon.getvalue())], label="grande")
+    feuilles = list(lot.sheets.order_by("pk"))
+    assert lot.status == "done" and len(feuilles) == 2, (lot.status, feuilles)
+    assert "démesurée" not in (feuilles[1].error_message or ""), feuilles[1].error_message
+    with mock.patch.object(services, "MAX_OCTETS_DECODAGE", 50_000_000):
+        lot = services.process_uploaded_files(
+            quiz, [SimpleUploadedFile("demesure.tif", tampon.getvalue())], label="demesure")
     feuilles = list(lot.sheets.order_by("pk"))
     assert lot.status == "done" and len(feuilles) == 2, (lot.status, feuilles)
     assert feuilles[1].status == "error" and "démesurée" in feuilles[1].error_message, feuilles[1]
     assert feuilles[0].status != "error", feuilles[0].error_message
-    print("  image démesurée dans le TIFF : refusée seule, le lot continue")
+    print("  grande page dans le TIFF : décodée réduite ; au-delà du budget, refusée seule, "
+          "le lot continue")
 
     # Une image seule garde son nom ; un faux .tif reste signalé, sans arrêter le lot.
     _, quiz, (a, _b) = creer_quiz("SC-TIFF-1", teacher, nb_qcm=PAGE_1, id_mode="sticker",
@@ -260,21 +269,95 @@ def verifier_haute_resolution(teacher):
     print(f"  PDF à 600 ppp et image seule à 1200 ppp ({largeur} × {hauteur} pixels) : décodés "
           f"à la moitié, identifiés, {PAGE_1}/{PAGE_1} chacun OK")
 
-    # Fichiers piégés : refusés sur leur seul en-tête, le message dit quoi régler.
-    # Progressif au-delà de la limite (libjpeg garderait toute l'image même réduite) ;
-    # séquentiel si grand que même le huitième dépasse la limite.
-    a4_progressif = pdf_jpeg(jpeg_annonce(5400, 7640, progressif=True), 595, 842)
+    # Scanner qui mesure sa page à 72 ppp (15 novembre 2026 : une A4 à 600 ppp y fait
+    # 179 × 247 cm, chaque copie refusée « Page démesurée ») : l'image se lit, ramenée à
+    # la taille d'une A3 à 200 ppp ; avec le texte d'une reconnaissance de caractères
+    # par-dessus, la page se dessine, réduite de même ; une page géante sans scan reste
+    # refusée (test_e2e_securite)
+    _, quiz72, (a72, _b72) = creer_quiz("SC-72PPP", teacher, nb_qcm=PAGE_1, id_mode="sticker",
+                                        auto_enroll=True)
+    disposition72, pdf72 = preparer(quiz72)
+    gris = cv2.cvtColor(copie(pdf72, disposition72, a72, {0})[0], cv2.COLOR_BGR2GRAY)
+    fine = cv2.resize(gris, None, fx=2, fy=2, interpolation=cv2.INTER_LINEAR)     # 600 ppp
+    flux_72 = cv2.imencode(".jpg", fine, [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
+    pdf_geant = pdf_jpeg(flux_72, fine.shape[1], fine.shape[0])          # 1 pixel = 1 point
+    long_a3 = round(services.A3_LONG_PT * services.SCAN_DPI / 72)
+    with pymupdf.open(stream=pdf_geant, filetype="pdf") as doc:
+        assert doc[0].rect.height / 72 * 2.54 > 200, doc[0].rect           # plus de 2 m
+        lue = services._image_du_scanner(doc, doc[0])
+    assert abs(max(lue.shape[:2]) - long_a3) <= 2, (lue.shape, long_a3)
+    doc = pymupdf.open(stream=pdf_geant, filetype="pdf")
+    doc[0].insert_text((60, 60), "texte reconnu", fontsize=40)
+    pdf_texte = doc.tobytes()
+    doc.close()
+    with services._open_pages("texte.pdf", pdf_texte) as pages:
+        assert abs(max(pages[0][1]().shape[:2]) - long_a3) <= 2
+    lot = services.process_uploaded_files(quiz72, [SimpleUploadedFile("geant.pdf", pdf_geant)],
+                                          label="72 ppp")
+    feuille = lot.sheets.get()
+    assert feuille.student_id == a72.pk, (feuille.status, feuille.error_message)
+    assert lignes(quiz72)[a72.pk]["score"] == PAGE_1, lignes(quiz72)
+    print(f"  page mesurée à 72 ppp ({fine.shape[1]} × {fine.shape[0]} points, plus de 2 m) : "
+          f"image lue réduite à une A3 à 200 ppp, identifiée, {PAGE_1}/{PAGE_1} ; avec du "
+          "texte reconnu par-dessus, dessinée réduite OK")
+
+    # Toutes les résolutions (15 novembre 2026) : au-delà de 40 millions de pixels, un JPEG
+    # progressif, un PNG et un TIFF (d'une page ou de plusieurs) se décodent seuls, réduits,
+    # en gris pour le PNG et le TIFF, et la copie est lue
+    _, quiz_t, (ta, tb) = creer_quiz("SC-TOUTES", teacher, nb_qcm=PAGE_1, id_mode="sticker",
+                                     auto_enroll=True)
+    disposition_t, pdf_t = preparer(quiz_t)
+
+    def scan_700(candidat):
+        gris = cv2.cvtColor(copie(pdf_t, disposition_t, candidat, {0})[0], cv2.COLOR_BGR2GRAY)
+        return cv2.resize(gris, None, fx=700 / 300, fy=700 / 300, interpolation=cv2.INTER_LINEAR)
+
+    grand_a, grand_b = scan_700(ta), scan_700(tb)
+    assert grand_a.shape[0] * grand_a.shape[1] > services.MAX_PIXELS_PAGE, grand_a.shape
+    progressif = cv2.imencode(".jpg", grand_a, [cv2.IMWRITE_JPEG_PROGRESSIVE, 1,
+                                                cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
+    assert services._entete_jpeg(progressif)[3] is False
+    lot = services.process_uploaded_files(quiz_t, [
+        SimpleUploadedFile("progressif.jpg", progressif),
+        SimpleUploadedFile("grand.png", cv2.imencode(".png", grand_b)[1].tobytes())],
+        label="toutes")
+    feuilles = list(lot.sheets.order_by("pk"))
+    assert [f.student_id for f in feuilles] == [ta.pk, tb.pk], \
+        [(f.status, f.error_message) for f in feuilles]
+    assert [lignes(quiz_t)[s.pk]["score"] for s in (ta, tb)] == [PAGE_1, PAGE_1]
+    _, quiz_t2, (ua, ub) = creer_quiz("SC-TOUTES-TIFF", teacher, nb_qcm=PAGE_1,
+                                      id_mode="sticker", auto_enroll=True)
+    disposition_t, pdf_t = preparer(quiz_t2)
+    une, plusieurs = io.BytesIO(), io.BytesIO()
+    Image.fromarray(scan_700(ua)).save(une, format="TIFF", compression="tiff_deflate")
+    Image.fromarray(scan_700(ua)).save(plusieurs, format="TIFF", compression="tiff_deflate",
+                                       save_all=True, append_images=[Image.fromarray(scan_700(ub))])
+    lot = services.process_uploaded_files(quiz_t2, [
+        SimpleUploadedFile("une.tif", une.getvalue()),
+        SimpleUploadedFile("plusieurs.tif", plusieurs.getvalue())], label="toutes-tiff")
+    feuilles = list(lot.sheets.order_by("pk"))
+    assert len(feuilles) == 3 and feuilles[0].student_id == ua.pk, \
+        [(f.status, f.error_message) for f in feuilles]
+    assert feuilles[2].student_id == ub.pk, (feuilles[2].status, feuilles[2].error_message)
+    assert lignes(quiz_t2)[ub.pk]["score"] == PAGE_1
+    print(f"  à 700 ppp ({grand_a.shape[1]} × {grand_a.shape[0]} pixels) : JPEG progressif, "
+          "PNG, TIFF d'une page et de plusieurs, décodés réduits, identifiés OK")
+
+    # Fichiers piégés, plus grands qu'une copie A3 scannée à 1200 ppp : refusés sur leur
+    # seul en-tête, sans décodage. Progressif au-delà du budget de décodage (libjpeg
+    # garderait tous les coefficients) ; séquentiel si grand que même le huitième dépasse.
+    a4_progressif = pdf_jpeg(jpeg_annonce(18000, 25456, progressif=True), 595, 842)
     carre = pdf_jpeg(jpeg_annonce(60000, 60000), 2268, 2268)          # 80 cm de côté
     with mock.patch.object(services.cv2, "imdecode", wraps=cv2.imdecode) as espion:
-        for octets, ppp in ((a4_progressif, 653), (carre, 1905)):
+        for octets, ppp in ((a4_progressif, 2178), (carre, 1905)):
             with services._open_pages("piege.pdf", octets, differer=True) as pages:
                 try:
                     pages[0][1]()
                     raise AssertionError(f"image de {ppp} ppp acceptée")
                 except ValueError as exc:
                     assert "démesurée" in str(exc) and f"{ppp} ppp" in str(exc) \
-                        and "réglez le scanner sur 200 ou 300 ppp" in str(exc), str(exc)
-        for octets in (jpeg_annonce(7000, 9900, progressif=True), jpeg_annonce(60000, 60000)):
+                        and "plus grande qu'une copie A3 scannée à 1200 ppp" in str(exc), str(exc)
+        for octets in (jpeg_annonce(20000, 20000, progressif=True), jpeg_annonce(60000, 60000)):
             with services._open_pages("piege.jpg", octets) as pages:
                 try:
                     pages[0][1]()
@@ -286,9 +369,9 @@ def verifier_haute_resolution(teacher):
         quiz, [SimpleUploadedFile("progressif.pdf", a4_progressif)], label="piege")
     feuille = lot.sheets.get()
     assert lot.status == "done" and feuille.status == "error", (lot.status, feuille.status)
-    assert "réglez le scanner" in feuille.error_message, feuille.error_message
-    print("  JPEG piégés (progressif au-delà de la limite, 60000 × 60000) : refusés sur "
-          "l'en-tête, sans décodage, le message dit quoi régler OK")
+    assert "plus grande qu'une copie A3" in feuille.error_message, feuille.error_message
+    print("  JPEG piégés (progressif de 458 millions de pixels, 60000 × 60000) : refusés sur "
+          "l'en-tête, sans décodage OK")
 
 
 def main():

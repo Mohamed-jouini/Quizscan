@@ -314,13 +314,69 @@ FORMATS_SCAN = ("JPEG", "PNG", "TIFF", "BMP", "WEBP")
 # taille, sans passer par l'image entière
 _LECTURE_REDUITE = {1: cv2.IMREAD_COLOR, 2: cv2.IMREAD_REDUCED_COLOR_2,
                     4: cv2.IMREAD_REDUCED_COLOR_4, 8: cv2.IMREAD_REDUCED_COLOR_8}
+_LECTURE_REDUITE_GRIS = {1: cv2.IMREAD_GRAYSCALE, 2: cv2.IMREAD_REDUCED_GRAYSCALE_2,
+                         4: cv2.IMREAD_REDUCED_GRAYSCALE_4, 8: cv2.IMREAD_REDUCED_GRAYSCALE_8}
+# Toutes les résolutions d'un scanner (demande de l'utilisateur, 15 novembre 2026) : une
+# image plus grande que MAX_PIXELS_PAGE ne se garde que réduite, mais son décodage peut
+# demander jusqu'à MAX_OCTETS_DECODAGE (TIFF, PNG : un octet par pixel en gris, une A3 à
+# 1200 ppp en fait 278 millions ; JPEG progressif : deux octets par pixel et par composante),
+# un seul de ces gros décodages à la fois. Au-delà, plus grand qu'une copie A3 scannée à
+# 1200 ppp, ce n'est plus un scan : un fichier piégé, refusé sur son seul en-tête.
+MAX_OCTETS_DECODAGE = 600_000_000
+_GROS_DECODAGE = threading.BoundedSemaphore(1)
+
+
+def _seuil_pillow():
+    """Pillow refuse de lui-même une image de plus du double de MAX_IMAGE_PIXELS (178 millions
+    de pixels par défaut : une A3 à 1200 ppp n'ouvrirait pas, et un TIFF de plusieurs pages
+    passerait pour une image seule) : son seuil suit MAX_OCTETS_DECODAGE."""
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = MAX_OCTETS_DECODAGE // 2
+
+
+_seuil_pillow()
+# octets par pixel d'une image Pillow en mémoire, selon son mode (« RGB » en prend quatre)
+_OCTETS_PAR_PIXEL = {"1": 1, "L": 1, "P": 1, "LA": 2, "PA": 2, "I;16": 2, "I;16B": 2}
+
+
+def _reduction_pour(largeur, hauteur):
+    """La plus petite réduction (1, 2, 4 ou 8) qui fait tenir l'image sous MAX_PIXELS_PAGE,
+    ou None si même le huitième la dépasse."""
+    for reduction in (1, 2, 4, 8):
+        if -(-largeur // reduction) * -(-hauteur // reduction) <= MAX_PIXELS_PAGE:
+            return reduction
+    return None
+
+
+# Le plus long côté d'une A3, en points PDF. Une page géante (plus de MAX_PIXELS_PAGE à
+# SCAN_DPI) qui porte un scan se lit à cette taille-là : un scanner qui mesure sa page à
+# 72 ppp la dit géante, 179 × 247 cm pour une A4 à 600 ppp (vu le 15 novembre 2026, toutes
+# les copies refusées « Page démesurée »).
+A3_LONG_PT = 420 / 25.4 * 72
+
+
+def _echelle_page(rect):
+    """Pixels par point PDF pour lire une page : SCAN_DPI / 72, ou, pour une page géante,
+    ce qu'il faut pour la ramener à la taille d'une A3 à SCAN_DPI."""
+    echelle = SCAN_DPI / 72
+    if rect.width * echelle * rect.height * echelle > MAX_PIXELS_PAGE:
+        echelle *= A3_LONG_PT / max(rect.width, rect.height)
+    return echelle
+
+
+def _image_pleine_page(page):
+    """La page porte-t-elle une image qui la couvre presque toute, comme un scan (avec ou
+    sans le texte d'une reconnaissance de caractères par-dessus) ?"""
+    aire = page.rect.width * page.rect.height
+    return any((x1 - x0) * (y1 - y0) >= 0.9 * aire
+               for x0, y0, x1, y1 in (info["bbox"] for info in page.get_image_info()))
 
 
 def _image_demesuree(largeur, hauteur, ou, ppp=None):
     """L'erreur d'une image trop grande pour être lue, avec ce qu'il faut faire."""
     finesse = f", {ppp} ppp" if ppp else ""
-    return ValueError(f"Image démesurée ({largeur} × {hauteur} pixels{finesse}) {ou} : "
-                      "réglez le scanner sur 200 ou 300 ppp.")
+    return ValueError(f"Image démesurée ({largeur} × {hauteur} pixels{finesse}) {ou} : plus "
+                      "grande qu'une copie A3 scannée à 1200 ppp, ce n'est pas un scan de copie.")
 
 
 def _entete_jpeg(octets):
@@ -373,26 +429,37 @@ def _controler_dimensions(name, data):
     sans cette liste, un fichier « .png » atteindrait tous les décodeurs de
     Pillow et d'OpenCV, y compris ceux de formats exotiques qui ont des failles
     connues (FlashPix, EPS, XBM…). Un JPEG en un balayage plus grand que la
-    limite (scanner à 1200 ppp) se décode réduit, juste assez pour y tenir."""
+    limite (scanner à 1200 ppp) se décode réduit, juste assez pour y tenir.
+
+    Toutes les résolutions d'un scanner passent (15 novembre 2026) : rend (réduction, gris,
+    gros). gris : une grande image d'un autre format que JPEG se décode en gris (un octet
+    par pixel), puis réduite ; gros : un décodage à faire seul (_GROS_DECODAGE). Refusée
+    seulement si son décodage dépasserait MAX_OCTETS_DECODAGE."""
     entete = _entete_jpeg(data)
-    if entete is not None and entete[3] and entete[2] in (1, 3):
-        largeur, hauteur = entete[:2]
-        for reduction in (1, 2, 4, 8):
-            if -(-largeur // reduction) * -(-hauteur // reduction) <= MAX_PIXELS_PAGE:
-                return reduction
+    if entete is not None and entete[2] in (1, 3):
+        largeur, hauteur, composantes, sequentiel = entete
+        reduction = _reduction_pour(largeur, hauteur)
+        # séquentiel : bande par bande, quelques lignes en mémoire ; progressif : tous les
+        # coefficients de l'image, deux octets par pixel et par composante
+        if reduction is not None and (
+                sequentiel or largeur * hauteur * composantes * 2 <= MAX_OCTETS_DECODAGE):
+            return reduction, False, not sequentiel and largeur * hauteur > MAX_PIXELS_PAGE
         raise _image_demesuree(largeur, hauteur, f"dans {name}")
     from PIL import Image
     try:
         with Image.open(io.BytesIO(data), formats=FORMATS_SCAN) as im:
             largeur, hauteur = im.size
     except Image.DecompressionBombError as exc:
-        raise ValueError(f"Image démesurée dans {name} : réglez le scanner "
-                         "sur 200 ou 300 ppp.") from exc
+        raise ValueError(f"Image démesurée dans {name} : plus grande qu'une copie A3 "
+                         "scannée à 1200 ppp, ce n'est pas un scan de copie.") from exc
     except Exception as exc:  # noqa: BLE001 — quelle qu'en soit la raison
         raise ValueError(f"Format d'image non reconnu : {name}") from exc
-    if largeur * hauteur > MAX_PIXELS_PAGE:
+    if largeur * hauteur <= MAX_PIXELS_PAGE:
+        return 1, False, False
+    reduction = _reduction_pour(largeur, hauteur)
+    if reduction is None or largeur * hauteur > MAX_OCTETS_DECODAGE:
         raise _image_demesuree(largeur, hauteur, f"dans {name}")
-    return 1
+    return reduction, True, True
 
 
 class _ADecoder:
@@ -460,22 +527,28 @@ def _jpeg_du_scanner(doc, page):
     if entete is None or entete[:2] != (w, h) or entete[2] not in (1, 3):
         # JPEG à part (CMJN, taille autre que celle annoncée, arithmétique…) : la
         # page se dessine, comme avant, si l'image reste à la mesure d'une copie
-        if max(w * h, entete[0] * entete[1] if entete else 0) > MAX_PIXELS_PAGE:
+        if max(w * h, entete[0] * entete[1] if entete else 0) * 4 > MAX_OCTETS_DECODAGE:
             raise _image_demesuree(w, h, "dans la page", ppp)
         return None
-    cible = (round(largeur_pt / 72 * SCAN_DPI), round(hauteur_pt / 72 * SCAN_DPI))
+    # page géante (scanner qui la mesure à 72 ppp) : ramenée à une A3 à SCAN_DPI
+    echelle = _echelle_page(page.rect)
+    cible = (round(largeur_pt * echelle), round(hauteur_pt * echelle))
     # la plus forte réduction qui garde 200 ppp : à 1200 ppp, le quart (300 ppp),
     # ramené ensuite à 200 ; l'image entière ne passe jamais en mémoire
     reduction = 1
     while reduction < 8 and w // (2 * reduction) >= cible[0]:
         reduction *= 2
     decodee = -(-w // reduction) * -(-h // reduction)
-    if decodee > MAX_PIXELS_PAGE or (not entete[3] and w * h > MAX_PIXELS_PAGE):
+    # progressif : tous ses coefficients en mémoire (deux octets par pixel et par composante)
+    progressif = not entete[3]
+    if decodee > MAX_PIXELS_PAGE or (progressif and w * h * entete[2] * 2 > MAX_OCTETS_DECODAGE):
         raise _image_demesuree(w, h, "dans la page", ppp)
     drapeaux = _LECTURE_REDUITE[reduction] | cv2.IMREAD_IGNORE_ORIENTATION
+    gros = progressif and w * h > MAX_PIXELS_PAGE
 
     def decoder():
-        img = cv2.imdecode(np.frombuffer(brut, dtype=np.uint8), drapeaux)
+        with (_GROS_DECODAGE if gros else contextlib.nullcontext()):
+            img = cv2.imdecode(np.frombuffer(brut, dtype=np.uint8), drapeaux)
         if img is not None and img.shape[1] > cible[0] * 1.05:
             img = cv2.resize(img, cible, interpolation=cv2.INTER_AREA)
         return img
@@ -504,29 +577,39 @@ def _open_pages(name, data, differer=False):
                     tiff.seek(i)
                     # seule la première image passe par _controler_dimensions
                     largeur, hauteur = tiff.size
-                    if largeur * hauteur > MAX_PIXELS_PAGE:
+                    if largeur * hauteur <= MAX_PIXELS_PAGE:
+                        return cv2.cvtColor(np.array(tiff.convert("RGB")), cv2.COLOR_RGB2BGR)
+                    # grande page (toutes les résolutions, 15 novembre 2026) : décodée seule,
+                    # en gris, puis réduite ; refusée si elle et son gris dépassent le budget
+                    reduction = _reduction_pour(largeur, hauteur)
+                    octets = largeur * hauteur * (_OCTETS_PAR_PIXEL.get(tiff.mode, 4) + 1)
+                    if reduction is None or octets > MAX_OCTETS_DECODAGE:
                         raise _image_demesuree(largeur, hauteur, f"dans {name}")
-                    return cv2.cvtColor(np.array(tiff.convert("RGB")), cv2.COLOR_RGB2BGR)
+                    with _GROS_DECODAGE:
+                        gris = tiff.convert("L")
+                        if reduction > 1:
+                            gris = gris.reduce(reduction)
+                        img = np.array(gris)
+                    return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
                 yield [(f"{name} (page {i + 1})", (lambda i=i: image_tiff(i)))
                        for i in range(nb_images)]
             return
 
         def decode():
-            reduction = _controler_dimensions(name, data)
-            img = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), _LECTURE_REDUITE[reduction])
+            reduction, gris, gros = _controler_dimensions(name, data)
+            drapeaux = (_LECTURE_REDUITE_GRIS if gris else _LECTURE_REDUITE)[reduction]
+            with (_GROS_DECODAGE if gros else contextlib.nullcontext()):
+                img = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), drapeaux)
             if img is None:
                 raise ValueError(f"Format d'image non reconnu : {name}")
-            return img
+            return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR) if img.ndim == 2 else img
         yield [(name, (lambda: _ADecoder(decode)) if differer else decode)]
         return
 
     with pymupdf.open(stream=data, filetype="pdf") as doc:
         def render(i):
-            rect = doc[i].rect
-            if (rect.width / 72 * SCAN_DPI) * (rect.height / 72 * SCAN_DPI) > MAX_PIXELS_PAGE:
-                raise ValueError(f"Page démesurée ({rect.width / 72 * 2.54:.0f} × "
-                                 f"{rect.height / 72 * 2.54:.0f} cm) : une copie se "
-                                 "scanne en A4 ou A3.")
+            # D'abord le JPEG d'un scanner, tel quel : _jpeg_du_scanner borne l'image en
+            # mémoire, même sur une page que le scanner dit géante (mesurée à 72 ppp)
             if differer:
                 a_decoder = _jpeg_du_scanner(doc, doc[i])
                 if a_decoder is not None:
@@ -535,7 +618,17 @@ def _open_pages(name, data, differer=False):
                 img = _image_du_scanner(doc, doc[i])
                 if img is not None:
                     return img
-            pix = doc[i].get_pixmap(dpi=SCAN_DPI, colorspace=pymupdf.csRGB)
+            rect = doc[i].rect
+            echelle = _echelle_page(rect)
+            # Page à dessiner, géante : un scan (image pleine page, texte reconnu par-dessus
+            # compris) se dessine ramené à une A3 à SCAN_DPI ; une page sans scan (vide,
+            # dessin : un fichier piégé) reste refusée
+            if echelle < SCAN_DPI / 72 and not _image_pleine_page(doc[i]):
+                raise ValueError(f"Page démesurée ({rect.width / 72 * 2.54:.0f} × "
+                                 f"{rect.height / 72 * 2.54:.0f} cm) : une copie se "
+                                 "scanne en A4 ou A3.")
+            pix = doc[i].get_pixmap(matrix=pymupdf.Matrix(echelle, echelle),
+                                    colorspace=pymupdf.csRGB)
             img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
                 pix.height, pix.width, 3)
             return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)

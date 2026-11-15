@@ -637,12 +637,16 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
 - Scanner à chargeur (Canon DR-G2110 à l'institut) : **PDF, niveaux de gris, 200 dpi**. Un
   paquet de 500 feuilles en recto-verso reste alors sous les 500 Mo permis par fichier. Le
   recto-verso convient : les versos blancs sont ignorés.
-- Plus fin (600, 1200 dpi) est accepté en PDF ou en JPEG : l'image est décodée réduite, puis lue
-  à 200 dpi. Cela n'apporte rien et alourdit tout : à 1200 dpi, une page compte 36 fois plus de
-  pixels qu'à 200 dpi, et le paquet dépasse vite les 500 Mo. En TIFF ou PNG, la limite reste de
-  40 millions de pixels (une A4 à 600 dpi passe, une A3 non). Une image démesurée (fichier
-  piégé, JPEG progressif de plus de 40 millions de pixels) est refusée, avec la résolution à
-  régler dans le message.
+- Toutes les résolutions sont acceptées, en PDF, JPEG, TIFF ou PNG : plus fine que 200 dpi,
+  l'image est décodée réduite, puis lue à 200 dpi. Le JPEG d'un scanner se décode bande par
+  bande ; un TIFF, un PNG ou un JPEG progressif de plus de 40 millions de pixels se décode
+  seul, en gris, puis réduit (une A3 à 1200 dpi demande alors 278 Mo le temps de son
+  décodage). Plus fin n'apporte rien et alourdit tout : à 1200 dpi, une page compte 36 fois
+  plus de pixels qu'à 200 dpi, et le paquet dépasse vite les 500 Mo. Seule une image plus
+  grande qu'une copie A3 scannée à 1200 dpi (un fichier piégé) est refusée, sur son seul
+  en-tête. Un PDF dont le scanner mesure la page à 72 dpi (une A4 à 600 dpi y fait
+  179 × 247 cm) est lu : son scan est ramené à la taille d'une A3 à 200 dpi, texte reconnu
+  par-dessus compris. Seule une page géante sans scan (vide, dessin) est refusée.
 - Copies d'écrit en A3 (réglage « Format des copies » de l'épreuve) : imprimez recto-verso sur
   le bord court, à 100 %, et pliez au milieu ; le sujet d'un QCM peut prendre le même format,
   sa feuille de réponses reste en A4. Au scan, passez les feuilles dépliées, en A3, recto seul :

@@ -238,10 +238,19 @@ def main():
         except ValueError as exc:
             assert "démesurée" in str(exc)
     import io as io_mod
+    import struct
+    import zlib
+
     from PIL import Image
+    # toutes les résolutions d'un scanner passent depuis le 15 novembre 2026 (une A3 à 1200
+    # ppp fait 278 millions de pixels) : la bombe annonce 40000 × 40000, 1,6 milliard de
+    # pixels, en quelques octets (en-tête IHDR réécrit, son CRC recalculé)
     tampon = io_mod.BytesIO()
-    Image.new("1", (9000, 9000)).save(tampon, "PNG")    # 81 Mpx, quelques Ko
-    with services._open_pages("bombe.png", tampon.getvalue()) as pages:
+    Image.new("1", (16, 16)).save(tampon, "PNG")
+    bombe = bytearray(tampon.getvalue())
+    bombe[16:24] = struct.pack(">II", 40000, 40000)
+    bombe[29:33] = struct.pack(">I", zlib.crc32(bytes(bombe[12:29])) & 0xFFFFFFFF)
+    with services._open_pages("bombe.png", bytes(bombe)) as pages:
         try:
             pages[0][1]()
             raise AssertionError("image démesurée décodée")
