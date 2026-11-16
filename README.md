@@ -120,6 +120,12 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    d'inscription, le prénom et le nom, dans l'ordre des n° d'inscription : l'ordre de
    mérite dirait le rang. Rang et notes restent au personnel : page des résultats,
    liste des admis en PDF, Excel, bulletins.
+   Sous les étapes d'un concours, **« Résultat final du concours »** dit le verdict seul
+   (ni moyenne finale ni rang) : « Admis au concours » pour un admis à l'oral publié,
+   « Non admis au concours » pour un non admis à une étape publiée ou qui n'est pas
+   admis à l'oral publié (absent compris), « À venir » sinon. Le concours finit par
+   l'oral : un admis à l'écrit reste « À venir » tant que l'oral n'est pas publié, ou
+   pas encore créé.
 
 ### Identification des copies : trois modes au choix (par quiz)
 
@@ -663,7 +669,8 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   Excel des notes d'oral : ils sortent salle par salle, d'après la salle du registre des inscriptions
   (« قاعة عدد 2 » avant « قاعة عدد 15 », les étudiants sans salle à la fin), puis par n°
   d'inscription, ou par n° de place. La « Liste des candidats par salle » (des étudiants pour
-  une classe ; page de l'épreuve, pour toute présentation) donne une liste par salle, dans le
+  une classe ; page du QCM ou de l'écrit, pour toute présentation, plus à l'oral depuis le
+  16 novembre 2026) donne une liste par salle, dans le
   même ordre, pour la signature de présence, deux cases par candidat (« Signature entrée » et
   « Signature sortie ») ; avec les copies à n° de place, elle porte aussi
   la place de chacun.
@@ -720,6 +727,11 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   pondérée par un coefficient par étape (1 par défaut, réglé sur cette page ; 0 : l'étape
   n'y compte pas). Elle classe les candidats d'un même résultat et figure dans les exports
   Excel et PDF du concours ; l'espace public ne montre toujours que le verdict.
+- Liste des admis au concours : à droite de « Rechercher », sur la page « Résultats du
+  concours », « Liste des admis (PDF) » et « Liste des admis (Excel) » donnent les candidats
+  « Admis au concours » seuls (la recherche n'y change rien) : rang sur la moyenne finale
+  (ex aequo au même rang), prénom et nom, n° d'inscription, note sur 20 de chaque étape et
+  moyenne finale ; le PDF finit par « Liste arrêtée à N admis ». Sans admis, pas de bouton.
 - Oral d'un concours en plusieurs notes, selon l'année : trois en السنة الأولى (إ م ت، ن إج،
   ق ت), deux en السنة الثانية (إ م ت، ن إج), créées avec l'oral. Sur sa page, chaque note a son
   nom et son coefficient (on en ajoute ou en retire). Le modèle Excel a une colonne par note,

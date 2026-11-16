@@ -242,6 +242,57 @@ def main():
         noms = [m for m in mots if m[4] == "ZOUARI"]
         assert not noms or noms[0][2] < (14 + 54) * 72 / 25.4, "le nom déborde sur la colonne suivante"
     assert lire_pdf(bulletin_mod.generate_parcours_pdf(dict(p, candidats=[])))[0][0].count("Aucun candidat") == 1
+    # liste des admis au concours, en PDF et en Excel, à droite de « Rechercher » (demande
+    # du 16 novembre 2026) : les admis seuls, malgré une recherche, avec leurs notes sur 20
+    page = c.get(reverse("quiz_parcours", args=[ecrit.pk])).content.decode()
+    assert '<a class="btn secondary" href="?format=admis_pdf">Liste des admis (PDF)</a>' in page
+    assert '<a class="btn secondary" href="?format=admis_xlsx">Liste des admis (Excel)</a>' in page
+    assert page.index(">Rechercher<") < page.index("Liste des admis (PDF)") < page.index("<table")
+    r = c.get(reverse("quiz_parcours", args=[ecrit.pk]) + "?q=driss&format=admis_pdf")
+    assert r["Content-Type"] == "application/pdf"
+    assert f'filename="admis_concours_{qcm.pk}.pdf"' in r["Content-Disposition"]
+    pages = lire_pdf(r.content)
+    texte = "".join(page_pdf[0] for page_pdf in pages)
+    assert len(pages) == 1 and "Liste des admis au concours" in texte and qcm.title in texte
+    assert "1 admis au concours sur 6 candidats" in texte and "Liste arrêtée à 1 admis." in texte
+    assert "QCM × 1 · Écrit × 1 · Oral × 1" in texte, texte[:500]
+    for attendu_pdf in ("X AMRI", "5500", "18", "14,50", "15", "15,83"):
+        assert attendu_pdf in texte, attendu_pdf
+    for autre in ("CHERIF", "BAKIR", "DRISS", "ESSID", "FERCHICHI"):
+        assert autre not in texte, autre
+    r = c.get(reverse("quiz_parcours", args=[ecrit.pk]) + "?format=admis_xlsx")
+    assert r["Content-Type"].startswith("application/vnd.openxmlformats")
+    assert f'filename="admis_concours_{qcm.pk}.xlsx"' in r["Content-Disposition"]
+    ws = load_workbook(io.BytesIO(r.content)).active
+    assert [ws.cell(row=2, column=k).value for k in range(1, ws.max_column + 1)] == [
+        "Rang", "Prénom", "Nom", "N° inscription", "QCM (/20)", "Écrit (/20)", "Oral (/20)",
+        "Moyenne finale (/20)"]
+    assert [ws.cell(row=3, column=k).value for k in range(1, ws.max_column + 1)] == [
+        1, "X", "AMRI", "5500", 18, 14.5, 15, 15.83]
+    assert ws.max_row == 3 and "1 admis sur 6 candidats" in ws["A1"].value
+    # rang sur la moyenne finale, ex aequo au même rang ; sans moyenne finale : en fin, sans rang
+    amri = p["candidats"][0]
+    essai = dict(p, candidats=[dict(amri, moyenne_finale=15.83), dict(amri, moyenne_finale=15.83),
+                               dict(amri, moyenne_finale=12.0), dict(amri, moyenne_finale=None),
+                               p["candidats"][1]])
+    assert [a["rang"] for a in services.admis_concours(essai)] == [1, 1, 3, None]
+    # beaucoup d'admis : pages numérotées, intitulés répétés, le nom ne déborde pas
+    pages = lire_pdf(bulletin_mod.generate_admis_concours_pdf(
+        dict(p, candidats=[amri] * 80 + [dict(amri, etudiant=long_nom)])))
+    assert len(pages) >= 3, len(pages)
+    assert f"page 1 / {len(pages)}" in pages[0][0] and "(suite)" in pages[1][0]
+    assert "Liste arrêtée à 81 admis." in pages[-1][0] and "ZOUARI" in pages[-1][0]
+    for _, mots, rect in pages:
+        assert all(m[0] >= 0 and m[2] <= rect.width and m[3] <= rect.height for m in mots)
+        noms = [m for m in mots if m[4] == "ZOUARI"]
+        assert not noms or noms[0][2] < (14 + 12 + 61 + 2) * 72 / 25.4, "le nom déborde sur le n°"
+    assert "Aucun candidat admis au concours." in lire_pdf(
+        bulletin_mod.generate_admis_concours_pdf(dict(p, candidats=[])))[0][0]
+    # aucun admis au concours : pas de liste à exporter, pas de bouton
+    Quiz.objects.filter(pk=oral.pk).update(note_admission=20)
+    assert "Liste des admis (PDF)" not in c.get(
+        reverse("quiz_parcours", args=[ecrit.pk])).content.decode()
+    Quiz.objects.filter(pk=oral.pk).update(note_admission=10)
     # retour vers la liste des résultats ; l'épreuve reste à un clic (titre)
     page = c.get(reverse("quiz_results", args=[ecrit.pk])).content.decode()
     assert f'href="{reverse("resultats_list")}">← Retour aux résultats' in page
@@ -270,7 +321,8 @@ def main():
     for vue in ("quiz_results", "quiz_detail"):
         page = c.get(reverse(vue, args=[seul.pk])).content.decode()
         assert "Résultats du concours" not in page and "Hors concours" in page and "fil-etapes" not in page, vue
-    print("  résultats du concours : parcours de chaque candidat, résultat final, Excel OK")
+    print("  résultats du concours : parcours de chaque candidat, résultat final, Excel ; "
+          "liste des admis en PDF et en Excel OK")
 
     # ---- listes Concours et Résultats : un seul bloc par concours, ses étapes dedans
     for nom in ("concours_list", "resultats_list"):
@@ -354,23 +406,47 @@ def main():
     def mes_resultats(numero):
         return anonyme.get(reverse("public_resultat"), {"numero": numero}).content.decode()
 
+    def final(page):
+        """Résultat final du concours affiché sous ses étapes (16 novembre 2026)."""
+        bloc = re.findall(r'class="groupe__final">(.*?)</div>', page, re.S)
+        if not bloc:
+            return None
+        assert len(bloc) == 1, bloc
+        return re.search(r'class="pub-verdict[^"]*">([^<]+)</p>', bloc[0]).group(1)
+
     Quiz.objects.filter(pk__in=[qcm.pk, ecrit.pk]).update(resultats_publies=True)
     page = mes_resultats("5500")
     assert page.count('class="groupe__titre"') == 1 and "2 étapes" in page
     assert ">Oral<" not in page and "<b>15</b>" not in page, "l'oral n'est pas publié"
+    # résultat final : à venir tant que l'oral n'est pas publié, même admis à l'écrit
+    assert final(page) == "À venir" and "Il sera connu après l'oral." in page, final(page)
+    assert final(mes_resultats("5501")) == "Non admis au concours", "éliminé à l'écrit"
+    assert final(mes_resultats("5504")) == "Non admis au concours", "éliminé au QCM"
+    assert final(mes_resultats("5503")) == "À venir", "absent à l'écrit : rien de dit avant l'oral"
+    # l'oral pas encore créé (la chaîne finit par l'écrit) : admis à l'écrit, pas « au concours »
+    Quiz.objects.filter(pk=oral.pk).update(epreuve_precedente=None)
+    assert final(mes_resultats("5500")) == "À venir"
+    Quiz.objects.filter(pk=oral.pk).update(epreuve_precedente=ecrit)
     Quiz.objects.filter(pk=oral.pk).update(resultats_publies=True)
     page = mes_resultats("5500")
     assert page.count('class="groupe__titre"') == 1 and "3 étapes" in page
     assert page.index(">QCM<") < page.index(">Écrit<") < page.index(">Oral<")
     # le verdict de chaque étape, jamais la note (demande du 13 novembre 2026)
-    # (l'oral, créé sans « concours », dit « Réussi » : le même verdict favorable)
-    assert page.count("pub-verdict--admis") == 3, page.count("pub-verdict--admis")
-    for note in ("bonnes réponses", "<b>9</b>", "14,50", "<b>15</b>", "18 / 20"):
+    # (l'oral, créé sans « concours », dit « Réussi » : le même verdict favorable), puis le
+    # résultat final du concours, le verdict seul lui aussi (ni moyenne finale ni rang)
+    assert page.count("pub-verdict--admis") == 4, page.count("pub-verdict--admis")
+    assert final(page) == "Admis au concours", final(page)
+    assert page.index(">Oral<") < page.index('class="groupe__final"')
+    for note in ("bonnes réponses", "<b>9</b>", "14,50", "<b>15</b>", "18 / 20", "Moyenne", "/ 20"):
         assert note not in page, note
     # éliminé à l'écrit : ses deux étapes seulement, et le verdict de chacune
     page = mes_resultats("5501")
     assert "2 étapes" in page and ">Oral<" not in page
     assert page.count(">Admis<") == 1 and page.count(">Non admis<") == 1
+    assert final(page) == "Non admis au concours", final(page)
+    # non admis à l'oral, absent à l'écrit, éliminé au QCM : non admis au concours
+    for numero in ("5502", "5503", "5504"):
+        assert final(mes_resultats(numero)) == "Non admis au concours", numero
     # accueil : une seule ligne pour le concours, un bouton par étape
     page = anonyme.get(reverse("public_accueil")).content.decode()
     assert page.count("<b>Étapes QCM</b>") == 1 and "<b>Étapes oral</b>" not in page
@@ -379,7 +455,8 @@ def main():
     Quiz.objects.filter(pk__in=[qcm.pk, ecrit.pk, oral.pk]).update(resultats_publies=False)
     assert "Aucun résultat publié" in mes_resultats("5500")
     cache.clear()
-    print("  espace public : un bloc par concours, étapes publiées seules, une ligne à l'accueil OK")
+    print("  espace public : un bloc par concours, étapes publiées seules, résultat final (à "
+          "venir avant l'oral, admis ou non admis au concours), une ligne à l'accueil OK")
 
     # une épreuve d'un collègue n'est pas proposée comme épreuve précédente
     autre = enseignant_complet(User.objects.get_or_create(username="prof_etapes2")[0])

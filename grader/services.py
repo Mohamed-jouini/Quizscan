@@ -2629,6 +2629,20 @@ def parcours_concours(chaine):
             "n_admis_final": sum(1 for c in candidats if c["final_ton"] == "ok")}
 
 
+def admis_concours(parcours):
+    """Les admis au concours (résultat final « Admis au concours »), pour leur liste en PDF
+    et en Excel (demande du 16 novembre 2026) : dans l'ordre de la page, la moyenne finale
+    d'abord. Rang sur la moyenne finale, ex aequo au même rang (1, 2, 2, 4) ; None sans
+    moyenne finale (pas noté à une étape qui compte), en fin de liste."""
+    admis, rang, precedente = [], 0, None
+    for i, c in enumerate((c for c in parcours["candidats"] if c["final_ton"] == "ok"), start=1):
+        moyenne = c["moyenne_finale"]
+        if moyenne is not None and moyenne != precedente:
+            rang, precedente = i, moyenne
+        admis.append(dict(c, rang=rang if moyenne is not None else None))
+    return admis
+
+
 # Tranches de la répartition des résultats (en % du barème).
 TRANCHES = [(0, 20), (20, 40), (40, 60), (60, 80), (80, 101)]
 

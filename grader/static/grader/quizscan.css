@@ -1743,6 +1743,14 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .pub-verdict--admis{background:var(--qs-ok-bg);color:var(--qs-ok)}
 .pub-verdict--refuse{background:var(--qs-bad-bg);color:var(--qs-bad)}
 .pub-verdict--attente{background:var(--qs-warn-bg);color:var(--qs-warn)}
+/* Mes résultats : le résultat final d'un concours en étapes, sous ses étapes (16 novembre 2026) */
+.groupe__final{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  gap:8px 16px;padding:12px 14px;border:1px solid var(--qs-line);border-radius:12px;
+  background:var(--qs-surface)}
+.groupe__final-libelle{display:flex;flex-direction:column;gap:2px;font-size:15px;font-weight:700;
+  color:var(--qs-ink)}
+.groupe__final-libelle small{font-size:12.5px;font-weight:400;color:var(--qs-muted)}
+.groupe__final .pub-verdict{align-self:center}
 .pub-tableau{overflow-x:auto;border:1px solid var(--qs-line);border-radius:var(--qs-r-card);
   background:var(--qs-surface)}
 .pub-tableau table{width:100%;border-collapse:collapse}

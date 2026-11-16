@@ -489,6 +489,118 @@ def generate_parcours_pdf(parcours):
     return buf.getvalue()
 
 
+def generate_admis_concours_pdf(parcours):
+    """Liste des admis au concours (résultat final « Admis au concours »), à afficher ou à
+    signer (demande du 16 novembre 2026) : rang sur la moyenne finale, prénom et nom, n°
+    d'inscription, la note sur 20 de chaque étape et la moyenne finale, sur autant de pages
+    qu'il faut (intitulés de colonnes répétés), puis « Liste arrêtée à N admis »."""
+    from django.utils import timezone
+
+    from .services import admis_concours
+
+    load_fonts()
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=A4)
+    X0, X1 = 14.0, 196.0
+    LIGNE, BAS = 7.2, 277.0
+    etapes, racine = parcours["etapes"], parcours["epreuves"][0]
+    admis = admis_concours(parcours)
+    n_candidats = len(parcours["candidats"])
+    edite = timezone.localtime().strftime("%d/%m/%Y")
+    L_RANG, L_NUM, L_ETAPE, L_MOY = 12.0, 26.0, 19.0, 26.0
+    L_NOM = X1 - X0 - L_RANG - L_NUM - len(etapes) * L_ETAPE - L_MOY
+    x_nom, x_num = X0 + L_RANG + 2, X0 + L_RANG + L_NOM + 2
+    # notes et moyenne alignées à droite de leur colonne
+    x_etapes = [X0 + L_RANG + L_NOM + L_NUM + (k + 1) * L_ETAPE - 2 for k in range(len(etapes))]
+    x_moy = X1 - 2
+
+    def tete_tableau(y):
+        c.setFillGray(0.93)
+        c.rect(X0 * mm, _y(y + 2.4), (X1 - X0) * mm, 7.6 * mm, stroke=0, fill=1)
+        c.setFillGray(0.0)
+        _draw(c, "Rang", X0 + 2, y, 9, bold=True, gray=0.25)
+        _draw(c, "Prénom et nom", x_nom, y, 9, bold=True, gray=0.25)
+        _draw(c, "N° d'inscription", x_num, y, 9, bold=True, gray=0.25)
+        for etape, x in zip(etapes, x_etapes):
+            _draw(c, etape["quiz"].type_court, x, y, 9, bold=True, align="right", gray=0.25)
+        _draw(c, "Moy. finale", x_moy, y, 9, bold=True, align="right", gray=0.25)
+        return y + 8.5
+
+    lignes_entete = [t.strip() for t in (racine.entete or "").splitlines() if t.strip()]
+    haut_titre = 22.0 + 4.2 * len(lignes_entete)
+    debut_p1 = haut_titre + 30.0
+    debut_suite = 26.0
+    par_page_1 = max(int((BAS - debut_p1 - 8.5) // LIGNE), 1)
+    par_page = int((BAS - debut_suite - 8.5) // LIGNE)
+    reste = max(len(admis) - par_page_1, 0)
+    total_pages = 1 + (-(-reste // par_page) if reste else 0)
+
+    def pied(page):
+        _draw(c, f"{racine.title} — liste des admis au concours — éditée le {edite}",
+              X0, 287.0, 7.5, gray=0.45)
+        _draw(c, f"page {page} / {total_pages}", X1, 287.0, 7.5, align="right", gray=0.45)
+
+    # ---- première page
+    y = 18.0
+    for ligne in lignes_entete:
+        _draw(c, ligne, PAGE_W / 2, y, 9, align="center", gray=0.3)
+        y += 4.2
+    _draw(c, "Liste des admis au concours", PAGE_W / 2, haut_titre + 4.0, 17, bold=True,
+          align="center")
+    _draw(c, racine.title, PAGE_W / 2, haut_titre + 11.5, 12, align="center")
+    _draw(c, f"{len(admis)} admis au concours sur {n_candidats} "
+             f"candidat{'s' if n_candidats > 1 else ''}",
+          PAGE_W / 2, haut_titre + 17.5, 9.5, bold=True, align="center")
+    poids = " · ".join(f"{e['quiz'].type_court} × {_nombre(coef)}"
+                       for e, coef in zip(etapes, parcours["coefficients"]))
+    _draw(c, f"Notes sur 20 — moyenne finale pondérée : {poids}", PAGE_W / 2,
+          haut_titre + 22.5, 8.5, align="center", gray=0.3)
+    c.setLineWidth(0.5)
+    c.line(X0 * mm, _y(debut_p1 - 4.5), X1 * mm, _y(debut_p1 - 4.5))
+    y = tete_tableau(debut_p1)
+    page, sur_la_page, capacite = 1, 0, par_page_1
+
+    for i, candidat in enumerate(admis):
+        if sur_la_page == capacite:
+            pied(page)
+            c.showPage()
+            page += 1
+            _draw(c, f"Liste des admis au concours — {racine.title} (suite)", X0, 18.0, 10,
+                  bold=True)
+            y = tete_tableau(debut_suite)
+            sur_la_page, capacite = 0, par_page
+        if i % 2:
+            c.setFillGray(0.97)
+            c.rect(X0 * mm, _y(y + 2.2), (X1 - X0) * mm, LIGNE * mm, stroke=0, fill=1)
+            c.setFillGray(0.0)
+        s = candidat["etudiant"]
+        _draw(c, str(candidat["rang"] or "—"), X0 + 2, y, 10, bold=True)
+        nom, corps = nom_ajuste(s, L_NOM - 4, 10)
+        _draw(c, nom, x_nom, y, corps)
+        _draw(c, s.student_number or "—", x_num, y, 10)
+        for case, x in zip(candidat["cases"], x_etapes):
+            note = case["row"]["note20"] if case["etat"] == "note" else None
+            _draw(c, _nombre(note) if note is not None else "—", x, y, 10, align="right",
+                  gray=None if note is not None else 0.5)
+        moyenne = candidat["moyenne_finale"]
+        _draw(c, _nombre(moyenne) if moyenne is not None else "—", x_moy, y, 10, bold=True,
+              align="right")
+        y += LIGNE
+        sur_la_page += 1
+
+    if not admis:
+        _draw(c, "Aucun candidat admis au concours.", X0 + 2, y + 2, 10, gray=0.35)
+        y += LIGNE
+    c.setLineWidth(0.4)
+    c.line(X0 * mm, _y(y - 3.0), X1 * mm, _y(y - 3.0))
+    if y + 8 <= BAS:
+        _draw(c, f"Liste arrêtée à {len(admis)} admis.", X0, y + 4.0, 10, bold=True)
+    pied(page)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
 def _intitule_salle(salle):
     """« Salle : 15 » ; une salle déjà nommée (« قاعة عدد 15 », « Salle B ») telle quelle ;
     sans salle au registre : à remplir à la main."""

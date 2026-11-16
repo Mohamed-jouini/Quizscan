@@ -30,9 +30,7 @@
       <a class="document" href="{% url 'quiz_notes_oral_xlsx' quiz.pk %}">
         <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 10h16M4 15h16M10 4v16"/></svg>
         <span><b>Modèle Excel des notes</b><small>{{ lignes|length }} {{ quiz.auto_enroll|yesno:"candidat(s),étudiant(s)" }}, note sur {{ quiz.note_sur|floatformat:"-2" }}</small></span></a>
-      <a class="document" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">
-        <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="M15 16l1.5 1.5L19 15"/></svg>
-        <span><b>Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }} par salle</b><small>une liste par salle, pour la signature de présence</small></span></a>
+      {# plus de « Liste des candidats par salle » à l'oral (demande du 16 novembre 2026) #}
     </div>
     {% else %}
     <p>Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} :

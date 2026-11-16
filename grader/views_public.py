@@ -122,7 +122,35 @@ def resultat(request):
             for groupe in contexte["groupes"]:
                 for etape in groupe["etapes"]:
                     etape["row"] = notes[etape["quiz"].pk]
+                groupe["final"] = _resultat_final(groupe, notes)
     return render(request, "public/resultat.html", contexte)
+
+
+def _resultat_final(groupe, notes):
+    """Résultat final d'un concours en étapes, sous ses étapes (demande du 16 novembre 2026) :
+    « admis » (au concours), « refuse » ou « a_venir » ; None hors concours en étapes.
+
+    Le verdict seul, ni note ni moyenne finale, tiré des étapes publiées (notes : les lignes
+    du candidat, par épreuve). Le concours de l'institut finit par l'oral :
+      - l'oral publié : admis à l'oral, admis au concours ; sinon non admis (non admis à
+        l'oral, absent, ou éliminé avant) ; correction en cours : à venir ;
+      - avant : non admis s'il l'est à sa dernière étape publiée, sinon à venir. Un admis à
+        l'écrit n'est pas « admis au concours » tant que l'oral n'est pas publié, ni même
+        créé (la chaîne finit alors par l'écrit)."""
+    if not groupe["concours"]:
+        return None
+    chaine = services.chaine_epreuves(groupe["racine"])
+    if len(chaine) < 2:
+        return None                 # concours d'une seule épreuve : son verdict suffit
+    finale = chaine[-1]
+    if finale.type_epreuve == "oral" and finale.resultats_publies:
+        oral = notes.get(finale.pk)
+        if oral is None:
+            return "refuse"
+        return {"admis": "admis", "refuse": "refuse"}.get(oral.get("resultat"), "a_venir")
+    if groupe["etapes"][-1]["row"].get("resultat") == "refuse":
+        return "refuse"
+    return "a_venir"
 
 
 def _liste_admis(quiz):

@@ -29,7 +29,8 @@ from . import layout as layout_mod
 from . import omr
 from . import qr as qr_mod
 from . import services, sheet_pdf
-from .export import candidats_workbook, parcours_workbook, results_workbook
+from .export import (admis_concours_workbook, candidats_workbook, parcours_workbook,
+                     results_workbook)
 from .forms import (CONCOURS_ID_MODES, AdminLoginForm, AnswerKeyUploadForm,
                     BulkQcmForm, CandidateFileForm, ClassGroupForm, ConnexionForm,
                     QuestionBankForm, QuestionForm, QuestionImportForm,
@@ -1752,12 +1753,28 @@ def quiz_parcours(request, pk):
                             content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="concours_{chaine[0].pk}.pdf"'
         return resp
+    # liste des admis au concours, en PDF et en Excel (demande du 16 novembre 2026)
+    if request.GET.get("format") == "admis_pdf":
+        resp = HttpResponse(bulletin_mod.generate_admis_concours_pdf(parcours),
+                            content_type="application/pdf")
+        resp["Content-Disposition"] = f'attachment; filename="admis_concours_{chaine[0].pk}.pdf"'
+        return resp
+    if request.GET.get("format") == "admis_xlsx":
+        resp = HttpResponse(
+            admis_concours_workbook(parcours),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        resp["Content-Disposition"] = f'attachment; filename="admis_concours_{chaine[0].pk}.xlsx"'
+        return resp
     recherche = " ".join(request.GET.get("q", "").split())[:100]
     trouves = _filtrer_etudiants(parcours["candidats"], recherche)
     return render(request, "grader/parcours.html", {
         "quiz": quiz, "parcours": parcours, "recherche": recherche,
         "n_trouves": len(trouves), "candidats_page": _page(request, trouves, PAGE_RESULTATS),
         "querystring": urlencode({"q": recherche}) if recherche else "",
+        # à droite de « Rechercher » : la liste des admis au concours, s'il y en a
+        "liens_admis": [("?format=admis_pdf", "Liste des admis (PDF)"),
+                        ("?format=admis_xlsx", "Liste des admis (Excel)")]
+                       if parcours["n_admis_final"] else [],
     })
 
 

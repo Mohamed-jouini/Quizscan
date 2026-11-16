@@ -42,6 +42,14 @@
         {% else %}
         {% include "public/_note.html" with quiz=g.racine row=g.etapes.0.row %}
         {% endif %}
+        {% if g.final %}{# résultat final du concours, le verdict seul (16 novembre 2026) #}
+        <div class="groupe__final">
+          <span class="groupe__final-libelle">Résultat final du concours{% if g.final == "a_venir" %}<small>Il sera connu après l'oral.</small>{% endif %}</span>
+          {% if g.final == "admis" %}<p class="pub-verdict pub-verdict--admis">Admis au concours</p>
+          {% elif g.final == "refuse" %}<p class="pub-verdict pub-verdict--refuse">Non admis au concours</p>
+          {% else %}<p class="pub-verdict pub-verdict--attente">À venir</p>{% endif %}
+        </div>
+        {% endif %}
       </article>
       {% endfor %}
     </div>

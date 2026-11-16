@@ -325,3 +325,44 @@ def parcours_workbook(parcours):
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def admis_concours_workbook(parcours):
+    """Liste des admis au concours (résultat final « Admis au concours », demande du
+    16 novembre 2026) : rang sur la moyenne finale, prénom, nom, n° d'inscription, la note sur
+    20 de chaque étape et la moyenne finale ; même ordre que le PDF et la page."""
+    from .services import admis_concours
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Admis au concours"
+    etapes = [e["quiz"] for e in parcours["etapes"]]
+    admis = admis_concours(parcours)
+    headers = (["Rang", "Prénom", "Nom", "N° inscription"]
+               + [f"{q.type_court} (/20)" for q in etapes] + ["Moyenne finale (/20)"])
+    ws.append([f"Liste des admis au concours — {parcours['epreuves'][0].title} "
+               f"({len(admis)} admis sur {len(parcours['candidats'])} candidats)"])
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+    ws["A1"].font = Font(bold=True, size=13)
+    ws.append(headers)
+    fond = PatternFill("solid", fgColor="1F4E79")
+    for col in range(1, len(headers) + 1):
+        cellule = ws.cell(row=2, column=col)
+        cellule.font = Font(bold=True, color="FFFFFF")
+        cellule.fill = fond
+        cellule.alignment = Alignment(horizontal="center", wrap_text=True)
+    for c in admis:
+        s = c["etudiant"]
+        ligne = [c["rang"], s.first_name, s.last_name, s.student_number]
+        ligne += [case["row"]["note20"] if case["etat"] == "note" else None
+                  for case in c["cases"]]
+        ligne.append(c["moyenne_finale"])
+        ws.append(_sans_formule(ligne))
+        for col in range(5, len(headers) + 1):
+            ws.cell(row=ws.max_row, column=col).number_format = "0.00"
+    for i, largeur in enumerate([7, 18, 22, 14] + [11] * len(etapes) + [14], start=1):
+        ws.column_dimensions[get_column_letter(i)].width = largeur
+    ws.freeze_panes = "E3"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

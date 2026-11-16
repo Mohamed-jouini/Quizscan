@@ -2,7 +2,8 @@
 Recherche juste au-dessus d'une liste de résultats : prénom, nom ou n° d'inscription,
 dans toute la liste et pas seulement la page affichée. La page se recharge et revient
 sur la liste (ancre).
-Paramètres : ancre, champ (id du champ de saisie), sujet (« candidat »…), n (lignes trouvées).
+Paramètres : ancre, champ (id du champ de saisie), sujet (« candidat »…), n (lignes trouvées),
+et liens, facultatif : [(adresse, texte)] à droite de « Rechercher » (exports de la liste).
 {% endcomment %}
 <form class="recherche-etudiant recherche-etudiant--liste" method="get" action="#{{ ancre }}" role="search">
   {% if batch %}<input type="hidden" name="batch" value="{{ batch.pk }}">{% endif %}
@@ -18,6 +19,7 @@ Paramètres : ancre, champ (id du champ de saisie), sujet (« candidat »…), n
     {% endif %}
   </div>
   <button class="btn" type="submit">Rechercher</button>
+  {% for adresse, texte in liens %}<a class="btn secondary" href="{{ adresse }}">{{ texte }}</a>{% endfor %}
   {% if recherche %}
   <span class="recherche-etudiant__bilan {% if not n %}is-vide{% endif %}">
     {{ n }} résultat{{ n|pluralize }} pour « {{ recherche }} »</span>

@@ -46,7 +46,7 @@
 </form>
 
 <div class="card" id="liste-candidats">
-  {% include "grader/_recherche_liste.html" with ancre="liste-candidats" champ="id_q" sujet="candidat" n=n_trouves %}
+  {% include "grader/_recherche_liste.html" with ancre="liste-candidats" champ="id_q" sujet="candidat" n=n_trouves liens=liens_admis %}
   {% include "grader/_pagination.html" with page=candidats_page label="Candidats" querystring=querystring ancre="liste-candidats" %}
   <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Résultats des candidats, épreuve par épreuve">
     <table>

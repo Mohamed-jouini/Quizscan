@@ -293,6 +293,8 @@ def test_oral(c, groupe):
     assert "Classeur en arabe" in page and "n° de CIN" in page
     assert '(<bdi lang="ar">العدد</bdi>, sur 20)' in page      # l'arabe isolé dans la phrase
     assert "Générer les fiches" not in page and "Lire les notes et les affecter" not in page
+    # plus de liste par salle à l'oral (demande du 16 novembre 2026)
+    assert reverse("quiz_emargement_pdf", args=[quiz.pk]) not in page and "par salle</b>" not in page
     e = {s.last_name: s for s in groupe.students.all()}
     assert f'name="note_{e["AMRI"].pk}"' not in page and "Enregistrer les notes" not in page
     # ni saisie fabriquée « à la main », ni fiches : rien n'est enregistré
