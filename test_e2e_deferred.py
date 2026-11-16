@@ -114,9 +114,69 @@ def main():
     wait_done(quiz)
     print("correction immédiate : lot corrigé dès le téléversement ✔")
 
+    ecrit_apres_scan(c, teacher)
+
     Quiz.objects.filter(owner=teacher).delete()
     teacher.delete()
     print("\n✅ TEST CORRECTION APRÈS SCAN RÉUSSI")
+
+
+def ecrit_apres_scan(c, teacher):
+    """L'écrit d'un concours corrigé après scan : « Lancer la correction » est sur la page
+    de l'écrit, et non plus sur celle du lot (demande du 16 novembre 2026)."""
+    from test_e2e import mm2px
+    from test_e2e_matieres import noircir
+
+    r = c.post("/quiz/nouveau/?concours=1", {
+        "title": "Écrit après scan", "type_epreuve": "ecrit", "annee": "1",
+        "language": "fr", "note_sur": "20", "sheet_mode": "grid", "id_mode": "sticker",
+        "id_digits": "6", "anonymat": "talon", "grading_mode": "deferred",
+        "wrong_penalty": "0"})
+    assert r.status_code == 302, r.context["form"].errors
+    quiz = Quiz.objects.get(owner=teacher, title="Écrit après scan")
+    assert quiz.type_epreuve == "ecrit" and quiz.corrige_apres_scan
+    Student.objects.create(class_group=quiz.class_group, last_name="DELTA",
+                           first_name="Y", student_number="2001")
+    c.post(f"/quiz/{quiz.pk}/", {"generer": "1"})
+    quiz.refresh_from_db()
+    page = c.get(f"/quiz/{quiz.pk}/").content.decode()
+    assert "Téléverser (correction lancée plus tard)" in page
+    assert 'name="launch_grading"' not in page, "rien d'envoyé : pas de bouton"
+
+    # la copie de la 1re matière, notée 14, talon découpé : mise en attente
+    from django.core.files.storage import default_storage
+    pdf = default_storage.open(quiz.layout_json["documents_matieres"][0]["copies"]).read()
+    img = noircir(render_page(pdf, 0), quiz.layout_json["pages"][0]["note_grid"], 14)
+    img = img[mm2px(30.0):, :].copy()
+    r = c.post(f"/quiz/{quiz.pk}/upload/", {"label": "Salle E", "files": [
+        SimpleUploadedFile("delta.jpg", jpg(simulate_scan(img)))]})
+    assert r.status_code == 302 and r.url.endswith(f"/quiz/{quiz.pk}/")
+    lot = quiz.batches.get()
+    assert lot.status == "pending" and not lot.sheets.exists()
+
+    page = c.get(f"/quiz/{quiz.pk}/").content.decode()
+    assert 'name="launch_grading"' in page and "<b>1 page(s)</b>" in page, page[-4000:]
+    assert "Copies scannées en attente de correction" in page
+    assert ">en attente</span>" in page, "le lot en attente n'est pas signalé"
+    page_lot = c.get(f"/lots/{lot.pk}/").content.decode()
+    assert 'name="launch_grading"' not in page_lot, "le bouton est resté sur la page du lot"
+    assert f'href="/quiz/{quiz.pk}/#correction-en-attente">page de l\'épreuve</a>' in page_lot
+    assert "Pages pas encore lues" in page_lot and "Aucune page dans ce lot" not in page_lot
+    accueil = c.get("/").content.decode()
+    assert f'href="/quiz/{quiz.pk}/#correction-en-attente"' in accueil, \
+        "le tableau de bord mène encore au lot"
+    print("écrit : bouton « Lancer la correction » sur la page de l'écrit, plus sur le lot ✔")
+
+    r = c.post(f"/quiz/{quiz.pk}/", {"launch_grading": "1"}, follow=True)
+    assert "Correction lancée : 1 lot(s), 1 page(s)" in r.content.decode()
+    wait_done(quiz)
+    copie = lot.sheets.get()
+    assert copie.status == "ok" and copie.student.last_name == "DELTA", \
+        (copie.status, copie.error_message)
+    note = copie.answers.get(question=quiz.matieres[0])
+    assert note.points_awarded == 14, note.points_awarded
+    assert 'name="launch_grading"' not in c.get(f"/quiz/{quiz.pk}/").content.decode()
+    print("écrit : correction lancée de sa page, note 14 lue et affectée ✔")
 
 
 if __name__ == "__main__":

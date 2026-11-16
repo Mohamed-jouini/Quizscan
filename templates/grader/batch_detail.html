@@ -25,12 +25,9 @@
   <div class="note__body">
     <b>{{ batch.total_pages }} page(s) reçue(s), en attente de correction</b>
     (concours corrigé après scan).
-    {% if perms.grader.corriger_copies %}
-    <form class="inline" method="post">{% csrf_token %}
-      <button class="btn small" name="launch_grading" value="1" type="submit">Lancer la correction</button>
-    </form>
-    {% endif %}
-    <span class="helptext">Le bouton lance la correction de tous les lots en attente de ce concours.</span>
+    <span class="helptext">La correction se lance sur la
+      <a href="{% url 'quiz_detail' batch.quiz.pk %}#correction-en-attente">page de l'épreuve</a>,
+      pour tous ses lots en attente d'un coup.</span>
   </div>
 </div>
 {% elif batch.is_processing and not stalled %}
@@ -104,7 +101,7 @@
         <a class="btn small" href="{% url 'sheet_review' s.pk %}">Vérifier / corriger</a>{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="6">Aucune page dans ce lot.</td></tr>
+    <tr><td colspan="6">{% if batch.status == "pending" %}Pages pas encore lues : elles le seront au lancement de la correction.{% else %}Aucune page dans ce lot.{% endif %}</td></tr>
     {% endfor %}
   </table>
   </div>

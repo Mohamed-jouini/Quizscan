@@ -683,11 +683,6 @@ def quiz_create(request):
                   {"form": form, "is_concours": is_concours})
 
 
-def _deferred(quiz):
-    """Concours corrigé « après scan » : les lots attendent le lancement."""
-    return quiz.auto_enroll and quiz.grading_mode == "deferred"
-
-
 def _id_modes(quiz):
     """Modes d'identification proposés pour ce quiz (concours : étiquette QR
     ou grille ; un ancien concours en « qr » garde son réglage)."""
@@ -1005,18 +1000,8 @@ def quiz_detail(request, pk):
                              + (f" — {n} copie(s) recalculée(s)." if n else "."))
             return redirect("quiz_detail", pk=pk)
         elif "launch_grading" in request.POST:
-            try:
-                n_batches, n_pages = services.launch_pending(quiz)
-            except services.CorrigeIncomplet as exc:
-                messages.error(request, str(exc))
-                return redirect("quiz_detail", pk=pk)
-            if n_batches:
-                messages.success(
-                    request, f"Correction lancée : {n_batches} lot(s), {n_pages} page(s) — "
-                             "suivez l'avancement dans la liste des lots ci-dessous.")
-            else:
-                messages.error(request, "Aucune copie en attente de correction.")
-            return redirect("quiz_detail", pk=pk)
+            from .views_epreuves import lancer_correction
+            return lancer_correction(request, quiz)
         elif "delete_answer_key" in request.POST:
             # Supprimer un corrigé scanné ne défait PAS les bonnes réponses
             # qu'il a renseignées : elles ont pu être retouchées depuis, et
@@ -1161,22 +1146,15 @@ def quiz_detail(request, pk):
             layout_stale = current_orders != layout_orders
 
     sans_corrige = list(quiz.questions_sans_corrige.values_list("order", flat=True))
-    pending = list(quiz.batches.filter(status="pending").order_by("created_at"))
-    processing = [b for b in quiz.batches.filter(status="processing")
-                  if not services.is_stalled(b)]
-    from .views_epreuves import suivre_generation
+    from .views_epreuves import correction_en_attente, suivre_generation
     return render(request, "grader/quiz_detail.html", {
+        **correction_en_attente(quiz),
         "quiz": quiz, "qform": qform, "bulk_form": bulk_form,
         "generation": suivre_generation(request, quiz),
         "fil": services.fil_etapes(quiz, _my_quizzes(request)),
         "pages_etiquette": layout_mod.pages_a_etiquette(quiz.layout_json),
         "import_form": import_form, "bank_form": bank_form,
         "id_modes": _id_modes(quiz),
-        "pending_batches": pending,
-        "pending_pages": sum(b.total_pages for b in pending),
-        "processing_pages": sum(b.total_pages for b in processing),
-        "processing_done": sum(b.processed_pages for b in processing),
-        "deferred": _deferred(quiz),
         "layout_stale": layout_stale,
         "sans_corrige": sans_corrige,
         "n_qcm": quiz.questions.filter(qtype="qcm").count(),
@@ -1210,7 +1188,7 @@ def quiz_upload(request, pk):
         form = UploadForm(request.POST, request.FILES)
         if form.is_valid():
             files = request.FILES.getlist("files")
-            if _deferred(quiz):
+            if quiz.corrige_apres_scan:
                 # concours « correction après scan » : lot mis en attente
                 batch = services.create_batch(quiz, files, status="pending",
                                               label=form.cleaned_data["label"])
@@ -1332,8 +1310,9 @@ def batch_delete(request, pk):
 def batch_detail(request, pk):
     batch = get_object_or_404(_my_batches(request), pk=pk)
     stalled = services.is_stalled(batch)
-    if request.method == "POST" and ("launch_grading" in request.POST
-                                     or "resume" in request.POST
+    # « Lancer la correction » (tous les lots en attente) n'est plus ici mais sur la page de
+    # l'épreuve, QCM ou écrit (16 novembre 2026)
+    if request.method == "POST" and ("resume" in request.POST
                                      or "reidentifier" in request.POST):
         droits.exiger(request.user, droits.CORRIGER,
                       "lancer la correction des copies")
@@ -1345,16 +1324,6 @@ def batch_detail(request, pk):
             messages.info(request, "Aucune copie de plus n'a pu être identifiée "
                                    "par son nom : affectez-les à l'écran de "
                                    "vérification.")
-        return redirect("batch_detail", pk=pk)
-    if request.method == "POST" and "launch_grading" in request.POST:
-        try:
-            n_batches, n_pages = services.launch_pending(batch.quiz)
-        except services.CorrigeIncomplet as exc:
-            messages.error(request, str(exc))
-            return redirect("quiz_detail", pk=batch.quiz_id)
-        if n_batches:
-            messages.success(request, f"Correction lancée : {n_batches} lot(s), "
-                                      f"{n_pages} page(s).")
         return redirect("batch_detail", pk=pk)
     if request.method == "POST" and "resume" in request.POST:
         if batch.status == "error" or stalled:

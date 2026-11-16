@@ -172,10 +172,12 @@ ensuite dans ses réglages) :
 - **immédiate** : chaque lot est corrigé dès son téléversement ;
 - **après scan** : les lots téléversés sont mis **en attente** (rien n'est lu
   ni noté). Quand toutes les salles ont été scannées, le bouton
-  **« ▶ Lancer la correction »** de la page du concours corrige tous les lots
-  en attente d'un coup, avec suivi de l'avancement. Un lot arrivé plus tard
-  attend à son tour et se corrige au prochain lancement, sans recorriger
-  les autres.
+  **« Lancer la correction »**, en haut de la page de l'épreuve (QCM ou
+  écrit), corrige tous les lots en attente d'un coup, avec suivi de
+  l'avancement. Il n'est pas sur la page d'un lot, qui renvoie à celle de
+  l'épreuve : il lance tous les lots, pas celui qu'on regarde. Un lot arrivé
+  plus tard attend à son tour et se corrige au prochain lancement, sans
+  recorriger les autres.
 
 Un numéro lu qui n'est pas dans la liste crée automatiquement son candidat
 (nom lu par OCR) ; importer ensuite la liste officielle met les noms à jour
@@ -597,7 +599,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_matieres.py` | écrit d'un concours en trois matières : réglages (noms, coefficients, sujets), sujet, copies et liste par salle de chaque matière, un seul envoi de scans, moyenne pondérée, note minimale, oral des admis, relevé et export par matière |
 | `test_e2e_import.py` | import de questionnaires et de candidats (Excel, Word, PDF, CSV), banque de questions |
 | `test_e2e_forms.py` | création d'un concours (sans classe ni case « mode concours ») et d'un quiz, nombre de choix par question jusqu'à la lecture de la copie |
-| `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » |
+| `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » (QCM, et écrit depuis sa page ; rien sur la page du lot) |
 | `test_e2e_web.py` | par l'interface : étiquettes QR d'une classe, correction en arrière-plan, secours OCR, corrigé modifié après l'épreuve, alerte de fiche périmée, droits d'accès |
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
 | `test_e2e_design.py` | une seule feuille de style pour toutes les pages, aucun style redéclaré en ligne, aucun jeton défini deux fois |

@@ -33,6 +33,37 @@ def _renommer(request, quiz):
         services.renommer_epreuve(quiz, titre, request.user)
 
 
+def correction_en_attente(quiz):
+    """Pour la page de l'épreuve (QCM ou écrit) : les lots d'un concours corrigé après scan
+    qui attendent « Lancer la correction », et l'avancement de ceux en cours de lecture."""
+    pending = list(quiz.batches.filter(status="pending").order_by("created_at"))
+    processing = [b for b in quiz.batches.filter(status="processing")
+                  if not services.is_stalled(b)]
+    return {"deferred": quiz.corrige_apres_scan,
+            "pending_batches": pending,
+            "pending_pages": sum(b.total_pages for b in pending),
+            "processing_pages": sum(b.total_pages for b in processing),
+            "processing_done": sum(b.processed_pages for b in processing)}
+
+
+def lancer_correction(request, quiz):
+    """« Lancer la correction » : tous les lots en attente de l'épreuve, d'un coup. Le bouton
+    est sur la page de l'épreuve, et non plus sur celle d'un lot (16 novembre 2026) : il lance
+    tous les lots du concours, pas seulement celui qu'on regarde."""
+    try:
+        n_batches, n_pages = services.launch_pending(quiz)
+    except services.CorrigeIncomplet as exc:
+        messages.error(request, str(exc))
+        return redirect("quiz_detail", pk=quiz.pk)
+    if n_batches:
+        messages.success(
+            request, f"Correction lancée : {n_batches} lot(s), {n_pages} page(s) — "
+                     "suivez l'avancement dans la liste des lots ci-dessous.")
+    else:
+        messages.error(request, "Aucune copie en attente de correction.")
+    return redirect("quiz_detail", pk=quiz.pk)
+
+
 def epreuve_detail(request, quiz, fil=None):
     """fil : le concours et ses étapes, pour l'en-tête (services.fil_etapes)."""
     if request.method == "POST" and "passer_admis" in request.POST:
@@ -214,6 +245,10 @@ def _lire_matieres(post, matieres):
 
 def _ecrit(request, quiz, fil=None):
     form = EpreuveEcritForm(instance=quiz)
+    if request.method == "POST" and "launch_grading" in request.POST:
+        # concours corrigé après scan : le droit de corriger suffit, comme pour un QCM
+        droits.exiger(request.user, droits.CORRIGER, "lancer la correction des copies")
+        return lancer_correction(request, quiz)
     if request.method == "POST":
         droits.exiger(request.user, droits.CREER, "modifier l'épreuve")
         if "creer_matieres" in request.POST:
@@ -296,6 +331,7 @@ def _ecrit(request, quiz, fil=None):
                  for d in (quiz.layout_json or {}).get("documents_matieres", [])
                  if matieres and quiz.sheet_pdf]
     return render(request, "grader/epreuve_ecrit.html", {
+        **correction_en_attente(quiz),
         "quiz": quiz, "fil": fil, "form": form, "retour": _retour(quiz),
         "matieres": matieres, "documents_matieres": documents,
         "generation": generation,

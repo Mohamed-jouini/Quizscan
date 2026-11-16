@@ -25,6 +25,7 @@
   <div class="note__body">Les documents ne suivent plus les réglages (barème, format, nombre de pages, identification{% if quiz.copies_nominatives %} ou liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% endif %}) : <b>régénérez les documents</b> avant de distribuer de nouvelles copies.</div>
 </div>
 {% endif %}
+{% include "grader/_correction_en_attente.html" %}
 
 <div class="grid2">
   <div class="card">
@@ -146,7 +147,9 @@
         <label>{{ upload_form.label.label }}</label>{{ upload_form.label }}
         <label>{{ upload_form.files.label }}</label>{{ upload_form.files }}
         <span class="helptext">{{ upload_form.files.help_text }}</span>
-        <p><button class="btn" type="submit" {% if not quiz.sheet_pdf %}disabled title="Générez d'abord les documents"{% endif %}>Lire les notes et les affecter</button></p>
+        <p><button class="btn" type="submit" {% if not quiz.sheet_pdf %}disabled title="Générez d'abord les documents"{% endif %}>{% if deferred %}Téléverser (correction lancée plus tard){% else %}Lire les notes et les affecter{% endif %}</button></p>
+        {% if deferred %}<span class="helptext">Correction après scan : les copies sont mises en
+          attente ; le bouton « Lancer la correction » apparaît en haut de la page.</span>{% endif %}
       </form>
       {% else %}<p class="helptext">Votre compte ne téléverse pas de copies.</p>{% endif %}
       {% if batches %}
@@ -155,8 +158,8 @@
           <tr><th>Lot</th><th>Date</th><th>Pages</th><th>Identifiées</th></tr>
           {% for b in batches %}
           <tr class="ligne-lien"><td><a class="ligne-lien__cible" href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
-              {% if b.is_processing %}<span class="badge warn">lecture {{ b.processed_pages }}/{{ b.total_pages }}</span>{% endif %}</td>
-            <td>{{ b.created_at|date:"d/m/Y H:i" }}</td><td>{{ b.sheets.count }}</td><td>{{ b.identified_count }}</td></tr>
+              {% if b.status == "pending" %}<span class="badge info" title="En attente de « Lancer la correction »">en attente</span>{% elif b.is_processing %}<span class="badge warn">lecture {{ b.processed_pages }}/{{ b.total_pages }}</span>{% endif %}</td>
+            <td>{{ b.created_at|date:"d/m/Y H:i" }}</td><td>{% if b.status == "pending" %}{{ b.total_pages }}{% else %}{{ b.sheets.count }}{% endif %}</td><td>{{ b.identified_count }}</td></tr>
           {% endfor %}
         </table>
       </div>

@@ -59,7 +59,7 @@
         <svg viewBox="0 0 24 24"><path d="M4 8.5 12 4l8 4.5-8 4.5z"/><path d="M4 13l8 4.5 8-4.5"/><path d="M4 17.5 12 22l8-4.5"/></svg>
       </span>
       <div class="a-faire__texte">
-        <a class="carte-bouton__lien a-faire__titre" href="{% url 'batch_detail' lots_en_attente.0.pk %}">{{ pages_en_attente }} page{{ pages_en_attente|pluralize }} reçue{{ pages_en_attente|pluralize }}, correction jamais lancée</a>
+        <a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_detail' lots_en_attente.0.quiz_id %}#correction-en-attente">{{ pages_en_attente }} page{{ pages_en_attente|pluralize }} reçue{{ pages_en_attente|pluralize }}, correction jamais lancée</a>
         ({{ lots_en_attente|length }} lot{{ lots_en_attente|pluralize }}). Ces copies sont en lieu sûr, mais personne n'a cliqué sur « Lancer la correction ».
       </div>
     </li>

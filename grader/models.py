@@ -6,6 +6,7 @@ from django.db import models, transaction
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.text import get_valid_filename
 
@@ -384,6 +385,12 @@ class Quiz(models.Model):
     def est_qcm(self):
         return self.type_epreuve == "qcm"
 
+    @property
+    def corrige_apres_scan(self):
+        """Concours corrigé « après scan » : les lots attendent « Lancer la correction »,
+        bouton de la page de l'épreuve (QCM ou écrit)."""
+        return self.auto_enroll and self.grading_mode == "deferred"
+
     # Présentation des copies nominatives (QR imprimé) : nom imprimé, nom sur
     # un talon à découper, ou copie anonyme à n° de place.
     ANONYMATS = [
@@ -560,7 +567,8 @@ class ScanBatch(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return self.label or f"Lot du {self.created_at:%d/%m/%Y %H:%M}"
+        # à l'heure de Tunis, comme la colonne « Date » (en UTC, le nom retardait d'une heure)
+        return self.label or f"Lot du {timezone.localtime(self.created_at):%d/%m/%Y %H:%M}"
 
     @property
     def identified_count(self):

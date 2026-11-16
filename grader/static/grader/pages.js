@@ -12,9 +12,15 @@
   });
 
   // Page qui suit un traitement en cours : <span data-recharger="3000" hidden>
+  // Pas sous les doigts de qui saisit : la page de l'épreuve, qui suit aussi la lecture
+  // des copies, porte des réglages qu'un rechargement effacerait en pleine frappe.
   var recharger = document.querySelector("[data-recharger]");
   if (recharger) {
-    setTimeout(function () { location.reload(); }, Number(recharger.dataset.recharger));
+    var saisie = false;
+    document.addEventListener("input", function () { saisie = true; });
+    document.addEventListener("change", function () { saisie = true; });
+    setTimeout(function () { if (!saisie) location.reload(); },
+               Number(recharger.dataset.recharger));
   }
 
   // Trop de fichiers pour un envoi : dit tout de suite, plutôt qu'après des heures

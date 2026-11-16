@@ -136,37 +136,7 @@
 </form>
 {% endif %}
 
-{% if pending_batches %}
-<div class="card card--vedette">
-  <div class="card__duo">
-    <div class="card__duo-texte">
-      <h2>Copies scannées en attente de correction</h2>
-      <b>{{ pending_pages }} page(s)</b> dans {{ pending_batches|length }} lot(s) :
-      {% for b in pending_batches %}{{ b }}{% if not forloop.last %}, {% endif %}{% endfor %}.
-      <span class="helptext">Téléversez toutes les copies, puis lancez la correction : elles seront
-        lues et notées en une seule fois.</span>
-    </div>
-    {% if perms.grader.corriger_copies %}
-    <form method="post">{% csrf_token %}
-      <button class="btn btn--grand" name="launch_grading" value="1" type="submit"
-              {% if sans_corrige %}disabled title="Complétez d'abord le corrigé"{% endif %}
-              data-confirmer="Lancer la correction de {{ pending_pages }} page(s) ?">
-        Lancer la correction</button>
-    </form>
-    {% endif %}
-  </div>
-</div>
-{% endif %}
-{% if processing_pages %}
-<div class="note">
-  <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-  <div class="note__body">
-    <b>Correction en cours : {{ processing_done }} / {{ processing_pages }} page(s) notée(s)</b>
-    — cette page se met à jour toute seule.
-  </div>
-</div>
-<span data-recharger="5000" hidden></span>
-{% endif %}
+{% include "grader/_correction_en_attente.html" %}
 
 {% if n_qcm %}
 <div class="card {% if sans_corrige %}card--alerte{% else %}card--valide{% endif %}">

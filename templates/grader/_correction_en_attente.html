@@ -1,0 +1,36 @@
+{% comment %}
+« Lancer la correction » d'un concours corrigé après scan, et l'avancement de la lecture.
+Page de l'épreuve, QCM ou écrit (views_epreuves.correction_en_attente), et non plus celle
+d'un lot (16 novembre 2026) : le bouton lance tous les lots en attente du concours.
+{% endcomment %}
+{% if pending_batches %}
+<div class="card card--vedette" id="correction-en-attente">
+  <div class="card__duo">
+    <div class="card__duo-texte">
+      <h2>Copies scannées en attente de correction</h2>
+      <b>{{ pending_pages }} page(s)</b> dans {{ pending_batches|length }} lot(s) :
+      {% for b in pending_batches %}{{ b }}{% if not forloop.last %}, {% endif %}{% endfor %}.
+      <span class="helptext">Téléversez toutes les copies, puis lancez la correction : elles seront
+        lues et notées en une seule fois.</span>
+    </div>
+    {% if perms.grader.corriger_copies %}
+    <form method="post" action="{% url 'quiz_detail' quiz.pk %}">{% csrf_token %}
+      <button class="btn btn--grand" name="launch_grading" value="1" type="submit"
+              {% if sans_corrige %}disabled title="Complétez d'abord le corrigé"{% endif %}
+              data-confirmer="Lancer la correction de {{ pending_pages }} page(s) ?">
+        Lancer la correction</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% if processing_pages %}
+<div class="note">
+  <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+  <div class="note__body">
+    <b>Correction en cours : {{ processing_done }} / {{ processing_pages }} page(s) notée(s)</b>
+    — cette page se met à jour toute seule.
+  </div>
+</div>
+<span data-recharger="5000" hidden></span>
+{% endif %}

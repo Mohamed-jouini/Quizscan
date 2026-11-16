@@ -103,18 +103,36 @@ def main():
 
     # createur sait faire une épreuve mais pas la corriger ; correcteur
     # l'inverse. Le lot est prêté à chacun le temps de sa vérification, les
-    # vues ne montrant à un compte que ses propres données.
-    for compte, attendu in ((createur, 403), (spectateur, 403),
-                            (correcteur, 302)):
-        quiz.owner = compte
-        quiz.save(update_fields=["owner"])
-        reponse = _client(compte).post(f"/lots/{lot.pk}/", {"launch_grading": "1"})
-        assert reponse.status_code == attendu, (
-            f"{compte.username} : lancement de la correction -> "
-            f"{reponse.status_code}, attendu {attendu}")
-    quiz.owner = les_deux
-    quiz.save(update_fields=["owner"])
-    print("  correction    refusée sans le droit, acceptée avec OK")
+    # vues ne montrant à un compte que ses propres données. « Lancer la
+    # correction » est sur la page de l'épreuve, QCM ou écrit, et non plus sur
+    # celle d'un lot (16 novembre 2026).
+    ecrit = Quiz.objects.create(title="DR écrit", class_group=quiz.class_group,
+                                owner=les_deux, type_epreuve="ecrit")
+    lot_ecrit = ScanBatch.objects.create(quiz=ecrit, label="DR lot écrit",
+                                         status="pending", total_pages=1)
+    for epreuve, lot_epreuve in ((quiz, lot), (ecrit, lot_ecrit)):
+        for compte, attendu in ((createur, 403), (spectateur, 403),
+                                (correcteur, 302)):
+            epreuve.owner = compte
+            epreuve.save(update_fields=["owner"])
+            reponse = _client(compte).post(f"/quiz/{epreuve.pk}/",
+                                           {"launch_grading": "1"})
+            assert reponse.status_code == attendu, (
+                f"{compte.username} : lancement de la correction ({epreuve.title}) "
+                f"-> {reponse.status_code}, attendu {attendu}")
+        epreuve.owner = les_deux
+        epreuve.save(update_fields=["owner"])
+        lot_epreuve.refresh_from_db()
+        assert lot_epreuve.status != "pending", f"{epreuve.title} : lot jamais lancé"
+    # la page d'un lot ne lance plus rien, même avec le droit
+    lot_seul = ScanBatch.objects.create(quiz=ecrit, label="DR lot seul",
+                                        status="pending", total_pages=1)
+    reponse = _client(les_deux).post(f"/lots/{lot_seul.pk}/", {"launch_grading": "1"})
+    lot_seul.refresh_from_db()
+    assert reponse.status_code == 200 and lot_seul.status == "pending", (
+        reponse.status_code, lot_seul.status)
+    assert 'name="launch_grading"' not in reponse.content.decode()
+    print("  correction    refusée sans le droit, acceptée avec (QCM et écrit) OK")
 
     # ---------------------------------------------------------------- 3
     etudiant = Student.objects.create(class_group=quiz.class_group,
