@@ -335,9 +335,11 @@
         <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">
           {% if quiz.sheet_mode == "split" %}📝 Feuille de réponses{% else %}📄 Télécharger la fiche{% endif %}</a>
         <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">📋 Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% if quiz.place_anonyme %} et des places{% endif %} par salle</a>
+        {% if quiz.a_des_qcm %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}" target="_blank" title="La feuille de réponses sans candidat : noircissez-y les bonnes réponses, puis envoyez-la dans « Corrigé scanné »">✅ Copie du correcteur</a>{% endif %}
       {% endif %}
     </form>
     {% endif %}
+    {% if quiz.sheet_pdf and quiz.a_des_qcm %}<span class="helptext"><b>Copie du correcteur</b> : la feuille de réponses sans candidat, marquée « CORRIGÉ ». Le correcteur y noircit la bonne réponse de chaque question, puis la scanne dans « Corrigé scanné » : le corrigé se remplit tout seul.</span>{% endif %}
     <span class="helptext">
       {% if quiz.sheet_mode == "split" %}
         <b>Sujet</b> : les questions et leurs choix, à distribuer (non scanné).

@@ -226,6 +226,47 @@ def main():
     print("  suppression d'un corrigé scanné : pièce effacée, bonnes réponses "
           "conservées, geste journalisé OK")
 
+    # ---- copie du correcteur (16 novembre 2026) : copies nominatives à talon, aucune de
+    # libre pour le corrigé ; la feuille sans candidat, marquée « CORRIGÉ », remplie des
+    # bonnes réponses et envoyée dans « Corrigé scanné »
+    import pymupdf
+    quiz3 = Quiz.objects.create(title="Concours talon corrigé", class_group=group,
+                                owner=teacher, sheet_mode="grid", id_mode="qr", talon_nom=True)
+    for i in range(1, 7):
+        Question.objects.create(quiz=quiz3, order=i, qtype="qcm", num_choices=4)
+    c.post(f"/quiz/{quiz3.pk}/", {"generate_pdf": "1"})
+    quiz3.refresh_from_db()
+    page_html = c.get(f"/quiz/{quiz3.pk}/").content.decode()
+    url_copie = f"/quiz/{quiz3.pk}/copie-correcteur.pdf"
+    assert url_copie in page_html and "Copie du correcteur" in page_html
+    r = c.get(url_copie)
+    assert r.status_code == 200 and r["Content-Type"] == "application/pdf"
+    with pymupdf.open(stream=r.content, filetype="pdf") as doc:
+        assert len(doc) == len(quiz3.layout_json["pages"]), len(doc)
+        texte = doc[0].get_text()
+    assert "CORRIGÉ — copie du correcteur" in texte and "Corrigé scanné" in texte, texte
+    assert "BEN SALAH" not in texte and "104523" not in texte, "un candidat sur la copie"
+    feuille3 = jpg(simulate_scan(fill_sheet(render_page(r.content), quiz3.layout_json, CORRIGE)))
+    r = c.post(f"/quiz/{quiz3.pk}/corrige/",
+               {"files": [SimpleUploadedFile("copie_correcteur.jpg", feuille3)]}, follow=True)
+    assert r.status_code == 200
+    assert dict(quiz3.questions.values_list("order", "correct_choice")) == CORRIGE
+    # talon découpé : lue aussi
+    for q in quiz3.questions.all():
+        q.correct_choice = None
+        q.save(update_fields=["correct_choice"])
+    decoupee = fill_sheet(render_page(c.get(url_copie).content), quiz3.layout_json, CORRIGE)
+    decoupee = decoupee[int(30 / 25.4 * 300):, :].copy()
+    c.post(f"/quiz/{quiz3.pk}/corrige/",
+           {"files": [SimpleUploadedFile("decoupee.jpg", jpg(simulate_scan(decoupee)))]})
+    assert dict(quiz3.questions.values_list("order", "correct_choice")) == CORRIGE
+    # une épreuve sans QCM (écrit) n'en a pas
+    ecrit = Quiz.objects.create(title="Écrit sans corrigé", class_group=group, owner=teacher,
+                                type_epreuve="ecrit")
+    assert c.get(f"/quiz/{ecrit.pk}/copie-correcteur.pdf").status_code == 302
+    print("  copie du correcteur : feuille sans candidat marquée « CORRIGÉ », remplie, "
+          "lue par « Corrigé scanné » (talon découpé ou non) OK")
+
     print("\n✅ TEST DU CORRIGÉ SCANNÉ RÉUSSI")
 
 

@@ -123,6 +123,10 @@ LABELS = {
         "non_lue": "Page non lue au scan : seule la page de garde porte la note.",
         # dos de la dernière feuille d'une copie A4, pour le recto-verso
         "page_blanche": "Page laissée blanche",
+        # copie du correcteur (16 novembre 2026), lue par « Corrigé scanné »
+        "corrige": "CORRIGÉ — copie du correcteur",
+        "corrige_instr": "Noircissez la bonne réponse de chaque question, puis scannez cette "
+                         "copie dans « Corrigé scanné », sur la page de l'épreuve.",
         "pli": "pli au milieu",
     },
     "ar": {
@@ -163,6 +167,9 @@ LABELS = {
         "redaction": "ورقة التحرير",
         "non_lue": "هذه الصفحة لا تُقرأ عند المسح الضوئي: العدد على صفحة الغلاف فقط.",
         "page_blanche": "صفحة متروكة فارغة",
+        "corrige": "سلّم الإصلاح — نسخة الأستاذ المصحّح",
+        "corrige_instr": "املأ خانة الإجابة الصحيحة لكل سؤال، ثم امسح هذه النسخة ضوئيا "
+                         "وأرسلها في خانة الإصلاح الممسوح بصفحة الاختبار.",
         "pli": "طيّ في الوسط",
     },
 }
@@ -180,7 +187,7 @@ def _qr_image(payload):
 
 
 def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, progres=None,
-                       codes=None):
+                       codes=None, corrige=False):
     """Retourne les octets du PDF de la fiche du quiz.
 
     places : copies ANONYMES à numéro de place ({id étudiant: n° de place}) :
@@ -198,6 +205,11 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
     codes : copies à talon ({id étudiant: code d'anonymat}) : le code est imprimé sur
     le talon et sous le QR de la copie, pour rapprocher l'un de l'autre à l'œil une
     fois le talon détaché (services.codes_anonymes).
+
+    corrige : la copie du correcteur (demande de l'utilisateur, 16 novembre 2026) : un
+    exemplaire, sans candidat ni QR, marqué « CORRIGÉ » ; le correcteur y noircit les bonnes
+    réponses et l'envoie dans « Corrigé scanné » (services.read_answer_key, qui ne lit que
+    le cadre, le code de page et les cases).
 
     Lève layout.TooManyPages si la fiche dépasse le nombre de pages que les
     repères de calibration peuvent numéroter."""
@@ -265,12 +277,15 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
             head_title = f"{head_title} — {matiere}"
         consigne = {"ecrit": T["ecrit_instr"], "oral": T["oral_instr"]}.get(
             mode, T["instr"])
+        if corrige:
+            head_title, consigne = f"{T['corrige']} — {quiz.title}", T["corrige_instr"]
         code = codes.get(student.pk) if (codes and student is not None) else None
         if talon:
             # nom, titre et consigne sur le talon, au-dessus du trait de coupe
             _dessiner_talon(c, draw, student, head_title,
                             f"{T['page']} {numero + 1} / {pages_copie}",
-                            consigne, T, lang, code, etablissement)
+                            consigne, T, lang, code, etablissement,
+                            libelle=T["corrige"] if corrige else None)
         else:
             if etablissement:
                 # l'établissement en haut du cadre, du côté où s'écrit sa langue (13 novembre
@@ -327,6 +342,9 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
                      bold=True, align="center", gray=0.25)
                 draw(student.first_name, fx + fw / 2, _y(fy + fh / 2 + 1.5), 11,
                      bold=True, align="center", gray=0.25)
+            elif corrige:
+                draw(T["corrige"], lx + lw / 2, _y(ly + lh / 2 + 1.5), 9,
+                     bold=True, align="center", gray=0.25)
 
         # Emplacement QR / étiquette
         # Cadre « coin » du mode grille : reconnu à la grille de n° de la
@@ -376,6 +394,17 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
             c.setDash(3, 2)
             c.rect(zx0 * mm, _y(by_, bh_), zw * mm, bh_ * mm)
             c.setDash()
+            if corrige:
+                draw(T["corrige"], zx0 + zw / 2, _y(by_ + bh_ / 2 + 1.5), 12, bold=True,
+                     align="center", gray=0.35)
+        elif qr_zone and corrige:
+            # copie nominative : la bande grise dit « CORRIGÉ », sans QR ni nom
+            bx_, by_, bw_, bh_ = qr_zone["band"]
+            c.setFillGray(0.955)
+            c.roundRect(bx_ * mm, _y(by_, bh_), bw_ * mm, bh_ * mm, 2 * mm, stroke=0, fill=1)
+            c.setFillGray(0.0)
+            draw(T["corrige"], bx_ + bw_ / 2, _y(by_ + bh_ / 2 + 1.7), 14, bold=True,
+                 align="center")
         elif qr_zone and student is not None:
             # une fois par copie : les pages de rédaction reprennent ce QR
             image_qr = _qr_image(f"QS|{quiz.pk}|{student.pk}")
@@ -684,7 +713,7 @@ def _dessiner_bande(c, draw, quiz, student, qr_zone, talon, places, T, lang, ima
 
 
 def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang, code=None,
-                    etablissement=""):
+                    etablissement="", libelle=None):
     """Talon du haut de la copie : nom et n° de l'étudiant, sous le n° sa CIN et
     sa salle (fiche du registre, demande du 5 novembre 2026), sous le nom le code
     d'anonymat, le même que sous le QR de la copie (demande du 13 novembre 2026),
@@ -692,7 +721,8 @@ def _dessiner_talon(c, draw, student, titre, page_txt, consigne, T, lang, code=N
     lecture : ce qu'on y ajoute ne change rien à la lecture)."""
     x0, x1 = 14.0, L.PAGE_W - 14.0
     rtl = lang == "ar"
-    nom = student.full_name if student else ""      # en arabe, le prénom d'abord
+    # en arabe, le prénom d'abord ; copie du correcteur : « CORRIGÉ » à la place du nom
+    nom = student.full_name if student else (libelle or "")
     num = f"N° {student.student_number}" if student and student.student_number else ""
     fiche = getattr(student, "inscrit", None) if student else None
     details = [t for t in (f"{T['cin']} {fiche.cin}" if fiche and fiche.cin else "",

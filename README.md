@@ -601,7 +601,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_web.py` | par l'interface : étiquettes QR d'une classe, correction en arrière-plan, secours OCR, corrigé modifié après l'épreuve, alerte de fiche périmée, droits d'accès |
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
 | `test_e2e_design.py` | une seule feuille de style pour toutes les pages, aucun style redéclaré en ligne, aucun jeton défini deux fois |
-| `test_e2e_corrige.py` | bonne réponse facultative, corrigé scanné et conservé, correction bloquée tant qu'il manque une réponse |
+| `test_e2e_corrige.py` | bonne réponse facultative, corrigé scanné et conservé, correction bloquée tant qu'il manque une réponse, copie du correcteur (sans candidat, « CORRIGÉ ») lue par le corrigé scanné |
 | `test_e2e_robustesse.py` | pannes d'OCR (Tesseract absent, paquet de langue manquant), fiches de plus de 12 pages, QR collés de travers dans leur cadre, QR abîmés (tache sur un coin, stylo, coin arraché, froissé, impression pâle, 100 dpi en JPEG 10, copies d'avant en correction M), contenu de la planche d'étiquettes, identifiants d'URL bricolés |
 
 Pour tout lancer : `for t in test_e2e*.py; do python $t || break; done`
@@ -835,7 +835,10 @@ de deux façons — au choix, et les deux se complètent :
 2. **En scannant le corrigé** : imprimez la fiche d'épreuve, noircissez les
    bonnes réponses comme le ferait un étudiant, scannez-la et déposez-la dans
    « Fiche du corrigé scannée » sur la page du quiz. Les cases lues
-   renseignent le corrigé d'un coup.
+   renseignent le corrigé d'un coup. Avec des copies nominatives (talon, QR,
+   n° de place), aucune n'est libre : le bouton « Copie du correcteur » donne
+   la feuille de réponses sans candidat ni QR, marquée « CORRIGÉ », à remplir
+   par le correcteur puis à scanner de même (talon découpé ou non).
 
 La fiche scannée est **conservée avec l'épreuve** — image d'origine et image
 de contrôle colorée — et reste consultable dans l'historique du quiz : elle

@@ -1717,6 +1717,21 @@ def quiz_admis_pdf(request, pk):
 
 
 @login_required
+def quiz_copie_correcteur_pdf(request, pk):
+    """La copie du correcteur d'un QCM (demande de l'utilisateur, 16 novembre 2026) : la
+    feuille de réponses, un exemplaire sans candidat ni QR, marqué « CORRIGÉ ». Le
+    correcteur y noircit les bonnes réponses et l'envoie dans « Corrigé scanné »."""
+    quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    if not quiz.layout_json or not quiz.a_des_qcm:
+        messages.error(request, "Générez d'abord la fiche de réponses PDF.")
+        return redirect("quiz_detail", pk=pk)
+    resp = HttpResponse(sheet_pdf.generate_sheet_pdf(quiz, quiz.layout_json, corrige=True),
+                        content_type="application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="copie_correcteur_{quiz.pk}.pdf"'
+    return resp
+
+
+@login_required
 def quiz_copies_manquantes_xlsx(request, pk):
     """Les copies manquantes de l'épreuve, toutes, en Excel : candidat, code d'anonymat,
     salle, matières ou pages sans copie (13 novembre 2026)."""
