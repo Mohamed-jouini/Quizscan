@@ -216,11 +216,12 @@ def main():
     bilan = services.bilan_admissions([quiz])["par_epreuve"][0]
     assert (bilan["n"], bilan["admis"], bilan["attente"], bilan["refuses"]) == (3, 1, 1, 1), bilan
     assert bilan["moyenne20"] == moyenne, bilan
+    # la liste « Résultats » n'affiche plus de moyenne (17 novembre 2026), les admis restent
     liste = c.get(reverse("resultats_list")).content.decode()
-    assert f"{moyenne:.2f} / 20".replace(".", ",") in liste and '<span class="badge ok">1 / 3</span>' in liste
-    assert "36 / 20" not in liste and "75,5" not in liste, "la somme des matières"
-    print(f"  listes « Résultats » et tableau de bord : moyenne {moyenne} / 20 et 1 admis sur 3, "
-          "comme la page des résultats OK")
+    assert '<span class="badge ok">1 / 3</span>' in liste and "<dt>Moyenne</dt>" not in liste
+    assert f"{moyenne:.2f}".replace(".", ",") not in liste and "36 / 20" not in liste
+    print(f"  tableau de bord : moyenne {moyenne} / 20 et 1 admis sur 3, comme la page des "
+          "résultats ; liste « Résultats » : 1 admis sur 3, sans moyenne OK")
     page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
     assert all(nom in page for nom in NOMS) and "Moyenne" in page and "12,44 / 20" in page
     assert "Incomplète : 2 matières" in page

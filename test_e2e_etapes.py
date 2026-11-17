@@ -370,11 +370,10 @@ def main():
         assert (f'<a class="carte-bouton__lien" href="/quiz/{q.pk}/resultats/">{q.title}</a>'
                 in resultats), q.title
     assert "Voir les résultats" not in resultats, "un bouton dans le bouton"
-    # moyennes des étapes (17 novembre 2026) : le QCM sur 20, (9+8+7+5+4+2) / 6 bonnes
-    # réponses sur 10 -> 11,67 / 20 ; l'écrit en trois matières, sur la moyenne de ses
-    # matières (14,5 ; 8 ; 12,25 -> 11,58 / 20) et non leur somme (34,75)
-    assert "11,67 / 20" in resultats and "5,83 / 10" not in resultats
-    assert "11,58 / 20" in resultats and "34,75" not in resultats
+    # pas de moyenne sur les étapes (demande du 17 novembre 2026) : copies notées et admis
+    assert "<dt>Moyenne</dt>" not in resultats and "<dt>Copies notées</dt>" in resultats
+    for moyenne in ("11,67", "5,83", "11,58", "34,75"):
+        assert moyenne not in resultats, moyenne
     # une étape aussi, et un seul lien par bloc : c'est lui qui s'étend sur tout le bloc
     assert f'carte-bouton__lien" title="{qcm.title}" href="/quiz/{qcm.pk}/resultats/"' in resultats
     for texte in (page, resultats):

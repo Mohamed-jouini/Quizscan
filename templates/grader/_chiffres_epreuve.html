@@ -14,8 +14,7 @@ Paramètres : e (étape), g (son groupe), resultats.
 {% elif e.resume %}
 <dl class="chiffres-epreuve">
   <div><dt>Copies notées</dt><dd>{{ e.resume.n }}</dd></div>
-  {# QCM : sur 20, comme partout ; écrit et oral : sur leur barème (17 novembre 2026) #}
-  <div><dt>Moyenne</dt><dd>{% if e.quiz.est_qcm %}{{ e.resume.moyenne20|floatformat:"-2" }} / 20{% else %}{{ e.resume.moyenne|floatformat:"-2" }} / {{ e.resume.bareme|floatformat:"-2" }}{% endif %}</dd></div>
+  {# plus de moyenne ici (demande du 17 novembre 2026) : elle reste sur la page de l'épreuve #}
   <div><dt>{% if g.concours %}Admis{% else %}Réussite{% endif %}</dt><dd>{% if e.resume.admis is not None %}<span class="badge ok">{{ e.resume.admis }} / {{ e.resume.n }}</span>{% else %}<span class="chiffres-epreuve__manque">pas de note minimale</span>{% endif %}</dd></div>
 </dl>
 {% else %}
