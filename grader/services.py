@@ -2657,17 +2657,30 @@ def bilan_admissions(quizzes, par_epreuve_max=8):
     règles que services.admissions : admis si la note atteint la note
     minimale ; sinon « en attente » tant qu'une réponse manuscrite reste à
     noter ; sinon non admis. Une épreuve sans note minimale compte dans la
-    moyenne et la répartition, pas dans l'admission."""
+    moyenne et la répartition, pas dans l'admission.
+
+    Écrit et oral en matières : la moyenne pondérée de leurs matières sur leur barème
+    (une requête de plus par épreuve), et non la somme des matières ; une matière sans
+    note les laisse « en attente » sous la note minimale, comme services.admissions."""
     quizzes = list(quizzes)
     par_pk = {q.pk: q for q in quizzes}
+    en_matieres = {q.pk: q.matieres for q in quizzes if q.type_epreuve in ("ecrit", "oral")}
+    en_matieres = {pk: matieres for pk, matieres in en_matieres.items() if matieres}
     baremes = dict(Question.objects.filter(quiz__in=quizzes)
                    .values_list("quiz_id").annotate(m=Sum("points")))
-    lignes = (Answer.objects
-              .filter(sheet__batch__quiz__in=quizzes, sheet__student__isnull=False)
-              .values("sheet__batch__quiz_id", "sheet__student_id")
-              .annotate(total=Sum("points_awarded"),
-                        attente=Count("pk", filter=Q(question__qtype="open",
-                                                     points_awarded__isnull=True))))
+    lignes = list(Answer.objects
+                  .filter(sheet__batch__quiz__in=[q for q in quizzes if q.pk not in en_matieres],
+                          sheet__student__isnull=False)
+                  .values("sheet__batch__quiz_id", "sheet__student_id")
+                  .annotate(total=Sum("points_awarded"),
+                            attente=Count("pk", filter=Q(question__qtype="open",
+                                                         points_awarded__isnull=True))))
+    for pk, matieres in en_matieres.items():
+        quiz = par_pk[pk]
+        baremes[pk] = quiz.note_sur
+        lignes += [{"sheet__batch__quiz_id": pk, "sheet__student_id": etudiant,
+                    "total": note, "attente": int(incomplete)}
+                   for etudiant, (note, incomplete, _) in _notes_en_matieres(quiz, matieres).items()]
     epreuves = {}
     pcts = []
     for l in lignes:
@@ -2774,22 +2787,58 @@ def corriges_douteux(quizzes):
     return {q: sorted(ordres) for q, ordres in douteux.items()}
 
 
+def _notes_en_matieres(quiz, matieres):
+    """{étudiant: (note, incomplète, notée)} d'un écrit ou d'un oral en matières, la note de
+    la page des résultats (compute_results) : la moyenne des matières pondérée par leurs
+    coefficients, sur le barème ; une matière sans note y compte pour 0 (incomplète) ; une
+    matière lue deux fois, sa première lecture. notée : au moins une matière a sa note.
+
+    Une requête, une ligne par matière et par candidat, sans charger les copies. Les listes
+    additionnaient les matières : « 44,75 / 20 » pour un écrit de trois matières, et des
+    admis comptés sur cette somme (signalé le 17 novembre 2026)."""
+    poids = sum(m.coefficient for m in matieres)
+    lues = {}
+    for etudiant, question, points in (
+            Answer.objects.filter(sheet__batch__quiz=quiz, sheet__student__isnull=False,
+                                  question__in=matieres)
+            .order_by("sheet__created_at", "sheet_id")      # l'ordre des copies là-bas
+            .values_list("sheet__student_id", "question_id", "points_awarded")):
+        lues.setdefault(etudiant, {}).setdefault(question, points)
+    notes = {}
+    for etudiant, par_matiere in lues.items():
+        valeurs = [par_matiere.get(m.pk) for m in matieres]
+        somme = sum(m.coefficient * v / m.points * quiz.note_sur
+                    for m, v in zip(matieres, valeurs) if v is not None and m.points)
+        notes[etudiant] = (round(somme / poids, 2) if poids else 0.0,
+                           any(v is None for v in valeurs),
+                           any(v is not None for v in valeurs))
+    return notes
+
+
 def resume_epreuve(quiz):
     """Effectif, moyenne et extrêmes d'une épreuve, sans charger les copies.
 
     Une requête : le total de points par candidat (un nombre par candidat).
     Moyenne, extrêmes et admis s'en déduisent ; deux requêtes de plus sur les
     mêmes réponses coûtaient 0,8 s au tableau de bord d'un concours de 10 000
-    copies. Renvoie None si aucune copie n'est encore notée.
+    copies. Écrit et oral en matières : la moyenne pondérée de ses matières, comme
+    sur la page des résultats, et non leur somme. Renvoie None si aucune copie
+    n'est encore notée.
     """
-    totaux = list(Answer.objects
+    matieres = quiz.matieres
+    if matieres:
+        totaux = [note for note, _, notee in _notes_en_matieres(quiz, matieres).values()
+                  if notee]
+    else:
+        # une pénalité ne fait pas descendre une note sous 0 (compute_results)
+        totaux = [max(total, 0.0) for total in Answer.objects
                   .filter(sheet__batch__quiz=quiz,
                           sheet__student__isnull=False,
                           points_awarded__isnull=False)
                   .values("sheet__student_id")
                   .annotate(total=Sum("points_awarded"))
                   .order_by()
-                  .values_list("total", flat=True))
+                  .values_list("total", flat=True)]
     if not totaux:
         return None
     bareme = quiz.max_score or 0
@@ -2804,7 +2853,8 @@ def resume_epreuve(quiz):
         # Part du barème, pour la jauge : une moyenne de 8,5 ne veut rien
         # dire sans savoir si l'épreuve est sur 14 ou sur 20.
         "pct": round(moyenne / bareme * 100) if bareme else 0,
-        "moyenne20": sur_20(moyenne, bareme),       # QCM : la moyenne, sur 20
+        # QCM : la moyenne, sur 20 (de la moyenne exacte, pas de son arrondi)
+        "moyenne20": sur_20(sum(totaux) / len(totaux), bareme),
         # Avec une note minimale : combien l'atteignent.
         "admis": (sum(1 for t in totaux if t >= quiz.note_admission)
                   if quiz.note_admission is not None else None),
