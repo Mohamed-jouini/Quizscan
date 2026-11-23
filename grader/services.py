@@ -2613,10 +2613,15 @@ def parcours_concours(chaine):
     (compute_results), resultat}. Le résultat final
     se lit à la dernière étape où le candidat a été convoqué.
 
-    Moyenne finale (المعدل النهائي, 13 novembre 2026) : la moyenne des notes sur 20 des
-    étapes, pondérée par leurs coefficients (Quiz.coefficient_final), pour le candidat noté
-    à chaque étape qui compte (coefficient non nul) ; None sinon. Elle classe les candidats
-    d'un même résultat."""
+    Moyenne finale (المعدل النهائي, 13 novembre 2026) : la moyenne de toutes les notes sur
+    20, chacune avec son coefficient (demande du 23 novembre 2026) — la note du QCM, ou d'une
+    épreuve d'une seule note, avec le coefficient de l'étape (Quiz.coefficient_final, réglé
+    sur la page du concours) ; la note de chaque matière de l'écrit et chaque note de l'oral,
+    avec le coefficient de la matière (réglé sur la page de l'épreuve, le même que dans sa
+    moyenne). Pour le candidat noté à chaque étape qui compte ; None sinon. Une matière sans
+    note y compte pour 0, comme dans la moyenne de l'épreuve. Elle classe les candidats d'un
+    même résultat. « composantes » : chaque note qui entre dans la moyenne finale, dans
+    l'ordre — {etape, matiere (None : la note de l'étape), libelle, coefficient}."""
     etapes, par_epreuve = [], []
     for quiz in chaine:
         rows = compute_results(quiz)
@@ -2635,7 +2640,18 @@ def parcours_concours(chaine):
             personnes.setdefault(cle, r["student"])
     derniere = len(chaine) - 1
     coefficients = [q.coefficient_final for q in chaine]
-    poids = sum(coefficients)
+    composantes = []
+    for k, quiz in enumerate(chaine):
+        matieres = quiz.matieres
+        if matieres:
+            composantes += [{"k": k, "etape": quiz, "matiere": m, "rang": i, "libelle": m.text,
+                             "coefficient": m.coefficient} for i, m in enumerate(matieres)]
+        else:
+            composantes.append({"k": k, "etape": quiz, "matiere": None, "rang": None,
+                                "libelle": quiz.type_court, "coefficient": quiz.coefficient_final})
+    comptees = [comp for comp in composantes if comp["coefficient"]]
+    poids = sum(comp["coefficient"] for comp in comptees)
+    etapes_comptees = {comp["k"] for comp in comptees}
     candidats = []
     for cle, etudiant in personnes.items():
         cases, atteinte = [], -1
@@ -2668,10 +2684,18 @@ def parcours_concours(chaine):
         derniere_note = cases[atteinte]["row"]["score"] if (
             atteinte >= 0 and cases[atteinte]["row"]) else -1
         moyenne = None
-        if poids and all(case["etat"] == "note" for case, coef in zip(cases, coefficients)
-                         if coef):
-            moyenne = round(sum(coef * case["row"]["note20"]
-                                for case, coef in zip(cases, coefficients) if coef) / poids, 2)
+        if poids and all(cases[k]["etat"] == "note" for k in etapes_comptees):
+            somme = 0.0
+            for comp in comptees:
+                row, m = cases[comp["k"]]["row"], comp["matiere"]
+                if m is None:
+                    somme += comp["coefficient"] * row["note20"]
+                    continue
+                notes_m = row.get("notes_matieres") or []
+                note = notes_m[comp["rang"]] if comp["rang"] < len(notes_m) else None
+                if note is not None and m.points:
+                    somme += comp["coefficient"] * note / m.points * 20
+            moyenne = round(somme / poids, 2)
         candidats.append({"etudiant": etudiant, "student": etudiant,
                           "cases": cases, "final": final,
                           "final_ton": ton, "atteinte": atteinte, "moyenne_finale": moyenne,
@@ -2680,7 +2704,9 @@ def parcours_concours(chaine):
                                    etudiant.last_name.lower(), etudiant.first_name.lower())})
     candidats.sort(key=lambda c: c["_tri"])
     return {"epreuves": chaine, "etapes": etapes, "candidats": candidats,
-            "coefficients": coefficients,
+            "coefficients": coefficients, "composantes": composantes,
+            # un coefficient au moins se règle sur la page du concours (une étape d'une note)
+            "coefs_modifiables": any(comp["matiere"] is None for comp in composantes),
             "n_admis_final": sum(1 for c in candidats if c["final_ton"] == "ok")}
 
 

@@ -33,16 +33,23 @@
 {# Moyenne finale (المعدل النهائي, 13 novembre 2026) : le coefficient de chaque étape #}
 <form class="card reglages" method="post" id="moyenne-finale">{% csrf_token %}
   <h2>Moyenne finale <bdi lang="ar">(المعدل النهائي)</bdi></h2>
-  <p class="helptext helptext--serre">La moyenne des notes sur 20 de chaque étape, pondérée par ces coefficients, pour les candidats notés à toutes les étapes qui comptent (coefficient 0 : l'étape n'y compte pas). Elle classe les candidats d'un même résultat.</p>
+  <p class="helptext helptext--serre">La moyenne de toutes les notes sur 20, chacune avec son coefficient : la note du QCM (coefficient réglé ici ; 0 : il n'y compte pas), la note de chaque matière de l'écrit et chaque note de l'oral (le coefficient de la matière, réglé sur la page de l'épreuve). Pour les candidats notés à toutes les étapes qui comptent. Elle classe les candidats d'un même résultat.</p>
+  {% comment %}Une case par note qui compte (23 novembre 2026) : le coefficient d'une étape d'une
+    seule note se règle ici, celui d'une matière sur la page de son épreuve (lien).{% endcomment %}
   <div class="matiere__tete">
-    {% for e in parcours.etapes %}
+    {% for comp in parcours.composantes %}
     <div>
-      <label for="coef_{{ e.quiz.pk }}">Coefficient {{ e.quiz.type_court }}</label>
-      <input id="coef_{{ e.quiz.pk }}" class="champ--court" type="number" step="0.1" min="0" max="99" name="coef_{{ e.quiz.pk }}" value="{{ e.quiz.coefficient_final|stringformat:'g' }}"{% if not perms.grader.creer_epreuve %} disabled{% endif %}>
+      {% if comp.matiere %}
+      <label>{{ comp.etape.type_court }} — <bdi>{{ comp.libelle }}</bdi></label>
+      <a class="coef-matiere" href="{% url 'quiz_detail' comp.etape.pk %}" title="Coefficient de la matière, réglé sur la page de l'épreuve ({{ comp.etape.type_court }})">× {{ comp.coefficient|floatformat:"-2" }}</a>
+      {% else %}
+      <label for="coef_{{ comp.etape.pk }}">Coefficient {{ comp.libelle }}</label>
+      <input id="coef_{{ comp.etape.pk }}" class="champ--court" type="number" step="0.1" min="0" max="99" name="coef_{{ comp.etape.pk }}" value="{{ comp.coefficient|stringformat:'g' }}"{% if not perms.grader.creer_epreuve %} disabled{% endif %}>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
-  {% if perms.grader.creer_epreuve %}<p><button class="btn small" name="coefficients" value="1" type="submit">Enregistrer</button></p>{% endif %}
+  {% if perms.grader.creer_epreuve and parcours.coefs_modifiables %}<p><button class="btn small" name="coefficients" value="1" type="submit">Enregistrer</button></p>{% endif %}
 </form>
 
 <div class="card" id="liste-candidats">

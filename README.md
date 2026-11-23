@@ -724,10 +724,14 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   retrouve chaque copie, on la repasse au scanner, un nouvel envoi l'ajoute. Les 300
   premières à l'écran, toutes dans l'export Excel. Un absent reste dans la liste.
 - Moyenne finale (المعدل النهائي) : la page « Résultats du concours » donne, pour chaque
-  candidat noté à toutes les étapes, la moyenne de ses notes sur 20 (QCM, écrit, oral),
-  pondérée par un coefficient par étape (1 par défaut, réglé sur cette page ; 0 : l'étape
-  n'y compte pas). Elle classe les candidats d'un même résultat et figure dans les exports
-  Excel et PDF du concours ; l'espace public ne montre toujours que le verdict.
+  candidat noté à toutes les étapes, la moyenne de toutes ses notes sur 20, chacune avec
+  son coefficient (23 novembre 2026) : la note du QCM (ou d'une épreuve d'une seule note),
+  avec le coefficient de l'étape réglé sur cette page (1 par défaut ; 0 : elle n'y compte
+  pas) ; la note de chaque matière de l'écrit et chaque note de l'oral, avec le coefficient
+  de la matière réglé sur la page de l'épreuve (le même que dans sa moyenne ; la page du
+  concours le rappelle, en lien). Elle classe les candidats d'un même résultat et figure
+  dans les exports Excel et PDF du concours ; l'espace public ne montre toujours que le
+  verdict.
 - Liste des admis au concours : à droite de « Rechercher », sur la page « Résultats du
   concours », « Liste des admis (PDF) » et « Liste des admis (Excel) » donnent les candidats
   « Admis au concours » seuls (la recherche n'y change rien) : rang sur la moyenne finale

@@ -295,6 +295,20 @@ def main():
     oral.refresh_from_db()                      # note minimale 10, réglée plus haut
     services.admissions(oral, [ligne_oral])
     assert ligne_oral["resultat"] == "admis"
+    # moyenne finale du concours (23 novembre 2026) : chaque matière de l'écrit et chaque
+    # note de l'oral, avec le coefficient de sa matière —
+    # (2×14 + 10 + 1,5×12 + 2×15 + 12,5 + 9) / 8,5 = 12,65
+    r = c.get(reverse("quiz_parcours", args=[oral.pk]))
+    p = r.context["parcours"]
+    assert [(comp["libelle"], comp["coefficient"]) for comp in p["composantes"]] == [
+        ("Droit civil", 2), ("Droit pénal", 1), ("Libertés fondamentales", 1.5),
+        ("إ م ت", 2), ("ن إج", 1), ("ق ت", 1)], p["composantes"]
+    amri_final = next(x for x in p["candidats"] if x["etudiant"].last_name == "AMRI")
+    assert amri_final["moyenne_finale"] == 12.65, amri_final["moyenne_finale"]
+    assert 'name="coefficients"' not in r.content.decode(), \
+        "rien à régler sur la page du concours : chaque coefficient est sur la page de l'épreuve"
+    print("  moyenne finale : chaque matière de l'écrit et chaque note de l'oral avec son "
+          "coefficient (AMRI 12,65) OK")
     feuille.cell(row=3, column=6).value = "autre"           # une colonne de note perdue
     tampon = io.BytesIO()
     classeur.save(tampon)

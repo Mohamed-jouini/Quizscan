@@ -1829,7 +1829,12 @@ def quiz_parcours(request, pk):
         # coefficients de la moyenne finale (المعدل النهائي, 13 novembre 2026)
         droits.exiger(request.user, droits.CREER, "régler la moyenne finale")
         valeurs = {}
+        en_matieres = [q for q in chaine if q.matieres]
         for q in chaine:
+            if q in en_matieres:
+                # chaque matière y compte avec son coefficient, réglé sur la page de
+                # l'épreuve (23 novembre 2026) : rien à régler ici pour cette étape
+                continue
             brut = (request.POST.get(f"coef_{q.pk}") or "").strip().replace(",", ".")
             try:
                 valeurs[q] = float(brut) if brut else q.coefficient_final
@@ -1837,7 +1842,7 @@ def quiz_parcours(request, pk):
                 valeurs[q] = None
         if any(v is None or not 0 <= v <= 99 for v in valeurs.values()):
             messages.error(request, "Coefficient invalide : de 0 à 99 pour chaque étape.")
-        elif not any(valeurs.values()):
+        elif not any(valeurs.values()) and not en_matieres:
             messages.error(request, "Une étape au moins doit compter dans la moyenne finale.")
         else:
             for q, v in valeurs.items():

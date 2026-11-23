@@ -496,6 +496,37 @@ def generate_parcours_pdf(parcours):
     return buf.getvalue()
 
 
+SEPARATEUR = " · "
+
+
+def _en_lignes(morceaux, taille, largeur_mm):
+    """Range des morceaux de texte en lignes qui tiennent dans largeur_mm."""
+    lignes, courante = [], []
+    for morceau in morceaux:
+        essai = courante + [morceau]
+        if courante and text_width_pt(SEPARATEUR.join(essai), taille) > largeur_mm * mm:
+            lignes.append(courante)
+            courante = [morceau]
+        else:
+            courante = essai
+    return lignes + ([courante] if courante else [])
+
+
+def _draw_morceaux(c, morceaux, x_centre, y, taille, gray=None):
+    """Une ligne de morceaux posés de gauche à droite, centrée sur x_centre, chacun dans son
+    sens : un nom de matière en arabe se lit à l'endroit, sans renverser l'ordre de la liste
+    (une seule chaîne mêlant français et arabe le faisait)."""
+    larges = [text_width_pt(m, taille) / mm for m in morceaux]
+    sep = text_width_pt(SEPARATEUR, taille) / mm
+    x = x_centre - (sum(larges) + sep * (len(morceaux) - 1)) / 2
+    for i, (morceau, large) in enumerate(zip(morceaux, larges)):
+        if i:
+            _draw(c, SEPARATEUR, x, y, taille, gray=gray)
+            x += sep
+        _draw(c, morceau, x, y, taille, gray=gray)
+        x += large
+
+
 def generate_admis_concours_pdf(parcours):
     """Liste des admis au concours (résultat final « Admis au concours »), à afficher ou à
     signer (demande du 16 novembre 2026) : rang sur la moyenne finale, prénom et nom, n°
@@ -535,7 +566,14 @@ def generate_admis_concours_pdf(parcours):
 
     lignes_entete = [t.strip() for t in (racine.entete or "").splitlines() if t.strip()]
     haut_titre = 22.0 + 4.2 * len(lignes_entete)
-    debut_p1 = haut_titre + 30.0
+    # le coefficient de chaque note de la moyenne finale (le QCM, chaque matière de l'écrit,
+    # chaque note de l'oral, 23 novembre 2026) : un morceau par note, sur plusieurs lignes
+    # s'il le faut, sous l'intitulé
+    morceaux = [f"{comp['libelle']} × {_nombre(comp['coefficient'])}"
+                for comp in parcours.get("composantes") or []]
+    lignes_poids = [["Notes sur 20 — moyenne finale pondérée :"]] + _en_lignes(morceaux, 8.0,
+                                                                               X1 - X0)
+    debut_p1 = haut_titre + 30.0 + 3.6 * (len(lignes_poids) - 1)
     debut_suite = 26.0
     par_page_1 = max(int((BAS - debut_p1 - 8.5) // LIGNE), 1)
     par_page = int((BAS - debut_suite - 8.5) // LIGNE)
@@ -558,10 +596,8 @@ def generate_admis_concours_pdf(parcours):
     _draw(c, f"{len(admis)} admis au concours sur {n_candidats} "
              f"candidat{'s' if n_candidats > 1 else ''}",
           PAGE_W / 2, haut_titre + 17.5, 9.5, bold=True, align="center")
-    poids = " · ".join(f"{e['quiz'].type_court} × {_nombre(coef)}"
-                       for e, coef in zip(etapes, parcours["coefficients"]))
-    _draw(c, f"Notes sur 20 — moyenne finale pondérée : {poids}", PAGE_W / 2,
-          haut_titre + 22.5, 8.5, align="center", gray=0.3)
+    for i, ligne in enumerate(lignes_poids):
+        _draw_morceaux(c, ligne, PAGE_W / 2, haut_titre + 22.5 + 3.6 * i, 8, gray=0.3)
     c.setLineWidth(0.5)
     c.line(X0 * mm, _y(debut_p1 - 4.5), X1 * mm, _y(debut_p1 - 4.5))
     y = tete_tableau(debut_p1)

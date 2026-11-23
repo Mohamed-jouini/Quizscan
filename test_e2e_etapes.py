@@ -157,35 +157,49 @@ def main():
     page = r.content.decode()
     assert "Admis au concours" in page and "non convoqué" in page
     assert [x["etat"] for x in p["candidats"][-1]["cases"]] == ["note", "non_convoque", "non_convoque"]
-    # moyenne finale (المعدل النهائي, 13 novembre 2026) : la moyenne des notes sur 20 des
-    # trois étapes, pour les candidats notés à chacune ; AMRI (18 + 14,5 + 15) / 3
+    # moyenne finale (المعدل النهائي) : chaque note sur 20 avec son coefficient (demande du
+    # 23 novembre 2026) — le QCM (coefficient de l'étape), chacune des trois matières de
+    # l'écrit (leur coefficient, 1) et l'oral, d'une seule note ici (coefficient de l'étape) ;
+    # AMRI (18 + 3 × 14,5 + 15) / 5 = 15,3 ; CHERIF (14 + 3 × 12,25 + 9) / 5 = 11,95
     moyennes = {x["etudiant"].last_name: x["moyenne_finale"] for x in p["candidats"]}
-    assert moyennes == {"AMRI": 15.83, "CHERIF": 11.75, "BAKIR": None, "DRISS": None,
+    assert moyennes == {"AMRI": 15.3, "CHERIF": 11.95, "BAKIR": None, "DRISS": None,
                         "ESSID": None, "FERCHICHI": None}, moyennes
-    assert "Moyenne finale" in page and "15,83 / 20" in page and "المعدل النهائي" in page
+    assert "Moyenne finale" in page and "15,30 / 20" in page and "المعدل النهائي" in page
+    matieres_ecrit = ecrit.matieres
+    assert [(comp["libelle"], comp["coefficient"]) for comp in p["composantes"]] == (
+        [("QCM", 1)] + [(m.text, 1) for m in matieres_ecrit] + [("Oral", 1)]), p["composantes"]
+    # le coefficient du QCM et de l'oral (une note) se règle ici ; celui d'une matière, sur
+    # la page de son épreuve (lien)
+    assert f'name="coef_{qcm.pk}"' in page and f'name="coef_{oral.pk}"' in page
+    assert f'name="coef_{ecrit.pk}"' not in page
+    assert page.count(f'class="coef-matiere" href="/quiz/{ecrit.pk}/"') == 3
     url_parcours = reverse("quiz_parcours", args=[oral.pk])
-    r = c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1",
-                              f"coef_{ecrit.pk}": "-1", f"coef_{oral.pk}": "1"}, follow=True)
+    r = c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "-1",
+                              f"coef_{oral.pk}": "1"}, follow=True)
     assert "Coefficient invalide" in r.content.decode()
+    # QCM et oral à 0 : les matières de l'écrit comptent toujours, seules
     r = c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "0",
-                              f"coef_{ecrit.pk}": "0", f"coef_{oral.pk}": "0"}, follow=True)
-    assert "Une étape au moins" in r.content.decode()
-    c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1",
-                          f"coef_{ecrit.pk}": "2", f"coef_{oral.pk}": "1"})
+                              f"coef_{oral.pk}": "0"}, follow=True)
+    assert "Une étape au moins" not in r.content.decode()
+    moyennes = {x["etudiant"].last_name: x["moyenne_finale"] for x in r.context["parcours"]["candidats"]}
+    assert (moyennes["AMRI"], moyennes["CHERIF"]) == (14.5, 12.25), moyennes
+    # QCM à 0, oral à 2 : (3 × 14,5 + 2 × 15) / 5 = 14,7 ; (3 × 12,25 + 2 × 9) / 5 = 10,95
+    c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "0", f"coef_{oral.pk}": "2"})
     p = c.get(url_parcours).context["parcours"]
     moyennes = {x["etudiant"].last_name: x["moyenne_finale"] for x in p["candidats"]}
-    # (18 + 2 × 14,5 + 15) / 4 = 15,5 ; (14 + 2 × 12,25 + 9) / 4 = 11,88
-    assert (moyennes["AMRI"], moyennes["CHERIF"]) == (15.5, 11.88), moyennes
-    c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "0",
-                          f"coef_{ecrit.pk}": "1", f"coef_{oral.pk}": "1"})
+    assert (moyennes["AMRI"], moyennes["CHERIF"]) == (14.7, 10.95), moyennes
+    c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1", f"coef_{oral.pk}": "1"})
+    # le coefficient d'une matière, réglé sur la page de l'écrit, compte aussi ici :
+    # droit civil à 2 -> (18 + 4 × 14,5 + 15) / 6 = 15,17 ; (14 + 4 × 12,25 + 9) / 6 = 12
+    Question.objects.filter(pk=matieres_ecrit[0].pk).update(coefficient=2)
     p = c.get(url_parcours).context["parcours"]
-    assert p["coefficients"] == [0, 1, 1]
     moyennes = {x["etudiant"].last_name: x["moyenne_finale"] for x in p["candidats"]}
-    assert moyennes["AMRI"] == 14.75, "QCM à 0 : l'écrit et l'oral seulement"
-    c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1",
-                          f"coef_{ecrit.pk}": "1", f"coef_{oral.pk}": "1"})
-    print("  moyenne finale : notes sur 20 des trois étapes (AMRI 15,83), coefficients "
-          "réglables (1 ; 2 ; 1 -> 15,5 ; QCM à 0 -> 14,75), invalides refusés OK")
+    assert (moyennes["AMRI"], moyennes["CHERIF"]) == (15.17, 12.0), moyennes
+    assert "× 2" in c.get(url_parcours).content.decode()
+    Question.objects.filter(pk=matieres_ecrit[0].pk).update(coefficient=1)
+    print("  moyenne finale : chaque note sur 20 (QCM, trois matières de l'écrit, oral) avec "
+          "son coefficient (AMRI 15,3) ; QCM et oral réglés ici, matières sur la page de "
+          "l'écrit ; invalides refusés OK")
     # la recherche filtre, l'export Excel reprend tout
     r = c.get(reverse("quiz_parcours", args=[ecrit.pk]) + "?q=driss")
     assert [x["etudiant"].last_name for x in r.context["candidats_page"]] == ["DRISS"]
@@ -200,7 +214,7 @@ def main():
     ws = load_workbook(io.BytesIO(r.content)).active
     assert ws.cell(row=2, column=ws.max_column).value == "Résultat final"
     assert ws.cell(row=2, column=ws.max_column - 1).value == "Moyenne finale (/20)"
-    assert ws.cell(row=3, column=ws.max_column - 1).value == 15.83
+    assert ws.cell(row=3, column=ws.max_column - 1).value == 15.3
     assert ws.cell(row=3, column=2).value == "AMRI"       # Prénom, puis Nom
     assert ws.cell(row=3, column=ws.max_column).value == "Admis au concours"
     assert ws.max_row == 2 + len(attendu)
@@ -224,7 +238,7 @@ def main():
         assert nom in texte and final in texte, (nom, final)
     assert texte.index("AMRI") < texte.index("CHERIF") < texte.index("FERCHICHI"), "même ordre que la page"
     assert "14,50 / 20" in texte and "9 / 10" in texte and "non convoqué" in texte
-    assert "Moy. finale" in texte and "15,83 / 20" in texte
+    assert "Moy. finale" in texte and "15,30 / 20" in texte
     # beaucoup de candidats : pages numérotées, intitulés répétés, rien hors de la page
     from grader import bulletin as bulletin_mod
     from grader.models import Student as Etudiant
@@ -255,8 +269,9 @@ def main():
     texte = "".join(page_pdf[0] for page_pdf in pages)
     assert len(pages) == 1 and "Liste des admis au concours" in texte and qcm.title in texte
     assert "1 admis au concours sur 6 candidats" in texte and "Liste arrêtée à 1 admis." in texte
-    assert "QCM × 1 · Écrit × 1 · Oral × 1" in texte, texte[:500]
-    for attendu_pdf in ("X AMRI", "5500", "18", "14,50", "15", "15,83"):
+    # le coefficient de chaque note : le QCM, les trois matières de l'écrit, l'oral
+    assert "QCM × 1" in texte and "Oral × 1" in texte and texte.count("×") == 5, texte[:600]
+    for attendu_pdf in ("X AMRI", "5500", "18", "14,50", "15", "15,30"):
         assert attendu_pdf in texte, attendu_pdf
     for autre in ("CHERIF", "BAKIR", "DRISS", "ESSID", "FERCHICHI"):
         assert autre not in texte, autre
@@ -268,7 +283,7 @@ def main():
         "Rang", "Prénom", "Nom", "N° inscription", "QCM (/20)", "Écrit (/20)", "Oral (/20)",
         "Moyenne finale (/20)"]
     assert [ws.cell(row=3, column=k).value for k in range(1, ws.max_column + 1)] == [
-        1, "X", "AMRI", "5500", 18, 14.5, 15, 15.83]
+        1, "X", "AMRI", "5500", 18, 14.5, 15, 15.3]
     assert ws.max_row == 3 and "1 admis sur 6 candidats" in ws["A1"].value
     # rang sur la moyenne finale, ex aequo au même rang ; sans moyenne finale : en fin, sans rang
     amri = p["candidats"][0]
