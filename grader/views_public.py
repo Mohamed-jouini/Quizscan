@@ -26,8 +26,13 @@ from .models import Communique, Inscrit, PieceJointe, Quiz, Student
 from .securite import adresse_client
 from .views import _page
 
-LIMITE_RECHERCHES = 30          # par adresse…
-FENETRE_S = 10 * 60             # …et par tranche de 10 minutes
+# Recherches par n° permises par adresse et par tranche de 10 minutes : 100 depuis le
+# 23 novembre 2026 (30 avant ; choix de l'utilisateur). Les candidats derrière une même
+# adresse (Wi-Fi de l'institut, d'un café) se partagent ce compte, et 30 s'atteignait vite
+# le jour des résultats. Essayer les 10 000 n° d'un concours depuis une adresse demande
+# encore 17 heures.
+LIMITE_RECHERCHES = 100
+FENETRE_S = 10 * 60
 
 
 def _adresse(request):

@@ -44,6 +44,7 @@ from django.urls import reverse
 
 from grader.models import (AnswerKeySheet, ClassGroup, Communique, Inscrit, Quiz,
                            ScanBatch, SheetScan, Student)
+from grader.views_public import LIMITE_RECHERCHES
 from test_commun import enseignant_complet
 
 
@@ -125,13 +126,13 @@ def main():
     cache.clear()
     anonyme = Client()
     url = reverse("public_resultat") + "?numero=123456"
-    for k in range(30):
+    for k in range(LIMITE_RECHERCHES):
         anonyme.get(url, REMOTE_ADDR="41.226.1.7", HTTP_X_FORWARDED_FOR=f"10.9.{k}.1")
     r = anonyme.get(url, REMOTE_ADDR="41.226.1.7", HTTP_X_FORWARDED_FOR="10.9.99.1")
     assert "Trop de recherches" in r.content.decode(), "frein contourné par X-Forwarded-For"
     # derrière Caddy (adresse locale) : la dernière valeur, ajoutée par Caddy, fait foi
     cache.clear()
-    for k in range(30):
+    for k in range(LIMITE_RECHERCHES):
         anonyme.get(url, REMOTE_ADDR="172.17.0.1",
                     HTTP_X_FORWARDED_FOR=f"1.1.{k}.1, 198.51.100.4")
     r = anonyme.get(url, REMOTE_ADDR="172.17.0.1", HTTP_X_FORWARDED_FOR="9.9.9.9, 198.51.100.4")

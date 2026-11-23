@@ -32,7 +32,7 @@ from django.test.utils import setup_test_environment
 from django.urls import reverse
 from django.utils.html import escape
 
-from grader import importers, inscriptions, layout as L, services, sheet_pdf
+from grader import importers, inscriptions, layout as L, services, sheet_pdf, views_public
 from grader.models import (ClassGroup, Communique, Inscrit, Question, Quiz, ScanBatch,
                            SheetScan, Student)
 from test_commun import enseignant_complet
@@ -501,13 +501,16 @@ def test_scan_et_public(c, prof):
         reverse("public_resultat") + "?numero=104525").content.decode()
     print("  liste des admis publiée puis retirée OK")
 
+    # frein : 100 recherches par adresse et par 10 minutes (30 jusqu'au 23 novembre 2026)
+    assert views_public.LIMITE_RECHERCHES == 100, views_public.LIMITE_RECHERCHES
     cache.clear()
-    for _ in range(30):
-        anonyme.get(reverse("public_resultat") + "?numero=1")
+    for _ in range(views_public.LIMITE_RECHERCHES):
+        r = anonyme.get(reverse("public_resultat") + "?numero=1")
+    assert "Trop de recherches" not in r.content.decode(), "freiné avant la limite"
     r = anonyme.get(reverse("public_resultat") + "?numero=104525")
     assert "Trop de recherches" in r.content.decode()
     cache.clear()
-    print("  recherches par n° freinées (30 / 10 min par adresse) OK")
+    print("  recherches par n° freinées (100 / 10 min par adresse) OK")
 
 
 def test_communiques(c, prof, autre):

@@ -1040,9 +1040,9 @@ python manage.py comptes_demo --supprimer
   (16 visiteurs à la fois, cache vide : un seul calcul, tous servis en 6 s). Avant, chacun
   la recalculait, et huit à la fois avaient épuisé la mémoire du poste et fait tomber
   PostgreSQL. Le cache en fichiers (`grader/cache.py`) ne relit plus tout son dossier à
-  chaque écriture (à 10 000 adresses, une recherche passait de 67 à 467 ms). Limite qui
-  demeure : 30 recherches par adresse et par 10 minutes, partagées par les candidats
-  derrière une même adresse (Wi-Fi commun, proxy mal réglé) ;
+  chaque écriture (à 10 000 adresses, une recherche passait de 67 à 467 ms). Recherches
+  par n° : 100 par adresse et par 10 minutes (30 jusqu'au 23 novembre 2026), partagées
+  par les candidats derrière une même adresse (Wi-Fi commun, proxy mal réglé) ;
 - servir avec gunicorn/nginx (l'image Docker le fait) ; toutes les pages et
   tous les documents exigent une connexion, et chaque enseignant n'accède
   qu'à **ses propres** fiches PDF, scans, images de contrôle et recadrages
