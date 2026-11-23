@@ -124,9 +124,15 @@ def main():
     r = c.post(url, dict(reglages, sheet_mode="split", versions="2"))
     quiz.refresh_from_db()
     assert r.status_code == 302 and (quiz.versions, quiz.sheet_mode) == (2, "split")
-    page = c.get(url).content.decode()
+    r = c.get(url)
+    page = r.content.decode()
     assert 'name="versions"' in page and "Deux versions, A et B" in page
-    print("  réglage : refusé avec une fiche de réponses seule, accepté avec un sujet séparé OK")
+    # avant la génération : l'aperçu de la version B, en regard de la version A
+    apercu = [(l["num"], l["question"].order) for l in r.context["version_b"]]
+    assert r.context["version_b_apercu"] and "Questions (7) — version B" in page and "Aperçu" in page
+    assert [num for num, _ in apercu] == [1, 2, 3, 4, 5, 6, 7], apercu
+    print("  réglage : refusé avec une fiche de réponses seule, accepté avec un sujet séparé ; "
+          "aperçu de la version B OK")
 
     # ---- 2) disposition : A puis B, A inchangée, B fixe, la réponse rédigée à sa place
     r = c.post(url, {"generate_pdf": "1"}, follow=True)
@@ -160,6 +166,35 @@ def main():
 
     # ---- 3) sujets : la version B dans l'ordre du tirage, choix compris
     par_ordre = {n: (texte, choix) for n, texte, choix, _ in QUESTIONS}
+    # la page de l'épreuve : le tableau de la version B (demande du 23 novembre 2026), son
+    # ordre, ses choix et sa bonne réponse dans cet ordre ; l'aperçu était ce tirage
+    r = c.get(url)
+    page = r.content.decode()
+    assert not r.context["version_b_apercu"] and "Aperçu" not in page
+    assert "Questions (7) — version A" in page and "Questions (7) — version B" in page
+    # chaque tableau défile dans son cadre, côte à côte (demande du 23 novembre 2026)
+    assert page.count("table-wrap--defile table-wrap--questions") == 2
+    assert 'aria-label="Questions de la version A"' in page
+    assert 'aria-label="Questions de la version B"' in page
+    # documents : le sujet de chaque version, plus celui des deux ensemble ; les copies
+    # nominatives restent dans un seul PDF, A et B alternées (demande du 23 novembre 2026)
+    assert quiz.subject_pdf.url not in page and "Sujet (questions)" not in page
+    assert "Sujet — version A" in page and "Sujet — version B" in page
+    assert f'href="{quiz.sheet_pdf.url}"' in page and "Copies (A et B alternées)" in page
+    assert "Feuille de réponses</a>" not in page and "{#" not in page and "{% comment" not in page
+    lignes = r.context["version_b"]
+    assert [(l["num"], l["question"].order) for l in lignes] == apercu
+    par_num = {t["num"]: t for t in tirage}
+    for l in lignes:
+        t = par_num.get(l["num"])
+        if t is None:                               # la réponse rédigée, à sa place
+            assert (l["num"], l["question"].order, l["bonne"]) == (4, 4, None), l
+            continue
+        assert l["question"].order == t["order"]
+        assert l["choix"] == [par_ordre[t["order"]][1][k] for k in t["perm"]]
+        assert l["bonne"] == "ABCD"[t["perm"].index(CORRIGE[t["order"]])], (l, t)
+    print("  page de l'épreuve : version A à gauche, version B en regard (son ordre, ses "
+          "choix, sa bonne réponse) OK")
     sujet_b = "".join(textes(c.get(reverse("quiz_version_pdf", args=[quiz.pk, "B", "sujet"])).content))
     assert "VERSION B" in sujet_b and "VERSION A" not in sujet_b
     position = 0
@@ -251,6 +286,10 @@ def main():
     n_a, n_b = len(L.pages_de_version(d, "A")), len(L.pages_de_version(d, "B"))
     assert len(fiche) == n_a + n_b
     assert all("VERSION A" in t for t in fiche[:n_a]) and all("VERSION B" in t for t in fiche[n_a:])
+    page = c.get(reverse("quiz_detail", args=[complet_q.pk])).content.decode()
+    assert complet_q.sheet_pdf.url not in page and "Télécharger la fiche" not in page, \
+        "fiche unique en deux versions : la fiche de chaque version, pas le PDF des deux"
+    assert "Fiche — version A" in page and "Fiche — version B" in page
     seule_b = textes(c.get(reverse("quiz_version_pdf", args=[complet_q.pk, "B", "feuille"])).content)
     assert len(seule_b) == n_b and all("VERSION B" in t for t in seule_b)
     assert c.get(reverse("quiz_version_pdf", args=[complet_q.pk, "B", "sujet"])).status_code == 404

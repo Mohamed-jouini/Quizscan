@@ -2280,6 +2280,44 @@ def copies_manquantes(quiz, limite=MAX_MANQUANTES_AFFICHEES):
             "en_lecture": quiz.batches.filter(status__in=("pending", "processing")).exists()}
 
 
+def questions_version_b(quiz):
+    """La version B d'un QCM en deux versions, pour la page de l'épreuve (demande du
+    23 novembre 2026) : une ligne par question, dans l'ordre de la version B — {num : n°
+    imprimé, question : la question (son n° dans la version A), choix : ses choix dans
+    l'ordre de la version B, bonne : la lettre de sa bonne réponse dans cet ordre}. D'après
+    la disposition enregistrée (ce qui est imprimé) ; avant la génération, l'aperçu du
+    tirage qu'elle fixera (apercu : vrai). Liste vide pour un QCM d'une seule version."""
+    from .models import choice_letter
+
+    disposition = quiz.layout_json or {}
+    questions = list(quiz.questions.order_by("order"))
+    if "B" in layout_mod.versions_de(disposition):
+        tirage, apercu = disposition.get("version_b", []), False
+    elif layout_mod.versions_actives(quiz):
+        tirage, apercu = layout_mod.tirage_version_b(quiz, questions), True
+    else:
+        return [], False
+    par_ordre = {q.order: q for q in questions}
+    par_place = {t["num"]: t for t in tirage}
+    lignes = []
+    for q in questions:
+        t = par_place.get(q.order) if q.qtype == "qcm" else None
+        source = par_ordre.get(t["order"]) if t else q
+        if source is None:
+            continue            # question retirée depuis la génération (fiche à régénérer)
+        perm = t["perm"] if t else list(range(len(source.choices or [])))
+        choix = list(source.choices or [])
+        if len(choix) == len(perm):
+            choix = [choix[k] for k in perm]
+        bonne = None
+        if source.qtype == "qcm" and source.correct_choice is not None:
+            k = perm.index(source.correct_choice) if source.correct_choice in perm \
+                else source.correct_choice
+            bonne = choice_letter(k, quiz.language)
+        lignes.append({"num": q.order, "question": source, "choix": choix, "bonne": bonne})
+    return lignes, apercu
+
+
 def copies_nominatives_pdf(quiz, layout, progres=None, page=None):
     """PDF d'une copie par étudiant, QR imprimé : nom imprimé (ou sur le
     talon), ou copie anonyme à n° de place — la correspondance place ->

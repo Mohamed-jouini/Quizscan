@@ -812,15 +812,14 @@ def _generer_fiche_qcm(quiz, count, progres=None):
                                    "version imprimée en haut de sa copie. Chaque copie est "
                                    "corrigée selon sa version."))
         elif quiz.sheet_mode == "split":
-            a_dire.append(("info", "Deux versions, A et B : chaque PDF contient la version A "
-                                   "puis la version B, et chaque version se télécharge aussi "
-                                   "seule. Remettez à chaque candidat le sujet et la feuille de "
-                                   "la même version (« VERSION A » ou « VERSION B » en haut de "
-                                   "chaque page). Chaque copie est corrigée selon sa version."))
+            a_dire.append(("info", "Deux versions, A et B : le sujet et la feuille de réponses "
+                                   "de chaque version se téléchargent séparément. Remettez à "
+                                   "chaque candidat le sujet et la feuille de la même version "
+                                   "(« VERSION A » ou « VERSION B » en haut de chaque page). "
+                                   "Chaque copie est corrigée selon sa version."))
         else:
-            a_dire.append(("info", "Deux versions, A et B : le PDF contient la fiche de la "
-                                   "version A puis celle de la version B (chacune se "
-                                   "télécharge aussi seule). Distribuez-les en alternant A et "
+            a_dire.append(("info", "Deux versions, A et B : la fiche de chaque version se "
+                                   "télécharge séparément. Distribuez-les en alternant A et "
                                    "B. Chaque copie est corrigée selon sa version."))
     if cases_deplacees:
         a_dire.append(("warning", "Les cases de la feuille ont changé de place : "
@@ -1174,9 +1173,12 @@ def quiz_detail(request, pk):
             layout_stale = current_orders != layout_orders
 
     sans_corrige = list(quiz.questions_sans_corrige.values_list("order", flat=True))
+    # QCM en deux versions : les questions de la version B, à côté de celles de la A
+    version_b, version_b_apercu = services.questions_version_b(quiz)
     from .views_epreuves import correction_en_attente, suivre_generation
     return render(request, "grader/quiz_detail.html", {
         **correction_en_attente(quiz),
+        "version_b": version_b, "version_b_apercu": version_b_apercu,
         "quiz": quiz, "qform": qform, "bulk_form": bulk_form,
         "generation": suivre_generation(request, quiz),
         "fil": services.fil_etapes(quiz, _my_quizzes(request)),

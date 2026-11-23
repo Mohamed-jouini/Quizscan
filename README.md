@@ -852,10 +852,16 @@ sujet séparé ; pas avec une fiche de réponses seule, dont le sujet vient d'ai
 - **« VERSION A » ou « VERSION B »** est imprimé en haut de chaque page du sujet et de la
   feuille de réponses (et rappelé dans les remarques du sujet). La feuille B a ses propres
   codes de page : le scan reconnaît la version, rien à cocher pour le candidat ;
-- **documents** : chaque PDF contient la version A puis la version B, et le sujet et la
-  feuille de chaque version se téléchargent aussi seuls. Copies nominatives (QR) : A et B
-  alternées dans l'ordre des salles, à remettre avec le sujet de la même version. La copie
-  du correcteur est en version A ;
+- **documents** : le sujet et la feuille de chaque version se téléchargent séparément
+  (« Sujet — version A », « Feuille de réponses — version B »…) ; les boutons du sujet et
+  de la feuille des deux versions ensemble ne sont plus proposés. Copies nominatives (QR) :
+  un seul PDF, « Copies (A et B alternées) » dans l'ordre des salles, à remettre avec le
+  sujet de la même version. La copie du correcteur est en version A ;
+- **page du QCM** : le tableau des questions de la version A (à gauche, où se règle le
+  corrigé) et, en regard, celui de la version B : n° imprimé, question et choix dans son
+  ordre, n° de la question dans la version A, et sa bonne réponse lettrée pour la version
+  B (lecture seule : elle suit le corrigé de la version A). Avant la génération des PDF,
+  c'est l'aperçu du tirage qu'elle fixera ;
 - **correction** : la réponse lue sur une copie B est ramenée à la question et au choix de
   la version A. Corrigé, notes, statistiques, exports ne voient que la version A ; un
   corrigé noirci sur une feuille B se lit juste. Le relevé de notes et l'écran de

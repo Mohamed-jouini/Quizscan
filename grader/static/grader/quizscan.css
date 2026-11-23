@@ -392,6 +392,9 @@ a.tile:hover{border-color:var(--qs-line-strong)}
    ligne de titres restant visible. La barre reste affichee meme pour une liste
    courte, a la demande de l'utilisateur. A l'impression, toute la liste. */
 .table-wrap--defile{max-height:360px;overflow-y:scroll}
+/* Questions d'un QCM (versions A et B côte à côte) : lignes hautes, cadre plus haut
+   (demande de l'utilisateur, 23 novembre 2026) */
+.table-wrap--questions{max-height:560px}
 .shell .table-wrap--defile table tr:first-child > th{position:sticky;top:0;z-index:2}
 @media print{.table-wrap--defile{max-height:none;overflow:visible}}
 

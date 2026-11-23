@@ -7,7 +7,7 @@ le même pour tous, à imprimer autant de fois qu'il le faut. Paramètre : quiz.
 <p class="helptext">
   {% if quiz.id_mode != "qr" and quiz.layout_json.versions %}
   {# deux versions (23 novembre 2026) : un exemplaire de chacune #}
-  <b>Un exemplaire de chaque version</b>, A puis B, dans le PDF : imprimez-en autant de chacune, pour la moitié des {{ qui }}s chacune{% if n %} ({{ n }} en tout){% endif %}.
+  <b>Deux versions, A et B</b> : imprimez {% if quiz.sheet_mode == "split" %}la feuille de réponses{% else %}la fiche{% endif %} de chaque version pour la moitié des {{ qui }}s{% if n %} ({{ n }} en tout){% endif %}, en les alternant.
   {% elif quiz.id_mode != "qr" %}
   <b>Un seul exemplaire</b> dans le PDF, le même pour tous : imprimez-en un par {{ qui }}{% if n %} ({{ n }} en tout){% endif %}.
   {% elif n %}

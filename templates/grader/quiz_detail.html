@@ -234,12 +234,13 @@
 
 <div class="grid2">
   <div class="card">
-    <h2>Questions ({{ quiz.questions.count }})</h2>
+    <h2>Questions ({{ quiz.questions.count }}){% if version_b %} — version A{% endif %}</h2>
     {% if quiz.questions.all %}
     {% comment %}« ajuste » : les textes vont à la ligne dans la demi-largeur de la carte ; sans
       cela, une ligne de choix un peu longue repoussait la bonne réponse et la croix hors de
       la carte (questionnaire de 50 questions de l'utilisateur, 6 novembre 2026).{% endcomment %}
-    <div class="table-wrap table-wrap--ajuste">
+    <div class="table-wrap table-wrap--ajuste table-wrap--defile table-wrap--questions" tabindex="0"
+         role="region" aria-label="Questions{% if version_b %} de la version A{% endif %}">
       <table>
       <tr><th>N°</th><th>Question</th><th>Bonne rép.</th><th>Barème</th><th></th></tr>
       {% for q in quiz.questions.all %}
@@ -307,12 +308,19 @@
       <button class="btn" name="generate_pdf" value="1" type="submit"{% if generation.etat == "en_cours" %} disabled title="Génération en cours"{% endif %}>
         {% if quiz.sheet_pdf %}Régénérer les PDF{% else %}Générer les PDF{% endif %}
       </button>
-      {% if quiz.sheet_mode == "split" and quiz.subject_pdf %}
+      {% comment %}Deux versions : le sujet et la feuille de chacune, plus le PDF des deux
+        ensemble (demande du 23 novembre 2026) ; sauf les copies nominatives, chacune déjà
+        dans sa version.{% endcomment %}
+      {% if quiz.sheet_mode == "split" and quiz.subject_pdf and not quiz.layout_json.versions %}
         <a class="btn secondary" href="{{ quiz.subject_pdf.url }}" target="_blank">📄 Sujet (questions)</a>
       {% endif %}
       {% if quiz.sheet_pdf %}
+        {% if not quiz.layout_json.versions %}
         <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">
           {% if quiz.sheet_mode == "split" %}📝 Feuille de réponses{% else %}📄 Télécharger la fiche{% endif %}</a>
+        {% elif quiz.id_mode == "qr" %}
+        <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">📝 Copies (A et B alternées)</a>
+        {% endif %}
         <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">📋 Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% if quiz.place_anonyme %} et des places{% endif %} par salle</a>
         {% if quiz.a_des_qcm %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}" target="_blank" title="La feuille de réponses sans candidat : noircissez-y les bonnes réponses, puis envoyez-la dans « Corrigé scanné »">✅ Copie du correcteur</a>{% endif %}
       {% endif %}
@@ -351,6 +359,32 @@
   </div>
 
   <div>
+    {% if version_b %}
+    {# QCM en deux versions (23 novembre 2026) : la version B, en regard de la version A #}
+    <div class="card" id="version-b">
+      <h2>Questions ({{ version_b|length }}) — version B</h2>
+      <div class="table-wrap table-wrap--ajuste table-wrap--defile table-wrap--questions" tabindex="0"
+           role="region" aria-label="Questions de la version B">
+        <table>
+        <tr><th>N°</th><th>Question</th><th>Version A</th><th>Bonne rép.</th><th>Barème</th></tr>
+        {% for l in version_b %}
+        <tr>
+          <td>{{ l.num }}</td>
+          <td>{% if l.question.qtype == "qcm" %}QCM · {{ l.question.num_bubbles }} choix{% else %}Manuscrite{% endif %}
+              {% if l.question.text %}<span class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>{{ l.question.text|truncatechars:50 }}</span>{% endif %}
+              {% if l.choix %}<div class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>
+                {% for ch in l.choix %}{{ ch }}{% if not forloop.last %} · {% endif %}{% endfor %}
+              </div>{% endif %}</td>
+          <td>n° {{ l.question.order }}</td>
+          <td>{% if l.question.qtype == "qcm" %}<b>{{ l.bonne|default:"—" }}</b>{% else %}—{% endif %}</td>
+          <td>{{ l.question.points|floatformat:"-2" }} pt</td>
+        </tr>
+        {% endfor %}
+        </table>
+      </div>
+      <span class="helptext">{% if version_b_apercu %}<b>Aperçu</b> : la version B est fixée à la génération des PDF. {% endif %}Les questions de la version B et leurs choix, dans l'ordre imprimé. Sa bonne réponse suit le corrigé de la version A : modifiez-le dans le tableau de la version A, les deux versions se corrigent ensemble.</span>
+    </div>
+    {% endif %}
     {% if perms.grader.creer_epreuve %}
     <div class="card">
       <h2>Ajout rapide de QCM (corrigé)</h2>
