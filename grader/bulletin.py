@@ -530,39 +530,86 @@ def _draw_morceaux(c, morceaux, x_centre, y, taille, gray=None):
 def generate_admis_concours_pdf(parcours):
     """Liste des admis au concours (résultat final « Admis au concours »), à afficher ou à
     signer (demande du 16 novembre 2026) : rang sur la moyenne finale, prénom et nom, n°
-    d'inscription, la note sur 20 de chaque étape et la moyenne finale, sur autant de pages
-    qu'il faut (intitulés de colonnes répétés), puis « Liste arrêtée à N admis »."""
+    d'inscription, les notes de chaque étape et la moyenne finale, sur autant de pages
+    qu'il faut (intitulés de colonnes répétés), puis « Liste arrêtée à N admis ».
+
+    Le tableau complet de la page du concours (23 novembre 2026) : une étape en matières
+    (écrit, oral) y a une colonne par matière, puis « Moyenne », sous le nom de l'étape ; la
+    page passe alors en paysage pour les loger. Sans matières, elle reste en portrait."""
     from django.utils import timezone
 
     from .services import admis_concours
 
     load_fonts()
     buf = io.BytesIO()
-    c = rl_canvas.Canvas(buf, pagesize=A4)
-    X0, X1 = 14.0, 196.0
-    LIGNE, BAS = 7.2, 277.0
     etapes, racine = parcours["etapes"], parcours["epreuves"][0]
     admis = admis_concours(parcours)
     n_candidats = len(parcours["candidats"])
     edite = timezone.localtime().strftime("%d/%m/%Y")
-    L_RANG, L_NUM, L_ETAPE, L_MOY = 12.0, 26.0, 19.0, 26.0
-    L_NOM = X1 - X0 - L_RANG - L_NUM - len(etapes) * L_ETAPE - L_MOY
+    # colonnes de notes : (étape, matière ou None pour la note de l'étape, intitulé, groupe)
+    colonnes = []
+    for k, etape in enumerate(etapes):
+        matieres = etape.get("matieres") or []
+        nom_etape = etape["quiz"].type_court
+        if matieres:
+            colonnes += [(k, i, m.text, nom_etape) for i, m in enumerate(matieres)]
+            colonnes.append((k, None, "Moyenne", nom_etape))
+        else:
+            colonnes.append((k, None, nom_etape, ""))
+    avec_matieres = any(groupe for *_, groupe in colonnes)
+    largeur, hauteur = (PAGE_H, PAGE_W) if avec_matieres else (PAGE_W, PAGE_H)
+    c = rl_canvas.Canvas(buf, pagesize=(largeur * mm, hauteur * mm))
+    decalage = PAGE_H - hauteur      # _draw et _y comptent depuis le haut d'une page portrait
+
+    def debut_de_page():
+        if decalage:
+            c.translate(0, -decalage * mm)
+
+    debut_de_page()
+    X0, X1 = 14.0, largeur - 14.0
+    LIGNE, BAS = 7.2, hauteur - 20.0
+    L_RANG = 12.0
+    if avec_matieres:
+        L_NUM, L_MOY, L_NOM = 24.0, 24.0, 52.0
+        L_COL = (X1 - X0 - L_RANG - L_NUM - L_MOY - L_NOM) / len(colonnes)
+    else:
+        L_NUM, L_COL, L_MOY = 26.0, 19.0, 26.0
+        L_NOM = X1 - X0 - L_RANG - L_NUM - len(colonnes) * L_COL - L_MOY
     x_nom, x_num = X0 + L_RANG + 2, X0 + L_RANG + L_NOM + 2
     # notes et moyenne alignées à droite de leur colonne
-    x_etapes = [X0 + L_RANG + L_NOM + L_NUM + (k + 1) * L_ETAPE - 2 for k in range(len(etapes))]
+    x_cols = [X0 + L_RANG + L_NOM + L_NUM + (j + 1) * L_COL - 2 for j in range(len(colonnes))]
     x_moy = X1 - 2
+    H_TETE = 15.4 if avec_matieres else 8.5      # bande d'intitulés, jusqu'à la 1re ligne
 
     def tete_tableau(y):
+        h = H_TETE - 0.9
         c.setFillGray(0.93)
-        c.rect(X0 * mm, _y(y + 2.4), (X1 - X0) * mm, 7.6 * mm, stroke=0, fill=1)
+        c.rect(X0 * mm, _y(y - 5.2 + h), (X1 - X0) * mm, h * mm, stroke=0, fill=1)
         c.setFillGray(0.0)
-        _draw(c, "Rang", X0 + 2, y, 9, bold=True, gray=0.25)
-        _draw(c, "Prénom et nom", x_nom, y, 9, bold=True, gray=0.25)
-        _draw(c, "N° d'inscription", x_num, y, 9, bold=True, gray=0.25)
-        for etape, x in zip(etapes, x_etapes):
-            _draw(c, etape["quiz"].type_court, x, y, 9, bold=True, align="right", gray=0.25)
-        _draw(c, "Moy. finale", x_moy, y, 9, bold=True, align="right", gray=0.25)
-        return y + 8.5
+        y_seul = y + 3.0 if avec_matieres else y       # intitulé d'une ligne : au milieu
+        _draw(c, "Rang", X0 + 2, y_seul, 9, bold=True, gray=0.25)
+        _draw(c, "Prénom et nom", x_nom, y_seul, 9, bold=True, gray=0.25)
+        _draw(c, "N° d'inscription", x_num, y_seul, 9, bold=True, gray=0.25)
+        groupes = {}
+        for (k, _, intitule, groupe), x in zip(colonnes, x_cols):
+            if not groupe:
+                _draw(c, intitule, x, y_seul, 9, bold=True, align="right", gray=0.25)
+                continue
+            g0, g1 = groupes.get(k, (x - L_COL + 2, x + 2))
+            groupes[k] = (min(g0, x - L_COL + 2), max(g1, x + 2))
+            # le nom de la matière sur deux lignes au plus, dans sa colonne
+            for n, morceau in enumerate(wrap(intitule, 7.0, L_COL - 2, bold=True)[:2]):
+                _draw(c, _ellipsize(morceau, 7.0, L_COL - 2, True), x, y + 4.0 + 3.0 * n,
+                      7.0, bold=True, align="right", gray=0.25)
+        for k, (g0, g1) in groupes.items():
+            _draw(c, etapes[k]["quiz"].type_court, (g0 + g1) / 2, y, 9, bold=True,
+                  align="center", gray=0.25)
+            c.setLineWidth(0.4)
+            c.setStrokeGray(0.7)
+            c.line((g0 + 1) * mm, _y(y + 1.3), (g1 - 1) * mm, _y(y + 1.3))
+            c.setStrokeGray(0.0)
+        _draw(c, "Moy. finale", x_moy, y_seul, 9, bold=True, align="right", gray=0.25)
+        return y + H_TETE
 
     lignes_entete = [t.strip() for t in (racine.entete or "").splitlines() if t.strip()]
     haut_titre = 22.0 + 4.2 * len(lignes_entete)
@@ -575,38 +622,41 @@ def generate_admis_concours_pdf(parcours):
                                                                                X1 - X0)
     debut_p1 = haut_titre + 30.0 + 3.6 * (len(lignes_poids) - 1)
     debut_suite = 26.0
-    par_page_1 = max(int((BAS - debut_p1 - 8.5) // LIGNE), 1)
-    par_page = int((BAS - debut_suite - 8.5) // LIGNE)
+    par_page_1 = max(int((BAS - debut_p1 - H_TETE) // LIGNE), 1)
+    par_page = int((BAS - debut_suite - H_TETE) // LIGNE)
     reste = max(len(admis) - par_page_1, 0)
     total_pages = 1 + (-(-reste // par_page) if reste else 0)
 
     def pied(page):
         _draw(c, f"{racine.title} — liste des admis au concours — éditée le {edite}",
-              X0, 287.0, 7.5, gray=0.45)
-        _draw(c, f"page {page} / {total_pages}", X1, 287.0, 7.5, align="right", gray=0.45)
+              X0, hauteur - 10.0, 7.5, gray=0.45)
+        _draw(c, f"page {page} / {total_pages}", X1, hauteur - 10.0, 7.5, align="right",
+              gray=0.45)
 
     # ---- première page
     y = 18.0
     for ligne in lignes_entete:
-        _draw(c, ligne, PAGE_W / 2, y, 9, align="center", gray=0.3)
+        _draw(c, ligne, largeur / 2, y, 9, align="center", gray=0.3)
         y += 4.2
-    _draw(c, "Liste des admis au concours", PAGE_W / 2, haut_titre + 4.0, 17, bold=True,
+    _draw(c, "Liste des admis au concours", largeur / 2, haut_titre + 4.0, 17, bold=True,
           align="center")
-    _draw(c, racine.title, PAGE_W / 2, haut_titre + 11.5, 12, align="center")
+    _draw(c, racine.title, largeur / 2, haut_titre + 11.5, 12, align="center")
     _draw(c, f"{len(admis)} admis au concours sur {n_candidats} "
              f"candidat{'s' if n_candidats > 1 else ''}",
-          PAGE_W / 2, haut_titre + 17.5, 9.5, bold=True, align="center")
+          largeur / 2, haut_titre + 17.5, 9.5, bold=True, align="center")
     for i, ligne in enumerate(lignes_poids):
-        _draw_morceaux(c, ligne, PAGE_W / 2, haut_titre + 22.5 + 3.6 * i, 8, gray=0.3)
+        _draw_morceaux(c, ligne, largeur / 2, haut_titre + 22.5 + 3.6 * i, 8, gray=0.3)
     c.setLineWidth(0.5)
     c.line(X0 * mm, _y(debut_p1 - 4.5), X1 * mm, _y(debut_p1 - 4.5))
     y = tete_tableau(debut_p1)
     page, sur_la_page, capacite = 1, 0, par_page_1
+    taille_note = 9.5 if avec_matieres else 10
 
     for i, candidat in enumerate(admis):
         if sur_la_page == capacite:
             pied(page)
             c.showPage()
+            debut_de_page()
             page += 1
             _draw(c, f"Liste des admis au concours — {racine.title} (suite)", X0, 18.0, 10,
                   bold=True)
@@ -621,10 +671,18 @@ def generate_admis_concours_pdf(parcours):
         nom, corps = nom_ajuste(s, L_NOM - 4, 10)
         _draw(c, nom, x_nom, y, corps)
         _draw(c, s.student_number or "—", x_num, y, 10)
-        for case, x in zip(candidat["cases"], x_etapes):
-            note = case["row"]["note20"] if case["etat"] == "note" else None
-            _draw(c, _nombre(note) if note is not None else "—", x, y, 10, align="right",
-                  gray=None if note is not None else 0.5)
+        for (k, i_matiere, _, groupe), x in zip(colonnes, x_cols):
+            case = candidat["cases"][k]
+            if case["etat"] != "note":
+                note = None
+            elif i_matiere is None:
+                note = case["row"]["note20"]
+            else:
+                notes = case.get("notes") or []
+                note = notes[i_matiere][0] if i_matiere < len(notes) else None
+            _draw(c, _nombre(note) if note is not None else "—", x, y, taille_note,
+                  bold=bool(groupe) and i_matiere is None,          # la moyenne d'une étape
+                  align="right", gray=None if note is not None else 0.5)
         moyenne = candidat["moyenne_finale"]
         _draw(c, _nombre(moyenne) if moyenne is not None else "—", x_moy, y, 10, bold=True,
               align="right")

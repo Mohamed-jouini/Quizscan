@@ -329,17 +329,26 @@ def parcours_workbook(parcours):
 
 def admis_concours_workbook(parcours):
     """Liste des admis au concours (résultat final « Admis au concours », demande du
-    16 novembre 2026) : rang sur la moyenne finale, prénom, nom, n° d'inscription, la note sur
-    20 de chaque étape et la moyenne finale ; même ordre que le PDF et la page."""
+    16 novembre 2026) : rang sur la moyenne finale, prénom, nom, n° d'inscription, les notes de
+    chaque étape et la moyenne finale ; même ordre que le PDF et la page. Le tableau complet
+    (23 novembre 2026) : une étape en matières a une colonne par matière, puis sa moyenne."""
     from .services import admis_concours
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Admis au concours"
-    etapes = [e["quiz"] for e in parcours["etapes"]]
     admis = admis_concours(parcours)
+    colonnes = []                   # (étape, matière ou None pour la note de l'étape, intitulé)
+    for k, etape in enumerate(parcours["etapes"]):
+        q, matieres = etape["quiz"], etape.get("matieres") or []
+        if matieres:
+            colonnes += [(k, i, f"{q.type_court} — {m.text} (/{m.points:g})")
+                         for i, m in enumerate(matieres)]
+            colonnes.append((k, None, f"{q.type_court} — moyenne (/20)"))
+        else:
+            colonnes.append((k, None, f"{q.type_court} (/20)"))
     headers = (["Rang", "Prénom", "Nom", "N° inscription"]
-               + [f"{q.type_court} (/20)" for q in etapes] + ["Moyenne finale (/20)"])
+               + [intitule for *_, intitule in colonnes] + ["Moyenne finale (/20)"])
     ws.append([f"Liste des admis au concours — {parcours['epreuves'][0].title} "
                f"({len(admis)} admis sur {len(parcours['candidats'])} candidats)"])
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
@@ -354,14 +363,23 @@ def admis_concours_workbook(parcours):
     for c in admis:
         s = c["etudiant"]
         ligne = [c["rang"], s.first_name, s.last_name, s.student_number]
-        ligne += [case["row"]["note20"] if case["etat"] == "note" else None
-                  for case in c["cases"]]
+        for k, i, _ in colonnes:
+            case = c["cases"][k]
+            if case["etat"] != "note":
+                ligne.append(None)
+            elif i is None:
+                ligne.append(case["row"]["note20"])
+            else:
+                notes = case.get("notes") or []
+                ligne.append(notes[i][0] if i < len(notes) else None)
         ligne.append(c["moyenne_finale"])
         ws.append(_sans_formule(ligne))
         for col in range(5, len(headers) + 1):
             ws.cell(row=ws.max_row, column=col).number_format = "0.00"
-    for i, largeur in enumerate([7, 18, 22, 14] + [11] * len(etapes) + [14], start=1):
+    for i, largeur in enumerate([7, 18, 22, 14] + [13] * len(colonnes) + [14], start=1):
         ws.column_dimensions[get_column_letter(i)].width = largeur
+    if any(i is not None for _, i, _ in colonnes):
+        ws.row_dimensions[2].height = 45              # intitulés des matières, sur deux lignes
     ws.freeze_panes = "E3"
     buf = io.BytesIO()
     wb.save(buf)

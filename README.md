@@ -739,8 +739,10 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
 - Liste des admis au concours : à droite de « Rechercher », sur la page « Résultats du
   concours », « Liste des admis (PDF) » et « Liste des admis (Excel) » donnent les candidats
   « Admis au concours » seuls (la recherche n'y change rien) : rang sur la moyenne finale
-  (ex aequo au même rang), prénom et nom, n° d'inscription, note sur 20 de chaque étape et
-  moyenne finale ; le PDF finit par « Liste arrêtée à N admis ». Sans admis, pas de bouton.
+  (ex aequo au même rang), prénom et nom, n° d'inscription, les notes de chaque étape et
+  la moyenne finale ; le PDF finit par « Liste arrêtée à N admis ». Sans admis, pas de bouton.
+  Le tableau complet de la page (23 novembre 2026) : une étape en matières y a une colonne
+  par matière puis sa moyenne ; le PDF passe alors en paysage.
 - Oral d'un concours en plusieurs notes, selon l'année : trois en السنة الأولى (إ م ت، ن إج،
   ق ت), deux en السنة الثانية (إ م ت، ن إج), créées avec l'oral. Sur sa page, chaque note a son
   nom et son coefficient (on en ajoute ou en retire). Le modèle Excel a une colonne par note,

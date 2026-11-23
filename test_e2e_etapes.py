@@ -292,11 +292,14 @@ def main():
     assert r["Content-Type"].startswith("application/vnd.openxmlformats")
     assert f'filename="admis_concours_{qcm.pk}.xlsx"' in r["Content-Disposition"]
     ws = load_workbook(io.BytesIO(r.content)).active
-    assert [ws.cell(row=2, column=k).value for k in range(1, ws.max_column + 1)] == [
-        "Rang", "Prénom", "Nom", "N° inscription", "QCM (/20)", "Écrit (/20)", "Oral (/20)",
-        "Moyenne finale (/20)"]
+    # le tableau complet (23 novembre 2026) : l'écrit en matières a une colonne par matière,
+    # puis sa moyenne
+    assert [ws.cell(row=2, column=k).value for k in range(1, ws.max_column + 1)] == (
+        ["Rang", "Prénom", "Nom", "N° inscription", "QCM (/20)"]
+        + [f"Écrit — {m.text} (/20)" for m in matieres_ecrit]
+        + ["Écrit — moyenne (/20)", "Oral (/20)", "Moyenne finale (/20)"])
     assert [ws.cell(row=3, column=k).value for k in range(1, ws.max_column + 1)] == [
-        1, "X", "AMRI", "5500", 18, 14.5, 15, 15.3]
+        1, "X", "AMRI", "5500", 18, 14.5, 14.5, 14.5, 14.5, 15, 15.3]
     assert ws.max_row == 3 and "1 admis sur 6 candidats" in ws["A1"].value
     # rang sur la moyenne finale, ex aequo au même rang ; sans moyenne finale : en fin, sans rang
     amri = p["candidats"][0]
@@ -310,10 +313,13 @@ def main():
     assert len(pages) >= 3, len(pages)
     assert f"page 1 / {len(pages)}" in pages[0][0] and "(suite)" in pages[1][0]
     assert "Liste arrêtée à 81 admis." in pages[-1][0] and "ZOUARI" in pages[-1][0]
-    for _, mots, rect in pages:
+    for texte_page, mots, rect in pages:
+        # l'écrit en matières : en paysage, sa moyenne sous « Écrit », à chaque page
+        assert rect.width > rect.height and "Moyenne" in texte_page and "Écrit" in texte_page
         assert all(m[0] >= 0 and m[2] <= rect.width and m[3] <= rect.height for m in mots)
         noms = [m for m in mots if m[4] == "ZOUARI"]
-        assert not noms or noms[0][2] < (14 + 12 + 61 + 2) * 72 / 25.4, "le nom déborde sur le n°"
+        x_num = min(m[0] for m in mots if m[4] == "N°")
+        assert not noms or noms[0][2] < x_num, "le nom déborde sur le n°"
     assert "Aucun candidat admis au concours." in lire_pdf(
         bulletin_mod.generate_admis_concours_pdf(dict(p, candidats=[])))[0][0]
     # aucun admis au concours : pas de liste à exporter, pas de bouton

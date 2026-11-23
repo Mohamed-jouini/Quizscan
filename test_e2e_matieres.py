@@ -312,6 +312,26 @@ def main():
     assert page.count('class="th--etape" colspan="4"') == 2 and page.count("th--moyenne") == 2
     assert all(f"<bdi>{nom}</bdi></th>" in page for nom in NOMS + list(services.MATIERES_ORAL["1"]))
     assert '<span class="score">12,50</span>' in page and '<span class="score">9</span>' in page
+    # la liste des admis en PDF et en Excel : le tableau complet (23 novembre 2026), une
+    # colonne par matière et la moyenne de chaque étape ; le PDF en paysage
+    url_concours = reverse("quiz_parcours", args=[oral.pk])
+    with pymupdf.open(stream=c.get(url_concours + "?format=admis_pdf").content,
+                      filetype="pdf") as doc:
+        assert doc[0].rect.width > doc[0].rect.height, "en paysage"
+        texte_admis = doc[0].get_text()
+    assert texte_admis.count("Moyenne") >= 2 and "Écrit" in texte_admis and "Oral" in texte_admis
+    for valeur in ("12,44", "12,50", "12,88", "12,65"):
+        assert valeur in texte_admis, valeur
+    from openpyxl import load_workbook as classeur_de
+    ws_admis = classeur_de(io.BytesIO(c.get(url_concours + "?format=admis_xlsx").content)).active
+    assert [x.value for x in ws_admis[2]] == (
+        ["Rang", "Prénom", "Nom", "N° inscription"]
+        + [f"Écrit — {nom} (/20)" for nom in NOMS] + ["Écrit — moyenne (/20)"]
+        + [f"Oral — {nom} (/20)" for nom in services.MATIERES_ORAL["1"]]
+        + ["Oral — moyenne (/20)", "Moyenne finale (/20)"]), [x.value for x in ws_admis[2]]
+    assert [x.value for x in ws_admis[3]] == [1, "Sana", "AMRI", "704501", 14, 10, 12, 12.44,
+                                              15, 12.5, 9, 12.88, 12.65], \
+        [x.value for x in ws_admis[3]]
     # chaque coefficient se modifie aussi ici, en direct (23 novembre 2026)
     assert 'name="coefficients"' in page
     assert all(f'name="coef_m_{comp["matiere"].pk}"' in page for comp in p["composantes"])

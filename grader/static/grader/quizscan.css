@@ -401,6 +401,9 @@ a.tile:hover{border-color:var(--qs-line-strong)}
    d'en-tête, fixes ensemble ; le nom de l'étape au-dessus de ses matières */
 .shell .table-wrap--defile table.table--matieres thead{position:sticky;top:0;z-index:2}
 .shell .table-wrap--defile table.table--matieres thead th{position:static}
+/* la 2e ligne d'en-tête a le fond de la 1re : sans lui, les lignes qui défilent dessous
+   transparaissaient (« non convoqué » par-dessus le nom d'une matière) */
+.shell table.table--matieres thead th{background:var(--qs-th-bg)}
 .table--matieres .th--etape{text-align:center;border-bottom:1px solid var(--qs-line)}
 .table--matieres .th--matiere{font-size:12px;font-weight:600;white-space:nowrap}
 .table--matieres .th--moyenne,.table--matieres .cellule--moyenne{border-right:1px solid var(--qs-line)}
