@@ -1,0 +1,13 @@
+{% comment %}
+Une étape d'un candidat sur la page « Résultats du concours » : sa note, son pourcentage (QCM :
+sa note sur 20) et son verdict ; « non noté », ou « non convoqué ». Paramètre : case. En
+matières, c'est la colonne « Moyenne » de l'étape (23 novembre 2026).
+{% endcomment %}
+{% if case.etat == "note" %}
+<span class="score">{{ case.row.score|floatformat:"-2" }} / {{ case.row.max_score|floatformat:"-2" }}</span>
+<span class="helptext helptext--serre">{% if case.row.est_qcm %}{{ case.row.note20|floatformat:"-2" }} / 20{% else %}{{ case.row.pct }} %{% endif %}</span>
+{% if case.resultat == "admis" %}<span class="badge ok">Admis</span>
+{% elif case.resultat == "refuse" %}<span class="badge bad">Non admis</span>
+{% elif case.resultat == "en_attente" %}<span class="badge warn">En attente</span>{% endif %}
+{% elif case.etat == "non_note" %}<span class="badge warn" title="Convoqué : absent, ou copie pas encore scannée">Non noté</span>
+{% else %}<span class="helptext" title="Pas admis à l'étape précédente">— non convoqué</span>{% endif %}

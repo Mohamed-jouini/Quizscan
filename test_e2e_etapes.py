@@ -168,11 +168,11 @@ def main():
     matieres_ecrit = ecrit.matieres
     assert [(comp["libelle"], comp["coefficient"]) for comp in p["composantes"]] == (
         [("QCM", 1)] + [(m.text, 1) for m in matieres_ecrit] + [("Oral", 1)]), p["composantes"]
-    # le coefficient du QCM et de l'oral (une note) se règle ici ; celui d'une matière, sur
-    # la page de son épreuve (lien)
+    # tout se règle ici (demande du 23 novembre 2026) : le coefficient du QCM et de l'oral
+    # (une note), et celui de chaque matière de l'écrit
     assert f'name="coef_{qcm.pk}"' in page and f'name="coef_{oral.pk}"' in page
     assert f'name="coef_{ecrit.pk}"' not in page
-    assert page.count(f'class="coef-matiere" href="/quiz/{ecrit.pk}/"') == 3
+    assert all(f'name="coef_m_{m.pk}" value="1"' in page for m in matieres_ecrit)
     url_parcours = reverse("quiz_parcours", args=[oral.pk])
     r = c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "-1",
                               f"coef_{oral.pk}": "1"}, follow=True)
@@ -189,17 +189,30 @@ def main():
     moyennes = {x["etudiant"].last_name: x["moyenne_finale"] for x in p["candidats"]}
     assert (moyennes["AMRI"], moyennes["CHERIF"]) == (14.7, 10.95), moyennes
     c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1", f"coef_{oral.pk}": "1"})
-    # le coefficient d'une matière, réglé sur la page de l'écrit, compte aussi ici :
-    # droit civil à 2 -> (18 + 4 × 14,5 + 15) / 6 = 15,17 ; (14 + 4 × 12,25 + 9) / 6 = 12
-    Question.objects.filter(pk=matieres_ecrit[0].pk).update(coefficient=2)
-    p = c.get(url_parcours).context["parcours"]
+    # le coefficient d'une matière, modifié ici : celui de la matière, le même sur la page
+    # de l'écrit ; droit civil à 2 -> (18 + 4 × 14,5 + 15) / 6 = 15,17 ; CHERIF 12
+    civil = matieres_ecrit[0]
+    r = c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1", f"coef_{oral.pk}": "1",
+                              f"coef_m_{civil.pk}": "0"}, follow=True)
+    assert "Coefficient de matière invalide" in r.content.decode()
+    r = c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1", f"coef_{oral.pk}": "1",
+                              f"coef_m_{civil.pk}": "2"}, follow=True)
+    assert "chaque matière modifiée (et ses admis) suit le nouveau coefficient" in r.content.decode()
+    civil.refresh_from_db()
+    assert civil.coefficient == 2
+    assert f'name="matiere_{civil.pk}_coefficient" value="2"' in c.get(
+        reverse("quiz_detail", args=[ecrit.pk])).content.decode(), "le même sur la page de l'écrit"
+    p = r.context["parcours"]
     moyennes = {x["etudiant"].last_name: x["moyenne_finale"] for x in p["candidats"]}
     assert (moyennes["AMRI"], moyennes["CHERIF"]) == (15.17, 12.0), moyennes
-    assert "× 2" in c.get(url_parcours).content.decode()
-    Question.objects.filter(pk=matieres_ecrit[0].pk).update(coefficient=1)
+    assert f'name="coef_m_{civil.pk}" value="2"' in r.content.decode()
+    c.post(url_parcours, {"coefficients": "1", f"coef_{qcm.pk}": "1", f"coef_{oral.pk}": "1",
+                          f"coef_m_{civil.pk}": "1"})
+    civil.refresh_from_db()
+    assert civil.coefficient == 1
     print("  moyenne finale : chaque note sur 20 (QCM, trois matières de l'écrit, oral) avec "
-          "son coefficient (AMRI 15,3) ; QCM et oral réglés ici, matières sur la page de "
-          "l'écrit ; invalides refusés OK")
+          "son coefficient (AMRI 15,3), tous modifiables ici (une matière : le même coefficient "
+          "que sur la page de l'écrit) ; invalides refusés OK")
     # la recherche filtre, l'export Excel reprend tout
     r = c.get(reverse("quiz_parcours", args=[ecrit.pk]) + "?q=driss")
     assert [x["etudiant"].last_name for x in r.context["candidats_page"]] == ["DRISS"]

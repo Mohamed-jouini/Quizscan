@@ -79,20 +79,23 @@ def main():
     assert not quiz.note_distincte
     print("  une QCM vaut 1 point : 5 bonnes réponses = 5 / 6 = 16,67 / 20 OK")
 
-    # la note sur 20, nulle part le pourcentage (demande du 13 novembre 2026)
+    # la note sur 20 (demande du 13 novembre 2026), et le pourcentage à côté dans les deux
+    # tableaux de la page (redemandé le 23 novembre 2026 : 5 / 6 -> 83 %) ; les exports et
+    # le relevé gardent la note sur 20 seule
     page = c.get(reverse("quiz_results", args=[quiz.pk])).content.decode()
     for attendu in ("<th>Bonnes réponses</th>", "<th>Note sur 20</th>", "5 / 6",
                     "<b>16,67 / 20</b>", "<b>10 / 20</b>", "Réussi", "Non réussi",
                     "au moins 3 bonnes réponses sur 6, soit 10 / 20",
                     "réussi ou non, sans sa note",
                     "Répartition des notes sur 20", ">8–12<", "meilleure note <b>16,67</b>",
-                    "(sur 20)"):
+                    "(sur 20)", '<td class="score">83 %</td>', '<td class="score">50 %</td>'):
         assert attendu in page, f"« {attendu} » absent de la page des résultats"
-    for absent in ("<th>Pourcentage</th>", "83 %", "<th>Note</th>", "<th>Points</th>",
-                   "80–100 %"):
+    assert page.count("<th>Pourcentage</th>") == 2, "liste des réussis et tableau des notes"
+    assert page.index("<th>Note sur 20</th>") < page.index("<th>Pourcentage</th>")
+    for absent in ("<th>Note</th>", "<th>Points</th>", "80–100 %"):
         assert absent not in page, f"« {absent} » encore sur la page des résultats"
-    print("  page des résultats : bonnes réponses, note sur 20 (seuil compris), "
-          "réussi / non réussi, sans pourcentage OK")
+    print("  page des résultats : bonnes réponses, note sur 20 (seuil compris) et "
+          "pourcentage, réussi / non réussi OK")
 
     xl = load_workbook(io.BytesIO(c.get(reverse("quiz_results_xlsx", args=[quiz.pk])).content))
     ws = xl["Résultats"]

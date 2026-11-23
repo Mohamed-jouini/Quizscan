@@ -2623,7 +2623,8 @@ def parcours_concours(chaine):
     même résultat. « composantes » : chaque note qui entre dans la moyenne finale, dans
     l'ordre — {etape, matiere (None : la note de l'étape), libelle, coefficient}."""
     etapes, par_epreuve = [], []
-    for quiz in chaine:
+    matieres_par_etape = [quiz.matieres for quiz in chaine]
+    for quiz, matieres in zip(chaine, matieres_par_etape):
         rows = compute_results(quiz)
         admissions(quiz, rows)                       # pose row["resultat"]
         notes = {_cle_candidat(r["student"]): r for r in rows}
@@ -2631,7 +2632,9 @@ def parcours_concours(chaine):
         par_epreuve.append((quiz, notes, convoques))
         etapes.append({"quiz": quiz, "convoques": len(convoques),
                        "presents": len(notes), "seuil": quiz.note_admission,
-                       "admis": sum(1 for r in rows if r.get("resultat") == "admis")})
+                       "admis": sum(1 for r in rows if r.get("resultat") == "admis"),
+                       # écrit ou oral en matières : une colonne par matière (23 novembre 2026)
+                       "matieres": matieres})
     personnes = {}
     for _, notes, convoques in par_epreuve:
         for cle, s in convoques.items():
@@ -2641,8 +2644,7 @@ def parcours_concours(chaine):
     derniere = len(chaine) - 1
     coefficients = [q.coefficient_final for q in chaine]
     composantes = []
-    for k, quiz in enumerate(chaine):
-        matieres = quiz.matieres
+    for k, (quiz, matieres) in enumerate(zip(chaine, matieres_par_etape)):
         if matieres:
             composantes += [{"k": k, "etape": quiz, "matiere": m, "rang": i, "libelle": m.text,
                              "coefficient": m.coefficient} for i, m in enumerate(matieres)]
@@ -2657,14 +2659,22 @@ def parcours_concours(chaine):
         cases, atteinte = [], -1
         for k, (quiz, notes, convoques) in enumerate(par_epreuve):
             r = notes.get(cle)
+            # en matières : le nombre de colonnes de l'étape, et la note de chaque matière
+            matieres = matieres_par_etape[k]
             if r is not None:
-                cases.append({"etat": "note", "row": r, "resultat": r.get("resultat")})
+                cases.append({"etat": "note", "row": r, "resultat": r.get("resultat"),
+                              "n_matieres": len(matieres),
+                              "notes": list(zip(r.get("notes_matieres") or
+                                                [None] * len(matieres),
+                                                [m.points for m in matieres]))})
                 atteinte = k
             elif cle in convoques:
-                cases.append({"etat": "non_note", "row": None, "resultat": None})
+                cases.append({"etat": "non_note", "row": None, "resultat": None,
+                              "n_matieres": len(matieres), "notes": []})
                 atteinte = k
             else:
-                cases.append({"etat": "non_convoque", "row": None, "resultat": None})
+                cases.append({"etat": "non_convoque", "row": None, "resultat": None,
+                              "n_matieres": len(matieres), "notes": []})
         final, ton = "—", "grey"
         if atteinte >= 0:
             case, titre = cases[atteinte], chaine[atteinte].type_court
@@ -2705,8 +2715,10 @@ def parcours_concours(chaine):
     candidats.sort(key=lambda c: c["_tri"])
     return {"epreuves": chaine, "etapes": etapes, "candidats": candidats,
             "coefficients": coefficients, "composantes": composantes,
-            # un coefficient au moins se règle sur la page du concours (une étape d'une note)
-            "coefs_modifiables": any(comp["matiere"] is None for comp in composantes),
+            # tableau de la page : une ligne d'en-tête de plus pour les matières, et le
+            # nombre de colonnes (candidat, chaque étape ou chaque matière + sa moyenne, fin)
+            "avec_matieres": any(matieres_par_etape),
+            "n_colonnes": 3 + sum(len(m) + 1 if m else 1 for m in matieres_par_etape),
             "n_admis_final": sum(1 for c in candidats if c["final_ton"] == "ok")}
 
 

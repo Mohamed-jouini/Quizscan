@@ -33,15 +33,15 @@
 {# Moyenne finale (المعدل النهائي, 13 novembre 2026) : le coefficient de chaque étape #}
 <form class="card reglages" method="post" id="moyenne-finale">{% csrf_token %}
   <h2>Moyenne finale <bdi lang="ar">(المعدل النهائي)</bdi></h2>
-  <p class="helptext helptext--serre">La moyenne de toutes les notes sur 20, chacune avec son coefficient : la note du QCM (coefficient réglé ici ; 0 : il n'y compte pas), la note de chaque matière de l'écrit et chaque note de l'oral (le coefficient de la matière, réglé sur la page de l'épreuve). Pour les candidats notés à toutes les étapes qui comptent. Elle classe les candidats d'un même résultat.</p>
-  {% comment %}Une case par note qui compte (23 novembre 2026) : le coefficient d'une étape d'une
-    seule note se règle ici, celui d'une matière sur la page de son épreuve (lien).{% endcomment %}
+  <p class="helptext helptext--serre">La moyenne de toutes les notes sur 20, chacune avec son coefficient : la note du QCM (0 : il n'y compte pas), la note de chaque matière de l'écrit et chaque note de l'oral. Le coefficient d'une matière est le même que dans la moyenne de son épreuve : le changer ici change aussi cette moyenne, et ses admis. Pour les candidats notés à toutes les étapes qui comptent. Elle classe les candidats d'un même résultat.</p>
+  {% comment %}Une case par note qui compte (23 novembre 2026), toutes modifiables ici : celle
+    d'une matière écrit le coefficient de la matière (Question.coefficient).{% endcomment %}
   <div class="matiere__tete">
     {% for comp in parcours.composantes %}
     <div>
       {% if comp.matiere %}
-      <label>{{ comp.etape.type_court }} — <bdi>{{ comp.libelle }}</bdi></label>
-      <a class="coef-matiere" href="{% url 'quiz_detail' comp.etape.pk %}" title="Coefficient de la matière, réglé sur la page de l'épreuve ({{ comp.etape.type_court }})">× {{ comp.coefficient|floatformat:"-2" }}</a>
+      <label for="coef_m_{{ comp.matiere.pk }}">{{ comp.etape.type_court }} — <bdi>{{ comp.libelle }}</bdi></label>
+      <input id="coef_m_{{ comp.matiere.pk }}" class="champ--court" type="number" step="0.1" min="0.1" max="99" name="coef_m_{{ comp.matiere.pk }}" value="{{ comp.coefficient|stringformat:'g' }}"{% if not perms.grader.creer_epreuve %} disabled{% endif %}>
       {% else %}
       <label for="coef_{{ comp.etape.pk }}">Coefficient {{ comp.libelle }}</label>
       <input id="coef_{{ comp.etape.pk }}" class="champ--court" type="number" step="0.1" min="0" max="99" name="coef_{{ comp.etape.pk }}" value="{{ comp.coefficient|stringformat:'g' }}"{% if not perms.grader.creer_epreuve %} disabled{% endif %}>
@@ -49,41 +49,56 @@
     </div>
     {% endfor %}
   </div>
-  {% if perms.grader.creer_epreuve and parcours.coefs_modifiables %}<p><button class="btn small" name="coefficients" value="1" type="submit">Enregistrer</button></p>{% endif %}
+  {% if perms.grader.creer_epreuve %}<p><button class="btn small" name="coefficients" value="1" type="submit">Enregistrer</button></p>{% endif %}
 </form>
 
 <div class="card" id="liste-candidats">
   {% include "grader/_recherche_liste.html" with ancre="liste-candidats" champ="id_q" sujet="candidat" n=n_trouves liens=liens_admis %}
   {% include "grader/_pagination.html" with page=candidats_page label="Candidats" querystring=querystring ancre="liste-candidats" %}
   <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Résultats des candidats, épreuve par épreuve">
-    <table>
+    {% comment %}Écrit et oral en matières (23 novembre 2026) : sous le nom de l'étape, une colonne
+      par matière (sa note) puis « Moyenne » (la note de l'étape et son verdict).{% endcomment %}
+    <table{% if parcours.avec_matieres %} class="table--matieres"{% endif %}>
+      <thead>
       <tr>
-        <th>Candidat</th>
-        {% for q in epreuves %}<th title="{{ q.title }}">{{ q.type_court }}</th>{% endfor %}
-        <th>Moyenne finale</th>
-        <th>Résultat final</th>
+        <th{% if parcours.avec_matieres %} rowspan="2"{% endif %}>Candidat</th>
+        {% for e in parcours.etapes %}
+        {% if e.matieres %}<th class="th--etape" colspan="{{ e.matieres|length|add:1 }}" title="{{ e.quiz.title }}">{{ e.quiz.type_court }}</th>
+        {% else %}<th{% if parcours.avec_matieres %} rowspan="2"{% endif %} title="{{ e.quiz.title }}">{{ e.quiz.type_court }}</th>{% endif %}
+        {% endfor %}
+        <th{% if parcours.avec_matieres %} rowspan="2"{% endif %}>Moyenne finale</th>
+        <th{% if parcours.avec_matieres %} rowspan="2"{% endif %}>Résultat final</th>
       </tr>
+      {% if parcours.avec_matieres %}
+      <tr>
+        {% for e in parcours.etapes %}{% if e.matieres %}
+        {% for m in e.matieres %}<th class="th--matiere" title="Coefficient {{ m.coefficient|floatformat:'-2' }}"><bdi>{{ m.text }}</bdi></th>{% endfor %}
+        <th class="th--matiere th--moyenne">Moyenne</th>
+        {% endif %}{% endfor %}
+      </tr>
+      {% endif %}
+      </thead>
+      <tbody>
       {% for c in candidats_page %}
       <tr>
         <td><b>{{ c.etudiant.full_name }}</b>{% if c.etudiant.student_number %}<span class="helptext">n° {{ c.etudiant.student_number }}</span>{% endif %}</td>
         {% for case in c.cases %}
-        <td>
-          {% if case.etat == "note" %}
-          <span class="score">{{ case.row.score|floatformat:"-2" }} / {{ case.row.max_score|floatformat:"-2" }}</span>
-          <span class="helptext helptext--serre">{% if case.row.est_qcm %}{{ case.row.note20|floatformat:"-2" }} / 20{% else %}{{ case.row.pct }} %{% endif %}</span>
-          {% if case.resultat == "admis" %}<span class="badge ok">Admis</span>
-          {% elif case.resultat == "refuse" %}<span class="badge bad">Non admis</span>
-          {% elif case.resultat == "en_attente" %}<span class="badge warn">En attente</span>{% endif %}
-          {% elif case.etat == "non_note" %}<span class="badge warn" title="Convoqué : absent, ou copie pas encore scannée">Non noté</span>
-          {% else %}<span class="helptext" title="Pas admis à l'étape précédente">— non convoqué</span>{% endif %}
-        </td>
+        {% if case.n_matieres and case.etat == "note" %}
+        {% for note, sur in case.notes %}<td class="cellule--matiere">{% if note is None %}<span class="helptext" title="Pas de note : comptée 0">—</span>{% else %}<span class="score">{{ note|floatformat:"-2" }}</span><span class="helptext helptext--serre">/ {{ sur|floatformat:"-2" }}</span>{% endif %}</td>{% endfor %}
+        <td class="cellule--moyenne">{% include "grader/_case_parcours.html" %}</td>
+        {% elif case.n_matieres %}
+        <td colspan="{{ case.n_matieres|add:1 }}">{% include "grader/_case_parcours.html" %}</td>
+        {% else %}
+        <td>{% include "grader/_case_parcours.html" %}</td>
+        {% endif %}
         {% endfor %}
         <td>{% if c.moyenne_finale is not None %}<b class="score">{{ c.moyenne_finale|floatformat:"-2" }} / 20</b>{% else %}<span class="helptext">—</span>{% endif %}</td>
         <td><span class="badge {{ c.final_ton }}">{{ c.final }}</span></td>
       </tr>
       {% empty %}
-      <tr><td colspan="{{ epreuves|length|add:3 }}">{% if recherche %}Aucun candidat ne correspond à « {{ recherche }} ».{% else %}Aucun candidat pour le moment.{% endif %}</td></tr>
+      <tr><td colspan="{{ parcours.n_colonnes }}">{% if recherche %}Aucun candidat ne correspond à « {{ recherche }} ».{% else %}Aucun candidat pour le moment.{% endif %}</td></tr>
       {% endfor %}
+      </tbody>
     </table>
   </div>
   {% include "grader/_pagination.html" with page=candidats_page label="Candidats" querystring=querystring ancre="liste-candidats" %}

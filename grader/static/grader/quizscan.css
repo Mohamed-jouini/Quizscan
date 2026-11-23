@@ -397,6 +397,14 @@ a.tile:hover{border-color:var(--qs-line-strong)}
 .table-wrap--questions{max-height:560px}
 .shell .table-wrap--defile table tr:first-child > th{position:sticky;top:0;z-index:2}
 @media print{.table-wrap--defile{max-height:none;overflow:visible}}
+/* Résultats d'un concours aux étapes en matières (23 novembre 2026) : deux lignes
+   d'en-tête, fixes ensemble ; le nom de l'étape au-dessus de ses matières */
+.shell .table-wrap--defile table.table--matieres thead{position:sticky;top:0;z-index:2}
+.shell .table-wrap--defile table.table--matieres thead th{position:static}
+.table--matieres .th--etape{text-align:center;border-bottom:1px solid var(--qs-line)}
+.table--matieres .th--matiere{font-size:12px;font-weight:600;white-space:nowrap}
+.table--matieres .th--moyenne,.table--matieres .cellule--moyenne{border-right:1px solid var(--qs-line)}
+.table--matieres .cellule--matiere{white-space:nowrap}
 
 /* --- Boutons ------------------------------------------------------------- */
 .btn{
@@ -2047,14 +2055,7 @@ fieldset.matiere{border:1px solid var(--qs-border,#dfe3dc);border-radius:10px;pa
 fieldset.matiere legend{font-weight:600;font-size:13px;padding:0 6px}
 .matiere__tete{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 .matiere__tete > div{flex:1 1 140px;min-width:0}
-.matiere__tete > div:has(.champ--court){flex:0 0 auto}
-/* Moyenne finale : le coefficient d'une matière, réglé sur la page de son épreuve (lien) */
-.matiere__tete > div:has(.coef-matiere){flex:0 0 auto}
-.coef-matiere{display:inline-flex;align-items:center;height:40px;padding:0 14px;
-  border:1px dashed var(--qs-line-strong);border-radius:var(--qs-r-field);
-  color:var(--qs-ink);font-weight:600;text-decoration:none;white-space:nowrap}
-.coef-matiere:hover{border-color:var(--qs-blue);background:var(--qs-surface-2)}
-.documents__matiere{font-size:15px;margin:14px 0 6px}
+.matiere__tete > div:has(.champ--court){flex:0 0 auto}.documents__matiere{font-size:15px;margin:14px 0 6px}
 /* QCM en deux versions : le sujet et la feuille de chaque version (23 novembre 2026) */
 .versions-documents{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 /* Corrigé d'un QCM en deux versions : version A à gauche, B à droite, un trait entre les deux */

@@ -158,7 +158,7 @@
   {% include "grader/_recherche_liste.html" with ancre="liste-admis" champ="id_q_admis" sujet=quiz.auto_enroll|yesno:"admis,étudiant ayant réussi" n=admission.admis_affiches|length %}
   <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Liste par ordre de mérite">
     <table>
-    <tr><th>Rang</th><th>Prénom et nom</th><th>N° d'inscription</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>{% if quiz.est_qcm %}Note sur 20{% else %}Pourcentage{% endif %}</th>{% if quiz.note_distincte %}<th>{% if quiz.est_qcm %}Points{% else %}Note{% endif %}</th>{% endif %}</tr>
+    <tr><th>Rang</th><th>Prénom et nom</th><th>N° d'inscription</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>{% if quiz.est_qcm %}Note sur 20{% else %}Pourcentage{% endif %}</th>{% if quiz.est_qcm %}<th>Pourcentage</th>{% endif %}{% if quiz.note_distincte %}<th>{% if quiz.est_qcm %}Points{% else %}Note{% endif %}</th>{% endif %}</tr>
     {% for r in admission.admis_affiches %}
     <tr class="ligne-lien">
       <td>{{ r.rang }}</td>
@@ -166,10 +166,11 @@
       <td>{{ r.student.student_number|default:"—" }}</td>
       {% if quiz.a_des_qcm %}<td class="score">{{ r.correct }} / {{ r.n_qcm }}</td>{% endif %}
       <td>{% if quiz.est_qcm %}{% include "grader/_note20.html" with note=r.note20 %}{% else %}{% include "grader/_pourcentage.html" with pct=r.pct %}{% endif %}</td>
+      {% if quiz.est_qcm %}<td class="score">{{ r.pct }} %</td>{% endif %}
       {% if quiz.note_distincte %}<td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>{% endif %}
     </tr>
     {% empty %}
-    <tr><td colspan="6">Aucun {% if quiz.auto_enroll %}admis{% else %}étudiant ayant réussi{% endif %} ne correspond à « {{ recherche }} ».</td></tr>
+    <tr><td colspan="7">Aucun {% if quiz.auto_enroll %}admis{% else %}étudiant ayant réussi{% endif %} ne correspond à « {{ recherche }} ».</td></tr>
     {% endfor %}
     </table>
   </div>
@@ -204,7 +205,7 @@
   <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Notes de tous les étudiants">
     <table>
     <tr>
-      <th>Étudiant</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>{% if quiz.est_qcm %}Note sur 20{% else %}Pourcentage{% endif %}</th>
+      <th>Étudiant</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>{% if quiz.est_qcm %}Note sur 20{% else %}Pourcentage{% endif %}</th>{% if quiz.est_qcm %}<th>Pourcentage</th>{% endif %}
       {% if quiz.note_distincte %}<th>{% if quiz.est_qcm %}Points{% elif matieres %}Moyenne{% else %}Note{% endif %}</th>{% endif %}
       {% for m in matieres %}<th dir="auto">{{ m.text }}{% if m.coefficient != 1 %} <small>× {{ m.coefficient|floatformat:"-2" }}</small>{% endif %}</th>{% endfor %}
       {% if quiz.a_des_qcm %}<th>Fausses</th><th>Sans réponse</th>{% endif %}
@@ -219,6 +220,7 @@
           {% elif r.questions_manquantes %}<span class="badge warn" title="Page non identifiée ou non reçue : ces questions ne comptent pas dans la note">Incomplète : {{ r.questions_manquantes }} question{{ r.questions_manquantes|pluralize }}</span>{% endif %}</td>
       {% if quiz.a_des_qcm %}<td class="score">{{ r.correct }} / {{ r.n_qcm }}</td>{% endif %}
       <td>{% if quiz.est_qcm %}{% include "grader/_note20.html" with note=r.note20 %}{% else %}{% include "grader/_pourcentage.html" with pct=r.pct %}{% endif %}</td>
+      {% if quiz.est_qcm %}<td class="score">{{ r.pct }} %</td>{% endif %}
       {% if quiz.note_distincte %}<td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>{% endif %}
       {% for n in r.notes_matieres %}<td class="score">{% if n is None %}—{% else %}{{ n|floatformat:"-2" }}{% endif %}</td>{% endfor %}
       {% if quiz.a_des_qcm %}<td><span class="badge bad">{{ r.wrong }}</span></td>
@@ -237,7 +239,7 @@
            href="{% url 'quiz_bulletins_pdf' quiz.pk %}?student={{ r.student.pk }}{% if batch %}&batch={{ batch.pk }}{% endif %}">🧾</a></td>
     </tr>
     {% empty %}
-    <tr><td colspan="9">{% if recherche %}Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} ne correspond à « {{ recherche }} ».{% else %}Aucune copie identifiée pour le moment.{% endif %}</td></tr>
+    <tr><td colspan="12">{% if recherche %}Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} ne correspond à « {{ recherche }} ».{% else %}Aucune copie identifiée pour le moment.{% endif %}</td></tr>
     {% endfor %}
   </table>
   </div>

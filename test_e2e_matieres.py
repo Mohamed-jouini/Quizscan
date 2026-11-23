@@ -305,10 +305,19 @@ def main():
         ("إ م ت", 2), ("ن إج", 1), ("ق ت", 1)], p["composantes"]
     amri_final = next(x for x in p["candidats"] if x["etudiant"].last_name == "AMRI")
     assert amri_final["moyenne_finale"] == 12.65, amri_final["moyenne_finale"]
-    assert 'name="coefficients"' not in r.content.decode(), \
-        "rien à régler sur la page du concours : chaque coefficient est sur la page de l'épreuve"
+    # le tableau : sous « Écrit » et « Oral », la note de chaque matière puis la moyenne
+    assert amri_final["cases"][0]["notes"] == [(14, 20), (10, 20), (12, 20)]
+    assert amri_final["cases"][1]["notes"] == [(15, 20), (12.5, 20), (9, 20)]
+    page = r.content.decode()
+    assert page.count('class="th--etape" colspan="4"') == 2 and page.count("th--moyenne") == 2
+    assert all(f"<bdi>{nom}</bdi></th>" in page for nom in NOMS + list(services.MATIERES_ORAL["1"]))
+    assert '<span class="score">12,50</span>' in page and '<span class="score">9</span>' in page
+    # chaque coefficient se modifie aussi ici, en direct (23 novembre 2026)
+    assert 'name="coefficients"' in page
+    assert all(f'name="coef_m_{comp["matiere"].pk}"' in page for comp in p["composantes"])
     print("  moyenne finale : chaque matière de l'écrit et chaque note de l'oral avec son "
-          "coefficient (AMRI 12,65) OK")
+          "coefficient (AMRI 12,65) ; le tableau montre la note de chaque matière et la "
+          "moyenne de chaque étape OK")
     feuille.cell(row=3, column=6).value = "autre"           # une colonne de note perdue
     tampon = io.BytesIO()
     classeur.save(tampon)

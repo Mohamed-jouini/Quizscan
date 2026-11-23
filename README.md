@@ -105,7 +105,8 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    + feuille statistiques) et **bulletins PDF** (relevé individuel par
    étudiant, en un seul PDF pour toute la classe ou un par un). Le résultat d'un
    **QCM se lit en bonnes réponses et en note sur 20** (37 bonnes réponses sur 50
-   donnent 14,80 / 20), jamais en pourcentage. C'est vrai partout : page des
+   donnent 14,80 / 20) ; la page des résultats donne aussi le pourcentage, dans une
+   colonne à côté de la note sur 20 (23 novembre 2026). La note sur 20 vaut partout : page des
    résultats, statistiques et histogramme (tranches de 4 points), bulletins, liste des
    admis en PDF, Excel, parcours du concours, tableau de bord. La note minimale d'un
    QCM se règle toujours en bonnes réponses (ou en points), et son équivalent sur 20
@@ -726,10 +727,13 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
 - Moyenne finale (المعدل النهائي) : la page « Résultats du concours » donne, pour chaque
   candidat noté à toutes les étapes, la moyenne de toutes ses notes sur 20, chacune avec
   son coefficient (23 novembre 2026) : la note du QCM (ou d'une épreuve d'une seule note),
-  avec le coefficient de l'étape réglé sur cette page (1 par défaut ; 0 : elle n'y compte
-  pas) ; la note de chaque matière de l'écrit et chaque note de l'oral, avec le coefficient
-  de la matière réglé sur la page de l'épreuve (le même que dans sa moyenne ; la page du
-  concours le rappelle, en lien). Elle classe les candidats d'un même résultat et figure
+  avec le coefficient de l'étape (1 par défaut ; 0 : elle n'y compte pas) ; la note de
+  chaque matière de l'écrit et chaque note de l'oral, avec le coefficient de la matière.
+  Tous se modifient sur la page du concours ; celui d'une matière est le même que sur la
+  page de son épreuve et dans sa moyenne (le changer change aussi cette moyenne, et ses
+  admis). Dans le tableau, sous « Écrit » et « Oral », une colonne par matière (sa note)
+  puis « Moyenne » (la note de l'étape, son pourcentage, son verdict). Elle classe les
+  candidats d'un même résultat et figure
   dans les exports Excel et PDF du concours ; l'espace public ne montre toujours que le
   verdict.
 - Liste des admis au concours : à droite de « Rechercher », sur la page « Résultats du
