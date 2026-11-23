@@ -864,6 +864,10 @@ sujet séparé ; pas avec une fiche de réponses seule, dont le sujet vient d'ai
   ordre, n° de la question dans la version A, et sa bonne réponse lettrée pour la version
   B (lecture seule : elle suit le corrigé de la version A). Avant la génération des PDF,
   c'est l'aperçu du tirage qu'elle fixera ;
+- **corrigé** : son cadre est coupé en deux, version A à gauche, version B à droite, chacune
+  avec sa fiche scannée à déposer, ses questions sans bonne réponse (à ses n°) et ses
+  fiches de corrigé lues (rangées selon la version lue au scan ; une fiche déposée du
+  mauvais côté est lue quand même, et signalée). Derrière, un seul corrigé ;
 - **correction** : la réponse lue sur une copie B est ramenée à la question et au choix de
   la version A. Corrigé, notes, statistiques, exports ne voient que la version A ; un
   corrigé noirci sur une feuille B se lit juste. Le relevé de notes et l'écran de

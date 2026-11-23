@@ -147,7 +147,44 @@
 
 {% include "grader/_correction_en_attente.html" %}
 
-{% if n_qcm %}
+{% if n_qcm and corrige_versions %}
+{% comment %}QCM en deux versions (23 novembre 2026) : le corrigé en deux moitiés, version A à
+  gauche, version B à droite, chacune avec sa fiche scannée et ses corrigés lus. Un seul
+  corrigé derrière : l'une ou l'autre fiche le remplit pour les deux versions.{% endcomment %}
+<div class="card {% if sans_corrige %}card--alerte{% else %}card--valide{% endif %}" id="corrige-versions">
+  <div class="grid2 corrige-versions">
+    {% for cv in corrige_versions %}
+    <div class="corrige-versions__cote">
+      {% if sans_corrige %}
+      <h2>Corrigé incomplet — version {{ cv.version }}</h2>
+      <p class="helptext helptext--serre">
+        {{ sans_corrige|length }} question(s) sur {{ n_qcm }} sans bonne réponse : n°
+        {% for n in cv.manquantes %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if cv.version != "A" %} (numéros de la version {{ cv.version }}){% endif %}.
+        <b>La correction des copies ne peut pas démarrer</b> tant qu'il en manque une.
+      </p>
+      {% else %}
+      <h2>Corrigé complet — version {{ cv.version }}</h2>
+      <p class="helptext helptext--serre">{{ n_qcm }} question(s) QCM{% if cv.version != "A" %}, dans l'ordre de la version {{ cv.version }}{% endif %} : les copies peuvent être corrigées.</p>
+      {% endif %}
+      {% if perms.grader.creer_epreuve %}
+      <form method="post" action="{% url 'quiz_answer_key' quiz.pk %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="version" value="{{ cv.version }}">
+        <label class="label--haut" for="{{ cv.form.files.id_for_label }}">Fiche du corrigé scannée — version {{ cv.version }}</label>
+        {{ cv.form.files }}
+        <span class="helptext">La copie du correcteur de la version {{ cv.version }}, noircie en suivant le sujet {{ cv.version }}, puis scannée.</span>
+        <p style="margin-bottom:0"><button class="btn" type="submit"
+          {% if not quiz.sheet_pdf %}disabled title="Générez d'abord la fiche PDF"{% endif %}>
+          Lire le corrigé scanné — version {{ cv.version }}</button></p>
+      </form>
+      {% endif %}
+      {% include "grader/_corriges_scannes.html" with fiches=cv.fiches %}
+    </div>
+    {% endfor %}
+  </div>
+  <span class="helptext">Un seul corrigé pour les deux versions : une fiche A ou une fiche B le remplit pour les deux, et il se règle aussi à la main dans le tableau de la version A. Les fiches de corrigé sont conservées avec l'épreuve : elles font foi sur l'origine du barème.</span>
+</div>
+{% elif n_qcm %}
 <div class="card {% if sans_corrige %}card--alerte{% else %}card--valide{% endif %}">
   <div class="card__duo card__duo--haut">
     <div class="card__duo-texte">
@@ -181,32 +218,7 @@
   </div>
 
   {% if answer_key_sheets %}
-  <div class="table-wrap">
-    <table class="table--espacee">
-    <tr><th>Corrigé scanné</th><th>Page</th><th>Lues</th><th>Date</th><th></th></tr>
-    {% for k in answer_key_sheets %}
-    <tr class="ligne-lien">
-      <td>{% if k.overlay_image %}<a class="ligne-lien__cible ligne-lien__nom" href="{{ k.overlay_image.url }}" target="_blank">{{ k.source_name|truncatechars:42 }}</a>{% else %}{{ k.source_name|truncatechars:42 }}{% endif %}</td>
-      <td>page {{ k.page_index|add:1 }}</td>
-      <td>{% if k.status == "ok" %}<span class="badge ok">{{ k.nb_lues }} réponse(s)</span>
-          {% elif k.status == "partial" %}<span class="badge warn">{{ k.nb_lues }} lue(s),
-            {{ k.unreadable|length }} illisible(s)</span>
-          {% else %}<span class="badge bad">{{ k.get_status_display }}</span>{% endif %}
-          {% if k.error_message %}<span class="helptext">{{ k.error_message }}</span>{% endif %}</td>
-      <td class="helptext" style="white-space:nowrap">{{ k.created_at|date:"d/m/Y H:i" }}</td>
-      <td class="cellule--droite">{% if k.overlay_image %}
-        <a class="btn small secondary" href="{{ k.overlay_image.url }}" target="_blank">Voir</a>
-        {% endif %}
-        {% if perms.grader.creer_epreuve %}
-        <form class="inline" method="post">{% csrf_token %}
-          <button class="btn small danger" type="submit" name="delete_answer_key" value="{{ k.pk }}"
-                  data-confirmer="Supprimer ce corrigé scanné ? Les bonnes réponses déjà enregistrées restent en place.">Supprimer</button>
-        </form>
-        {% endif %}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  </div>
+  {% include "grader/_corriges_scannes.html" with fiches=answer_key_sheets %}
   <span class="helptext">Les fiches de corrigé sont conservées avec l'épreuve :
     elles font foi sur l'origine du barème.{% if n_answer_key_sheets > 12 %}
     ({{ n_answer_key_sheets }} au total, les 12 plus récentes sont affichées.){% endif %}</span>

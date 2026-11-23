@@ -269,10 +269,38 @@ def main():
     Question.objects.filter(quiz=quiz, qtype="qcm").update(correct_choice=None)
     feuille_b = noircir(render_page(correcteur_b, 0), pages_b[0], CORRIGE)
     c.post(reverse("quiz_answer_key", args=[quiz.pk]),
-           {"files": [SimpleUploadedFile("corrige_b.jpg", jpg(simulate_scan(feuille_b)))]})
+           {"version": "B",
+            "files": [SimpleUploadedFile("corrige_b.jpg", jpg(simulate_scan(feuille_b)))]})
     lu = dict(quiz.questions.filter(qtype="qcm").values_list("order", "correct_choice"))
     assert lu == CORRIGE, (lu, CORRIGE)
     print("  copie du correcteur B noircie et scannée : les bonnes réponses de la version A OK")
+    # le corrigé en deux moitiés (23 novembre 2026) : la fiche B lue de son côté
+    r = c.get(url)
+    page = r.content.decode()
+    cv = r.context["corrige_versions"]
+    assert [m["version"] for m in cv] == ["A", "B"]
+    assert "Corrigé complet — version A" in page and "Corrigé complet — version B" in page
+    assert [f.page_version for f in cv[1]["fiches"]] == [1] and not cv[0]["fiches"]
+    assert 'id="id_corrige_a_files"' in page and 'id="id_corrige_b_files"' in page
+    # une question sans bonne réponse : son n° de chaque côté
+    t = next(t for t in tirage if t["num"] != t["order"])
+    Question.objects.filter(quiz=quiz, order=t["order"]).update(correct_choice=None)
+    r = c.get(url)
+    cv = r.context["corrige_versions"]
+    assert (cv[0]["manquantes"], cv[1]["manquantes"]) == ([t["order"]], [t["num"]]), cv
+    assert "Corrigé incomplet — version B" in r.content.decode()
+    Question.objects.filter(quiz=quiz, order=t["order"]).update(correct_choice=CORRIGE[t["order"]])
+    # une fiche A déposée du côté B : lue quand même, rangée avec la version A
+    feuille_a = noircir(render_page(c.get(url_correcteur).content, 0), pages_a[0], CORRIGE)
+    r = c.post(reverse("quiz_answer_key", args=[quiz.pk]),
+               {"version": "B",
+                "files": [SimpleUploadedFile("corrige_a.jpg", jpg(simulate_scan(feuille_a)))]},
+               follow=True)
+    assert "Fiche déposée en version B, lue en version A" in r.content.decode()
+    cv = r.context["corrige_versions"]
+    assert (len(cv[0]["fiches"]), len(cv[1]["fiches"])) == (1, 1)
+    print("  corrigé en deux moitiés : fiches lues de leur côté, questions manquantes aux n° "
+          "de chaque version, fiche déposée du mauvais côté signalée OK")
 
     # ---- 6) copies manquantes : seul le 4e (pas scanné)
     manquantes = services.copies_manquantes(quiz)

@@ -2051,3 +2051,17 @@ fieldset.matiere legend{font-weight:600;font-size:13px;padding:0 6px}
 .documents__matiere{font-size:15px;margin:14px 0 6px}
 /* QCM en deux versions : le sujet et la feuille de chaque version (23 novembre 2026) */
 .versions-documents{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+/* Corrigé d'un QCM en deux versions : version A à gauche, B à droite, un trait entre les deux */
+.corrige-versions{gap:0}
+.corrige-versions__cote{min-width:0;padding:0 22px}
+.corrige-versions__cote:first-child{padding-left:0}
+.corrige-versions__cote + .corrige-versions__cote{border-left:1px solid var(--qs-line);padding-right:0}
+.cellule--date{white-space:nowrap}
+/* dans une moitié, la date et les boutons vont à la ligne plutôt que de déborder */
+.corrige-versions .cellule--date,.corrige-versions .cellule--droite{white-space:normal}
+.corrige-versions .cellule--droite .btn{margin:2px 0}
+@media (max-width:860px){
+  .corrige-versions__cote{padding:0}
+  .corrige-versions__cote + .corrige-versions__cote{border-left:0;border-top:1px solid var(--qs-line);
+    margin-top:16px;padding-top:16px}
+}
