@@ -12,7 +12,10 @@ Rien n'y est visible tant que le personnel n'a pas publié (Quiz.resultats_publi
 Quiz.admis_publies, Communique.publie). Les recherches par n° sont freinées
 par adresse pour décourager l'essai de tous les numéros à la suite.
 """
+import time
+
 from django.core.cache import cache
+from django.db import connection, transaction
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
@@ -153,24 +156,59 @@ def _resultat_final(groupe, notes):
     return "a_venir"
 
 
+ADMIS_FRAICHEUR_S = 5 * 60      # la liste publiée suit les corrections dans les 5 minutes…
+ADMIS_GARDE_S = 7 * 24 * 3600   # …la précédente restant servie pendant qu'une requête la refait
+VERROU_ADMIS = 4_102_026        # verrou PostgreSQL de ce calcul, avec le n° de l'épreuve
+
+
+def _calculer_admis(quiz):
+    admission = services.admissions(quiz, services.compute_results(quiz))
+    liste = [{"numero": r["student"].student_number or "",
+              "nom": r["student"].last_name, "prenom": r["student"].first_name}
+             for r in (admission["admis"] if admission else [])]
+    # n° d'inscription dans l'ordre des nombres (« 9 » avant « 10 »), sans n° à la fin
+    liste.sort(key=lambda a: (not a["numero"], len(a["numero"]), a["numero"],
+                              a["nom"].lower(), a["prenom"].lower()))
+    return liste
+
+
 def _liste_admis(quiz):
-    """Admis (n°, prénom, nom), par n° d'inscription, gardés 5 minutes.
+    """Admis (n°, prénom, nom), par n° d'inscription, recalculés au plus toutes les 5 minutes.
 
     Ni rang ni note : le candidat n'apprend que « Admis » ou « Non admis » (demande de
     l'utilisateur, 13 novembre 2026). L'ordre de mérite dirait le rang : la liste suit le
     n° d'inscription, où chacun cherche le sien. La liste complète, rang et notes, reste
-    au personnel (page des résultats, PDF, Excel)."""
-    cle = f"qs-public-admis5:{quiz.pk}:{quiz.publie_le and quiz.publie_le.timestamp()}"
-    liste = cache.get(cle)
-    if liste is None:
-        admission = services.admissions(quiz, services.compute_results(quiz))
-        liste = [{"numero": r["student"].student_number or "",
-                  "nom": r["student"].last_name, "prenom": r["student"].first_name}
-                 for r in (admission["admis"] if admission else [])]
-        # n° d'inscription dans l'ordre des nombres (« 9 » avant « 10 »), sans n° à la fin
-        liste.sort(key=lambda a: (not a["numero"], len(a["numero"]), a["numero"],
-                                  a["nom"].lower(), a["prenom"].lower()))
-        cache.set(cle, liste, 300)
+    au personnel (page des résultats, PDF, Excel).
+
+    Le calcul reprend les notes de tous les candidats : 5 s et plus de 100 Mo pour un QCM de
+    10 000 candidats (mesure du 23 novembre 2026). Chaque visiteur qui trouvait le cache vide
+    le refaisait : à la publication puis toutes les 5 minutes, huit à la fois ont épuisé la
+    mémoire d'un poste de 6 Go et fait tomber PostgreSQL. Une seule requête le fait désormais,
+    tous processus confondus (verrou PostgreSQL) ; les autres servent la liste précédente ou,
+    s'il n'y en a pas encore (publication), attendent celle-ci."""
+    cle = f"qs-public-admis6:{quiz.pk}:{quiz.publie_le and quiz.publie_le.timestamp()}"
+
+    def gardee():
+        garde = cache.get(cle)          # (calculée à, liste)
+        return garde, garde is not None and time.time() - garde[0] < ADMIS_FRAICHEUR_S
+
+    garde, a_jour = gardee()
+    if a_jour:
+        return garde[1]
+    with transaction.atomic(), connection.cursor() as curseur:
+        if garde is None:
+            curseur.execute("SELECT pg_advisory_xact_lock(%s::int, %s::int)",
+                            [VERROU_ADMIS, quiz.pk])
+        else:
+            curseur.execute("SELECT pg_try_advisory_xact_lock(%s::int, %s::int)",
+                            [VERROU_ADMIS, quiz.pk])
+            if not curseur.fetchone()[0]:
+                return garde[1]         # une autre requête la refait : la précédente d'ici là
+        garde, a_jour = gardee()        # refaite pendant l'attente du verrou ?
+        if a_jour:
+            return garde[1]
+        liste = _calculer_admis(quiz)
+        cache.set(cle, (time.time(), liste), ADMIS_GARDE_S)
     return liste
 
 

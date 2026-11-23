@@ -305,9 +305,11 @@ LOGGING = {
 # n° (views_public) et celui des connexions y comptent les essais. En mémoire
 # de chaque processus, la limite était multipliée par le nombre de processus.
 # MAX_ENTRIES : à 300 (défaut), il suffirait d'essayer 300 identifiants pour
-# que le cache, en se vidant, efface les compteurs.
+# que le cache, en se vidant, efface les compteurs. grader.cache.CacheFichiers :
+# celui de Django, sans relire tout le dossier à chaque écriture (un fichier par
+# adresse qui a cherché un résultat : des milliers le jour des résultats).
 CACHES = {"default": {
-    "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+    "BACKEND": "grader.cache.CacheFichiers",
     "LOCATION": str(DATA_DIR / ("cache_test" if os.environ.get("QUIZSCAN_TEST") else "cache")),
     "OPTIONS": {"MAX_ENTRIES": 20000},
 }}

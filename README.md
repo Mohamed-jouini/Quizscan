@@ -1030,6 +1030,19 @@ python manage.py comptes_demo --supprimer
   et se partagent les limites de connexion et de recherche par n°. Contrôle :
   `docker compose logs quizscan | grep Connexion` doit montrer l'adresse publique
   des enseignants ;
+- **jour des résultats** (mesuré le 23 novembre 2026 sur un poste de 6 processeurs :
+  concours de 10 000 candidats, QCM de 50 questions) : une recherche de résultat demande
+  65 à 90 ms ; un processus gunicorn en sert une vingtaine par seconde, 4 processus 78 :
+  10 000 recherches passent en 2 à 4 minutes de pleine charge, au-delà les visiteurs
+  attendent, sans erreur. La liste publique des admis d'un tel QCM demande 4 à 5 s et plus
+  de 100 Mo de calcul : une seule requête la calcule à la fois, tous processus confondus
+  (verrou PostgreSQL), au plus toutes les 5 minutes, et les autres servent la précédente
+  (16 visiteurs à la fois, cache vide : un seul calcul, tous servis en 6 s). Avant, chacun
+  la recalculait, et huit à la fois avaient épuisé la mémoire du poste et fait tomber
+  PostgreSQL. Le cache en fichiers (`grader/cache.py`) ne relit plus tout son dossier à
+  chaque écriture (à 10 000 adresses, une recherche passait de 67 à 467 ms). Limite qui
+  demeure : 30 recherches par adresse et par 10 minutes, partagées par les candidats
+  derrière une même adresse (Wi-Fi commun, proxy mal réglé) ;
 - servir avec gunicorn/nginx (l'image Docker le fait) ; toutes les pages et
   tous les documents exigent une connexion, et chaque enseignant n'accède
   qu'à **ses propres** fiches PDF, scans, images de contrôle et recadrages
