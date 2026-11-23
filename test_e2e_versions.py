@@ -180,6 +180,8 @@ def main():
     # nominatives restent dans un seul PDF, A et B alternées (demande du 23 novembre 2026)
     assert quiz.subject_pdf.url not in page and "Sujet (questions)" not in page
     assert "Sujet — version A" in page and "Sujet — version B" in page
+    assert "Copie du correcteur — version A" in page and "Copie du correcteur — version B" in page
+    assert "?version=B" in page
     assert f'href="{quiz.sheet_pdf.url}"' in page and "Copies (A et B alternées)" in page
     assert "Feuille de réponses</a>" not in page and "{#" not in page and "{% comment" not in page
     lignes = r.context["version_b"]
@@ -224,10 +226,15 @@ def main():
         version = "AB"[k % 2]
         assert f"VERSION {version}" in texte and f"version {version}" in texte, (k, texte[:300])
         assert s.last_name in texte
-    correcteur = textes(c.get(reverse("quiz_copie_correcteur_pdf", args=[quiz.pk])).content)
+    url_correcteur = reverse("quiz_copie_correcteur_pdf", args=[quiz.pk])
+    correcteur = textes(c.get(url_correcteur).content)
     assert len(correcteur) == 1 and "VERSION A" in correcteur[0]
+    # la copie du correcteur de la version B, pour qui suit le sujet B (23 novembre 2026)
+    correcteur_b = c.get(url_correcteur + "?version=B").content
+    assert [("VERSION B" in t, "VERSION A" in t) for t in textes(correcteur_b)] == [(True, False)]
+    assert "VERSION A" in textes(c.get(url_correcteur + "?version=A").content)[0]
     print("  copies nominatives : A, B, A, B dans l'ordre des salles ; copie du correcteur "
-          "en version A OK")
+          "en version A, et en version B OK")
 
     # ---- 5) scan : mêmes réponses en A et en B, même note, réponses ramenées à la version A
     envois = []
@@ -258,14 +265,14 @@ def main():
     assert "Version B" in page and "Copie en version B" in page
     print("  relevé de notes et écran de vérification : « copie en version B » OK")
 
-    # un corrigé noirci sur une feuille B : les bonnes réponses de la version A
+    # la copie du correcteur B, noircie en suivant le sujet B : les bonnes réponses de la A
     Question.objects.filter(quiz=quiz, qtype="qcm").update(correct_choice=None)
-    feuille_b = noircir(render_page(pdf, 1), pages_b[0], CORRIGE)
+    feuille_b = noircir(render_page(correcteur_b, 0), pages_b[0], CORRIGE)
     c.post(reverse("quiz_answer_key", args=[quiz.pk]),
            {"files": [SimpleUploadedFile("corrige_b.jpg", jpg(simulate_scan(feuille_b)))]})
     lu = dict(quiz.questions.filter(qtype="qcm").values_list("order", "correct_choice"))
     assert lu == CORRIGE, (lu, CORRIGE)
-    print("  corrigé noirci sur une feuille B : les bonnes réponses de la version A OK")
+    print("  copie du correcteur B noircie et scannée : les bonnes réponses de la version A OK")
 
     # ---- 6) copies manquantes : seul le 4e (pas scanné)
     manquantes = services.copies_manquantes(quiz)

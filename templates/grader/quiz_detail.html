@@ -322,7 +322,11 @@
         <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">📝 Copies (A et B alternées)</a>
         {% endif %}
         <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">📋 Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% if quiz.place_anonyme %} et des places{% endif %} par salle</a>
-        {% if quiz.a_des_qcm %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}" target="_blank" title="La feuille de réponses sans candidat : noircissez-y les bonnes réponses, puis envoyez-la dans « Corrigé scanné »">✅ Copie du correcteur</a>{% endif %}
+        {% if quiz.a_des_qcm %}
+        {% if quiz.layout_json.versions %}
+        {% for v in quiz.layout_json.versions %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}?version={{ v }}" target="_blank" title="La feuille de réponses de la version {{ v }}, sans candidat : noircissez-y les bonnes réponses en suivant le sujet {{ v }}, puis envoyez-la dans « Corrigé scanné »">✅ Copie du correcteur — version {{ v }}</a>{% endfor %}
+        {% else %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}" target="_blank" title="La feuille de réponses sans candidat : noircissez-y les bonnes réponses, puis envoyez-la dans « Corrigé scanné »">✅ Copie du correcteur</a>{% endif %}
+        {% endif %}
       {% endif %}
       {% if quiz.sheet_pdf and quiz.layout_json.versions %}
       <div class="versions-documents" aria-label="Documents de chaque version">
@@ -335,7 +339,7 @@
     </form>
     {% endif %}
     {% if quiz.sheet_pdf and quiz.layout_json.versions %}<span class="helptext"><b>Deux versions, A et B</b> : la version B a ses questions et leurs choix dans un autre ordre. Remettez à chaque candidat {% if quiz.sheet_mode == "split" %}le sujet et la feuille de réponses de la même version{% else %}une fiche, en alternant A et B{% endif %} : la version est imprimée en haut de chaque page et lue au scan, chaque copie est corrigée selon la sienne.{% if quiz.id_mode == "qr" %} Les copies nominatives alternent A et B dans l'ordre des salles.{% endif %}</span>{% endif %}
-    {% if quiz.sheet_pdf and quiz.a_des_qcm %}<span class="helptext"><b>Copie du correcteur</b> : la feuille de réponses sans candidat, marquée « CORRIGÉ ». Le correcteur y noircit la bonne réponse de chaque question, puis la scanne dans « Corrigé scanné » : le corrigé se remplit tout seul.</span>{% endif %}
+    {% if quiz.sheet_pdf and quiz.a_des_qcm %}<span class="helptext"><b>Copie du correcteur</b> : la feuille de réponses sans candidat, marquée « CORRIGÉ ». Le correcteur y noircit la bonne réponse de chaque question, puis la scanne dans « Corrigé scanné » : le corrigé se remplit tout seul.{% if quiz.layout_json.versions %} En deux versions, une seule suffit, A ou B, selon le sujet que suit le correcteur : l'une ou l'autre remplit le même corrigé, pour les deux versions.{% endif %}</span>{% endif %}
     <span class="helptext">
       {% if quiz.sheet_mode == "split" %}
         <b>Sujet</b> : les questions et leurs choix, à distribuer (non scanné).

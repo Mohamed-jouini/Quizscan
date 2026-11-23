@@ -856,7 +856,9 @@ sujet séparé ; pas avec une fiche de réponses seule, dont le sujet vient d'ai
   (« Sujet — version A », « Feuille de réponses — version B »…) ; les boutons du sujet et
   de la feuille des deux versions ensemble ne sont plus proposés. Copies nominatives (QR) :
   un seul PDF, « Copies (A et B alternées) » dans l'ordre des salles, à remettre avec le
-  sujet de la même version. La copie du correcteur est en version A ;
+  sujet de la même version. La copie du correcteur existe dans les deux versions (« Copie du
+  correcteur — version A / B ») : une seule suffit, celle du sujet que suit le correcteur,
+  l'une ou l'autre remplit le même corrigé ;
 - **page du QCM** : le tableau des questions de la version A (à gauche, où se règle le
   corrigé) et, en regard, celui de la version B : n° imprimé, question et choix dans son
   ordre, n° de la question dans la version A, et sa bonne réponse lettrée pour la version

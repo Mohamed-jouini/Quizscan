@@ -1744,14 +1744,24 @@ def quiz_version_pdf(request, pk, version, document):
 def quiz_copie_correcteur_pdf(request, pk):
     """La copie du correcteur d'un QCM (demande de l'utilisateur, 16 novembre 2026) : la
     feuille de réponses, un exemplaire sans candidat ni QR, marqué « CORRIGÉ ». Le
-    correcteur y noircit les bonnes réponses et l'envoie dans « Corrigé scanné »."""
+    correcteur y noircit les bonnes réponses et l'envoie dans « Corrigé scanné ».
+
+    QCM en deux versions : ?version=B donne celle de la version B (demande du 23 novembre
+    2026), pour un correcteur qui suit le sujet B ; sans précision, la version A. L'une ou
+    l'autre remplit le même corrigé (la lecture ramène la B à la A)."""
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if not quiz.layout_json or not quiz.a_des_qcm:
         messages.error(request, "Générez d'abord la fiche de réponses PDF.")
         return redirect("quiz_detail", pk=pk)
-    resp = HttpResponse(sheet_pdf.generate_sheet_pdf(quiz, quiz.layout_json, corrige=True),
+    disposition, nom = quiz.layout_json, f"copie_correcteur_{quiz.pk}"
+    version = request.GET.get("version", "")
+    if version in layout_mod.versions_de(disposition):
+        disposition = {**disposition, "versions": [version],
+                       "pages": layout_mod.pages_de_version(disposition, version)}
+        nom += f"_version_{version}"
+    resp = HttpResponse(sheet_pdf.generate_sheet_pdf(quiz, disposition, corrige=True),
                         content_type="application/pdf")
-    resp["Content-Disposition"] = f'inline; filename="copie_correcteur_{quiz.pk}.pdf"'
+    resp["Content-Disposition"] = f'inline; filename="{nom}.pdf"'
     return resp
 
 
