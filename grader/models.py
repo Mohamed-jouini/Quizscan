@@ -22,8 +22,24 @@ def nom_et_prenom(nom, prenom):
     return f"{(prenom or '').strip()} {(nom or '').strip()}".strip()
 
 
+class ClassGroupQuerySet(models.QuerySet):
+    """Les classes, et les listes de candidats des concours : les deux sont des ClassGroup.
+
+    Chaque étape d'un concours reçoit à sa création sa propre liste de candidats
+    (views.quiz_create) : ce n'est pas une classe. Demande de l'utilisateur du 23 novembre
+    2026 (« lorsque fait un concours ne pas créer une classe ») : elle ne paraît ni ne compte
+    parmi les classes (tableau de bord, épreuve de classe, administration). Une liste est
+    celle d'un concours tant qu'une épreuve de concours (auto_enroll) s'y rattache."""
+
+    def classes(self):
+        return self.exclude(quizzes__auto_enroll=True)
+
+    def de_concours(self):
+        return self.filter(quizzes__auto_enroll=True).distinct()
+
+
 class ClassGroup(models.Model):
-    """Une classe / un groupe d'étudiants."""
+    """Une classe / un groupe d'étudiants (ou la liste de candidats d'un concours)."""
     # SET_NULL et non CASCADE : quand un enseignant quitte l'établissement,
     # son compte est supprimé mais ses classes, ses épreuves et les notes de
     # ses élèves restent — ce sont les archives de l'établissement, pas sa
@@ -46,6 +62,8 @@ class ClassGroup(models.Model):
         verbose_name="enseignants")
     name = models.CharField("nom de la classe", max_length=120)
     created_at = models.DateTimeField("créée le", auto_now_add=True)
+
+    objects = ClassGroupQuerySet.as_manager()
 
     class Meta:
         verbose_name = "classe"

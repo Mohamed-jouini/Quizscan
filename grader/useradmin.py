@@ -2,6 +2,8 @@
 
 L'administrateur d'établissement règle ici, pour chaque enseignant :
   - les **classes** dont il a la charge — il ne verra que celles-là ;
+  - les **concours** dont il a la charge (une liste de candidats par étape, à part
+    des classes) ;
   - le droit de **créer des épreuves** ;
   - le droit de **corriger les copies**.
 Les deux droits sont indépendants : préparer les sujets et dépouiller ne sont
@@ -67,6 +69,15 @@ class CompteChangeForm(forms.ModelForm):
                   "collègues qui l'ont déjà. Une classe décochée n'est pas "
                   "supprimée.")
 
+    # La liste de candidats d'un concours n'est pas une classe (23 novembre 2026) : elle se
+    # coche à part, une par étape du concours.
+    concours = forms.ModelMultipleChoiceField(
+        label="Concours de cet enseignant", required=False,
+        queryset=ClassGroup.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        help_text="Les listes de candidats des concours, une par étape : il voit les "
+                  "étapes cochées, leurs candidats, copies et résultats.")
+
     peut_creer = forms.BooleanField(
         label="Créer des épreuves", required=False,
         help_text="Saisir les questions, régler la fiche, produire les PDF.")
@@ -86,9 +97,11 @@ class CompteChangeForm(forms.ModelForm):
 
         # Toutes les classes sont proposées : une classe peut avoir plusieurs
         # enseignants, en cocher une ici n'en retire personne.
-        self.fields["classes"].queryset = ClassGroup.objects.all()
+        self.fields["classes"].queryset = ClassGroup.objects.classes()
+        self.fields["concours"].queryset = ClassGroup.objects.de_concours()
         if instance and instance.pk:
-            self.fields["classes"].initial = instance.classes_attribuees.all()
+            self.fields["classes"].initial = instance.classes_attribuees.classes()
+            self.fields["concours"].initial = instance.classes_attribuees.de_concours()
             self.fields["role"].initial = (
                 ROLE_ADMIN if instance.is_superuser else ROLE_ENSEIGNANT)
             self.fields["peut_creer"].initial = droits.peut_creer(instance)
@@ -150,7 +163,8 @@ class CompteChangeForm(forms.ModelForm):
         choisies = self.cleaned_data.get("classes")
         if choisies is None:
             return
-        compte.classes_attribuees.set(choisies)
+        compte.classes_attribuees.set(list(choisies)
+                                      + list(self.cleaned_data.get("concours") or []))
 
     def _enregistrer_droits(self, compte):
         """Les deux cases deviennent des permissions Django.
@@ -194,6 +208,10 @@ class CompteAdmin(TitresFrancais, UserAdmin):
         ("Classes", {
             "description": "Les classes dont cet enseignant a la charge.",
             "fields": ("classes",)}),
+        ("Concours", {
+            "description": "Les concours dont il a la charge (chaque étape a sa liste "
+                           "de candidats).",
+            "fields": ("concours",)}),
         ("Autorisations", {
             "description": "Les deux gestes se donnent séparément. Dans tous "
                            "les cas, la note d'un QCM reste celle de la "
@@ -228,7 +246,7 @@ class CompteAdmin(TitresFrancais, UserAdmin):
 
     @admin.display(description="Classes")
     def ses_classes(self, obj):
-        noms = list(obj.classes_attribuees.values_list("name", flat=True))
+        noms = list(obj.classes_attribuees.classes().values_list("name", flat=True))
         return ", ".join(noms) if noms else "—"
 
     @admin.display(description="Autorisations")

@@ -92,7 +92,7 @@
     </div>
     <span class="tile__note">
       {% if week_total %}<b class="tile__fort">+{{ week_total }} cette semaine</b> · {% endif %}{{ n_quizzes }} épreuve{{ n_quizzes|pluralize }} ·
-      {{ n_classes }} classe{{ n_classes|pluralize }} · {{ n_students }} étudiant{{ n_students|pluralize }}
+      {{ n_classes }} classe{{ n_classes|pluralize }} · {{ n_students }} étudiant{{ n_students|pluralize }}{% if n_candidats %} · {{ n_candidats }} candidat{{ n_candidats|pluralize }} aux concours{% endif %}
     </span>
   </div>
 

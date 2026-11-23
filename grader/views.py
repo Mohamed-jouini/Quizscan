@@ -147,7 +147,11 @@ def dashboard(request):
     """Vue d'ensemble de l'enseignant : volumes, taux de lecture automatique
     et derniers lots de copies."""
     quizzes = _my_quizzes(request)
-    classes = _my_classes(request)
+    # la liste de candidats d'un concours n'est pas une classe (23 novembre 2026) : ses
+    # candidats se comptent à part, ceux de la première étape (les suivantes les reprennent)
+    classes = _my_classes(request).classes()
+    candidats = Student.objects.filter(class_group__in=_my_classes(request).filter(
+        quizzes__auto_enroll=True, quizzes__epreuve_precedente__isnull=True))
     sheets = _my_sheets(request)
 
     n_sheets = sheets.count()
@@ -278,6 +282,7 @@ def dashboard(request):
         "classes": classes,
         "n_classes": classes.count(),
         "n_students": Student.objects.filter(class_group__in=classes).count(),
+        "n_candidats": candidats.count(),
         "n_sheets": n_sheets,
         "n_auto": n_auto,
         "n_attention": n_attention,

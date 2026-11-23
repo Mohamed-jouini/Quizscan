@@ -142,8 +142,16 @@ class ClassGroupAdmin(TitresFrancais, admin.ModelAdmin):
     filter_horizontal = ("enseignants",)
     readonly_fields = ("owner",)
 
+    def changelist_view(self, request, extra_context=None):
+        # La liste de candidats d'un concours n'est pas une classe (23 novembre 2026) : elle
+        # se gère depuis le menu Concours, et un enseignant la reçoit par sa fiche
+        # (« Concours de cet enseignant »). Sa page reste ouverte, pas la liste des classes.
+        request.classes_seules = True
+        return super().changelist_view(request, extra_context)
+
     def get_queryset(self, request):
-        return super().get_queryset(request).prefetch_related("enseignants")
+        qs = super().get_queryset(request).prefetch_related("enseignants")
+        return qs.classes() if getattr(request, "classes_seules", False) else qs
 
     @admin.display(description="Enseignants")
     def ses_enseignants(self, obj):
@@ -240,6 +248,36 @@ class QuizAdmin(TitresFrancais, admin.ModelAdmin):
             journal.noter(request.user, "note_admission", quiz=obj,
                           objet="Note minimale d'admission",
                           avant=note, apres=obj.note_admission)
+
+    # Supprimer une étape de concours supprime aussi sa liste de candidats, restée sans
+    # épreuve : elle passerait sinon pour une classe (23 novembre 2026). La page de
+    # confirmation l'annonce avec le reste.
+    @staticmethod
+    def _listes_orphelines(epreuves):
+        pks = {q.pk for q in epreuves}
+        listes = {q.class_group for q in epreuves if q.auto_enroll}
+        return [g for g in listes if not g.quizzes.exclude(pk__in=pks).exists()]
+
+    def get_deleted_objects(self, objs, request):
+        objs = list(objs)
+        supprimes, compte, permissions, proteges = super().get_deleted_objects(objs, request)
+        for liste in self._listes_orphelines(objs):
+            n = liste.students.count()
+            supprimes.append(f"Liste de candidats du concours : {liste.name} "
+                             f"({n} candidat{'s' if n > 1 else ''})")
+        return supprimes, compte, permissions, proteges
+
+    def delete_model(self, request, obj):
+        orphelines = self._listes_orphelines([obj])
+        super().delete_model(request, obj)
+        for liste in orphelines:
+            liste.delete()
+
+    def delete_queryset(self, request, queryset):
+        orphelines = self._listes_orphelines(list(queryset.select_related("class_group")))
+        super().delete_queryset(request, queryset)
+        for liste in orphelines:
+            liste.delete()
 
     def save_formset(self, request, form, formset, change):
         """Questions modifiées ou supprimées depuis la fiche de l'épreuve."""

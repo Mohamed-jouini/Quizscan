@@ -161,7 +161,12 @@ non identifiée s'affecte en deux clics dans l'écran de vérification.
 
 Créez le concours depuis le menu **Concours → Nouveau concours** : pas de
 classe à choisir ni de case à cocher, chaque concours a sa propre liste de
-candidats. Deux modes d'identification :
+candidats, une par étape. Cette liste n'est pas une classe : elle n'apparaît ni
+dans les classes du tableau de bord (ses candidats y sont comptés à part), ni
+dans le menu « Classe » d'une épreuve de classe, ni dans **Administration →
+Classes** ; la fiche d'un enseignant la propose à part, sous « Concours ».
+Supprimer le concours depuis l'administration supprime aussi sa liste de
+candidats, et la page de confirmation l'annonce. Deux modes d'identification :
 
 - **QR code — étiquette autocollante** (par défaut) : importez la liste des
   candidats (Excel, voir `modele_candidats.xlsx`), imprimez la planche
@@ -606,6 +611,8 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_matieres.py` | écrit d'un concours en trois matières : réglages (noms, coefficients, sujets), sujet, copies et liste par salle de chaque matière, un seul envoi de scans, moyenne pondérée, note minimale, oral des admis, relevé et export par matière |
 | `test_e2e_import.py` | import de questionnaires et de candidats (Excel, Word, PDF, CSV), banque de questions |
 | `test_e2e_forms.py` | création d'un concours (sans classe ni case « mode concours ») et d'un quiz, nombre de choix par question jusqu'à la lecture de la copie |
+| `test_e2e_concours_classe.py` | la liste de candidats d'un concours n'est pas une classe : tableau de bord, menu « Classe », administration (liste des classes, fiche de l'enseignant), liste supprimée avec son concours |
+| `test_e2e_charge.py` | jour des résultats : liste publique des admis calculée une seule fois pour des visiteurs simultanés, la précédente servie pendant son calcul, cache en fichiers sans relecture du dossier à chaque écriture |
 | `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » (QCM, et écrit depuis sa page ; rien sur la page du lot) |
 | `test_e2e_web.py` | par l'interface : étiquettes QR d'une classe, correction en arrière-plan, secours OCR, corrigé modifié après l'épreuve, alerte de fiche périmée, droits d'accès |
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
@@ -940,13 +947,16 @@ réellement un administrateur d'établissement :
   *Administrateur*), les **classes** de chacun, ses **autorisations**, l'état
   actif, et un lien **Modifier** le mot de passe ;
 - la fiche d'un compte est découpée en *Compte*, *Identité*, *Accès*,
-  *Classes* et *Autorisations* ; les permissions unitaires de Django sont
-  repliées, inutiles dans la plupart des établissements ;
+  *Classes*, *Concours* et *Autorisations* ; les permissions unitaires de Django
+  sont repliées, inutiles dans la plupart des établissements ;
 - **« Rôle »** remplace les deux cases « Statut équipe » et « Statut
   super-utilisateur » : dans QuizScan elles vont toujours ensemble, un compte
   ouvre l'administration et voit tout, ou ni l'un ni l'autre ;
 - **« Classes »** : l'enseignant ne voit que les classes cochées, leurs
   étudiants et leurs épreuves. Une classe décochée n'est pas supprimée ;
+- **« Concours »** : les listes de candidats des concours, une par étape, cochées à
+  part des classes ; l'enseignant voit les étapes cochées, leurs candidats, copies
+  et résultats ;
 - **« Autorisations »** : *Créer des épreuves* et *Corriger les copies* se
   donnent séparément. Aucune des deux ne permet de modifier la note d'un QCM,
   établie par lecture optique ; seul un administrateur peut rectifier une

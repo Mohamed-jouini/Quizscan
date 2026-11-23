@@ -414,7 +414,7 @@ class QuizForm(forms.ModelForm):
             del self.fields["annee"]            # une année : concours seulement
             # quiz de classe : correction toujours immédiate
             del self.fields["grading_mode"]
-            qs = self.fields["class_group"].queryset
+            qs = ClassGroup.objects.classes()       # pas la liste de candidats d'un concours
             if user is not None and not user.is_superuser:
                 qs = qs.filter(enseignants=user).distinct()
             self.fields["class_group"].queryset = qs
