@@ -25,6 +25,8 @@ urlpatterns = [
          name="quiz_copies_manquantes_xlsx"),
     path("quiz/<int:pk>/copie-correcteur.pdf", views.quiz_copie_correcteur_pdf,
          name="quiz_copie_correcteur_pdf"),
+    path("quiz/<int:pk>/version-<str:version>/<str:document>.pdf", views.quiz_version_pdf,
+         name="quiz_version_pdf"),
     path("quiz/<int:pk>/notes-oral.xlsx", views.quiz_notes_oral_xlsx,
          name="quiz_notes_oral_xlsx"),
     path("quiz/<int:pk>/bulletins.pdf", views.quiz_bulletins_pdf, name="quiz_bulletins_pdf"),

@@ -128,6 +128,8 @@ LABELS = {
         "corrige_instr": "Noircissez la bonne réponse de chaque question, puis scannez cette "
                          "copie dans « Corrigé scanné », sur la page de l'épreuve.",
         "pli": "pli au milieu",
+        # QCM en deux versions (23 novembre 2026), en haut de chaque page
+        "version": "VERSION",
     },
     "ar": {
         "last": "اللقب", "first": "الاسم",
@@ -171,6 +173,7 @@ LABELS = {
         "corrige_instr": "املأ خانة الإجابة الصحيحة لكل سؤال، ثم امسح هذه النسخة ضوئيا "
                          "وأرسلها في خانة الإصلاح الممسوح بصفحة الاختبار.",
         "pli": "طيّ في الوسط",
+        "version": "النسخة",
     },
 }
 
@@ -253,22 +256,31 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
         # requête pour toutes les copies, pas une par copie (des milliers)
         prefetch_related_objects([s for s in students if s is not None], "inscrit")
     units = students or serials or [None]
-    pages_unite = len(layout["pages"])
     etablissement = ligne_etablissement(quiz)       # en haut de chaque page lue
-    for rang, (unit, page) in enumerate([(u, p) for u in units for p in layout["pages"]]):
-        if progres is not None and rang and rang % pages_unite == 0:
-            progres(rang // pages_unite)       # copies terminées (génération en arrière-plan)
+    for i_copie, unit, page, rang_page, pages_de_la_copie in _pages_a_imprimer(
+            layout, units, plusieurs=bool(students or serials), corrige=corrige):
+        if progres is not None and rang_page == 0 and i_copie:
+            progres(i_copie)                   # copies terminées (génération en arrière-plan)
         student = unit if (students and unit is not None) else None
         pidx = page["page_index"]              # code de page, lu au scan
         # n° de la page dans son cahier : à l'écrit, la page de garde est la première
-        numero = 0 if mode == "ecrit" else rang % pages_unite
+        numero = 0 if mode == "ecrit" else rang_page
+        total_pages = pages_copie if mode == "ecrit" else pages_de_la_copie
         matiere = page.get("matiere", "")       # écrit en matières : à son nom
+        version = page.get("version", "")       # QCM en deux versions : « A » ou « B »
 
         # Repères ArUco (avec leur marge blanche débordant légèrement)
         # Calage : cadre fin autour de la page et code de page en haut (plus
         # de carrés noirs dans les coins, voir layout.CADRE_MARGE).
         talon = bool(layout.get("talon"))
         _dessiner_cadre(c, pidx, layout.get("cadre_haut", L.CADRE_MARGE), talon)
+        if version:
+            # du côté libre : l'établissement s'écrit du côté de sa langue (à droite pour
+            # l'institut, en arabe) ; sur une copie à talon, il est sur le talon, et le QR
+            # est en dessous à droite
+            gauche = talon or (has_arabic(etablissement) if etablissement else lang == "ar")
+            _dessiner_version(c, draw, version, layout.get("cadre_haut", L.CADRE_MARGE),
+                              gauche=gauche, T=T)
 
         # En-tête (concours : titre seul, sans le nom du conteneur de candidats)
         head_title = (quiz.title if concours
@@ -283,7 +295,7 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
         if talon:
             # nom, titre et consigne sur le talon, au-dessus du trait de coupe
             _dessiner_talon(c, draw, student, head_title,
-                            f"{T['page']} {numero + 1} / {pages_copie}",
+                            f"{T['page']} {numero + 1} / {total_pages}",
                             consigne, T, lang, code, etablissement,
                             libelle=T["corrige"] if corrige else None)
         else:
@@ -302,10 +314,10 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
                 draw(consigne, L.PAGE_W / 2, _y(28.5), 8, align="center")
             elif lang == "ar":
                 draw(consigne, L.PAGE_W / 2, _y(28.5), 8, align="center")
-                draw(f"{T['page']} {numero + 1} / {len(layout['pages'])}",
+                draw(f"{T['page']} {numero + 1} / {total_pages}",
                      L.CONTENT_X1, _y(28.5), 8, align="right")
             else:
-                draw(f"{T['page']} {numero + 1} / {len(layout['pages'])} — {consigne}",
+                draw(f"{T['page']} {numero + 1} / {total_pages} — {consigne}",
                      L.PAGE_W / 2, _y(28.5), 8, align="center")
 
         # Zone nom / prénom  (ou emplacement réservé à une étiquette autocollante)
@@ -455,16 +467,18 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
                 xs = [b[0] for b in bubbles]
                 pts = q.points if q else 1
                 unit = T["pt"] if pts <= 1 else T["pts"]
+                # n° imprimé : celui de la place dans la version B (« num »)
+                num = item.get("num", item["order"])
                 if lang == "ar":
                     num_x = max(xs) + 6.5
                     c.setFont("Helvetica-Bold", 10)
-                    c.drawString(num_x * mm, _y(cy + 1.5), f".{item['order']}")
+                    c.drawString(num_x * mm, _y(cy + 1.5), f".{num}")
                     draw(f"{pts:g} {unit}", num_x + 4.0, _y(cy + 4.8),
                          5.5, align="right", gray=0.45)
                 else:
                     c.setFont("Helvetica-Bold", 10)
                     c.drawRightString((min(xs) - 6.5) * mm, _y(cy + 1.5),
-                                      f"{item['order']}.")
+                                      f"{num}.")
                     draw(f"{pts:g} {unit}", min(xs) - 6.5, _y(cy + 4.6),
                          5.5, align="right", gray=0.45)
             for k, (bx, by) in enumerate(bubbles):
@@ -513,7 +527,9 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
                          bold=True)
             _dessiner_lignes(c, page["lignes"])
 
-        draw(f"{quiz.title} — page {numero + 1}",
+        draw(f"{quiz.title} — page {numero + 1}"
+             + (f" — {T['version'].lower()} {version}" if version and lang != "ar"
+                else f" — {T['version']} {version}" if version else ""),
              L.PAGE_W / 2, _y(L.PAGE_H - 5.0), 6.5, align="center", gray=0.5)
         c.showPage()
 
@@ -628,6 +644,46 @@ def _imposer_a3(pdf, lang, par_exemplaire=None):
                         feuille.show_pdf_page(moitie, source, debut + n - 1)
                 feuille.show_pdf_page(feuille.rect, calque, 0)
         return sortie.tobytes(garbage=1, deflate=True)
+
+
+def _pages_a_imprimer(layout, units, plusieurs, corrige=False):
+    """(n° de la copie, unité, page, rang de la page dans la copie, pages de la copie),
+    dans l'ordre d'impression. QCM en deux versions (23 novembre 2026) : une copie n'a que
+    les pages de sa version, A et B alternées copie après copie (deux voisins de salle
+    n'ont pas la même) ; une fiche unique sort en un exemplaire de chaque version ; la
+    copie du correcteur, en version A (le corrigé se lit sur l'une comme sur l'autre)."""
+    versions = L.versions_de(layout)
+    if not versions:
+        suites = [(u, layout["pages"]) for u in units]
+    else:
+        par_version = {v: L.pages_de_version(layout, v) for v in versions}
+        if corrige:
+            suites = [(units[0], par_version[versions[0]])]
+        elif plusieurs:
+            suites = [(u, par_version[versions[i % len(versions)]])
+                      for i, u in enumerate(units)]
+        else:
+            suites = [(units[0], par_version[v]) for v in versions]
+    for i, (unit, pages) in enumerate(suites):
+        for k, page in enumerate(pages):
+            yield i, unit, page, k, len(pages)
+
+
+def _dessiner_version(c, draw, version, haut, gauche, T):
+    """« VERSION A » en gros, en haut du cadre, à hauteur du code de page : dans le cadre,
+    elle reste sur une copie à talon découpée. Du côté que l'établissement laisse libre
+    (gauche : vrai quand il est à droite, ou que le QR d'une copie à talon est juste
+    dessous à droite). Ni sur les tirets lus (au centre), ni aux emplacements des anciens
+    carrés noirs des coins (x < 22 et x > 188 mm)."""
+    w, h = 34.0, 6.0
+    x = L.CONTENT_X0 if gauche else L.CONTENT_X1 - w
+    y = haut + 1.3
+    c.setLineWidth(1.0)
+    c.setFillGray(0.9)
+    c.roundRect(x * mm, _y(y, h), w * mm, h * mm, 1.5 * mm, stroke=1, fill=1)
+    c.setFillGray(0.0)
+    draw(f"{T['version']} {version}", x + w / 2, _y(y + h / 2 + 1.5), 11, bold=True,
+         align="center")
 
 
 def _dessiner_cadre(c, page_index, haut=L.CADRE_MARGE, talon=False):
@@ -929,6 +985,9 @@ SUJET_TEXTES = {
         "r_pages": "Le sujet comporte {p} page(s) de questions, numérotées de 1 "
                    "à {n}, et une feuille de réponses séparée.",
         "r_nombre": "Nombre de questions : {n}.",
+        "r_version": "Ce sujet est celui de la VERSION {v} : votre feuille de réponses "
+                     "doit porter la même mention, VERSION {v}. Sinon, signalez-le au "
+                     "surveillant.",
         "r_unique": "Chaque question n'admet qu'une seule bonne réponse.",
         "r_unique_qcm": "Chaque question à choix multiples n'admet qu'une seule "
                         "bonne réponse.",
@@ -992,6 +1051,8 @@ SUJET_TEXTES = {
         "r_pages": "يتضمن الاختبار {p} من الأسئلة المرقمة من 1 إلى {n} "
                    "وورقة إجابة منفصلة.",
         "r_nombre": "عدد الأسئلة : {n}",
+        "r_version": "هذا الاختبار هو النسخة {v} : يجب أن تحمل ورقة إجابتك النسخة {v} "
+                     "أيضا، وإلا فأعلم المراقب.",
         "r_unique": "كل سؤال يحتمل إجابة واحدة صحيحة لا غير.",
         "r_unique_qcm": "كل سؤال متعدد الاختيارات يحتمل إجابة واحدة صحيحة لا غير.",
         "r_penalite": "تُطرح {x} نقطة عن كل إجابة خاطئة، ولا يُطرح شيء عن "
@@ -1059,7 +1120,38 @@ def _cle_identification(quiz):
     return "c_etiquette" if L._uses_sticker(quiz) else "c_nominative"
 
 
-def generate_subject_pdf(quiz, questions=None):
+def questions_de_la_version(quiz, version):
+    """Les questions d'un QCM telles que le sujet de cette version les imprime, d'après
+    la disposition enregistrée (celle de la feuille de réponses imprimée)."""
+    questions = list(quiz.questions.order_by("order"))
+    if version != "B":
+        return questions
+    return L.questions_de_version(questions, (quiz.layout_json or {}).get("version_b", []))
+
+
+def _assembler(pdfs):
+    """Plusieurs PDF bout à bout, dans l'ordre."""
+    if len(pdfs) == 1:
+        return pdfs[0]
+    sortie = pymupdf.open()
+    for data in pdfs:
+        with pymupdf.open(stream=data, filetype="pdf") as doc:
+            sortie.insert_pdf(doc)
+    return sortie.tobytes()
+
+
+def generate_subject_pdf(quiz, questions=None, version=None):
+    """PDF du sujet. QCM en deux versions (23 novembre 2026) : le sujet de la version A
+    puis celui de la version B (version : celui-là seul), chacun dans l'ordre de sa feuille
+    de réponses, « VERSION A » ou « VERSION B » sur chaque page. Voir _sujet_pdf."""
+    versions = L.versions_de(getattr(quiz, "layout_json", None))
+    if questions is None and versions and getattr(quiz, "type_epreuve", "qcm") == "qcm":
+        return _assembler([_sujet_pdf(quiz, questions_de_la_version(quiz, v), v)
+                           for v in ([version] if version in versions else versions)])
+    return _sujet_pdf(quiz, questions)
+
+
+def _sujet_pdf(quiz, questions=None, version=""):
     """PDF du SUJET (questions seules, sans cases à noircir) — à distribuer
     aux étudiants ; la grille de réponses est un document séparé (sheet_pdf).
     Aucun repère ArUco : ce document n'est pas scanné.
@@ -1174,6 +1266,17 @@ def generate_subject_pdf(quiz, questions=None):
         page_no[0] += 1
         draw(S["page"].format(i=page_no[0], n=total), L.PAGE_W / 2, 12.0, 9,
              align="center", gray=0.35)
+        if version:
+            # la version du sujet, à rapprocher de celle de la feuille de réponses
+            w, h, y = 34.0, 7.0, 7.5
+            x = X0 if rtl else X1 - w
+            c.setLineWidth(1.0)
+            c.setFillGray(0.9)
+            c.roundRect(x * mm, (L.PAGE_H - (y + h)) * mm, w * mm, h * mm, 1.5 * mm,
+                        stroke=1, fill=1)
+            c.setFillGray(0.0)
+            draw(f"{T['version']} {version}", x + w / 2, y + h / 2 + 1.7, 12, bold=True,
+                 align="center")
 
     def pied_page():
         if not titre_a_la_main:
@@ -1302,14 +1405,17 @@ def generate_subject_pdf(quiz, questions=None):
         n_q = len(qs)
         remarques = [S["r_pages"].format(p=_nb_pages(len(pages), lang), n=n_q),
                      S["r_nombre"].format(n=n_q)]
+        if version:
+            remarques.insert(0, S["r_version"].format(v=version))
         if a_qcm:
             remarques.append(S["r_unique_qcm"] if a_redigees else S["r_unique"])
             if quiz.wrong_penalty:
                 remarques.append(S["r_penalite"].format(x=f"{quiz.wrong_penalty:g}"))
         cle = _cle_identification(quiz)
         consignes = [S[cle].format(f=S["feuille"])]
-        # Chaque page de la feuille est identifiée séparément au scan.
-        nb_feuilles = len((quiz.layout_json or {}).get("pages", []))
+        # Chaque page de la feuille est identifiée séparément au scan (en deux versions :
+        # les pages de la sienne).
+        nb_feuilles = len(L.pages_de_version(quiz.layout_json, version or "A"))
         if nb_feuilles > 1 and cle == "c_etiquette":
             consignes.append(S["c_chaque_page_etiquette"].format(p=_nb_pages(nb_feuilles, lang)))
         elif nb_feuilles > 1 and cle in ("c_grille", "c_nom"):

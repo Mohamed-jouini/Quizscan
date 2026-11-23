@@ -610,6 +610,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
 | `test_e2e_design.py` | une seule feuille de style pour toutes les pages, aucun style redéclaré en ligne, aucun jeton défini deux fois |
 | `test_e2e_corrige.py` | bonne réponse facultative, corrigé scanné et conservé, correction bloquée tant qu'il manque une réponse, copie du correcteur (sans candidat, « CORRIGÉ ») lue par le corrigé scanné |
+| `test_e2e_versions.py` | QCM en deux versions : réglage refusé sans sujet imprimé, pages A puis B (A au millimètre, B fixe), sujets dans l'ordre du tirage, copies alternées, copie B lue et ramenée à la version A, corrigé sur feuille B, copies manquantes, questionnaire complet |
 | `test_e2e_robustesse.py` | pannes d'OCR (Tesseract absent, paquet de langue manquant), fiches de plus de 12 pages, QR collés de travers dans leur cadre, QR abîmés (tache sur un coin, stylo, coin arraché, froissé, impression pâle, 100 dpi en JPEG 10, copies d'avant en correction M), contenu de la planche d'étiquettes, identifiants d'URL bricolés |
 
 Pour tout lancer : `for t in test_e2e*.py; do python $t || break; done`
@@ -837,6 +838,28 @@ s'applique :
 
 De même, « Hauteur zone réponse » n'apparaît que pour une question manuscrite,
 et les choix disparaissent pour celle-ci.
+
+## QCM en deux versions, A et B
+
+Réglage « Versions du sujet » de la page d'un QCM (avec un questionnaire complet ou un
+sujet séparé ; pas avec une fiche de réponses seule, dont le sujet vient d'ailleurs) :
+
+- la **version B** imprime les QCM dans un autre ordre, et les choix de chacun aussi ;
+  une réponse rédigée garde sa place. Le tirage est fixé par l'épreuve : la même version
+  B à chaque génération, tant que les questions ne changent pas. Une question sans texte
+  de choix garde ses cases dans l'ordre ; évitez les choix du type « toutes les réponses
+  ci-dessus » ;
+- **« VERSION A » ou « VERSION B »** est imprimé en haut de chaque page du sujet et de la
+  feuille de réponses (et rappelé dans les remarques du sujet). La feuille B a ses propres
+  codes de page : le scan reconnaît la version, rien à cocher pour le candidat ;
+- **documents** : chaque PDF contient la version A puis la version B, et le sujet et la
+  feuille de chaque version se téléchargent aussi seuls. Copies nominatives (QR) : A et B
+  alternées dans l'ordre des salles, à remettre avec le sujet de la même version. La copie
+  du correcteur est en version A ;
+- **correction** : la réponse lue sur une copie B est ramenée à la question et au choix de
+  la version A. Corrigé, notes, statistiques, exports ne voient que la version A ; un
+  corrigé noirci sur une feuille B se lit juste. Le relevé de notes et l'écran de
+  vérification d'une copie B le signalent (numérotation de la version A).
 
 ## Le corrigé : saisi, ou scanné
 

@@ -111,6 +111,7 @@ def main():
         base.execute("ALTER TABLE grader_quiz DROP COLUMN date_epreuve")
         base.execute("ALTER TABLE grader_quiz DROP COLUMN annee")
         base.execute("ALTER TABLE grader_quiz DROP COLUMN coefficient_final")
+        base.execute("ALTER TABLE grader_quiz DROP COLUMN versions")
         for colonne in ("coefficient", "sujet", "duree", "date_epreuve"):
             base.execute(f"ALTER TABLE grader_question DROP COLUMN {colonne}")
         for colonne in ("cin_lieu", "cin_date", "centre", "salle"):

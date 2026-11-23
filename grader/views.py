@@ -804,6 +804,24 @@ def _generer_fiche_qcm(quiz, count, progres=None):
                "remplir et scanner.")
     quiz.save()
     a_dire = [("success", msg)]
+    if layout_mod.versions_de(layout):
+        # deux versions, A et B (23 novembre 2026)
+        if quiz.id_mode == "qr":
+            a_dire.append(("info", "Deux versions, A et B : les copies alternent A, B, A, B… "
+                                   "(dans l'ordre des salles). Remettez à chacun le sujet de la "
+                                   "version imprimée en haut de sa copie. Chaque copie est "
+                                   "corrigée selon sa version."))
+        elif quiz.sheet_mode == "split":
+            a_dire.append(("info", "Deux versions, A et B : chaque PDF contient la version A "
+                                   "puis la version B, et chaque version se télécharge aussi "
+                                   "seule. Remettez à chaque candidat le sujet et la feuille de "
+                                   "la même version (« VERSION A » ou « VERSION B » en haut de "
+                                   "chaque page). Chaque copie est corrigée selon sa version."))
+        else:
+            a_dire.append(("info", "Deux versions, A et B : le PDF contient la fiche de la "
+                                   "version A puis celle de la version B (chacune se "
+                                   "télécharge aussi seule). Distribuez-les en alternant A et "
+                                   "B. Chaque copie est corrigée selon sa version."))
     if cases_deplacees:
         a_dire.append(("warning", "Les cases de la feuille ont changé de place : "
                                   "une feuille imprimée avant cette génération "
@@ -1063,6 +1081,15 @@ def quiz_detail(request, pk):
             new_mode = request.POST.get("sheet_mode")
             if new_mode in dict(Quiz.SHEET_MODES):
                 quiz.sheet_mode = new_mode
+            # deux versions, A et B (23 novembre 2026) : le sujet de chacune sort de
+            # l'application, dans son ordre ; pas avec une fiche de réponses seule
+            if request.POST.get("versions") in ("1", "2"):
+                quiz.versions = int(request.POST["versions"])
+            if quiz.versions == 2 and quiz.sheet_mode == "grid":
+                quiz.versions = 1
+                messages.error(request, "Deux versions : choisissez « Questionnaire complet » "
+                                        "ou « Sujet séparé + feuille de réponses ». L'application "
+                                        "doit imprimer le sujet de chaque version, dans son ordre.")
             new_id = request.POST.get("id_mode")
             if new_id in dict(_id_modes(quiz)):
                 quiz.id_mode = new_id
@@ -1095,7 +1122,7 @@ def quiz_detail(request, pk):
             quiz.save(update_fields=["wrong_penalty", "sheet_mode", "grading_mode",
                                      "id_mode", "id_digits", "entete", "duree", "date_epreuve",
                                      "note_admission", "talon_nom", "place_anonyme",
-                                     "format_impression", "annee"])
+                                     "format_impression", "annee", "versions"])
             if quiz.annee != ancienne_annee:
                 services.changer_annee(quiz, quiz.annee)        # toutes les étapes
             # Le cartouche et le format ne concernent que le sujet, jamais scanné : on
@@ -1478,6 +1505,8 @@ def sheet_review(request, pk):
         "propose": suite or propose, "suite": suite, "ressemblance": round(ressemblance),
         "identification": _identification(sheet),
         "answers": answers,
+        # QCM en deux versions : la version de cette copie (23 novembre 2026)
+        "version": layout_mod.version_de_page(quiz.layout_json, sheet.page_index),
         "position": position + 1, "total": len(sheet_ids),
         "prev_id": prev_id, "next_id": next_id,
         "a_enregistrer": a_enregistrer,
@@ -1683,6 +1712,29 @@ def quiz_admis_pdf(request, pk):
     resp = HttpResponse(data, content_type="application/pdf")
     nom = "liste_admis" if quiz.auto_enroll else "liste_reussites"
     resp["Content-Disposition"] = f'attachment; filename="{nom}_{quiz.pk}.pdf"'
+    return resp
+
+
+@login_required
+def quiz_version_pdf(request, pk, version, document):
+    """Le sujet ou la feuille de réponses d'une seule version d'un QCM en deux versions
+    (23 novembre 2026), pour imprimer chacune en autant d'exemplaires qu'il faut. La
+    feuille : fiche unique seulement (en mode QR, chaque copie a déjà sa version dans le
+    PDF des copies). Fait à la demande, d'après la disposition enregistrée."""
+    quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    disposition = quiz.layout_json or {}
+    if version not in layout_mod.versions_de(disposition):
+        raise Http404("Ce QCM n'a pas cette version.")
+    if document == "sujet" and quiz.sheet_mode == "split":
+        data = sheet_pdf.generate_subject_pdf(quiz, version=version)
+    elif document == "feuille" and quiz.id_mode != "qr":
+        data = sheet_pdf.generate_sheet_pdf(
+            quiz, {**disposition, "versions": [version],
+                   "pages": layout_mod.pages_de_version(disposition, version)})
+    else:
+        raise Http404("Document inconnu.")
+    resp = HttpResponse(data, content_type="application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="{document}_version_{version}_{quiz.pk}.pdf"'
     return resp
 
 

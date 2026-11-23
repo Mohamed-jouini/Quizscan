@@ -9,6 +9,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas as rl_canvas
 
+from . import layout as L
 from .fonts import font_for, has_arabic, load_fonts, runs, shape, text_width_pt, wrap
 from .labels_pdf import _ellipsize
 from .models import nom_et_prenom
@@ -118,6 +119,12 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
         _draw(c, nom, X0, 48.0, corps, bold=True)
         if s.student_number:
             _draw(c, f"N° {s.student_number}", X1, 48.0, 10, align="right", gray=0.3)
+        # QCM en deux versions (23 novembre 2026) : le détail suit la version A
+        version = next((L.version_de_page(quiz.layout_json, f.page_index)
+                        for f in r.get("sheets", []) if f.page_index is not None), "")
+        if version and version != "A":
+            _draw(c, f"Copie en version {version} : les questions sont numérotées comme "
+                     "dans la version A.", X0, 53.0, 8.5, gray=0.4)
 
         # Résultat : bonnes réponses (une QCM = 1 point) et note sur 20 (QCM, demande du
         # 13 novembre 2026), ou pourcentage (écrit, oral)

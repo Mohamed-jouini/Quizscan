@@ -9,8 +9,10 @@ La disposition est figée dans quiz.layout_json au moment de la génération
 du PDF, pour que la lecture reste correcte même si le quiz est modifié après.
 """
 
+import copy
 import hashlib
 import json
+import random
 
 import cv2
 
@@ -170,6 +172,8 @@ def layout_signature(quiz):
     if getattr(quiz, "copies_nominatives", False):
         # une copie par étudiant : un étudiant ajouté demande une régénération
         data["places"] = sorted(quiz.class_group.students.values_list("pk", flat=True))
+    if versions_actives(quiz):
+        data["versions"] = 2        # seulement en deux versions : empreintes inchangées
     if getattr(quiz, "type_epreuve", "qcm") in ("ecrit", "oral"):
         # seulement pour l'écrit et l'oral : les empreintes des fiches QCM
         # existantes ne doivent pas changer (toutes seraient « périmées »)
@@ -237,16 +241,20 @@ def _checked(layout):
 
 def build_layout(quiz):
     """Disposition de la fiche ; copie à talon : cadre abaissé (voir
-    TALON_CADRE_HAUT), rien de ce qui est lu ne bouge."""
+    TALON_CADRE_HAUT), rien de ce qui est lu ne bouge. QCM en deux versions : les
+    pages de la version B suivent celles de la version A (_ajouter_version_b)."""
     layout = _build_sans_talon(quiz)
+    if versions_actives(quiz):
+        layout = _ajouter_version_b(quiz, layout)
     if getattr(quiz, "talon_nom", False):
         layout["talon"] = True
         layout["cadre_haut"] = TALON_CADRE_HAUT
     return layout
 
 
-def _build_sans_talon(quiz):
-    """Calcule la disposition complète de la fiche pour un quiz.
+def _build_sans_talon(quiz, questions=None):
+    """Calcule la disposition complète de la fiche pour un quiz. questions : celles à
+    imprimer, dans l'ordre (la version B d'un QCM) ; par défaut, celles du quiz.
 
     Retourne un dictionnaire sérialisable en JSON :
     {
@@ -264,9 +272,9 @@ def _build_sans_talon(quiz):
     if getattr(quiz, "type_epreuve", "qcm") in ("ecrit", "oral"):
         return _build_ecrit_layout(quiz)
     if getattr(quiz, "sheet_mode", "grid") == "full":
-        return _build_full_layout(quiz)
+        return _build_full_layout(quiz, questions)
 
-    questions = list(quiz.questions.order_by("order"))
+    questions = list(questions if questions is not None else quiz.questions.order_by("order"))
     ncho = quiz.num_choices
     rtl = getattr(quiz, "language", "fr") == "ar"
     qcm_qs = [q for q in questions if q.qtype == "qcm"]
@@ -352,6 +360,127 @@ def _build_sans_talon(quiz):
     return _checked({"mode": "grid", "num_choices": ncho, "colonnes": n_cols, "pages": pages})
 
 
+# ---------------------------------------------------------------------------
+# QCM en deux versions, A et B (demande de l'utilisateur, 23 novembre 2026).
+# La version B imprime les QCM dans un autre ordre, et les choix de chacun dans un autre
+# ordre ; les réponses manuscrites gardent leur place. Ses pages suivent celles de la
+# version A dans la disposition, avec leurs propres codes de page : le scan reconnaît la
+# version comme il reconnaît la page (rien à cocher pour le candidat). Chaque question
+# d'une page B porte son n° imprimé (« num »), la question de la version A (« order ») et
+# le choix d'origine de chacune de ses cases (« perm ») : la lecture ramène la réponse à
+# la version A (omr.read_bubbles), et le reste (corrigé, notes, statistiques) l'ignore.
+# ---------------------------------------------------------------------------
+VERSIONS = ("A", "B")
+
+
+def versions_actives(quiz):
+    """Le QCM se fait-il en deux versions ? Pas sans sujet imprimé par l'application
+    (fiche de réponses seule : le sujet distribué à part ne serait pas mélangé)."""
+    return (getattr(quiz, "versions", 1) == 2
+            and getattr(quiz, "type_epreuve", "qcm") == "qcm"
+            and getattr(quiz, "sheet_mode", "grid") in ("full", "split"))
+
+
+def versions_de(disposition):
+    """["A", "B"] pour une fiche en deux versions, sinon []. La disposition enregistrée
+    fait foi : c'est elle qui a été imprimée."""
+    return list((disposition or {}).get("versions") or [])
+
+
+def pages_de_version(disposition, version):
+    """Pages d'une version ; sans versions, toutes les pages (celles de la version A)."""
+    return [p for p in (disposition or {}).get("pages", [])
+            if p.get("version", "A") == version]
+
+
+def version_de_page(disposition, page_index):
+    """« A » ou « B » pour une page d'une fiche en deux versions, sinon « »."""
+    pages = (disposition or {}).get("pages", [])
+    if page_index is not None and 0 <= page_index < len(pages):
+        return pages[page_index].get("version", "")
+    return ""
+
+
+def pages_equivalentes(disposition, page_index):
+    """Les pages de même rang dans chaque version (la 1re page de A et la 1re de B) : une
+    seule et même page de la copie d'un candidat. Sans versions : la page elle-même."""
+    version = version_de_page(disposition, page_index)
+    if not version:
+        return [page_index]
+    rang = [p["page_index"] for p in pages_de_version(disposition, version)].index(page_index)
+    return [pages[rang]["page_index"]
+            for pages in (pages_de_version(disposition, v) for v in versions_de(disposition))
+            if rang < len(pages)]
+
+
+def tirage_version_b(quiz, questions):
+    """L'ordre de la version B : [{"num": n° imprimé, "order": n° de la question dans la
+    version A, "perm": choix d'origine de chaque case}], un par QCM, dans l'ordre des n°.
+    Les QCM se partagent les n° des QCM de la version A (les réponses manuscrites gardent
+    les leurs). Tirage fixé par l'épreuve : la même version B à chaque génération tant
+    que les questions ne changent pas. Les choix d'une question ne changent d'ordre que
+    s'ils ont tous leur texte : sinon le sujet ne les montrerait pas dans le nouvel ordre."""
+    qcm = [q for q in questions if q.qtype == "qcm"]
+    melange = qcm[:]
+    random.Random(f"quizscan-version-B-{quiz.pk}").shuffle(melange)
+    if len(melange) > 1 and melange == qcm:
+        melange = melange[1:] + melange[:1]           # jamais l'ordre de la version A
+    tirage = []
+    for place, q in zip(qcm, melange):
+        n = q.num_bubbles
+        perm = list(range(n))
+        if n > 1 and len(q.choices or []) == n:
+            random.Random(f"quizscan-version-B-{quiz.pk}-{q.pk}").shuffle(perm)
+            if perm == list(range(n)):
+                perm = perm[1:] + perm[:1]
+        tirage.append({"num": place.order, "order": q.order, "perm": perm})
+    return tirage
+
+
+def questions_de_version(questions, tirage):
+    """Les questions telles que la version B les imprime : des copies, jamais
+    enregistrées, au n° de leur place et leurs choix dans l'ordre de la version.
+    questions : celles de l'épreuve, dans l'ordre ; tirage : tirage_version_b."""
+    par_ordre = {q.order: q for q in questions}
+    par_place = {t["num"]: t for t in tirage}
+    vues = []
+    for q in questions:
+        t = par_place.get(q.order) if q.qtype == "qcm" else None
+        if t is None or t["order"] not in par_ordre:
+            vues.append(q)                  # réponse manuscrite : à sa place
+            continue
+        source = par_ordre[t["order"]]
+        vue = copy.copy(source)
+        vue.order = t["num"]
+        if len(source.choices or []) == len(t["perm"]):
+            vue.choices = [source.choices[k] for k in t["perm"]]
+        vues.append(vue)
+    return vues
+
+
+def _ajouter_version_b(quiz, disposition):
+    """Ajoute à la disposition de la version A les pages de la version B."""
+    questions = list(quiz.questions.order_by("order"))
+    tirage = tirage_version_b(quiz, questions)
+    par_place = {t["num"]: t for t in tirage}
+    b = _build_sans_talon(quiz, questions_de_version(questions, tirage))
+    decalage = len(disposition["pages"])
+    for page in disposition["pages"]:
+        page["version"] = "A"
+    for page in b["pages"]:
+        page["page_index"] += decalage
+        page["version"] = "B"
+        for item in page["qcm"]:
+            t = par_place[item["order"]]          # la disposition a reçu le n° imprimé
+            item["num"], item["order"] = t["num"], t["order"]
+            if t["perm"] != list(range(len(t["perm"]))):
+                item["perm"] = t["perm"]
+    disposition["pages"] += b["pages"]
+    disposition["versions"] = list(VERSIONS)
+    disposition["version_b"] = tirage
+    return _checked(disposition)
+
+
 ECART_3_COLONNES = 4.0     # entre deux blocs de cases, sur trois colonnes (mm)
 
 
@@ -391,9 +520,9 @@ C_CONT_H = 4.8     # hauteur des lignes suivantes d'un choix long (mm)
 BLOCK_GAP = 4.5    # espace entre questions (mm)
 
 
-def _build_full_layout(quiz):
+def _build_full_layout(quiz, questions=None):
     fonts.load_fonts()
-    questions = list(quiz.questions.order_by("order"))
+    questions = list(questions if questions is not None else quiz.questions.order_by("order"))
     ncho = quiz.num_choices
     lang = getattr(quiz, "language", "fr")
     rtl = lang == "ar"
@@ -678,9 +807,12 @@ def _uses_sticker(quiz):
 
 def pages_a_etiquette(disposition):
     """Nombre de pages d'une fiche qui attendent une étiquette collée. Chaque page
-    s'identifie seule au scan : c'est aussi le nombre d'étiquettes par candidat."""
-    return sum(1 for p in (disposition or {}).get("pages", [])
-               if (p.get("qr") or {}).get("sticker"))
+    s'identifie seule au scan : c'est aussi le nombre d'étiquettes par candidat. En deux
+    versions, un candidat n'a les pages que de l'une."""
+    versions = versions_de(disposition)
+    pages = (pages_de_version(disposition, versions[0]) if versions
+             else (disposition or {}).get("pages", []))
+    return sum(1 for p in pages if (p.get("qr") or {}).get("sticker"))
 
 
 def _add_qr_zone(page, page_index, sticker=False):

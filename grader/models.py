@@ -303,6 +303,17 @@ class Quiz(models.Model):
         default="immediate")
     sheet_mode = models.CharField(
         "type de fiche", max_length=6, choices=SHEET_MODES, default="full")
+    # QCM en deux versions (demande de l'utilisateur, 23 novembre 2026) : la version B a
+    # ses questions et, dans chacune, ses choix dans un autre ordre ; la version est
+    # imprimée sur la feuille et lue au scan (layout.VERSIONS)
+    VERSIONS = [
+        (1, "Une seule version"),
+        (2, "Deux versions, A et B — questions et choix dans un autre ordre"),
+    ]
+    versions = models.PositiveSmallIntegerField(
+        "versions du sujet", choices=VERSIONS, default=1,
+        help_text="QCM : la version B mélange les questions et leurs choix ; chaque copie "
+                  "porte sa version et se corrige selon elle.")
     num_choices = models.PositiveSmallIntegerField(
         "nombre de choix par question QCM", default=4,
         validators=[MinValueValidator(2), MaxValueValidator(MAX_CHOICES)],

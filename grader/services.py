@@ -1204,10 +1204,13 @@ def actualiser_sujet(quiz, forcer=False):
 
 
 def _deja_identifies(quiz, sheet):
-    """Étudiants qui ont déjà une copie identifiée pour cette page du quiz."""
+    """Étudiants qui ont déjà une copie identifiée pour cette page du quiz (QCM en deux
+    versions : cette page de l'une ou de l'autre, c'est la même page de leur copie)."""
+    pages = layout_mod.pages_equivalentes(quiz.layout_json, sheet.page_index)
+    meme_page = ({"page_index__in": pages} if len(pages) > 1
+                 else {"page_index": sheet.page_index})
     return set(SheetScan.objects
-               .filter(batch__quiz=quiz, page_index=sheet.page_index,
-                       student__isnull=False)
+               .filter(batch__quiz=quiz, student__isnull=False, **meme_page)
                .exclude(pk=sheet.pk)
                .values_list("student_id", flat=True))
 
@@ -2242,18 +2245,32 @@ def copies_manquantes(quiz, limite=MAX_MANQUANTES_AFFICHEES):
     if quiz.type_epreuve == "oral" or not pages or not quiz.batches.exists():
         return vide
     par_matiere = quiz.type_epreuve == "ecrit" and any(p.get("matiere") for p in pages)
-    if par_matiere:
-        libelles = [p.get("matiere") or f"page {k + 1}" for k, p in enumerate(pages)]
-    elif len(pages) > 1:
-        libelles = [f"page {k + 1}" for k in range(len(pages))]
-    else:
-        libelles = ["copie"]
+    # QCM en deux versions (23 novembre 2026) : la copie d'un candidat a les pages de l'une
+    # seulement, celle de ses pages déjà scannées (la version A tant qu'il n'en a aucune)
+    versions = layout_mod.versions_de(quiz.layout_json)
+    par_version = ({v: [p["page_index"] for p in layout_mod.pages_de_version(quiz.layout_json, v)]
+                    for v in versions} if versions else {"": list(range(len(pages)))})
+
+    def libelles_de(indexes):
+        if par_matiere:
+            return [pages[k].get("matiere") or f"page {j + 1}" for j, k in enumerate(indexes)]
+        if len(indexes) > 1:
+            return [f"page {j + 1}" for j in range(len(indexes))]
+        return ["copie"]
+
     scannees = set(SheetScan.objects.filter(batch__quiz=quiz, student__isnull=False)
                    .values_list("student_id", "page_index"))
+    vues = collections.defaultdict(set)
+    for etudiant, page_index in scannees:
+        vues[etudiant].add(page_index)
     codes = codes_imprimes(quiz)
     lignes, total = [], 0
     for s in etudiants_par_salle(quiz):
-        absentes = [lib for k, lib in enumerate(libelles) if (s.pk, k) not in scannees]
+        version = next((v for v in par_version if vues[s.pk] & set(par_version[v])),
+                       next(iter(par_version)))
+        indexes = par_version[version]
+        libelles = libelles_de(indexes)
+        absentes = [lib for k, lib in zip(indexes, libelles) if (s.pk, k) not in scannees]
         if absentes:
             total += 1
             if limite is None or len(lignes) < limite:

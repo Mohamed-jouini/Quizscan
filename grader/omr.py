@@ -293,6 +293,15 @@ def read_bubbles(warped_bgr, page_layout):
             else:
                 multiple = True
                 choice = top[0]
+        perm = item.get("perm")
+        if perm:
+            # version B d'un QCM (23 novembre 2026) : la case k porte le choix perm[k] de la
+            # version A ; la réponse et les taux de remplissage y sont ramenés
+            choice = perm[choice] if choice is not None else None
+            canon = [0.0] * len(ratios)
+            for k, v in enumerate(ratios):
+                canon[perm[k]] = v
+            ratios = canon
         results[item["order"]] = {"choice": choice, "multiple": multiple,
                                   "ratios": ratios}
     return results
@@ -884,12 +893,14 @@ def draw_overlay(warped_bgr, page_layout, bubble_results, questions_by_order,
         if res is None:
             continue
         q = questions_by_order.get(item["order"])
+        perm = item.get("perm")     # version B : la case i porte le choix perm[i]
         for i, (cx, cy) in enumerate(item["bubbles"]):
             x, y = _mm(cx), _mm(cy)
-            if q is not None and q.correct_choice == i:
+            choix = perm[i] if perm else i
+            if q is not None and q.correct_choice == choix:
                 cv2.circle(img, (x, y), r + 4, (255, 160, 0), 2)   # bonne réponse (bleu)
-            if i == res["choice"]:
-                ok = q is not None and q.correct_choice == i and not res["multiple"]
+            if choix == res["choice"]:
+                ok = q is not None and q.correct_choice == choix and not res["multiple"]
                 color = (0, 170, 0) if ok else (0, 0, 230)
                 if res["multiple"]:
                     color = (0, 140, 255)

@@ -120,6 +120,8 @@
         constat des cases noircies et ne se modifie pas. Seules les réponses
         manuscrites sont à noter ici.
       </p>
+      {% if version %}<p class="helptext helptext--serre"><span class="badge info">Version {{ version }}</span>
+        {% if version != "A" %}Copie en version {{ version }} : le tableau donne les questions et les lettres de la version A (celle du corrigé) ; l'image de contrôle montre les cases telles qu'imprimées sur la feuille {{ version }}.{% endif %}</p>{% endif %}
       <div class="table-wrap">
         <table>
         <tr><th>Q</th><th>Détecté</th><th>Attendu</th><th>Points</th></tr>

@@ -59,6 +59,15 @@
     </select>
   </div>
   <div class="reglages__large">
+    <label for="id_versions">Versions du sujet</label>
+    <select id="id_versions" name="versions">
+      {% for val, label in quiz.VERSIONS %}
+      <option value="{{ val }}" {% if quiz.versions == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <span class="helptext helptext--serre">Deux versions : la version B a ses questions, et les choix de chacune, dans un autre ordre. « VERSION A » ou « VERSION B » est imprimé sur le sujet et sur la feuille de réponses, lu au scan, et chaque copie est corrigée selon sa version. Avec un questionnaire complet ou un sujet séparé seulement ; évitez alors les choix du type « toutes les réponses ci-dessus ».</span>
+  </div>
+  <div class="reglages__large">
     <label>Identification des copies</label>
     <select name="id_mode">
       {% for val, label in id_modes %}
@@ -307,8 +316,17 @@
         <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">📋 Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% if quiz.place_anonyme %} et des places{% endif %} par salle</a>
         {% if quiz.a_des_qcm %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}" target="_blank" title="La feuille de réponses sans candidat : noircissez-y les bonnes réponses, puis envoyez-la dans « Corrigé scanné »">✅ Copie du correcteur</a>{% endif %}
       {% endif %}
+      {% if quiz.sheet_pdf and quiz.layout_json.versions %}
+      <div class="versions-documents" aria-label="Documents de chaque version">
+        {% for v in quiz.layout_json.versions %}
+        {% if quiz.sheet_mode == "split" %}<a class="btn secondary" href="{% url 'quiz_version_pdf' quiz.pk v 'sujet' %}" target="_blank">📄 Sujet — version {{ v }}</a>{% endif %}
+        {% if quiz.id_mode != "qr" %}<a class="btn secondary" href="{% url 'quiz_version_pdf' quiz.pk v 'feuille' %}" target="_blank">📝 {% if quiz.sheet_mode == "split" %}Feuille de réponses{% else %}Fiche{% endif %} — version {{ v }}</a>{% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
     </form>
     {% endif %}
+    {% if quiz.sheet_pdf and quiz.layout_json.versions %}<span class="helptext"><b>Deux versions, A et B</b> : la version B a ses questions et leurs choix dans un autre ordre. Remettez à chaque candidat {% if quiz.sheet_mode == "split" %}le sujet et la feuille de réponses de la même version{% else %}une fiche, en alternant A et B{% endif %} : la version est imprimée en haut de chaque page et lue au scan, chaque copie est corrigée selon la sienne.{% if quiz.id_mode == "qr" %} Les copies nominatives alternent A et B dans l'ordre des salles.{% endif %}</span>{% endif %}
     {% if quiz.sheet_pdf and quiz.a_des_qcm %}<span class="helptext"><b>Copie du correcteur</b> : la feuille de réponses sans candidat, marquée « CORRIGÉ ». Le correcteur y noircit la bonne réponse de chaque question, puis la scanne dans « Corrigé scanné » : le corrigé se remplit tout seul.</span>{% endif %}
     <span class="helptext">
       {% if quiz.sheet_mode == "split" %}
