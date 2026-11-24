@@ -1,11 +1,11 @@
 {% extends "admin/base_site.html" %}
 {% load i18n log %}
 
-{# Page d'accueil de l'administration.                                        #}
-{# C'est le SEUL endroit qui liste les tables : la barre latérale ne les      #}
-{# reprend plus (templates/admin/base.html). La grille se réorganise toute    #}
-{# seule — autant de colonnes que la largeur en permet — pour remplir aussi   #}
-{# bien un écran large qu'un téléphone.                                       #}
+{#Page d'accueil de l'administration.#}
+{#C'est le SEUL endroit qui liste les tables : la barre latérale ne les#}
+{#reprend plus (templates/admin/base.html). La grille se réorganise toute#}
+{#seule — autant de colonnes que la largeur en permet — pour remplir aussi#}
+{#bien un écran large qu'un téléphone.#}
 
 {% block bodyclass %}{{ block.super }} dashboard{% endblock %}
 {% block nav-breadcrumbs %}{% endblock %}
@@ -25,9 +25,9 @@
           <span class="carte-bouton__icone" aria-hidden="true">
             <svg viewBox="0 0 24 24"><use href="#ic-{{ table.icone }}"/></svg>
           </span>
-          {# grader/admin.py ne compte que les tables consultables ;       #}
-          {# « admin_url » est donc le bon garde-fou — et il laisse passer  #}
-          {# un effectif de zero, que « if table.effectif » masquerait.     #}
+          {#grader/admin.py ne compte que les tables consultables ;#}
+          {#« admin_url » est donc le bon garde-fou — et il laisse passer#}
+          {#un effectif de zero, que « if table.effectif » masquerait.#}
           {% if table.admin_url %}
           <b class="qs-table__n">{{ table.effectif }}</b>
           {% endif %}
@@ -84,8 +84,8 @@
   </section>
 </div>
 
-{# Icônes des tables. Le nom vient de grader/admin.py (ICONES), qui garantit #}
-{# un repli sur « table » pour tout modèle qu'il ne connaît pas.             #}
+{#Icônes des tables. Le nom vient de grader/admin.py (ICONES), qui garantit#}
+{#un repli sur « table » pour tout modèle qu'il ne connaît pas.#}
 <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true"
      style="position:absolute">
   <symbol id="ic-compte" viewBox="0 0 24 24"><path d="M4 20a8 8 0 0 1 16 0"/><circle cx="12" cy="8" r="4"/></symbol>
@@ -103,6 +103,6 @@
 </svg>
 {% endblock %}
 
-{# La colonne de droite de Django : son contenu est repris ci-dessus, dans la #}
-{# même grille, pour que la page occupe toute la largeur disponible.          #}
+{#La colonne de droite de Django : son contenu est repris ci-dessus, dans la#}
+{#même grille, pour que la page occupe toute la largeur disponible.#}
 {% block sidebar %}{% endblock %}

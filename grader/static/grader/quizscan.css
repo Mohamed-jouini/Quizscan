@@ -260,8 +260,8 @@ body #container{
 }
 .nav__item.is-active svg{stroke:var(--qs-accent)}
 .nav__item.is-active::before{
-  content:"";position:absolute;left:-16px;top:7px;bottom:7px;width:4px;
-  border-radius:0 4px 4px 0;background:var(--qs-accent);
+  content:"";position:absolute;inset-inline-start:-16px;top:7px;bottom:7px;width:4px;
+  border-radius:0;border-start-end-radius:4px;border-end-end-radius:4px;background:var(--qs-accent);
 }
 .nav__item--sub{font-size:13.5px;padding:7px 12px 7px 20px}
 .nav__group{
@@ -328,7 +328,7 @@ a.tile:hover{border-color:var(--qs-line-strong)}
 .tile__cible{color:inherit;text-decoration:none}
 .tile__cible::after{content:"";position:absolute;inset:0;border-radius:var(--qs-r-card)}
 .tile__value{font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px}
-.tile__unit{font-size:14px;font-weight:600;color:var(--qs-faint);margin-left:3px}
+.tile__unit{font-size:14px;font-weight:600;color:var(--qs-faint);margin-inline-start:3px}
 .tile__note{font-size:12px;color:var(--qs-faint)}
 /* Tuile mise en avant (la première du tableau de bord), comme la carte
    pleine de la charte : fond vert profond, chiffres blancs, accent anis. */
@@ -366,6 +366,10 @@ a.tile:hover{border-color:var(--qs-line-strong)}
   font-variant-numeric:tabular-nums}
 .shell th,.shell td{padding:12px 11px;border-bottom:1px solid var(--qs-line);
   text-align:left;vertical-align:middle}
+/* Interface en arabe : à droite. « text-align:start » suivait le dir="auto" de chaque
+   cellule, et une matière écrite en arabe passait à droite dans l'interface française.
+   :where() garde la spécificité de la règle ci-dessus : un intitulé centré le reste. */
+:where([dir="rtl"]) .shell th,:where([dir="rtl"]) .shell td{text-align:right}
 .shell td{font-size:14px}
 .shell th{font-size:12.5px;font-weight:600;letter-spacing:0;
   color:var(--qs-ink-soft);white-space:nowrap}
@@ -373,8 +377,10 @@ a.tile:hover{border-color:var(--qs-line-strong)}
    ligne qui porte les <th>. */
 .shell table tr:first-child > th{background:var(--qs-th-bg);border-bottom:0;
   padding-top:10px;padding-bottom:10px}
-.shell table tr:first-child > th:first-child{border-radius:10px 0 0 10px}
-.shell table tr:first-child > th:last-child{border-radius:0 10px 10px 0}
+.shell table tr:first-child > th:first-child{border-radius:0;border-start-start-radius:10px;
+  border-end-start-radius:10px}
+.shell table tr:first-child > th:last-child{border-radius:0;border-start-end-radius:10px;
+  border-end-end-radius:10px}
 .shell table tr:first-child > th:only-child{border-radius:10px}
 .shell tbody tr:last-child td,.shell table tr:last-child td{border-bottom:0}
 .shell tr:hover td{background:var(--qs-row-hover)}
@@ -406,7 +412,7 @@ a.tile:hover{border-color:var(--qs-line-strong)}
 .shell table.table--matieres thead th{background:var(--qs-th-bg)}
 .table--matieres .th--etape{text-align:center;border-bottom:1px solid var(--qs-line)}
 .table--matieres .th--matiere{font-size:12px;font-weight:600;white-space:nowrap}
-.table--matieres .th--moyenne,.table--matieres .cellule--moyenne{border-right:1px solid var(--qs-line)}
+.table--matieres .th--moyenne,.table--matieres .cellule--moyenne{border-inline-end:1px solid var(--qs-line)}
 .table--matieres .cellule--matiere{white-space:nowrap}
 
 /* --- Boutons ------------------------------------------------------------- */
@@ -493,7 +499,7 @@ input:focus,select:focus,textarea:focus{
 .score{font-weight:700;font-size:15px}
 .errors{color:var(--qs-bad);font-size:13px;margin:4px 0}
 .errorlist{color:var(--qs-bad);font-size:13px;font-weight:600;margin:4px 0;
-  padding-left:18px}
+  padding-inline-start:18px}
 .userbox{font-size:13.5px;color:var(--qs-muted)}
 
 /* --- En-tete de page ----------------------------------------------------
@@ -617,7 +623,7 @@ input:focus,select:focus,textarea:focus{
 .recherche-etudiant{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   margin:0 0 18px}
 .recherche-etudiant__champ{position:relative;flex:1 1 360px;max-width:620px}
-.recherche-etudiant__loupe{position:absolute;left:15px;top:50%;width:19px;height:19px;
+.recherche-etudiant__loupe{position:absolute;inset-inline-start:15px;top:50%;width:19px;height:19px;
   transform:translateY(-50%);fill:none;stroke:var(--qs-faint);stroke-width:2;
   stroke-linecap:round;pointer-events:none}
 .shell .recherche-etudiant input[type=search]{
@@ -633,7 +639,7 @@ input:focus,select:focus,textarea:focus{
 /* Croix maison : celle du navigateur (type=search) n'efface que le champ,
    la nôtre recharge la liste complète. */
 .recherche-etudiant input[type=search]::-webkit-search-cancel-button{display:none}
-.recherche-etudiant__effacer{position:absolute;right:9px;top:50%;
+.recherche-etudiant__effacer{position:absolute;inset-inline-end:9px;top:50%;
   transform:translateY(-50%);width:28px;height:28px;border-radius:8px;
   display:flex;align-items:center;justify-content:center;color:var(--qs-muted)}
 .recherche-etudiant__effacer:hover{background:var(--qs-track);color:var(--qs-ink)}
@@ -655,7 +661,7 @@ input:focus,select:focus,textarea:focus{
 .form-admission label{margin:0;font-size:12.5px;font-weight:600}
 .form-admission__champ{display:inline-flex;align-items:center;gap:6px}
 .form-admission__champ .helptext{display:inline;margin:0;white-space:nowrap}
-.admission__regler{margin-left:auto}
+.admission__regler{margin-inline-start:auto}
 .admission__regler summary{cursor:pointer;font-size:12.5px;font-weight:600;
   color:var(--qs-blue)}
 .btn--inactif{opacity:.55;cursor:not-allowed}
@@ -739,11 +745,11 @@ a.tile{transition:border-color .15s,transform .08s}
 a.tile:active{transform:translateY(1px)}
 
 /* Alignements de cellules, a la place des attributs style en ligne. */
-.cellule--droite{text-align:right;white-space:nowrap}
+.cellule--droite{text-align:end;white-space:nowrap}
 .cellule--serree{white-space:nowrap}
 
 /* Liste a puces sobre, pour un texte d'explication dans une carte. */
-.liste-sobre{margin:0 0 18px;padding-left:20px;line-height:1.7;
+.liste-sobre{margin:0 0 18px;padding-inline-start:20px;line-height:1.7;
   font-size:13.5px;color:var(--qs-ink-soft)}
 .liste-sobre li{margin:0 0 4px}
 /* Rangee de boutons au pied d'une confirmation. */
@@ -784,11 +790,11 @@ body.page-erreur{display:flex;align-items:center;justify-content:center;
 .steps{list-style:none;counter-reset:etape;margin:0;padding:0;display:grid;
   gap:14px}
 .steps li{
-  counter-increment:etape;position:relative;padding-left:40px;
+  counter-increment:etape;position:relative;padding-inline-start:40px;
   font-size:13.5px;line-height:1.65;color:var(--qs-ink-soft);
 }
 .steps li::before{
-  content:counter(etape);position:absolute;left:0;top:-1px;
+  content:counter(etape);position:absolute;inset-inline-start:0;top:-1px;
   width:26px;height:26px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
   background:var(--qs-grad);color:#fff;font-size:12.5px;font-weight:700;
@@ -809,7 +815,7 @@ body.auth-page{
   backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
   box-shadow:var(--qs-shadow-auth);
 }
-.auth__tools{display:flex;justify-content:flex-end;margin:-10px -10px -14px 0}
+.auth__tools{display:flex;justify-content:flex-end;margin:-10px 0 -14px;margin-inline-end:-10px}
 .auth__panel{
   padding:clamp(32px,5vw,64px);
   display:flex;flex-direction:column;justify-content:center;
@@ -843,9 +849,9 @@ body.auth-page{
 .field input::placeholder{color:var(--qs-faint)}
 .field input:focus{border-color:var(--qs-blue);
   box-shadow:0 0 0 4px rgba(29,107,67,.16)}
-.field input[type=password]{padding-right:48px}
+.field input[type=password]{padding-inline-end:48px}
 .reveal{
-  position:absolute;right:6px;width:36px;height:36px;border:0;border-radius:50%;
+  position:absolute;inset-inline-end:6px;width:36px;height:36px;border:0;border-radius:50%;
   background:transparent;color:var(--qs-muted);cursor:pointer;
   display:flex;align-items:center;justify-content:center;
 }
@@ -980,7 +986,7 @@ body.popup #container{grid-template-columns:1fr;border-radius:0;min-height:100vh
 .qs-identite{
   display:flex;align-items:center;gap:12px;min-width:0;
   text-decoration:none;color:inherit;
-  padding:4px 10px 4px 4px;margin-left:-4px;
+  padding:4px;padding-inline-end:10px;margin-inline-start:-4px;
   border-radius:999px;transition:background .15s;
 }
 .qs-identite:hover{background:var(--qs-sheen-hover)}
@@ -1017,7 +1023,7 @@ div.breadcrumbs{
    ci-dessus venait de poser — il restait du texte blanc sur fond clair,
    donc invisible. Le bandeau est peint sur le <summary>, qui est de toute
    facon l element cliquable, et le titre n y porte plus que le texte. */
-.module.collapse summary{background:var(--qs-surface);border:0;padding:0 0 0 10px;
+.module.collapse summary{background:var(--qs-surface);border:0;padding:0;padding-inline-start:10px;
   color:var(--qs-ink)}
 .module.collapse summary .fieldset-heading{background:transparent;color:var(--qs-ink);
   border-bottom:0}
@@ -1063,14 +1069,14 @@ fieldset.module .description{
 .form-row:not(tr):last-child{border-bottom:0}
 .form-row:not(tr) > label,.aligned .form-row:not(tr) label{
   width:auto;padding:7px 0 0;font-size:13px;font-weight:600;
-  color:var(--body-medium-color);text-align:left;float:none;
+  color:var(--body-medium-color);text-align:start;float:none;
 }
 /* Django aligne l'aide avec « padding-left:170px » dans une règle plus
    spécifique que la nôtre : on remonte la spécificité. */
 form .aligned .form-row:not(tr) div.help,
 form .aligned .form-row:not(tr) p.help,
 .form-row:not(tr) .help,.form-row:not(tr) .helptext{
-  grid-column:2;margin:3px 0 0;padding:0;font-size:12.5px;text-align:left;
+  grid-column:2;margin:3px 0 0;padding:0;font-size:12.5px;text-align:start;
   color:var(--body-quiet-color);line-height:1.5;max-width:64ch;
 }
 .form-row .help div,.form-row .help p{padding:0;margin:0}
@@ -1097,7 +1103,7 @@ form .aligned .form-row:not(tr) p.help,
   display:flex;gap:10px;align-items:center;flex-wrap:wrap;
 }
 .submit-row input.default{background:var(--qs-grad);border:0;text-transform:none}
-.submit-row a.deletelink{margin-left:auto}
+.submit-row a.deletelink{margin-inline-start:auto}
 /* Liens dessinés en boutons (« Supprimer », « Fermer », « Non, revenir en
    arrière ») : Django leur donne une hauteur fixe de 15 px plus 10 px de
    marge ; avec box-sizing:border-box, la marge mange toute la hauteur et le
@@ -1118,7 +1124,7 @@ form .aligned .form-row:not(tr) p.help,
   box-sizing:border-box;height:2.1875rem;padding:0 16px;vertical-align:middle}
 .delete-confirmation form input[type=submit]:hover,
 .delete-confirmation form input[type=submit]:focus{background:var(--qs-bad-btn-hover)}
-.delete-confirmation form .cancel-link{vertical-align:middle;margin:0 0 0 10px}
+.delete-confirmation form .cancel-link{vertical-align:middle;margin:0;margin-inline-start:10px}
 .object-tools a{border-radius:999px;font-weight:600;letter-spacing:.2px}
 
 #changelist .results{border-radius:14px;overflow:auto}
@@ -1169,7 +1175,7 @@ body.dashboard #content{width:auto;max-width:none}
 .qs-table__links{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
 /* Ajouter, Modification : de petits boutons, l icone de Django gardee a gauche
    (background-color et non background, qui l effacerait). */
-.qs-table__links a{position:relative;z-index:1;flex:1 1 auto;padding:5px 8px 5px 24px;
+.qs-table__links a{position:relative;z-index:1;flex:1 1 auto;padding:5px 8px;padding-inline-start:24px;
   font-size:12.5px;font-weight:600;line-height:18px;text-decoration:none;white-space:nowrap;
   border:1px solid var(--qs-line-strong);border-radius:8px;
   background-color:var(--qs-surface);background-position:7px center;
@@ -1178,7 +1184,7 @@ body.dashboard #content{width:auto;max-width:none}
 
 .qs-journal .actionlist{margin:0;padding:0;list-style:none}
 .qs-journal .actionlist li{
-  padding:9px 0 9px 24px;border-bottom:1px solid var(--qs-line);font-size:14px;
+  padding:9px 0;padding-inline-start:24px;border-bottom:1px solid var(--qs-line);font-size:14px;
 }
 .qs-journal .actionlist li:last-child{border-bottom:0;padding-bottom:0}
 .qs-journal .actionlist li:first-child{padding-top:0}
@@ -1282,7 +1288,7 @@ body.dashboard #content{width:auto;max-width:none}
 #result_list thead th.sorted div.text a{color:var(--qs-blue)}
 /* Django reserve 42 px a droite de l'intitule trie pour ses fleches
    flottantes : elles suivent maintenant le texte. */
-#result_list thead th.sorted .text{padding-right:0}
+#result_list thead th.sorted .text{padding-right:0;padding-left:0}
 #result_list thead th.action-checkbox-column .qs-th{padding:11px 10px;
   justify-content:center}
 #result_list thead th.action-checkbox-column div.text span{display:inline}
@@ -1327,7 +1333,7 @@ body.dashboard #content{width:auto;max-width:none}
 
 /* Colonne des cases a cocher : etroite et centree. */
 #result_list .action-checkbox-column,
-#result_list td.action-checkbox{width:34px;text-align:center;padding-right:0}
+#result_list td.action-checkbox{width:34px;text-align:center;padding-inline-end:0}
 #result_list input[type=checkbox]{margin:0;vertical-align:middle}
 
 /* Les memes regles pour les tableaux hors liste : lignes imbriquees d'un
@@ -1452,14 +1458,14 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
      sur la rubrique voisine. */
   .nav__item.is-active::before{left:12px;right:12px;top:auto;bottom:2px;
     width:auto;height:3px;border-radius:3px}
-  .side__brand{padding:0 12px 0 4px}
+  .side__brand{padding:0 12px;padding-inline-start:4px}
   .side__name small{display:none}
   .nav{flex-direction:row;gap:4px}
   .nav__item{white-space:nowrap;padding:8px 12px}
   .nav__group{display:none}
   .side__foot{
-    margin:0 0 0 auto;padding:0 0 0 12px;border-top:0;
-    border-left:1px solid var(--qs-side-line);flex-direction:row;align-items:center;
+    margin:0;margin-inline-start:auto;padding:0;padding-inline-start:12px;border-top:0;
+    border-inline-start:1px solid var(--qs-side-line);flex-direction:row;align-items:center;
   }
   .grid2{grid-template-columns:1fr}
   #header{padding:12px 16px}
@@ -1651,7 +1657,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .verif__chiffres{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 14px}
 .verif__chiffre{padding:6px 12px;border-radius:999px;font-size:13px;
   background:var(--qs-track);color:var(--qs-muted)}
-.verif__chiffre b{color:var(--qs-ink);margin-right:3px}
+.verif__chiffre b{color:var(--qs-ink);margin-inline-end:3px}
 .verif__chiffre--ok{background:var(--qs-ok-bg);color:var(--qs-ok)}
 .verif__chiffre--alerte{background:var(--qs-warn-bg);color:var(--qs-warn)}
 .form-inscription__champs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
@@ -1672,7 +1678,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   padding:10px 12px;margin-bottom:12px;border-radius:12px;background:var(--qs-surface-2)}
 .shell .barre-choix label{margin:0}
 .shell .barre-choix select{width:auto;min-width:220px;max-width:100%}
-.shell th.col-choix,.shell td.col-choix{width:34px;padding-right:0}
+.shell th.col-choix,.shell td.col-choix{width:34px;padding-inline-end:0}
 .qr-mini{display:block;border-radius:4px;background:#fff}
 .actions-ligne{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .avis-liste{list-style:none;margin:0;padding:0}
@@ -1777,9 +1783,37 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .pub-article__texte{font-size:15.5px;line-height:1.7}
 .pub-retour{display:inline-block;margin-bottom:14px;font-size:14px;text-decoration:none}
 .pub-pied{text-align:center;font-size:12.5px;color:var(--qs-muted);padding:18px 16px 26px}
+/* Bouton de langue (24 novembre 2026) : passe à l'autre langue, écrit dans celle-ci. */
+.langue{margin:0}
+.langue__bouton{font:inherit;font-size:14px;font-weight:600;padding:6px 12px;border-radius:9px;
+  border:1px solid var(--qs-line);background:transparent;color:var(--qs-ink);cursor:pointer}
+.langue__bouton:hover{background:var(--qs-track)}
+.pub-tete .langue__bouton{border-color:var(--qs-side-line);color:var(--qs-side-ink)}
+.pub-tete .langue__bouton:hover{background:var(--qs-side-hover)}
+/* Espace public en arabe, de droite à gauche (24 novembre 2026). Les rangées (flex) et le
+   texte suivent dir="rtl" d'eux-mêmes ; restent les placements écrits à gauche. L'arabe est
+   une écriture liée : aucun espacement entre les lettres. */
+[dir="rtl"] .pub-tete__outils{margin-left:0;margin-right:auto}
+[dir="rtl"] .pub-recherche__champ svg{left:auto;right:15px}
+[dir="rtl"] .pub-recherche input{padding:0 44px 0 16px}
+[dir="rtl"] .pub-tableau th,[dir="rtl"] .pub-tableau td{text-align:right}
+[dir="rtl"] .tuile-etape + .tuile-etape::before{left:auto;right:-18px;
+  transform:translateY(-50%) rotate(-135deg)}
+html[lang="ar"] body *{letter-spacing:0}
+/* Pages du personnel et administration en arabe (24 novembre 2026). Leurs placements sont
+   écrits en début/fin de ligne (margin-inline-start…) : ils se retournent d'eux-mêmes, sans
+   rien changer en français. Restent la colonne du menu, peinte sur la carte, les chevrons
+   entre les étapes, et quelques règles du rtl.css de Django, chargé après cette feuille. */
+[dir="rtl"] .shell__inner,[dir="rtl"] body #container{background-position:100% 0}
+[dir="rtl"] .fil-etapes__liste li + li::before{transform:rotate(-135deg)}
+[dir="rtl"] .qs-table__links a{background-position:calc(100% - 7px) center}
+[dir="rtl"] #content-main{float:none}
+[dir="rtl"] #changelist-filter{margin:0}
+[dir="rtl"] #changelist-filter li.selected{border-left:0;border-right:3px solid var(--qs-blue)}
 @media (max-width:720px){
   .form-inscription__champs{grid-template-columns:1fr}
   .pub-tete__outils{margin-left:0}
+  [dir="rtl"] .pub-tete__outils{margin-right:0}
   .pub-hero{padding:22px 18px}
   .pub-hero h1{font-size:23px}
 }
@@ -1795,9 +1829,9 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 /* Les quatre étapes d'une épreuve écrite, cochées au fur et à mesure. */
 .etapes{list-style:none;counter-reset:etape;margin:0 0 18px;padding:0;display:grid;
   grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-.etapes li{counter-increment:etape;position:relative;padding:14px 14px 14px 52px;
+.etapes li{counter-increment:etape;position:relative;padding:14px;padding-inline-start:52px;
   border:1px solid var(--qs-line);border-radius:var(--qs-r-card);background:var(--qs-surface)}
-.etapes li::before{content:counter(etape);position:absolute;left:14px;top:13px;width:26px;
+.etapes li::before{content:counter(etape);position:absolute;inset-inline-start:14px;top:13px;width:26px;
   height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-weight:700;font-size:13px;background:var(--qs-track);color:var(--qs-muted)}
 .etapes li.is-fait::before{content:"✓";background:var(--qs-accent);color:var(--qs-accent-ink)}
@@ -1806,7 +1840,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 /* Listes Concours et Resultats : un bloc par concours, ses etapes a l'interieur.
    Une epreuve seule tient sur une colonne, un concours en etapes sur toute la largeur. */
 .groupes{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr));
-  grid-auto-flow:dense;gap:14px;max-height:560px;overflow:hidden scroll;padding:2px 6px 5px 2px}
+  grid-auto-flow:dense;gap:14px;max-height:560px;overflow:hidden scroll;padding:2px 2px 5px;padding-inline-end:6px}
 .groupe{display:flex;flex-direction:column;gap:12px;min-width:0;padding:14px;
   border:1px solid var(--qs-line);border-radius:var(--qs-r-card);background:var(--qs-surface)}
 .groupe--etapes{grid-column:1/-1;background:var(--qs-surface-2)}
@@ -1821,7 +1855,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .groupe__bas{margin-top:auto;display:flex;flex-wrap:wrap;align-items:flex-end;
   justify-content:space-between;gap:8px}
 /* Creer une classe : une ligne dans l'en-tete de la liste, a droite du titre. */
-.nouvelle-classe{flex:1 1 300px;max-width:480px;margin-left:auto;display:flex;flex-wrap:wrap;gap:8px}
+.nouvelle-classe{flex:1 1 300px;max-width:480px;margin-inline-start:auto;display:flex;flex-wrap:wrap;gap:8px}
 .shell .nouvelle-classe input[type=text]{flex:1 1 220px;width:auto;min-width:0}
 .groupe__etapes{flex:1;display:flex;flex-wrap:wrap;gap:12px 26px;margin:0;padding:0;list-style:none}
 .tuile-etape{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:10px;padding:12px 14px}
@@ -1842,9 +1876,10 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
 .fil-etapes__liste{display:flex;align-items:center;flex-wrap:wrap;gap:8px 6px;margin:0;padding:0;
   list-style:none}
 .fil-etapes__liste li{display:flex;align-items:center;gap:6px}
-.fil-etapes__liste li + li::before{content:"";width:7px;height:7px;margin-right:4px;
+.fil-etapes__liste li + li::before{content:"";width:7px;height:7px;margin-inline-end:4px;
   border:solid var(--qs-line-strong);border-width:2px 2px 0 0;transform:rotate(45deg)}
-.fil-etapes__etape{display:inline-flex;align-items:center;gap:8px;padding:5px 14px 5px 6px;
+.fil-etapes__etape{display:inline-flex;align-items:center;gap:8px;padding:5px 14px;
+  padding-inline-start:6px;
   border:1px solid var(--qs-line-strong);border-radius:999px;background:var(--qs-surface);
   font-size:14px;font-weight:600;color:var(--qs-ink);text-decoration:none;
   transition:border-color .15s,background-color .15s}
@@ -1927,8 +1962,8 @@ li.ligne-lien:hover{background:var(--qs-row-hover)}
 .barre-empilee{display:flex;gap:2px;height:10px;border-radius:4px;overflow:hidden;
   background:var(--qs-track);margin-bottom:4px}
 .barre-empilee i{display:block;height:100%;min-width:3px}
-.barre-empilee i:first-child{border-radius:4px 0 0 4px}
-.barre-empilee i:last-child{border-radius:0 4px 4px 0}
+.barre-empilee i:first-child{border-radius:0;border-start-start-radius:4px;border-end-start-radius:4px}
+.barre-empilee i:last-child{border-radius:0;border-start-end-radius:4px;border-end-end-radius:4px}
 .barre-empilee i:only-child{border-radius:4px}
 /* Histogramme vertical : une seule série, une seule teinte, barres fines. */
 .histo{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:end;
@@ -1989,8 +2024,8 @@ p.bord-note{display:block}
 @media (max-width:720px){.form-inscription__large{grid-column:auto}}
 
 /* Alerte fermable (« × ») : pages non identifiées sur la page des résultats. */
-.messages li.messages__fermable{position:relative;padding-right:46px}
-.messages__fermer{position:absolute;top:7px;right:8px;margin:0}
+.messages li.messages__fermable{position:relative;padding-inline-end:46px}
+.messages__fermer{position:absolute;top:7px;inset-inline-end:8px;margin:0}
 .messages__fermer button{width:28px;height:28px;border:0;border-radius:8px;cursor:pointer;
   background:transparent;color:inherit;font-size:20px;line-height:1;opacity:.75}
 .messages__fermer button:hover{background:rgba(0,0,0,.07);opacity:1}
@@ -2033,7 +2068,7 @@ a.badge{text-decoration:none}
 .piece-jointe__nom b{display:block;font-size:13.5px;overflow-wrap:anywhere}
 .piece-jointe__nom small{display:block;font-size:12px;color:var(--qs-muted)}
 .pieces-mini{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-wrap:wrap;gap:6px}
-.pieces-mini a{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 7px;font-size:12.5px;
+.pieces-mini a{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;padding-inline-start:7px;font-size:12.5px;
   border:1px solid var(--qs-line);border-radius:999px;color:var(--qs-ink-soft);text-decoration:none}
 .pieces-mini a:hover{border-color:var(--qs-blue)}
 .pieces-mini svg{width:15px;height:15px}
@@ -2064,14 +2099,15 @@ fieldset.matiere legend{font-weight:600;font-size:13px;padding:0 6px}
 /* Corrigé d'un QCM en deux versions : version A à gauche, B à droite, un trait entre les deux */
 .corrige-versions{gap:0}
 .corrige-versions__cote{min-width:0;padding:0 22px}
-.corrige-versions__cote:first-child{padding-left:0}
-.corrige-versions__cote + .corrige-versions__cote{border-left:1px solid var(--qs-line);padding-right:0}
+.corrige-versions__cote:first-child{padding-inline-start:0}
+.corrige-versions__cote + .corrige-versions__cote{border-inline-start:1px solid var(--qs-line);
+  padding-inline-end:0}
 .cellule--date{white-space:nowrap}
 /* dans une moitié, la date et les boutons vont à la ligne plutôt que de déborder */
 .corrige-versions .cellule--date,.corrige-versions .cellule--droite{white-space:normal}
 .corrige-versions .cellule--droite .btn{margin:2px 0}
 @media (max-width:860px){
   .corrige-versions__cote{padding:0}
-  .corrige-versions__cote + .corrige-versions__cote{border-left:0;border-top:1px solid var(--qs-line);
+  .corrige-versions__cote + .corrige-versions__cote{border-inline-start:0;border-top:1px solid var(--qs-line);
     margin-top:16px;padding-top:16px}
 }

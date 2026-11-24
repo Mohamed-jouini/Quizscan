@@ -26,10 +26,13 @@ mais invalide, elle, est refusée).
 import csv
 import datetime
 import io
+import math
 import re
 import unicodedata
 import zipfile
 from xml.etree import ElementTree as ET
+
+from django.utils.translation import gettext
 
 from .models import ARABIC_LETTERS, MAX_CHOICES, MAX_OPEN_HEIGHT_MM
 
@@ -67,12 +70,28 @@ MAX_LIGNES = 20000       # au-delà, ce n'est plus une liste de classe
 MAX_COLONNES = 60
 
 
+# Un .xlsx est un zip : quelques Mo peuvent se décompresser en gigaoctets, qu'openpyxl
+# charge d'un bloc (chaînes partagées). Une liste de 15 000 candidats en fait moins de 10.
+MAX_XLSX_DECOMPRESSE = 200 * 1024 * 1024
+
+
+def _controler_xlsx(data):
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            total = sum(info.file_size for info in z.infolist())
+    except zipfile.BadZipFile:
+        return                      # openpyxl le dira illisible
+    if total > MAX_XLSX_DECOMPRESSE:
+        raise ImportError_(gettext("Fichier Excel trop volumineux une fois décompressé."))
+
+
 def _xlsx_rows(data):
     import openpyxl
+    _controler_xlsx(data)
     try:
         wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     except Exception as exc:  # noqa: BLE001
-        raise ImportError_(f"Fichier Excel illisible : {exc}") from exc
+        raise ImportError_(gettext('Fichier Excel illisible : %(exc)s') % {"exc": exc}) from exc
     ws = wb.active
     # Dimensions déclarées par le fichier lui-même : un petit .xlsx peut
     # annoncer des milliards de cellules, que la lecture remplirait de vide.
@@ -95,10 +114,10 @@ def _docx_blocks(data):
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             # taille décompressée vérifiée avant lecture (archive piégée)
             if z.getinfo("word/document.xml").file_size > 50 * 1024 * 1024:
-                raise ImportError_("Document Word démesuré.")
+                raise ImportError_(gettext("Document Word démesuré."))
             root = ET.fromstring(z.read("word/document.xml"))
     except Exception as exc:  # noqa: BLE001
-        raise ImportError_(f"Fichier Word illisible : {exc}") from exc
+        raise ImportError_(gettext('Fichier Word illisible : %(exc)s') % {"exc": exc}) from exc
 
     def text_of(el):
         parts = []
@@ -128,7 +147,7 @@ def _pdf_lines(data):
     try:
         doc = pymupdf.open(stream=data, filetype="pdf")
     except Exception as exc:  # noqa: BLE001
-        raise ImportError_(f"Fichier PDF illisible : {exc}") from exc
+        raise ImportError_(gettext('Fichier PDF illisible : %(exc)s') % {"exc": exc}) from exc
     lines = []
     for page in doc:
         lines.extend(page.get_text("text").splitlines())
@@ -384,8 +403,8 @@ def rows_to_fiches(rows):
         colonnes = {"last": 0, "first": 1, "number": 2}
     elif not colonnes.keys() & {"last", "first", "full", "number", "cin"}:
         raise ImportError_(
-            "Colonnes non reconnues : la première ligne du fichier doit nommer au "
-            "moins le n° d'inscription (عدد الترسيم) ou le nom (الاسم و اللقب).")
+            gettext("Colonnes non reconnues : la première ligne du fichier doit nommer au "
+            "moins le n° d'inscription (عدد الترسيم) ou le nom (الاسم و اللقب)."))
     if "full" not in colonnes and colonnes.keys() & {"last", "first"}:
         nb_colonnes = max(len(r) for r in rows)
         _a_defaut(colonnes, "last", 0, nb_colonnes)
@@ -471,8 +490,8 @@ def parse_fiches_file(name, data):
     elif ext == ".txt":
         lines = _text_lines(data)
     else:
-        raise ImportError_("Format non pris en charge : utilisez un fichier "
-                           "Excel, CSV, Word (.docx), PDF ou texte.")
+        raise ImportError_(gettext("Format non pris en charge : utilisez un fichier "
+                           "Excel, CSV, Word (.docx), PDF ou texte."))
     rows = [split_name_line(l) for l in lines if l.strip()]
     # une première ligne d'en-tête (« Nom Prénom N° ») est ignorée
     if rows and norm(rows[0][0]) in _LAST | _FULL:
@@ -495,7 +514,10 @@ _POINTS_LINE = re.compile(
     r"^\s*(?:bar[èe]me|points?|pts|النقاط|العدد)\s*[:=]\s*(\d+(?:[.,]\d+)?)", re.I)
 _OPEN_TAG = re.compile(r"[\[(]\s*(?:manuscrite|ouverte|r[ée]daction|open|"
                        r"مقالي|كتابي)\s*[\])]", re.I)
-_MARK = re.compile(r"^\s*[*✓✔]\s*|\s*(?:[*✓✔]|\(\s*x\s*\)|\[\s*x\s*\])\s*$", re.I)
+# Sans « \s* » en tête de la seconde forme : avec search(), il essayait chaque position
+# d'une longue suite d'espaces, temps quadratique (un choix suivi de 500 000 espaces
+# bloquait le serveur ; 24 novembre 2026). Les espaces laissés se retirent par strip().
+_MARK = re.compile(r"^\s*[*✓✔]\s*|(?:[*✓✔]|\(\s*x\s*\)|\[\s*x\s*\])\s*$", re.I)
 
 _AR_INDEX = {l: i for i, l in enumerate(ARABIC_LETTERS)}
 _AR_INDEX["ا"] = 0
@@ -527,7 +549,12 @@ def _answer_index(value, choices):
 
 
 def _points(s):
-    return float(s.replace(",", "."))
+    """Barème lu dans un fichier. « nan » et « inf » refusés (ValueError) : une note qui n'en
+    est pas cassait toutes les pages de l'épreuve (24 novembre 2026)."""
+    valeur = float(s.replace(",", "."))
+    if not math.isfinite(valeur):
+        raise ValueError(s)
+    return valeur
 
 
 _MD_TRAIT = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")
@@ -699,14 +726,13 @@ def _finalize(items):
         if reponse:
             correct = _answer_index(reponse, choices)
         if len(choices) < 2:
-            errors.append(f"{label} : au moins deux choix sont nécessaires.")
+            errors.append(gettext('%(label)s : au moins deux choix sont nécessaires.') % {"label": label})
             continue
         if len(choices) > MAX_CHOICES:
-            errors.append(f"{label} : maximum {MAX_CHOICES} choix.")
+            errors.append(gettext('%(label)s : maximum %(MAX_CHOICES)s choix.') % {"label": label, "MAX_CHOICES": MAX_CHOICES})
             continue
         if reponse and (correct is None or not 0 <= correct < len(choices)):
-            errors.append(f"{label} : bonne réponse « {reponse[:20]} » invalide "
-                          "(la lettre d'un choix : A, B… ou أ، ب…).")
+            errors.append(gettext("%(label)s : bonne réponse « %(reponse)s » invalide (la lettre d'un choix : A, B… ou أ، ب…).") % {"label": label, "reponse": reponse[:20]})
             continue
         # Sans bonne réponse indiquée (« version sans réponses ») : importée quand
         # même, à renseigner ensuite à la main ou par le scan du corrigé ; la
@@ -786,7 +812,7 @@ def parse_questions_rows(rows):
         try:
             points = _points(col("points")) if col("points") else 1.0
         except ValueError:
-            errors.append(f"{label} : barème invalide « {col('points')} ».")
+            errors.append(gettext('%(label)s : barème invalide « %(col)s ».') % {"label": label, "col": col('points')})
             continue
         qtype = norm(col("type"))
         is_open = qtype.startswith(("manus", "ouvert", "redac", "open", "مقال", "كتاب"))
@@ -800,7 +826,7 @@ def parse_questions_rows(rows):
                               "open_height_mm": max(10, min(height, MAX_OPEN_HEIGHT_MM))})
             continue
         if any(not c for c in choices):
-            errors.append(f"{label} : un choix est vide entre deux choix remplis.")
+            errors.append(gettext('%(label)s : un choix est vide entre deux choix remplis.') % {"label": label})
             continue
         reponse = col("answer")
         correct = _answer_index(reponse, choices) if reponse else None
@@ -808,11 +834,11 @@ def parse_questions_rows(rows):
         # suit le réglage du quiz, vérifié à l'enregistrement
         n_choices = len(choices) or MAX_CHOICES
         if len(choices) == 1:
-            errors.append(f"{label} : au moins deux choix sont nécessaires.")
+            errors.append(gettext('%(label)s : au moins deux choix sont nécessaires.') % {"label": label})
             continue
         # réponse vide : à renseigner ensuite (voir _finalize) ; écrite mais fausse : refusée
         if reponse and (correct is None or not 0 <= correct < n_choices):
-            errors.append(f"{label} : bonne réponse « {reponse} » invalide.")
+            errors.append(gettext('%(label)s : bonne réponse « %(reponse)s » invalide.') % {"label": label, "reponse": reponse})
             continue
         questions.append({"qtype": "qcm", "text": text[:500], "choices": choices,
                           "correct": correct, "points": points,
@@ -839,8 +865,7 @@ def _questions_du_pdf(data, langue):
             with pymupdf.open(stream=data, filetype="pdf") as doc:
                 if doc.page_count > ocr_pdf.PAGES_MAX:
                     raise ImportError_(
-                        f"{sans_texte} La lecture par OCR s'arrête à {ocr_pdf.PAGES_MAX} "
-                        f"pages ; ce PDF en a {doc.page_count}.") from None
+                        gettext("%(sans_texte)s La lecture par OCR s'arrête à %(PAGES_MAX)s pages ; ce PDF en a %(page_count)s.") % {"sans_texte": sans_texte, "PAGES_MAX": ocr_pdf.PAGES_MAX, "page_count": doc.page_count}) from None
                 for essai, code in enumerate((langue, "fr" if langue == "ar" else "ar")):
                     try:
                         lignes = ocr_pdf.lignes_du_pdf(doc, code)
@@ -857,9 +882,7 @@ def _questions_du_pdf(data, langue):
             raise sans_texte from None
         questions, erreurs = lu
         if not questions and not erreurs:
-            raise ImportError_(f"{sans_texte} La lecture par reconnaissance de caractères "
-                               "(OCR), en arabe comme en français, n'y a trouvé aucune "
-                               "question numérotée.") from None
+            raise ImportError_(gettext("%(sans_texte)s La lecture par reconnaissance de caractères (OCR), en arabe comme en français, n'y a trouvé aucune question numérotée.") % {"sans_texte": sans_texte}) from None
         for q in questions:
             q["ocr"] = True
         return questions, erreurs
@@ -901,8 +924,8 @@ def parse_questions_file(name, data, langue="fr"):
         return _questions_du_pdf(data, langue)
     if ext in (".txt", ".md", ".markdown"):
         return parse_questions_text(_text_lines(data))
-    raise ImportError_("Format non pris en charge : utilisez un fichier "
-                       "Excel, CSV, Word (.docx), PDF, texte ou Markdown (.md).")
+    raise ImportError_(gettext("Format non pris en charge : utilisez un fichier "
+                       "Excel, CSV, Word (.docx), PDF, texte ou Markdown (.md)."))
 
 
 # --------------------------------------------------- notes d'un oral (Excel)
@@ -964,7 +987,7 @@ def notes_du_classeur(data, note_sur, matieres=None):
     moins."""
     from .inscriptions import numero_propre
     if len(data) > MAX_TAILLE_NOTES:
-        raise ImportError_("Fichier trop gros pour une liste de notes (5 Mo au plus).")
+        raise ImportError_(gettext("Fichier trop gros pour une liste de notes (5 Mo au plus)."))
     lignes = _xlsx_rows(data)
     if matieres:
         return _notes_par_matiere(lignes, note_sur, matieres)
@@ -977,8 +1000,8 @@ def notes_du_classeur(data, note_sur, matieres=None):
             entete = (i, col_numero, col_note)
             break
     if entete is None:
-        raise ImportError_("Colonnes « N° d'inscription » et « Note » introuvables : "
-                           "partez du modèle Excel de l'épreuve.")
+        raise ImportError_(gettext("Colonnes « N° d'inscription » et « Note » introuvables : "
+                           "partez du modèle Excel de l'épreuve."))
     debut, col_numero, col_note = entete
     notes, erreurs, vus = [], [], set()
     for ligne in lignes[debut + 1:]:
@@ -987,17 +1010,17 @@ def notes_du_classeur(data, note_sur, matieres=None):
         if not brut:
             continue                    # pas (encore) de note : rien à importer
         if not numero:
-            erreurs.append(f"une note (« {brut} ») sans n° d'inscription")
+            erreurs.append(gettext("une note (« %(brut)s ») sans n° d'inscription") % {"brut": brut})
             continue
         try:
             valeur = float(chiffres_latins(brut).translate(_DECIMALE))
         except ValueError:
             valeur = None
         if valeur is None or not 0 <= valeur <= note_sur:
-            erreurs.append(f"n° {numero} : « {brut} » n'est pas une note de 0 à {note_sur:g}")
+            erreurs.append(gettext("n° %(numero)s : « %(brut)s » n'est pas une note de 0 à %(note_sur)s") % {"numero": numero, "brut": brut, "note_sur": format(note_sur, 'g')})
             continue
         if numero in vus:
-            erreurs.append(f"n° {numero} : deux fois dans le fichier")
+            erreurs.append(gettext('n° %(numero)s : deux fois dans le fichier') % {"numero": numero})
             continue
         vus.add(numero)
         notes.append((numero, round(valeur, 2)))
@@ -1045,13 +1068,13 @@ def _notes_par_matiere(lignes, note_sur, matieres):
         if not valeurs and not fautes:
             continue
         if not numero:
-            erreurs.append("des notes sans n° d'inscription")
+            erreurs.append(gettext("des notes sans n° d'inscription"))
             continue
         if fautes:
             erreurs.extend(f"n° {numero} : {f}" for f in fautes)
             continue
         if numero in vus:
-            erreurs.append(f"n° {numero} : deux fois dans le fichier")
+            erreurs.append(gettext('n° %(numero)s : deux fois dans le fichier') % {"numero": numero})
             continue
         vus.add(numero)
         notes.append((numero, valeurs))

@@ -1,34 +1,34 @@
-{% extends "grader/base.html" %}
+{% extends "grader/base.html" %}{% load i18n %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
-    <h1>Vérification de la copie</h1>
+    <h1>{% translate "Vérification de la copie" %}</h1>
     <p class="page-head__meta">
       <b>{{ sheet.source_name }}</b>
-      <span class="badge grey">copie {{ position }} / {{ total }}</span>
+      <span class="badge grey">{% blocktranslate trimmed %}copie {{ position }} / {{ total }}{% endblocktranslate %}</span>
     </p>
   </div>
   <div class="page-head__actions">
-    <a class="btn small secondary" href="{% url 'batch_detail' sheet.batch.pk %}">← Retour au lot</a>
-    <a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}">← Retour aux résultats</a>
-    {% if prev_id %}<a class="btn small secondary" href="{% url 'sheet_review' prev_id %}">◀ Précédente</a>{% endif %}
-    {% if next_id %}<a class="btn small secondary" href="{% url 'sheet_review' next_id %}">Suivante ▶</a>{% endif %}
+    <a class="btn small secondary" href="{% url 'batch_detail' sheet.batch.pk %}">{% translate "← Retour au lot" %}</a>
+    <a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}">{% translate "← Retour aux résultats" %}</a>
+    {% if prev_id %}<a class="btn small secondary" href="{% url 'sheet_review' prev_id %}">{% translate "◀ Précédente" %}</a>{% endif %}
+    {% if next_id %}<a class="btn small secondary" href="{% url 'sheet_review' next_id %}">{% translate "Suivante ▶" %}</a>{% endif %}
   </div>
 </header>
 
 <form method="post">{% csrf_token %}
 <div class="grid2">
   <div class="card">
-    <h2>Image contrôlée</h2>
+    <h2>{% translate "Image contrôlée" %}</h2>
     <p class="helptext">
       {% if quiz.type_epreuve == "ecrit" or quiz.type_epreuve == "oral" %}
-      Cercle <b class="t-ok">vert</b> = chiffre de la note lu,
-      cadre <b class="t-warn">orange</b> = ligne à vérifier (aucune case noircie, 0 compris, ou plusieurs).
+      {% translate "Cercle" %} <b class="t-ok">{% translate "vert" %}</b> {% blocktranslate trimmed %}= chiffre de la note lu,
+      cadre{% endblocktranslate %} <b class="t-warn">{% translate "orange" %}</b> {% translate "= ligne à vérifier (aucune case noircie, 0 compris, ou plusieurs)." %}
       {% else %}
-      Cercle <b class="t-info">bleu</b> = bonne réponse attendue,
-      <b class="t-ok">vert</b> = réponse de l'étudiant correcte,
-      <b class="t-bad">rouge</b> = réponse fausse,
-      <b class="t-warn">orange</b> = plusieurs cases cochées.
+      {% translate "Cercle" %} <b class="t-info">{% translate "bleu" %}</b> {% translate "= bonne réponse attendue," %}
+      <b class="t-ok">{% translate "vert" %}</b> {% translate "= réponse de l'étudiant correcte," %}
+      <b class="t-bad">{% translate "rouge" %}</b> {% translate "= réponse fausse," %}
+      <b class="t-warn">{% translate "orange" %}</b> {% translate "= plusieurs cases cochées." %}
       {% endif %}
     </p>
     {% if sheet.overlay_image %}
@@ -40,45 +40,45 @@
 
   <div>
     <div class="card">
-      <h2>Étudiant</h2>
+      <h2>{% translate "Étudiant" %}</h2>
       {% if sheet.student %}
-      {# Copie identifiée : le nom, et comment il a été trouvé. Pas de     #}
-      {# changement d'étudiant ici : la lecture du QR ou du n° fait foi.   #}
+      {#Copie identifiée : le nom, et comment il a été trouvé. Pas de#}
+      {#changement d'étudiant ici : la lecture du QR ou du n° fait foi.#}
       <div class="identite-copie">
         <span class="avatar">{{ sheet.student.first_name|slice:":1" }}{{ sheet.student.last_name|slice:":1" }}</span>
         <div>
           <div class="identite-copie__nom">{{ sheet.student.full_name }}</div>
           <div class="identite-copie__meta">
-            {% if sheet.student.student_number %}N° {{ sheet.student.student_number }} · {% endif %}
-            {% if code_copie %}Code <b>{{ code_copie }}</b> · {% endif %}
+            {% if sheet.student.student_number %}{% translate "N°" %} {{ sheet.student.student_number }} · {% endif %}
+            {% if code_copie %}{% translate "Code" %} <b>{{ code_copie }}</b> · {% endif %}
             <span class="badge {% if identification.methode == 'qr' or identification.methode == 'grille' %}ok{% else %}grey{% endif %}">{{ identification.texte }}</span>
           </div>
         </div>
       </div>
       {% if sheet.name_crop and identification.methode == "ocr" %}
-      <p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}" alt="Nom écrit sur la copie"></p>
+      <p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}" alt="{% translate "Nom écrit sur la copie" %}"></p>
       {% endif %}
       {% if sheet.error_message %}<p class="helptext helptext--serre">{{ sheet.error_message }}</p>{% endif %}
       {% else %}
       {% if sheet.error_message %}<p class="helptext helptext--serre"><b>{{ sheet.error_message }}</b></p>{% endif %}
-      <p class="helptext helptext--serre">Copie non identifiée{% if sheet.id_read %} — identifiant lu : <b>{{ sheet.id_read }}</b>, inconnu dans la liste{% elif sheet.ocr_name_raw %} — nom lu : <b>{{ sheet.ocr_name_raw }}</b>{% endif %}.
-        {% if suite %}Proposé d'après l'ordre du scan : la page précédente du lot est celle de <b>{{ propose.full_name }}</b>. Rien sur cette page ne le confirme : vérifiez que le paquet n'a pas été mélangé, puis enregistrez.
-        {% elif propose %}Étudiant proposé : <b>{{ propose.full_name }}</b> (ressemblance {{ ressemblance }} %, parmi les étudiants sans copie) — vérifiez sur l'image puis enregistrez.{% else %}Choisissez l'étudiant :{% endif %}</p>
-      {% if sheet.name_crop %}<p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}" alt="Nom écrit sur la copie"></p>{% endif %}
-      {% if avec_codes %}<p class="helptext helptext--serre">Le code imprimé sous le QR, le même que sur le talon, retrouve l'étudiant : tapez-le dans la recherche ci-dessous.</p>{% endif %}
-      <label for="id_student">Affecter à</label>
-      {# Recherche dans la liste (pages.js) : nom, n° d'inscription ou code de la copie #}
+      <p class="helptext helptext--serre">{% translate "Copie non identifiée" %}{% if sheet.id_read %} {% translate "— identifiant lu :" %} <b>{{ sheet.id_read }}</b>{% translate ", inconnu dans la liste" %}{% elif sheet.ocr_name_raw %} {% translate "— nom lu :" %} <b>{{ sheet.ocr_name_raw }}</b>{% endif %}.
+        {% if suite %}{% translate "Proposé d'après l'ordre du scan : la page précédente du lot est celle de" %} <b>{{ propose.full_name }}</b>{% translate ". Rien sur cette page ne le confirme : vérifiez que le paquet n'a pas été mélangé, puis enregistrez." %}
+        {% elif propose %}{% translate "Étudiant proposé :" %} <b>{{ propose.full_name }}</b> {% blocktranslate trimmed %}(ressemblance {{ ressemblance }} %, parmi les étudiants sans copie) — vérifiez sur l'image puis enregistrez.{% endblocktranslate %}{% else %}{% translate "Choisissez l'étudiant :" %}{% endif %}</p>
+      {% if sheet.name_crop %}<p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}" alt="{% translate "Nom écrit sur la copie" %}"></p>{% endif %}
+      {% if avec_codes %}<p class="helptext helptext--serre">{% translate "Le code imprimé sous le QR, le même que sur le talon, retrouve l'étudiant : tapez-le dans la recherche ci-dessous." %}</p>{% endif %}
+      <label for="id_student">{% translate "Affecter à" %}</label>
+      {#Recherche dans la liste (pages.js) : nom, n° d'inscription ou code de la copie#}
       <div class="recherche-etudiant recherche-etudiant--liste">
         <div class="recherche-etudiant__champ">
           <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-          <input type="search" data-filtre-liste="id_student" autocomplete="off" aria-label="Rechercher l'étudiant"
-                 placeholder="Nom, n° d'inscription{% if avec_codes %} ou code de la copie{% endif %}">
+          <input type="search" data-filtre-liste="id_student" autocomplete="off" aria-label="{% translate "Rechercher l'étudiant" %}"
+                 placeholder="{% if avec_codes %}{% translate "Nom, n° d'inscription ou code de la copie" %}{% else %}{% translate "Nom, n° d'inscription" %}{% endif %}">
         </div>
       </div>
       <select id="id_student" name="student">
-        <option value="">— non identifié —</option>
+        <option value="">{% translate "— non identifié —" %}</option>
         {% for s in students %}
-        <option value="{{ s.pk }}"{% if propose and s.pk == propose.pk %} selected{% endif %} data-recherche="{{ s.student_number|default:'' }} {{ s.code_copie|cut:'-' }}">{{ s.full_name }}{% if s.code_copie %} — code {{ s.code_copie }}{% endif %}</option>
+        <option value="{{ s.pk }}"{% if propose and s.pk == propose.pk %} selected{% endif %} data-recherche="{{ s.student_number|default:'' }} {{ s.code_copie|cut:'-' }}">{{ s.full_name }}{% if s.code_copie %} {% blocktranslate trimmed with code_copie=s.code_copie %}— code {{ code_copie }}{% endblocktranslate %}{% endif %}</option>
         {% endfor %}
       </select>
       {% endif %}
@@ -86,61 +86,61 @@
 
     <div class="card">
       {% if quiz.type_epreuve == "ecrit" or quiz.type_epreuve == "oral" %}
-      {# Écrit / oral : la note lue dans la grille. Illisible (plusieurs   #}
-      {# cases sur une ligne, ou au-dessus du barème) : elle se saisit ici, #}
-      {# l'image sous les yeux. L'image suit la largeur de la carte : en    #}
-      {# taille réelle, elle repoussait le champ hors de l'écran.           #}
-      <h2>Note</h2>
+      {#Écrit / oral : la note lue dans la grille. Illisible (plusieurs#}
+      {#cases sur une ligne, ou au-dessus du barème) : elle se saisit ici,#}
+      {#l'image sous les yeux. L'image suit la largeur de la carte : en#}
+      {#taille réelle, elle repoussait le champ hors de l'écran.#}
+      <h2>{% translate "Note" %}</h2>
       {% for a in answers %}{% if a.question.qtype == "open" %}
       <div class="note-lue{% if a.points_awarded is None %} note-lue--a-saisir{% endif %}">
         <p class="note-lue__etat">
-          {% if a.points_awarded is None %}<span class="badge warn">Note illisible : à saisir</span>
-          {% elif a.manually_set %}<span class="badge ok">Note saisie : {{ a.points_awarded|floatformat:"-2" }} / {{ a.question.points|floatformat:"-2" }}</span>
-          {% else %}<span class="badge ok">Note lue : {{ a.points_awarded|floatformat:"-2" }} / {{ a.question.points|floatformat:"-2" }}</span>{% endif %}
+          {% if a.points_awarded is None %}<span class="badge warn">{% translate "Note illisible : à saisir" %}</span>
+          {% elif a.manually_set %}<span class="badge ok">{% blocktranslate trimmed with points_awarded=a.points_awarded|floatformat:"-2" points=a.question.points|floatformat:"-2" %}Note saisie : {{ points_awarded }} / {{ points }}{% endblocktranslate %}</span>
+          {% else %}<span class="badge ok">{% blocktranslate trimmed with points_awarded=a.points_awarded|floatformat:"-2" points=a.question.points|floatformat:"-2" %}Note lue : {{ points_awarded }} / {{ points }}{% endblocktranslate %}</span>{% endif %}
         </p>
-        <p class="helptext helptext--serre">{% if quiz.type_epreuve == "oral" %}Note noircie par l'examinateur sur la fiche d'évaluation{% else %}Note noircie par le correcteur dans le cadre de la page de garde{% endif %} :
-          {% if a.points_awarded is None %}lisez-la sur l'image et saisissez-la ci-dessous.{% else %}vérifiez-la sur l'image ; corrigez-la au besoin.{% endif %}</p>
-        {% if a.open_crop %}<a class="note-lue__image" href="{{ a.open_crop.url }}" target="_blank" title="Agrandir">
-          <img src="{{ a.open_crop.url }}" alt="Grille de la note sur la copie"></a>{% endif %}
-        <label for="id_points_{{ a.pk }}">Note sur {{ a.question.points|floatformat:"-2" }}</label>
+        <p class="helptext helptext--serre">{% if quiz.type_epreuve == "oral" %}{% translate "Note noircie par l'examinateur sur la fiche d'évaluation" %}{% else %}{% translate "Note noircie par le correcteur dans le cadre de la page de garde" %}{% endif %} :
+          {% if a.points_awarded is None %}{% translate "lisez-la sur l'image et saisissez-la ci-dessous." %}{% else %}{% translate "vérifiez-la sur l'image ; corrigez-la au besoin." %}{% endif %}</p>
+        {% if a.open_crop %}<a class="note-lue__image" href="{{ a.open_crop.url }}" target="_blank" title="{% translate "Agrandir" %}">
+          <img src="{{ a.open_crop.url }}" alt="{% translate "Grille de la note sur la copie" %}"></a>{% endif %}
+        <label for="id_points_{{ a.pk }}">{% blocktranslate trimmed with points=a.question.points|floatformat:"-2" %}Note sur {{ points }}{% endblocktranslate %}</label>
         <div class="note-lue__saisie">
           <input id="id_points_{{ a.pk }}" class="champ--note" type="text" inputmode="decimal"
                  name="points_{{ a.pk }}" value="{{ a.points_awarded|floatformat:'-2'|default_if_none:'' }}"
-                 placeholder="ex. 15,75" autocomplete="off"{% if a.points_awarded is None %} autofocus{% endif %}>
+                 placeholder="{% translate "ex. 15,75" %}" autocomplete="off"{% if a.points_awarded is None %} autofocus{% endif %}>
           <span>/ {{ a.question.points|floatformat:"-2" }}</span>
         </div>
       </div>
       {% endif %}{% empty %}
-      <p class="helptext">Aucune note lue sur cette page.</p>
+      <p class="helptext">{% translate "Aucune note lue sur cette page." %}</p>
       {% endfor %}
       {% else %}
-      <h2>Réponses</h2>
+      <h2>{% translate "Réponses" %}</h2>
       <p class="helptext helptext--serre">
-        Les QCM sont notés par lecture optique : la réponse retenue est le
+        {% blocktranslate trimmed %}Les QCM sont notés par lecture optique : la réponse retenue est le
         constat des cases noircies et ne se modifie pas. Seules les réponses
-        manuscrites sont à noter ici.
+        manuscrites sont à noter ici.{% endblocktranslate %}
       </p>
-      {% if version %}<p class="helptext helptext--serre"><span class="badge info">Version {{ version }}</span>
-        {% if version != "A" %}Copie en version {{ version }} : le tableau donne les questions et les lettres de la version A (celle du corrigé) ; l'image de contrôle montre les cases telles qu'imprimées sur la feuille {{ version }}.{% endif %}</p>{% endif %}
+      {% if version %}<p class="helptext helptext--serre"><span class="badge info">{% blocktranslate trimmed %}Version {{ version }}{% endblocktranslate %}</span>
+        {% if version != "A" %}{% blocktranslate trimmed %}Copie en version {{ version }} : le tableau donne les questions et les lettres de la version A (celle du corrigé) ; l'image de contrôle montre les cases telles qu'imprimées sur la feuille {{ version }}.{% endblocktranslate %}{% endif %}</p>{% endif %}
       <div class="table-wrap">
         <table>
-        <tr><th>Q</th><th>Détecté</th><th>Attendu</th><th>Points</th></tr>
+        <tr><th>{% translate "Q" %}</th><th>{% translate "Détecté" %}</th><th>{% translate "Attendu" %}</th><th>{% translate "Points" %}</th></tr>
         {% for a in answers %}
         <tr>
           <td>{{ a.question.order }}</td>
           {% if a.question.qtype == "qcm" %}
-          <td>{{ a.detected_letter }}{% if a.is_multiple %} <span class="badge warn">multiple</span>{% endif %}</td>
+          <td>{{ a.detected_letter }}{% if a.is_multiple %} <span class="badge warn">{% translate "multiple" %}</span>{% endif %}</td>
           <td>{{ a.question.correct_letter }}</td>
           <td>{{ a.points_awarded|floatformat:"-2"|default:"—" }} / {{ a.question.points|floatformat:"-2" }}</td>
           {% else %}
           <td colspan="2">
-            Réponse manuscrite :
-            {% if a.open_crop %}<a class="reponse-manuscrite" href="{{ a.open_crop.url }}" target="_blank" title="Agrandir">
-              <img src="{{ a.open_crop.url }}" alt="Réponse manuscrite"></a>{% endif %}
+            {% translate "Réponse manuscrite :" %}
+            {% if a.open_crop %}<a class="reponse-manuscrite" href="{{ a.open_crop.url }}" target="_blank" title="{% translate "Agrandir" %}">
+              <img src="{{ a.open_crop.url }}" alt="{% translate "Réponse manuscrite" %}"></a>{% endif %}
           </td>
           <td class="cellule--serree"><input class="champ--note" type="text" name="points_{{ a.pk }}"
                      value="{{ a.points_awarded|floatformat:'-2'|default_if_none:'' }}"
-                     placeholder="note"> / {{ a.question.points|floatformat:"-2" }}</td>
+                     placeholder="{% translate "note" %}"> / {{ a.question.points|floatformat:"-2" }}</td>
           {% endif %}
         </tr>
         {% endfor %}
@@ -151,15 +151,15 @@
         {% if a_enregistrer %}
         {% if next_id %}
         <button class="btn" type="submit" name="save_next" value="1">
-          Enregistrer et copie suivante ▶</button>
+          {% translate "Enregistrer et copie suivante ▶" %}</button>
         {% endif %}
-        <button class="btn secondary" type="submit">Enregistrer et retour au lot</button>
-        <button class="btn secondary" type="submit" name="retour_resultats" value="1">Enregistrer et retour aux résultats</button>
+        <button class="btn secondary" type="submit">{% translate "Enregistrer et retour au lot" %}</button>
+        <button class="btn secondary" type="submit" name="retour_resultats" value="1">{% translate "Enregistrer et retour aux résultats" %}</button>
         {% else %}
-        {# Rien à enregistrer : copie reconnue, QCM seuls. #}
-        {% if next_id %}<a class="btn" href="{% url 'sheet_review' next_id %}">Copie suivante ▶</a>{% endif %}
-        <a class="btn secondary" href="{% url 'batch_detail' sheet.batch.pk %}">Retour au lot</a>
-        <a class="btn secondary" href="{% url 'quiz_results' quiz.pk %}">Retour aux résultats</a>
+        {#Rien à enregistrer : copie reconnue, QCM seuls.#}
+        {% if next_id %}<a class="btn" href="{% url 'sheet_review' next_id %}">{% translate "Copie suivante ▶" %}</a>{% endif %}
+        <a class="btn secondary" href="{% url 'batch_detail' sheet.batch.pk %}">{% translate "Retour au lot" %}</a>
+        <a class="btn secondary" href="{% url 'quiz_results' quiz.pk %}">{% translate "Retour aux résultats" %}</a>
         {% endif %}
       </p>
     </div>
@@ -168,9 +168,9 @@
 </form>
 {% if historique %}
 <div class="card">
-  <h2>Historique de cette copie</h2>
-  <p class="helptext helptext--serre">Toute modification d'attribution ou de
-    note est inscrite ici, avec son auteur. Le journal ne se modifie pas.</p>
+  <h2>{% translate "Historique de cette copie" %}</h2>
+  <p class="helptext helptext--serre">{% blocktranslate trimmed %}Toute modification d'attribution ou de
+    note est inscrite ici, avec son auteur. Le journal ne se modifie pas.{% endblocktranslate %}</p>
   {% include "grader/_journal.html" with entrees=historique %}
 </div>
 {% endif %}

@@ -16,6 +16,7 @@ passent donc par `user.has_perm`, qui répond toujours oui à un super-
 utilisateur. L'administrateur n'a pas de cas particulier à écrire.
 """
 from django.core.exceptions import PermissionDenied
+from django.utils.translation import gettext
 
 CREER = "grader.creer_epreuve"
 CORRIGER = "grader.corriger_copies"
@@ -45,5 +46,4 @@ def exiger(utilisateur, droit, geste):
     """
     if not utilisateur.has_perm(droit):
         raise PermissionDenied(
-            f"Votre compte n'a pas l'autorisation de {geste}. "
-            "Demandez-la à l'administrateur de l'établissement.")
+            gettext("Votre compte n'a pas l'autorisation de %(geste)s. Demandez-la à l'administrateur de l'établissement.") % {"geste": geste})

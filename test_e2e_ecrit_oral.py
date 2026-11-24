@@ -106,16 +106,19 @@ def test_ecrit(c, prof, groupe):
 
     layout = quiz.layout_json
     grille = layout["pages"][0]["note_grid"]
-    # par demi-points (demande du 13 novembre 2026) : partie entière de 0 à 20 sur une
-    # ligne, décimale « ,0 » ou « ,5 » ; 15,5 = 15 puis ,5
+    # partie entière de 0 à 20 sur une ligne (13 novembre 2026), décimale par quarts de point
+    # (24 novembre 2026 : « ,00 ,25 ,50 ,75 au lieu de ,0 et ,5 ») ; 15,5 = 15 puis ,50
     assert grille["modele"] == "demi" and grille["kinds"] == ["entier", "demi"]
-    assert [len(r) for r in grille["rows"]] == [21, 2], [len(r) for r in grille["rows"]]
+    assert [len(r) for r in grille["rows"]] == [21, 4], [len(r) for r in grille["rows"]]
+    assert grille["valeurs"] == [0, 0.25, 0.5, 0.75], grille["valeurs"]
     texte_garde = doc[0].get_text()
     assert "Partie entière" in texte_garde and "Décimale" in texte_garde \
-        and "avec 20, noircissez ,0" in texte_garde and "Dizaines" not in texte_garde
+        and "avec 20, noircissez ,00." in texte_garde and "Dizaines" not in texte_garde
+    assert "(,00 ,25 ,50 ou ,75)" in texte_garde and all(
+        d in texte_garde for d in (",00", ",25", ",50", ",75")), texte_garde
     base = render_page(copies, 0)
     pages = []
-    for (nom, prenom, num), chiffres in zip(ETUDIANTS, ([15, 1],
+    for (nom, prenom, num), chiffres in zip(ETUDIANTS, ([15, 2],
                                                        [8, 0],
                                                        [[12, 16], 0])):
         img = fill_sheet(base.copy(), layout, {}, student_number=num)
@@ -132,8 +135,8 @@ def test_ecrit(c, prof, groupe):
     assert rows["AMRI"]["score"] == 15.5 and rows["AMRI"]["pct"] == 78, rows["AMRI"]
     assert rows["BAKIR"]["score"] == 8.0 and rows["BAKIR"]["pending_open"] == 0
     assert rows["CHERIF"]["pending_open"] == 1, "note ambiguë : à saisir"
-    print("  scan : 15,5 et 8 lus (partie entière 0 à 20, décimale ,0 ou ,5) et affectés "
-          "par n° ; note ambiguë à saisir ; page de rédaction ignorée OK")
+    print("  scan : 15,5 et 8 lus (partie entière 0 à 20, décimale ,00 ,25 ,50 ,75) et "
+          "affectés par n° ; note ambiguë à saisir ; page de rédaction ignorée OK")
 
     detail = c.get(reverse("batch_detail", args=[lot.pk])).content.decode()
     assert "Page de rédaction" in detail
@@ -195,10 +198,10 @@ def test_ecrit(c, prof, groupe):
 
 
 def test_ligne_vide_a_verifier(quiz):
-    """Grille par demi-points (13 novembre 2026) : une case noircie par ligne, « ,0 »
-    compris. Une ligne vide n'est pas lue 0 : la note est à vérifier (règle du 8 novembre
-    2026, après une vraie fiche d'oral où 19 était lu 9). 20,5 dépasse le barème : à
-    vérifier aussi."""
+    """Grille de la note d'un écrit (13 novembre 2026), décimale ,00 ,25 ,50 ,75 (24
+    novembre) : une case noircie par ligne, « ,00 » compris. Une ligne vide n'est pas lue 0 :
+    la note est à vérifier (règle du 8 novembre 2026, après une vraie fiche d'oral où 19
+    était lu 9). 20,25 dépasse le barème : à vérifier aussi."""
     from grader import omr
     grille = quiz.layout_json["pages"][0]["note_grid"]
     pdf = open(quiz.sheet_pdf.path, "rb").read()
@@ -221,19 +224,24 @@ def test_ligne_vide_a_verifier(quiz):
     assert note is None and lus == ["?", "?"], (note, lus)
     sans_decimale = noircir_note(render_page(pdf, 0), grille, [15, None])
     assert lire(sans_decimale)[0] is None, "décimale vide : à vérifier, pas 15"
-    complete = en_clair(noircir_note(render_page(pdf, 0), grille, [19, 1]), "19,5")
+    complete = en_clair(noircir_note(render_page(pdf, 0), grille, [19, 2]), "19,5")
     assert lire(complete)[0] == 19.5, "écrite et noircie : 19,5"
+    quart = noircir_note(render_page(pdf, 0), grille, [12, 1])
+    assert lire(quart.copy())[0] == 12.25, "12 puis ,25 : 12,25"
+    trois_quarts = noircir_note(render_page(pdf, 0), grille, [7, 3])
+    assert lire(trois_quarts.copy())[0] == 7.75, "7 puis ,75 : 7,75"
     assert lire(noircir_note(render_page(pdf, 0), grille, [20, 0]))[0] == 20.0
     trop = noircir_note(render_page(pdf, 0), grille, [20, 1])
-    assert lire(trop)[0] is None, "20,5 : au-dessus du barème, à vérifier"
-    assert lire(noircir_note(render_page(pdf, 0), grille, [14, [0, 1]]))[0] is None, \
-        ",0 et ,5 noircis : à vérifier"
+    assert lire(trop)[0] is None, "20,25 : au-dessus du barème, à vérifier"
+    assert lire(noircir_note(render_page(pdf, 0), grille, [14, [1, 3]]))[0] is None, \
+        ",25 et ,75 noircis : à vérifier"
     # par le vrai chemin : feuille scannée (tournée, bruitée), recalée sur son cadre
-    for image, attendu in ((neuf, 9.0), (vide, None), (complete, 19.5), (trop, None)):
+    for image, attendu in ((neuf, 9.0), (vide, None), (complete, 19.5), (quart, 12.25),
+                           (trois_quarts, 7.75), (trop, None)):
         recalee, _ = omr.detect_and_warp(simulate_scan(image.copy()))
         assert omr.lire_note(recalee, grille, 20)[0] == attendu, attendu
-    print("  grille par demi-points : 9, 19,5 et 20 lus ; partie entière ou décimale vide, "
-          "deux décimales, 20,5 : note à vérifier OK")
+    print("  grille de la note : 9, 19,5, 12,25, 7,75 et 20 lus ; partie entière ou décimale "
+          "vide, deux décimales, 20,25 : note à vérifier OK")
 
 
 def test_ancienne_grille(quiz):
@@ -272,6 +280,49 @@ def test_ancienne_grille(quiz):
     assert omr.lire_note(warped, nouvelle, 20)[0] is None
     print("  copies à l'ancienne grille (13,5 ; 19,25 ; 8 ; 14,5 sur trois lignes) lues avec "
           "leur disposition ; avec la nouvelle : à vérifier, jamais fausses OK")
+
+
+def test_copies_demi_points(c, quiz):
+    """Copies imprimées avec la décimale ,0 / ,5 (du 13 au 24 novembre 2026) : lues avec leur
+    disposition enregistrée (sans « valeurs »), et avec la nouvelle (,00 ,25 ,50 ,75) si
+    l'épreuve a été régénérée depuis : ,00 et ,50 sont à la place de ,0 et ,5, la note reste
+    juste. La régénération le dit sans alarmer."""
+    import copy
+
+    from grader import omr, sheet_pdf
+    nouvelle = quiz.layout_json["pages"][0]["note_grid"]
+    demis = {**copy.deepcopy(nouvelle), "decimales": 1}
+    demis.pop("valeurs")
+    demis["rows"][1] = [nouvelle["rows"][1][0], nouvelle["rows"][1][2]]   # ,0 et ,5
+    disposition = copy.deepcopy(quiz.layout_json)
+    disposition["pages"][0]["note_grid"] = demis
+    pdf = sheet_pdf.generate_sheet_pdf(quiz, disposition)           # copie imprimée d'avant
+    texte = pymupdf.open(stream=pdf, filetype="pdf")[0].get_text()
+    assert "(,0 ou ,5)" in texte and ",25" not in texte, "l'ancienne copie n'est pas rendue"
+    for chiffres, attendu in (([13, 1], 13.5), ([8, 0], 8.0), ([20, 1], None)):
+        img = noircir_note(render_page(pdf, 0), demis, chiffres)
+        warped = cv2.resize(img, (int(210 * 8), int(297 * 8)))      # repère canonique
+        assert omr.lire_note(warped, demis, 20)[0] == attendu, (chiffres, "disposition d'alors")
+        assert omr.lire_note(warped, nouvelle, 20)[0] == attendu, (chiffres, "nouvelle")
+        recalee, _ = omr.detect_and_warp(simulate_scan(img.copy()))
+        assert omr.lire_note(recalee, nouvelle, 20)[0] == attendu, (chiffres, "scannée")
+    assert services.zones_lues_changees(disposition, quiz.layout_json)
+    assert services.seule_la_decimale_change(disposition, quiz.layout_json)
+    assert not services.seule_la_decimale_change(quiz.layout_json, quiz.layout_json)
+    # documents générés avec les demi-points : « régénérez », puis un message qui rassure
+    disposition["signature"] = "empreinte d'avant les quarts de point"
+    quiz.layout_json = disposition
+    quiz.save(update_fields=["layout_json"])
+    assert "régénérez les documents" in c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
+    page = c.post(reverse("quiz_detail", args=[quiz.pk]), {"generer": "1"},
+                  follow=True).content.decode()
+    assert "Nouvelle décimale de la note : ,00 ,25 ,50 ou ,75" in page, "message absent"
+    assert "lue de travers" not in page and "régénérez les documents" not in page
+    quiz.refresh_from_db()
+    assert quiz.layout_json["pages"][0]["note_grid"]["valeurs"] == [0, 0.25, 0.5, 0.75]
+    print("  copies à ,0 / ,5 (13,5 ; 8 ; 20,5 à vérifier) lues justes avec leur disposition "
+          "et avec la nouvelle à ,00 ,25 ,50 ,75 ; documents d'avant signalés, régénérés sans "
+          "alarme OK")
 
 
 def test_oral(c, groupe):
@@ -459,6 +510,7 @@ def main():
     print("Épreuve écrite :")
     quiz = test_ecrit(c, prof, groupe)
     test_ancienne_grille(quiz)
+    test_copies_demi_points(c, quiz)
     test_ligne_vide_a_verifier(quiz)
     print("Épreuve orale :")
     test_oral(c, groupe)

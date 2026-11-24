@@ -1,6 +1,7 @@
 from django import forms
 from django.conf import settings
 from django.contrib.auth.forms import AuthenticationForm
+from django.utils.translation import gettext, gettext_lazy
 
 from . import importers, pieces
 from .securite import FreinConnexion
@@ -33,8 +34,8 @@ class ClassGroupForm(forms.ModelForm):
         model = ClassGroup
         fields = ["name"]
         widgets = {"name": forms.TextInput(attrs={
-            "placeholder": "Nouvelle classe, ex. 3ème A — Sciences",
-            "aria-label": "Nom de la nouvelle classe"})}
+            "placeholder": gettext_lazy("Nouvelle classe, ex. 3ème A — Sciences"),
+            "aria-label": gettext_lazy("Nom de la nouvelle classe")})}
 
 
 def _texte(exemple, **attrs):
@@ -60,21 +61,21 @@ class InscritForm(forms.ModelForm):
         model = Inscrit
         fields = ["numero", "prenom", "nom", "cin", "cin_lieu", "cin_date",
                   "date_naissance", "centre", "salle"]
-        labels = {"cin_lieu": "Lieu de délivrance", "cin_date": "Date de délivrance"}
+        labels = {"cin_lieu": gettext_lazy("Lieu de délivrance"), "cin_date": gettext_lazy("Date de délivrance")}
         widgets = {
             "numero": _texte("104523"),
-            "nom": _texte("BEN SALEM"),
-            "prenom": _texte("Samia"),
+            "nom": _texte(gettext_lazy("BEN SALEM")),
+            "prenom": _texte(gettext_lazy("Samia")),
             "cin": _texte("09876543", inputmode="numeric"),
-            "cin_lieu": _texte("Tunis"),
+            "cin_lieu": _texte(gettext_lazy("Tunis")),
             "cin_date": _date_passee(),
             "date_naissance": _date_passee(),
-            "centre": _texte("Lycée pilote de Sfax"),
-            "salle": _texte("Salle 12"),
+            "centre": _texte(gettext_lazy("Lycée pilote de Sfax")),
+            "salle": _texte(gettext_lazy("Salle 12")),
         }
         help_texts = {"cin": "", "centre": ""}
         error_messages = {"numero": {
-            "unique": "Ce n° d'inscription est déjà attribué (voir la liste)."}}
+            "unique": gettext_lazy("Ce n° d'inscription est déjà attribué (voir la liste).")}}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -85,13 +86,13 @@ class InscritForm(forms.ModelForm):
         # inscrites avant, qui se complètent par « Modifier ».
         for nom in ("cin", "cin_lieu", "cin_date", "date_naissance"):
             self.fields[nom].required = True
-            self.fields[nom].error_messages["required"] = "Champ obligatoire."
+            self.fields[nom].error_messages["required"] = gettext("Champ obligatoire.")
 
     def clean_numero(self):
         from .inscriptions import numero_propre
         numero = numero_propre(self.cleaned_data["numero"])
         if not numero:
-            raise forms.ValidationError("Indiquez le n° d'inscription.")
+            raise forms.ValidationError(gettext("Indiquez le n° d'inscription."))
         return numero
 
     def clean_nom(self):
@@ -107,25 +108,25 @@ class InscritForm(forms.ModelForm):
         cin = cin_propre(self.cleaned_data.get("cin", ""))
         if not cin_valide(cin):
             raise forms.ValidationError(
-                "N° de CIN invalide : 8 chiffres (ou n° de passeport).")
+                gettext("N° de CIN invalide : 8 chiffres (ou n° de passeport)."))
         autre = Inscrit.objects.filter(cin=cin).exclude(pk=self.instance.pk).first()
         if autre is not None:
             raise forms.ValidationError(
-                f"Cette CIN est déjà celle de {autre.nom_complet} (n° {autre.numero}).")
+                gettext('Cette CIN est déjà celle de %(nom_complet)s (n° %(numero)s).') % {"nom_complet": autre.nom_complet, "numero": autre.numero})
         return cin
 
     def _date_vraisemblable(self, champ, libelle):
         import datetime
         date = self.cleaned_data.get(champ)
         if date and not datetime.date(1900, 1, 1) <= date <= datetime.date.today():
-            raise forms.ValidationError(f"{libelle} invraisemblable.")
+            raise forms.ValidationError(gettext('%(libelle)s invraisemblable.') % {"libelle": libelle})
         return date
 
     def clean_date_naissance(self):
-        return self._date_vraisemblable("date_naissance", "Date de naissance")
+        return self._date_vraisemblable("date_naissance", gettext("Date de naissance"))
 
     def clean_cin_date(self):
-        return self._date_vraisemblable("cin_date", "Date de délivrance")
+        return self._date_vraisemblable("cin_date", gettext("Date de délivrance"))
 
     def clean(self):
         donnees = super().clean()
@@ -134,7 +135,7 @@ class InscritForm(forms.ModelForm):
                 donnees[champ] = " ".join(donnees[champ].split())
         naissance, delivrance = donnees.get("date_naissance"), donnees.get("cin_date")
         if naissance and delivrance and delivrance < naissance:
-            self.add_error("cin_date", "La délivrance ne peut pas précéder la naissance.")
+            self.add_error("cin_date", gettext("La délivrance ne peut pas précéder la naissance."))
         return donnees
 
 
@@ -155,10 +156,10 @@ class CommuniqueForm(forms.ModelForm):
     """Avis publié sur l'espace public, avec ses pièces jointes (images,
     vidéos, documents : grader/pieces.py)."""
     fichiers = FichiersField(
-        label="Pièces jointes", required=False,
+        label=gettext_lazy("Pièces jointes"), required=False,
         widget=EnvoiMultiple(attrs={"accept": pieces.ACCEPT}))
     retirer = forms.ModelMultipleChoiceField(
-        label="Retirer", required=False, queryset=PieceJointe.objects.none(),
+        label=gettext_lazy("Retirer"), required=False, queryset=PieceJointe.objects.none(),
         widget=forms.CheckboxSelectMultiple)
 
     class Meta:
@@ -183,8 +184,7 @@ class CommuniqueForm(forms.ModelForm):
         gardees = (self.instance.pieces.count() if self.instance.pk else 0) \
             - len(donnees.get("retirer") or [])
         if gardees + len(donnees.get("fichiers") or []) > pieces.MAX_PAR_COMMUNIQUE:
-            self.add_error("fichiers", f"{pieces.MAX_PAR_COMMUNIQUE} pièces jointes "
-                                       f"au plus par communiqué.")
+            self.add_error("fichiers", gettext('%(MAX_PAR_COMMUNIQUE)s pièces jointes au plus par communiqué.') % {"MAX_PAR_COMMUNIQUE": pieces.MAX_PAR_COMMUNIQUE})
         return donnees
 
     def enregistrer_pieces(self, avis):
@@ -199,14 +199,14 @@ class CommuniqueForm(forms.ModelForm):
 
 class StudentImportForm(forms.Form):
     text = forms.CharField(
-        label="Liste des étudiants",
+        label=gettext_lazy("Liste des étudiants"),
         widget=forms.Textarea(attrs={
             "rows": 8,
-            "placeholder": "Un étudiant par ligne : NOM;Prénom;N°  ou  NOM Prénom N°\n"
-                           "Ex.\nBEN SALAH;Ahmed;104523\nTRABELSI Mariem 104524"}),
-        help_text="Copier-coller depuis un tableur ou un document : « NOM;Prénom;N° », "
+            "placeholder": gettext_lazy("Un étudiant par ligne : NOM;Prénom;N°  ou  NOM Prénom N°\n"
+                           "Ex.\nBEN SALAH;Ahmed;104523\nTRABELSI Mariem 104524")}),
+        help_text=gettext_lazy("Copier-coller depuis un tableur ou un document : « NOM;Prénom;N° », "
                   "colonnes séparées par des tabulations, ou « NOM Prénom N° » "
-                  "(les mots en MAJUSCULES forment le nom). Le n° est optionnel.")
+                  "(les mots en MAJUSCULES forment le nom). Le n° est optionnel."))
 
     def parse(self):
         return [importers.fiche_simple(*importers.split_name_line(line))
@@ -218,15 +218,15 @@ class CandidateFileForm(forms.Form):
     officielle de l'institut (Excel), ou Excel, CSV, Word, PDF à colonnes
     Prénom, Nom, N° d'inscription."""
     file = forms.FileField(
-        label="Fichier (Excel, CSV, Word ou PDF)",
+        label=gettext_lazy("Fichier (Excel, CSV, Word ou PDF)"),
         widget=forms.ClearableFileInput(
             attrs={"accept": ",".join(importers.CANDIDATE_EXTS)}),
-        help_text="Les colonnes se reconnaissent à leur intitulé, dans n'importe quel "
-                  "ordre. Un titre peut précéder la ligne d'intitulés.")
+        help_text=gettext_lazy("Les colonnes se reconnaissent à leur intitulé, dans n'importe quel "
+                  "ordre. Un titre peut précéder la ligne d'intitulés."))
 
     def clean_file(self):
         return _controler_import(self.cleaned_data["file"], importers.CANDIDATE_EXTS,
-                                 ".xlsx, .csv, .docx, .pdf ou .txt")
+                                 gettext(".xlsx, .csv, .docx, .pdf ou .txt"))
 
     def parse(self):
         """Retourne les lignes du fichier : voir importers.rows_to_fiches."""
@@ -241,7 +241,7 @@ CandidateXlsxForm = CandidateFileForm
 class QuestionImportForm(forms.Form):
     """Import d'un questionnaire existant (Excel, CSV, Word, PDF, texte)."""
     file = forms.FileField(
-        label="Questionnaire (Excel, Word, PDF ou texte)",
+        label=gettext_lazy("Questionnaire (Excel, Word, PDF ou texte)"),
         widget=forms.ClearableFileInput(
             attrs={"accept": ",".join(importers.QUESTION_EXTS)}))
 
@@ -250,14 +250,17 @@ class QuestionImportForm(forms.Form):
                                  ", ".join(importers.QUESTION_EXTS))
 
 
+MAX_INTERVALLE = 5000      # questions d'un intervalle « 1-50 » de la banque, au plus
+
+
 class QuestionBankForm(forms.Form):
     """Banque de questions : reprendre les questions d'une épreuve précédente."""
     source = forms.ModelChoiceField(
-        label="Reprendre les questions du quiz", queryset=Quiz.objects.none(),
-        empty_label="— choisir un quiz —")
+        label=gettext_lazy("Reprendre les questions du quiz"), queryset=Quiz.objects.none(),
+        empty_label=gettext_lazy("— choisir un quiz —"))
     orders = forms.CharField(
-        label="Questions à reprendre (facultatif)", required=False,
-        widget=forms.TextInput(attrs={"placeholder": "Ex. 1-5, 8, 12 — vide = toutes"}))
+        label=gettext_lazy("Questions à reprendre (facultatif)"), required=False,
+        widget=forms.TextInput(attrs={"placeholder": gettext_lazy("Ex. 1-5, 8, 12 — vide = toutes")}))
 
     def __init__(self, *args, quizzes=None, exclude=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -266,7 +269,8 @@ class QuestionBankForm(forms.Form):
             qs = qs.exclude(pk=exclude.pk)
         self.fields["source"].queryset = qs.filter(questions__isnull=False).distinct()
         self.fields["source"].label_from_instance = \
-            lambda q: f"{q.title} — {q.class_group.name} ({q.questions.count()} q.)"
+            lambda q: gettext("%(titre)s — %(liste)s (%(n)s q.)") % {
+                "titre": q.title, "liste": q.class_group.name, "n": q.questions.count()}
 
     def clean_orders(self):
         raw = (self.cleaned_data.get("orders") or "").replace(" ", "")
@@ -279,12 +283,16 @@ class QuestionBankForm(forms.Form):
             try:
                 if "-" in part:
                     a, b = (int(x) for x in part.split("-", 1))
+                    if abs(b - a) > MAX_INTERVALLE:     # « 1-1000000000 » remplissait la mémoire
+                        raise forms.ValidationError(
+                            gettext("« %(part)s » : intervalle trop grand (%(max)s questions "
+                                    "au plus).") % {"part": part, "max": MAX_INTERVALLE})
                     wanted.update(range(min(a, b), max(a, b) + 1))
                 else:
                     wanted.add(int(part))
             except ValueError:
                 raise forms.ValidationError(
-                    f"« {part} » n'est pas un numéro ou un intervalle valide.")
+                    gettext("« %(part)s » n'est pas un numéro ou un intervalle valide.") % {"part": part})
         return wanted
 
 
@@ -292,9 +300,9 @@ class QuestionBankForm(forms.Form):
 # est importée, chacun reçoit son étiquette QR (ou noircit son n° d'inscription).
 CONCOURS_ID_MODES = ["sticker", "grid"]
 
-AIDE_ENTETE = ("Laissé vide : en-tête de l'institut (المعهد الأعلى للمحاماة). Sinon, une "
+AIDE_ENTETE = (gettext_lazy("Laissé vide : en-tête de l'institut (المعهد الأعلى للمحاماة). Sinon, une "
                "ligne par ligne : ministère, établissement… Imprimé dans le cartouche du sujet ; "
-               "sa dernière ligne, l'établissement, l'est aussi en haut des copies.")
+               "sa dernière ligne, l'établissement, l'est aussi en haut des copies."))
 # Le champ de date du navigateur n'accepte que ce format. Sans max, Chrome laisse
 # 6 chiffres à l'année.
 SAISIE_DATE = forms.DateInput(attrs={"type": "date", "min": "2000-01-01", "max": "9999-12-31"},
@@ -305,12 +313,12 @@ def _champ_anonymat():
     """Présentation des copies nominatives : nom imprimé, talon à découper
     (solution 1) ou copie anonyme à n° de place (solution 2)."""
     return forms.ChoiceField(
-        label="Présentation des copies", choices=Quiz.ANONYMATS, required=False,
+        label=gettext_lazy("Présentation des copies"), choices=Quiz.ANONYMATS, required=False,
         widget=forms.RadioSelect,
-        help_text="Talon ou n° de place : une copie par étudiant, QR imprimé "
+        help_text=gettext_lazy("Talon ou n° de place : une copie par étudiant, QR imprimé "
                   "(identification « QR code », même en concours). N° de place : "
                   "aucun nom sur la copie, une liste des candidats et des places "
-                  "est imprimée pour le surveillant.")
+                  "est imprimée pour le surveillant."))
 
 
 def _appliquer_anonymat(form, data):
@@ -330,9 +338,9 @@ ETAPE_PRECEDENTE = {"ecrit": "qcm", "oral": "ecrit"}
 def _preparer_annee(champ):
     """Le choix de l'année d'un concours : 1re ou 2e, sans « aucune » (13 novembre 2026)."""
     champ.choices = Quiz.ANNEES
-    champ.label = "Année"
-    champ.help_text = ("Vaut pour toutes les étapes du concours. Le code d'anonymat des "
-                       "copies à talon commence toujours par X en 1re année, par Y en 2e.")
+    champ.label = gettext_lazy("Année")
+    champ.help_text = (gettext_lazy("Vaut pour toutes les étapes du concours. Le code d'anonymat des "
+                       "copies à talon commence toujours par X en 1re année, par Y en 2e."))
 
 
 class ChoixEpreuvePrecedente(forms.Select):
@@ -368,9 +376,9 @@ class QuizForm(forms.ModelForm):
                    "entete": forms.Textarea(attrs={"rows": 3}),
                    "date_epreuve": SAISIE_DATE}
         field_classes = {"wrong_penalty": DecimalField, "note_sur": DecimalField}
-        labels = {"id_digits": "Nombre de chiffres du n° d'inscription"}
-        help_texts = {"id_digits": "Taille de la grille à noircir sur la fiche "
-                                   "(ex. 6 pour un n° comme 104523).",
+        labels = {"id_digits": gettext_lazy("Nombre de chiffres du n° d'inscription")}
+        help_texts = {"id_digits": gettext_lazy("Taille de la grille à noircir sur la fiche "
+                                   "(ex. 6 pour un n° comme 104523)."),
                       "entete": AIDE_ENTETE}
 
     def __init__(self, *args, user=None, concours=False, precedentes=None, **kwargs):
@@ -383,17 +391,17 @@ class QuizForm(forms.ModelForm):
         prec.queryset = (precedentes if precedentes is not None
                          else Quiz.objects.none()).filter(note_admission__isnull=False)
         prec.required = False
-        prec.empty_label = "— aucune : tous les étudiants de la liste —"
-        prec.label = "Candidats : admis de l'épreuve"
-        prec.help_text = ("Concours en plusieurs étapes : les admis du QCM passent "
-                          "à l'écrit, les admis de l'écrit passent à l'oral.")
+        prec.empty_label = gettext_lazy("— aucune : tous les étudiants de la liste —")
+        prec.label = gettext_lazy("Candidats : admis de l'épreuve")
+        prec.help_text = (gettext_lazy("Concours en plusieurs étapes : les admis du QCM passent "
+                          "à l'écrit, les admis de l'écrit passent à l'oral."))
         # Facultatifs à l'envoi : QCM sur 20 par défaut (formulaires et
         # scripts d'avant les épreuves écrites et orales).
         self.fields["type_epreuve"].required = False
         # oral : notes importées d'Excel, seule voie depuis le 13 novembre 2026 (libellé du
         # modèle laissé tel quel : le changer demanderait une migration)
         self.fields["type_epreuve"].choices = [
-            (v, "Oral — notes importées d'un fichier Excel" if v == "oral" else libelle)
+            (v, gettext("Oral — notes importées d'un fichier Excel") if v == "oral" else libelle)
             for v, libelle in self.fields["type_epreuve"].choices]
         self.fields["note_sur"].required = False
         if concours:
@@ -401,7 +409,7 @@ class QuizForm(forms.ModelForm):
             # suivante la reprend de la précédente (vue)
             _preparer_annee(self.fields["annee"])
             self.fields["annee"].required = True
-            self.fields["annee"].error_messages["required"] = "Choisissez l'année du concours."
+            self.fields["annee"].error_messages["required"] = gettext("Choisissez l'année du concours.")
             # un concours a sa propre liste de candidats, créée automatiquement
             del self.fields["class_group"]
             self.fields["id_mode"].choices = [
@@ -418,13 +426,13 @@ class QuizForm(forms.ModelForm):
             if user is not None and not user.is_superuser:
                 qs = qs.filter(enseignants=user).distinct()
             self.fields["class_group"].queryset = qs
-            self.fields["class_group"].empty_label = "— choisir une classe —"
+            self.fields["class_group"].empty_label = gettext_lazy("— choisir une classe —")
             # avec une épreuve précédente, la liste des candidats (ses admis)
             # est créée pour cette épreuve : pas de classe à choisir
             self.fields["class_group"].required = not self.data.get("epreuve_precedente")
             self.fields["class_group"].help_text = (
-                "Inutile avec « admis de l'épreuve » : la liste des admis est "
-                "créée pour cette épreuve.")
+                gettext_lazy("Inutile avec « admis de l'épreuve » : la liste des admis est "
+                "créée pour cette épreuve."))
 
     def _get_validation_exclusions(self):
         exclus = super()._get_validation_exclusions()
@@ -439,8 +447,8 @@ class QuizForm(forms.ModelForm):
         if precedente is not None and (precedente.type_epreuve
                                        != ETAPE_PRECEDENTE.get(data.get("type_epreuve"))):
             self.add_error("epreuve_precedente",
-                           "Un QCM ne suit aucune épreuve, un écrit suit un QCM, "
-                           "un oral suit un écrit.")
+                           gettext("Un QCM ne suit aucune épreuve, un écrit suit un QCM, "
+                           "un oral suit un écrit."))
         return data
 
     def clean_type_epreuve(self):
@@ -459,10 +467,10 @@ class _ChampNoteAdmission:
     def _preparer_note_admission(self):
         note = self.fields["note_admission"]
         note.required = False
-        note.label = ("Note minimale d'admission" if self.instance.auto_enroll
-                      else "Note minimale de réussite")
-        note.help_text = (f"Sur {self.instance.note_sur or 20:g} (ex. 10 pour 10 / 20). Vide : "
-                          "pas de liste des admis."
+        note.label = (gettext("Note minimale d'admission") if self.instance.auto_enroll
+                      else gettext("Note minimale de réussite"))
+        note.help_text = (gettext("Sur %(sur)s (ex. 10 pour 10 / 20). Vide : pas de liste des "
+                                  "admis.") % {"sur": f"{self.instance.note_sur or 20:g}"}
                           + (f" {self.suite_concours}" if self.instance.auto_enroll else ""))
         note.widget.attrs.update({"class": "champ--court", "placeholder": "—"})
 
@@ -476,7 +484,7 @@ class _ChampNoteAdmission:
             return None
         bareme = self.cleaned_data.get("note_sur") or self.instance.note_sur or 20.0
         if not 0 <= valeur <= bareme:
-            raise forms.ValidationError(f"Entre 0 et {bareme:g}, le barème de l'épreuve.")
+            raise forms.ValidationError(gettext("Entre 0 et %(bareme)s, le barème de l'épreuve.") % {"bareme": format(bareme, 'g')})
         return valeur
 
 
@@ -484,7 +492,7 @@ class EpreuveEcritForm(_ChampNoteAdmission, forms.ModelForm):
     """Réglages d'une épreuve écrite : sujet, barème, copie à imprimer."""
 
     anonymat = _champ_anonymat()
-    suite_concours = "Les admis passent à l'étape suivante du concours."
+    suite_concours = gettext_lazy("Les admis passent à l'étape suivante du concours.")
 
     class Meta:
         model = Quiz
@@ -492,26 +500,26 @@ class EpreuveEcritForm(_ChampNoteAdmission, forms.ModelForm):
                   "note_admission", "id_mode", "id_digits", "anonymat", "pages_redaction",
                   "format_impression"]
         widgets = {"sujet_texte": forms.Textarea(attrs={
-                       "rows": 9, "placeholder": "Ex. Racontez un voyage qui vous a "
+                       "rows": 9, "placeholder": gettext_lazy("Ex. Racontez un voyage qui vous a "
                                                  "marqué…\n\nVous décrirez les lieux "
-                                                 "et vos impressions."}),
+                                                 "et vos impressions.")}),
                    "entete": forms.Textarea(attrs={"rows": 3}),
                    "date_epreuve": SAISIE_DATE,
                    "annee": forms.RadioSelect}
         field_classes = {"note_sur": DecimalField, "note_admission": DecimalField}
-        labels = {"id_digits": "Nombre de chiffres du n° d'inscription",
-                  "pages_redaction": "Pages lignées après la page de garde",
-                  "format_impression": "Format des copies"}
+        labels = {"id_digits": gettext_lazy("Nombre de chiffres du n° d'inscription"),
+                  "pages_redaction": gettext_lazy("Pages lignées après la page de garde"),
+                  "format_impression": gettext_lazy("Format des copies")}
         help_texts = {"entete": AIDE_ENTETE,
-                      "pages_redaction": "Elles ne sont pas lues au scan. Chaque copie "
+                      "pages_redaction": gettext_lazy("Elles ne sont pas lues au scan. Chaque copie "
                                          "remplit des feuilles entières, pour le recto-verso : "
                                          "en A4, avec un nombre pair, le dos de la dernière "
                                          "feuille reste blanc ; en A3, 3 ou 7 (une feuille "
-                                         "pliée, ou deux).",
-                      "format_impression": "A3 : la page de garde et 3 pages lignées sur une "
+                                         "pliée, ou deux)."),
+                      "format_impression": gettext_lazy("A3 : la page de garde et 3 pages lignées sur une "
                                            "feuille, imprimée recto-verso sur le bord court, à "
                                            "100 %, puis pliée au milieu. Les pages lignées "
-                                           "vont jusqu'à la fin de la feuille."}
+                                           "vont jusqu'à la fin de la feuille.")}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -550,7 +558,7 @@ class EpreuveEcritForm(_ChampNoteAdmission, forms.ModelForm):
 
 class EpreuveOralForm(_ChampNoteAdmission, forms.ModelForm):
     """Réglages d'une épreuve orale : barème et note minimale."""
-    suite_concours = "Les admis de l'oral, dernière étape, sont les admis au concours."
+    suite_concours = gettext_lazy("Les admis de l'oral, dernière étape, sont les admis au concours.")
 
     class Meta:
         model = Quiz
@@ -565,21 +573,21 @@ class EpreuveOralForm(_ChampNoteAdmission, forms.ModelForm):
 class QuestionForm(forms.ModelForm):
     # N° de la question : le suivant par défaut (à la fin) ; un n° déjà pris place la
     # question à ce rang (demande de l'utilisateur, 6 novembre 2026). Voir __init__.
-    numero = forms.IntegerField(label="N° de la question", required=False, min_value=1)
+    numero = forms.IntegerField(label=gettext_lazy("N° de la question"), required=False, min_value=1)
     correct_letter = forms.ChoiceField(
-        label="Bonne réponse (facultatif)", required=False,
-        help_text="Laissez vide si vous préférez renseigner le corrigé plus "
+        label=gettext_lazy("Bonne réponse (facultatif)"), required=False,
+        help_text=gettext_lazy("Laissez vide si vous préférez renseigner le corrigé plus "
                   "tard, à la main ou en scannant la fiche remplie avec les "
-                  "bonnes réponses.")
+                  "bonnes réponses."))
     choices_text = forms.CharField(
-        label="Choix de réponse (un par ligne)", required=False,
+        label=gettext_lazy("Choix de réponse (un par ligne)"), required=False,
         widget=forms.Textarea(attrs={
             "rows": 4,
-            "placeholder": "Ex.\nParis\nLyon\nMarseille\nToulouse"}),
-        help_text="Le texte de chaque choix, imprimé à côté de sa case. Le "
+            "placeholder": gettext_lazy("Ex.\nParis\nLyon\nMarseille\nToulouse")}),
+        help_text=gettext_lazy("Le texte de chaque choix, imprimé à côté de sa case. Le "
                   "nombre de cases suit alors le nombre de lignes saisies. "
                   "Laissez vide pour n'imprimer qu'une rangée de cases "
-                  "(fiche de réponses seule, sujet distribué à part).")
+                  "(fiche de réponses seule, sujet distribué à part)."))
 
     # Pas de champ « Nombre de cases à imprimer » (retiré à la demande de
     # l'utilisateur, 11 octobre 2026) : le nombre de cases suit les choix
@@ -612,8 +620,8 @@ class QuestionForm(forms.ModelForm):
         # Une QCM vaut toujours 1 point : le barème ne concerne que les
         # réponses manuscrites (champ masqué pour une QCM).
         self.fields["points"].required = False
-        self.fields["points"].label = "Barème de la réponse manuscrite (points)"
-        self.fields["points"].help_text = "Une QCM vaut toujours 1 point."
+        self.fields["points"].label = gettext_lazy("Barème de la réponse manuscrite (points)")
+        self.fields["points"].help_text = gettext_lazy("Une QCM vaut toujours 1 point.")
         # N° : plus au choix dès qu'une copie est scannée. Une fiche imprimée associe
         # chaque rangée de cases à un n° de question (rien sur la fiche ne dit avec
         # quelle version des questions elle a été imprimée) : insérer une question
@@ -627,14 +635,14 @@ class QuestionForm(forms.ModelForm):
         numero.initial = self.prochain_numero
         numero.widget.attrs.update({"min": 1, "max": self.prochain_numero})
         if self.insertion_possible:
-            numero.help_text = (
-                f"{self.prochain_numero} : à la fin. Un n° déjà pris place la question à "
-                "ce rang, et les questions suivantes prennent un n° de plus.")
+            numero.help_text = gettext(
+                "%(n)s : à la fin. Un n° déjà pris place la question à ce rang, et les "
+                "questions suivantes prennent un n° de plus.") % {"n": self.prochain_numero}
         else:
             numero.disabled = True
             numero.help_text = (
-                "Des copies sont déjà scannées : la question se place à la fin, pour ne "
-                "pas décaler la lecture des fiches déjà imprimées.")
+                gettext_lazy("Des copies sont déjà scannées : la question se place à la fin, pour ne "
+                "pas décaler la lecture des fiches déjà imprimées."))
         # Quiz en arabe : saisie de droite à gauche pour l'intitulé et les choix
         if quiz and quiz.language == "ar":
             for name in ("text", "choices_text"):
@@ -649,7 +657,7 @@ class QuestionForm(forms.ModelForm):
             return self.prochain_numero
         if numero > self.prochain_numero:
             raise forms.ValidationError(
-                f"Entre 1 et {self.prochain_numero} ({self.prochain_numero} : à la fin).")
+                gettext('Entre 1 et %(prochain_numero)s (%(prochain_numero)s : à la fin).') % {"prochain_numero": self.prochain_numero})
         return numero
 
     def _cases_par_defaut(self):
@@ -675,16 +683,16 @@ class QuestionForm(forms.ModelForm):
                 return data
             if not choices and int(data["correct_letter"]) >= data["num_choices"]:
                 raise forms.ValidationError(
-                    "La bonne réponse dépasse le nombre de choix.")
+                    gettext("La bonne réponse dépasse le nombre de choix."))
             if choices:
                 if len(choices) < 2:
-                    raise forms.ValidationError("Saisissez au moins deux choix.")
+                    raise forms.ValidationError(gettext("Saisissez au moins deux choix."))
                 if len(choices) > MAX_CHOICES:
                     raise forms.ValidationError(
-                        f"Maximum {MAX_CHOICES} choix par question.")
+                        gettext('Maximum %(MAX_CHOICES)s choix par question.') % {"MAX_CHOICES": MAX_CHOICES})
                 if int(data["correct_letter"]) >= len(choices):
                     raise forms.ValidationError(
-                        "La bonne réponse dépasse le nombre de choix saisis.")
+                        gettext("La bonne réponse dépasse le nombre de choix saisis."))
         else:
             data["choices_list"] = []
             data["num_choices"] = None
@@ -693,11 +701,11 @@ class QuestionForm(forms.ModelForm):
 
 class BulkQcmForm(forms.Form):
     answer_key = forms.CharField(
-        label="Corrigé (une lettre par question)",
-        widget=forms.TextInput(attrs={"placeholder": "Ex. ABCADBBC — crée 8 questions QCM"}),
-        help_text="Saisissez la suite des bonnes réponses ; une question QCM est créée par lettre.")
+        label=gettext_lazy("Corrigé (une lettre par question)"),
+        widget=forms.TextInput(attrs={"placeholder": gettext_lazy("Ex. ABCADBBC — crée 8 questions QCM")}),
+        help_text=gettext_lazy("Saisissez la suite des bonnes réponses ; une question QCM est créée par lettre."))
     num_choices = forms.IntegerField(
-        label="Nombre de choix par question", initial=4, min_value=2,
+        label=gettext_lazy("Nombre de choix par question"), initial=4, min_value=2,
         max_value=MAX_CHOICES)
     def __init__(self, *args, quiz=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -727,8 +735,7 @@ class BulkQcmForm(forms.Form):
                 bad.append(ch)
         if bad:
             self.add_error("answer_key",
-                           f"Lettres non valides : {', '.join(sorted(set(bad)))} "
-                           f"(choix possibles : A–{chr(ord('A') + n - 1)} ou أ، ب، ج…)")
+                           gettext('Lettres non valides : %(join)s (choix possibles : A–%(chr)s ou أ، ب، ج…)') % {"join": ', '.join(sorted(set(bad))), "chr": chr(ord('A') + n - 1)})
         return key
 
 
@@ -745,11 +752,10 @@ TAILLE_MAX_IMPORT = 20 * 1024 * 1024       # liste d'étudiants, questionnaire
 
 def _controler_import(f, extensions, formats):
     if not (f.name or "").lower().endswith(extensions):
-        raise forms.ValidationError(f"Formats acceptés : {formats}.")
+        raise forms.ValidationError(gettext('Formats acceptés : %(formats)s.') % {"formats": formats})
     if f.size > TAILLE_MAX_IMPORT:
         raise forms.ValidationError(
-            f"Fichier trop lourd ({f.size // (1024 * 1024)} Mo) : "
-            f"{TAILLE_MAX_IMPORT // (1024 * 1024)} Mo au plus.")
+            gettext('Fichier trop lourd (%(size)s Mo) : %(TAILLE_MAX_IMPORT)s Mo au plus.') % {"size": f.size // (1024 * 1024), "TAILLE_MAX_IMPORT": TAILLE_MAX_IMPORT // (1024 * 1024)})
     return f
 
 
@@ -757,7 +763,11 @@ class MultiFileField(forms.FileField):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("widget", MultiFileInput(
             attrs={"multiple": True, "accept": ",".join(SCAN_EXTS),
-                   "data-max-fichiers": settings.DATA_UPLOAD_MAX_NUMBER_FILES}))
+                   "data-max-fichiers": settings.DATA_UPLOAD_MAX_NUMBER_FILES,
+                   # message de pages.js quand il y en a trop, dans la langue de l'interface
+                   "data-trop": gettext_lazy("{n} fichiers choisis : {max} au plus par envoi. "
+                                             "Envoyez le reste ensuite, dans un second "
+                                             "envoi.")}))
         super().__init__(*args, **kwargs)
 
     def clean(self, data, initial=None):
@@ -770,23 +780,21 @@ class MultiFileField(forms.FileField):
                 continue
             if not (f.name or "").lower().endswith(SCAN_EXTS):
                 raise forms.ValidationError(
-                    f"« {f.name} » : seuls les PDF et les images (JPG, PNG, TIFF, "
-                    f"BMP, WebP) sont acceptés.")
+                    gettext('« %(name)s » : seuls les PDF et les images (JPG, PNG, TIFF, BMP, WebP) sont acceptés.') % {"name": f.name})
             if f.size > TAILLE_MAX_SCAN:
                 raise forms.ValidationError(
-                    f"« {f.name} » : {f.size // (1024 * 1024)} Mo, au-delà des "
-                    f"{TAILLE_MAX_SCAN // (1024 * 1024)} Mo permis par fichier.")
+                    gettext('« %(name)s » : %(size)s Mo, au-delà des %(TAILLE_MAX_SCAN)s Mo permis par fichier.') % {"name": f.name, "size": f.size // (1024 * 1024), "TAILLE_MAX_SCAN": TAILLE_MAX_SCAN // (1024 * 1024)})
         return fichiers
 
 
 class UploadForm(forms.Form):
-    label = forms.CharField(label="Libellé du lot", required=False, max_length=120,
-                            widget=forms.TextInput(attrs={"placeholder": "Ex. Groupe A — 28/08"}))
+    label = forms.CharField(label=gettext_lazy("Libellé du lot"), required=False, max_length=120,
+                            widget=forms.TextInput(attrs={"placeholder": gettext_lazy("Ex. Groupe A — 28/08")}))
     files = MultiFileField(
-        label="Fichiers scannés (PDF ou images)",
-        help_text="Vous pouvez sélectionner plusieurs fichiers : 10 000 au plus par "
+        label=gettext_lazy("Fichiers scannés (PDF ou images)"),
+        help_text=gettext_lazy("Vous pouvez sélectionner plusieurs fichiers : 10 000 au plus par "
                   "envoi, 500 Mo au plus chacun. Un PDF ou un TIFF multi-pages est "
-                  "accepté (une copie par page). Au-delà, faites plusieurs envois.")
+                  "accepté (une copie par page). Au-delà, faites plusieurs envois."))
 
 
 class ConnexionForm(FreinConnexion, AuthenticationForm):
@@ -802,8 +810,8 @@ class AdminLoginForm(FreinConnexion, AuthenticationForm):
     comprendre pourquoi. Le message l'oriente vers la bonne page."""
 
     error_messages = dict(AuthenticationForm.error_messages, **{
-        "not_admin": "Ce compte n'est pas un compte d'administration. "
-                     "Utilisez la page « Connexion enseignant ».",
+        "not_admin": gettext_lazy("Ce compte n'est pas un compte d'administration. "
+                                  "Utilisez la page « Connexion enseignant »."),
     })
 
     def confirm_login_allowed(self, user):
@@ -820,8 +828,8 @@ class AnswerKeyUploadForm(forms.Form):
     fichiers ou un PDF multi-pages sont acceptés, pour une fiche recto-verso
     ou sur plusieurs pages."""
     files = MultiFileField(
-        label="Fiche du corrigé scannée (PDF ou images)",
-        help_text="Imprimez la fiche d'épreuve, noircissez les bonnes "
+        label=gettext_lazy("Fiche du corrigé scannée (PDF ou images)"),
+        help_text=gettext_lazy("Imprimez la fiche d'épreuve, noircissez les bonnes "
                   "réponses, scannez-la et déposez-la ici. Les cases lues "
                   "renseignent le corrigé ; la fiche est conservée avec "
-                  "l'épreuve.")
+                  "l'épreuve."))

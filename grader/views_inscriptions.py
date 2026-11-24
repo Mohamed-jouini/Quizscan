@@ -12,6 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.utils.translation import gettext
 
 from . import droits, importers, journal, pieces
 from . import inscriptions as insc
@@ -51,22 +52,21 @@ def _importer_au_registre(request, fichier):
         messages.error(request, str(exc))
         return
     except Exception as exc:      # noqa: BLE001 — fichier corrompu
-        messages.error(request, f"Fichier illisible : {exc}")
+        messages.error(request, gettext('Fichier illisible : %(exc)s') % {"exc": exc})
         return
     if not lignes:
-        messages.error(request, "Aucune ligne trouvée dans ce fichier.")
+        messages.error(request, gettext("Aucune ligne trouvée dans ce fichier."))
         return
     if not any(insc._porte_une_fiche(ligne) for ligne in lignes):
-        messages.error(request, "Ce fichier ne donne que des noms et des n° : il n'inscrit "
+        messages.error(request, gettext("Ce fichier ne donne que des noms et des n° : il n'inscrit "
                                 "personne au registre. Il lui faut aussi la CIN ou la date de "
                                 "naissance. Une liste simple s'importe dans une classe ou un "
-                                "concours (page Candidats).")
+                                "concours (page Candidats)."))
         return
     resultat, decomptes, nouvelles = insc.rapprocher(lignes, request.user)
     insc.rattacher_nouvelles(nouvelles, _my_classes(request))
     request.session[CLE_VERIFICATION] = insc.rapport_session(resultat, decomptes)
-    messages.success(request, f"{len(nouvelles)} fiche(s) ajoutée(s) au registre, "
-                              f"sur {len(lignes)} ligne(s) lue(s).")
+    messages.success(request, gettext('%(len)s fiche(s) ajoutée(s) au registre, sur %(len2)s ligne(s) lue(s).') % {"len": len(nouvelles), "len2": len(lignes)})
 
 
 @login_required
@@ -92,12 +92,12 @@ def inscriptions(request):
     if pk_modifie is not None:
         modifie = get_object_or_404(Inscrit, pk=pk_modifie)
         if not _peut_retirer(request.user, modifie, "cree_par_id"):
-            raise PermissionDenied("Seul l'auteur de l'inscription ou "
-                                   "l'administrateur peut la modifier.")
+            raise PermissionDenied(gettext("Seul l'auteur de l'inscription ou "
+                                   "l'administrateur peut la modifier."))
     form = InscritForm(instance=modifie)
     fichier = CandidateFileForm()
     if request.method == "POST":
-        droits.exiger(request.user, droits.CREER, "modifier le registre des inscriptions")
+        droits.exiger(request.user, droits.CREER, gettext("modifier le registre des inscriptions"))
         if "importer_liste" in request.POST:
             fichier = CandidateFileForm(request.POST, request.FILES)
             if fichier.is_valid():
@@ -115,9 +115,7 @@ def inscriptions(request):
                 inscrit.save()
                 if modifie is None:
                     insc.rattacher_existants(inscrit, _my_classes(request))
-                    messages.success(request, f"{inscrit.nom_complet} est inscrit(e) "
-                                              f"sous le n° {inscrit.numero}. Sa carte "
-                                              "avec QR code est prête.")
+                    messages.success(request, gettext('%(nom_complet)s est inscrit(e) sous le n° %(numero)s. Sa carte avec QR code est prête.') % {"nom_complet": inscrit.nom_complet, "numero": inscrit.numero})
                 else:
                     # le registre fait foi : les listes de classe et de
                     # concours reliées à cette inscription suivent — celles
@@ -134,19 +132,20 @@ def inscriptions(request):
                                                      "student_number"])
                         journal.etudiant_modifie(request.user, etudiant, avant)
                         n += 1
-                    messages.success(request, f"Inscription de {inscrit.nom_complet} "
-                                              "enregistrée"
-                                     + (f" ({n} liste(s) de classe ou de concours "
-                                        "mise(s) à jour)." if n else "."))
+                    messages.success(request, (gettext(
+                        "Inscription de %(nom)s enregistrée (%(n)s liste(s) de classe ou de "
+                        "concours mise(s) à jour).") if n else gettext(
+                        "Inscription de %(nom)s enregistrée.")) % {"nom": inscrit.nom_complet,
+                                                                   "n": n})
                 return redirect(f"{reverse('inscriptions')}?q={inscrit.numero}")
         elif "supprimer" in request.POST:
             inscrit = get_object_or_404(Inscrit, pk=_int_or_none(request.POST["supprimer"]))
             if not _peut_retirer(request.user, inscrit, "cree_par_id"):
-                raise PermissionDenied("Seul l'auteur de l'inscription ou "
-                                       "l'administrateur peut la retirer.")
+                raise PermissionDenied(gettext("Seul l'auteur de l'inscription ou "
+                                       "l'administrateur peut la retirer."))
             nom = inscrit.nom_complet
             inscrit.delete()      # les classes et concours gardent leur candidat
-            messages.success(request, f"Inscription de {nom} retirée du registre.")
+            messages.success(request, gettext('Inscription de %(nom)s retirée du registre.') % {"nom": nom})
             return _retour(request)
         elif "ajouter" in request.POST:
             groupe = get_object_or_404(_my_classes(request),
@@ -155,12 +154,12 @@ def inscriptions(request):
                 pk__in=[p for p in map(_int_or_none, request.POST.getlist("choix"))
                         if p is not None])
             if not choisis:
-                messages.error(request, "Cochez au moins un étudiant.")
+                messages.error(request, gettext("Cochez au moins un étudiant."))
                 return _retour(request)
             ajoutes, deja = insc.ajouter_a_classe(groupe, choisis)
-            msg = f"{ajoutes} étudiant(s) ajouté(s) à « {groupe.name} »"
+            msg = gettext('%(ajoutes)s étudiant(s) ajouté(s) à « %(name)s »') % {"ajoutes": ajoutes, "name": groupe.name}
             if deja:
-                msg += f" ({deja} y figurai{'en' if deja > 1 else ''}t déjà)"
+                msg += gettext(' (%(deja)s y figurai%(en)st déjà)') % {"deja": deja, "en": 'en' if deja > 1 else ''}
             messages.success(request, msg + ".")
             return _retour(request)
 
@@ -201,7 +200,7 @@ def inscriptions_cartes(request):
                       " ".join(donnees.get("q", "").split())[:100])
     inscrits = list(qs[:500])
     if not inscrits:
-        messages.error(request, "Aucun étudiant à imprimer : cochez-en au moins un.")
+        messages.error(request, gettext("Aucun étudiant à imprimer : cochez-en au moins un."))
         return _retour(request)
     resp = HttpResponse(insc.cartes_pdf(inscrits), content_type="application/pdf")
     resp["Content-Disposition"] = 'inline; filename="cartes_inscription.pdf"'
@@ -218,18 +217,18 @@ def communiques(request):
     if pk is not None:
         modifie = get_object_or_404(Communique, pk=pk)
         if not _peut_retirer(request.user, modifie, "auteur_id"):
-            raise PermissionDenied("Seul l'auteur du communiqué ou "
-                                   "l'administrateur peut le modifier.")
+            raise PermissionDenied(gettext("Seul l'auteur du communiqué ou "
+                                   "l'administrateur peut le modifier."))
     form = CommuniqueForm(instance=modifie)
     if request.method == "POST":
-        droits.exiger(request.user, droits.CREER, "publier des communiqués")
+        droits.exiger(request.user, droits.CREER, gettext("publier des communiqués"))
         if "supprimer" in request.POST:
             avis = get_object_or_404(Communique, pk=_int_or_none(request.POST["supprimer"]))
             if not _peut_retirer(request.user, avis, "auteur_id"):
-                raise PermissionDenied("Seul l'auteur du communiqué ou "
-                                       "l'administrateur peut le supprimer.")
+                raise PermissionDenied(gettext("Seul l'auteur du communiqué ou "
+                                       "l'administrateur peut le supprimer."))
             avis.delete()
-            messages.success(request, "Communiqué supprimé.")
+            messages.success(request, gettext("Communiqué supprimé."))
             return redirect("communiques")
         form = CommuniqueForm(request.POST, request.FILES, instance=modifie)
         if form.is_valid():
@@ -239,8 +238,8 @@ def communiques(request):
             with transaction.atomic():
                 avis.save()
                 form.enregistrer_pieces(avis)
-            messages.success(request, "Communiqué enregistré"
-                             + (" et publié." if avis.publie else " (brouillon)."))
+            messages.success(request, gettext("Communiqué enregistré et publié.") if avis.publie
+                             else gettext("Communiqué enregistré (brouillon)."))
             return redirect("communiques")
     return render(request, "grader/communiques.html", {
         "form": form, "modifie": modifie, "pieces": pieces,
@@ -262,20 +261,20 @@ def _etat_publication(quiz):
 def quiz_publication(request, pk):
     """Publie (ou retire) les résultats d'une épreuve sur l'espace public."""
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
-    droits.exiger(request.user, droits.CORRIGER, "publier les résultats")
+    droits.exiger(request.user, droits.CORRIGER, gettext("publier les résultats"))
     avant = _etat_publication(quiz)
     quiz.resultats_publies = bool(request.POST.get("resultats_publies"))
     quiz.admis_publies = bool(request.POST.get("admis_publies"))
     if quiz.admis_publies and quiz.note_admission is None:
         quiz.admis_publies = False
-        messages.error(request, "La liste des admis demande une note minimale : "
-                                "indiquez-la d'abord.")
+        messages.error(request, gettext("La liste des admis demande une note minimale : "
+                                "indiquez-la d'abord."))
     if quiz.resultats_publies or quiz.admis_publies:
         quiz.publie_le = quiz.publie_le or timezone.now()
-        messages.success(request, "Publication mise à jour : visible sur l'espace public.")
+        messages.success(request, gettext("Publication mise à jour : visible sur l'espace public."))
     else:
         quiz.publie_le = None
-        messages.success(request, "Résultats retirés de l'espace public.")
+        messages.success(request, gettext("Résultats retirés de l'espace public."))
     quiz.save(update_fields=["resultats_publies", "admis_publies", "publie_le"])
     journal.noter(request.user, "publication", quiz=quiz,
                   objet="Publication sur l'espace public",

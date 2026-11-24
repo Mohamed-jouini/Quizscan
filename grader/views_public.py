@@ -23,7 +23,7 @@ from django.shortcuts import get_object_or_404, render
 from . import pieces, services
 from .inscriptions import cin_propre, cin_valide, numero_propre
 from .models import Communique, Inscrit, PieceJointe, Quiz, Student
-from .securite import adresse_client
+from .securite import adresse_client, cle_d_adresse
 from .views import _page
 
 # Recherches par n° permises par adresse et par tranche de 10 minutes : 100 depuis le
@@ -40,11 +40,21 @@ def _adresse(request):
 
 
 def _trop_de_recherches(request):
-    cle = f"qs-public-recherche:{_adresse(request)}"
-    n = cache.get(cle, 0)
+    """Fenêtre FIXE de 10 minutes, ouverte par la première recherche : avant le 24 novembre
+    2026, chaque recherche repoussait l'échéance, et une adresse partagée (Wi-Fi de
+    l'institut) au trafic régulier, même lent, restait bloquée. Une adresse IPv6 compte pour
+    son réseau /64 (securite.cle_d_adresse)."""
+    cle = f"qs-public-recherche:{cle_d_adresse(_adresse(request))}"
+    maintenant = time.time()
+    valeur = cache.get(cle)
+    if not isinstance(valeur, tuple):       # compteur de l'ancienne version, ou aucun
+        valeur = (maintenant, int(valeur or 0))
+    debut, n = valeur
+    if maintenant - debut >= FENETRE_S:
+        debut, n = maintenant, 0
     if n >= LIMITE_RECHERCHES:
         return True
-    cache.set(cle, n + 1, FENETRE_S)
+    cache.set(cle, (debut, n + 1), max(1, int(debut + FENETRE_S - maintenant)))
     return False
 
 

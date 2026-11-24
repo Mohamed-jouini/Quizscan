@@ -1,28 +1,28 @@
-{% comment %}
+{% load i18n %}{% comment %}
 Les fiches de corrigé scannées, sur la page d'un QCM. Paramètre : fiches. En deux versions
 (23 novembre 2026), une liste de chaque côté, la page comptée dans sa version (page_version).
 {% endcomment %}
 {% if fiches %}
 <div class="table-wrap table-wrap--ajuste">
   <table class="table--espacee">
-  <tr><th>Corrigé scanné</th><th>Page</th><th>Lues</th><th>Date</th><th></th></tr>
+  <tr><th>{% translate "Corrigé scanné" %}</th><th>{% translate "Page" %}</th><th>{% translate "Lues" %}</th><th>{% translate "Date" %}</th><th></th></tr>
   {% for k in fiches %}
   <tr class="ligne-lien">
     <td>{% if k.overlay_image %}<a class="ligne-lien__cible ligne-lien__nom" href="{{ k.overlay_image.url }}" target="_blank">{{ k.source_name|truncatechars:42 }}</a>{% else %}{{ k.source_name|truncatechars:42 }}{% endif %}</td>
-    <td>{% if k.page_version %}page {{ k.page_version }}{% elif k.page_index is not None %}page {{ k.page_index|add:1 }}{% else %}—{% endif %}</td>
-    <td>{% if k.status == "ok" %}<span class="badge ok">{{ k.nb_lues }} réponse(s)</span>
-        {% elif k.status == "partial" %}<span class="badge warn">{{ k.nb_lues }} lue(s),
-          {{ k.unreadable|length }} illisible(s)</span>
+    <td>{% if k.page_version %}{% blocktranslate trimmed with page_version=k.page_version %}page {{ page_version }}{% endblocktranslate %}{% elif k.page_index is not None %}{% blocktranslate trimmed with page_index=k.page_index|add:1 %}page {{ page_index }}{% endblocktranslate %}{% else %}—{% endif %}</td>
+    <td>{% if k.status == "ok" %}<span class="badge ok">{% blocktranslate trimmed with nb_lues=k.nb_lues %}{{ nb_lues }} réponse(s){% endblocktranslate %}</span>
+        {% elif k.status == "partial" %}<span class="badge warn">{% blocktranslate trimmed with nb_lues=k.nb_lues unreadable=k.unreadable|length %}{{ nb_lues }} lue(s),
+          {{ unreadable }} illisible(s){% endblocktranslate %}</span>
         {% else %}<span class="badge bad">{{ k.get_status_display }}</span>{% endif %}
         {% if k.error_message %}<span class="helptext">{{ k.error_message }}</span>{% endif %}</td>
     <td class="helptext cellule--date">{{ k.created_at|date:"d/m/Y H:i" }}</td>
     <td class="cellule--droite">{% if k.overlay_image %}
-      <a class="btn small secondary" href="{{ k.overlay_image.url }}" target="_blank">Voir</a>
+      <a class="btn small secondary" href="{{ k.overlay_image.url }}" target="_blank">{% translate "Voir" %}</a>
       {% endif %}
       {% if perms.grader.creer_epreuve %}
       <form class="inline" method="post">{% csrf_token %}
         <button class="btn small danger" type="submit" name="delete_answer_key" value="{{ k.pk }}"
-                data-confirmer="Supprimer ce corrigé scanné ? Les bonnes réponses déjà enregistrées restent en place.">Supprimer</button>
+                data-confirmer="{% translate "Supprimer ce corrigé scanné ? Les bonnes réponses déjà enregistrées restent en place." %}">{% translate "Supprimer" %}</button>
       </form>
       {% endif %}</td>
   </tr>

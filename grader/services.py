@@ -25,13 +25,16 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import DatabaseError, close_old_connections, connection, transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Max, Q, Sum
+from django.utils import timezone
+from django.utils import translation
+from django.utils.translation import gettext, gettext_lazy
 
 from . import journal, omr, sheet_pdf
 from . import layout as layout_mod
 from . import qr as qr_mod
-from .models import (Answer, AnswerKeySheet, ClassGroup, Inscrit, Question, Quiz,
-                     ScanBatch, SheetScan, Student)
+from .models import (Answer, AnswerKeySheet, ClassGroup, Inscrit, Modification, Question,
+                     Quiz, ScanBatch, SheetScan, Student)
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +80,14 @@ def create_batch(quiz: Quiz, files, label="", status="processing"):
     status="pending" : lot mis en attente (concours en « correction après
     scan »), corrigé quand l'enseignant lance la correction."""
     batch = ScanBatch.objects.create(quiz=quiz, label=label, status=status)
+    # Verrou du lot pendant l'enregistrement des fichiers (10 000 : plusieurs minutes) : un
+    # lot « en cours » sans verrou ni progrès depuis une minute était repris à vide par
+    # reprendre_lots, et marqué terminé sans aucune page (24 novembre 2026).
+    with verrou_du_lot(batch.pk):
+        return _enregistrer_fichiers(batch, files)
+
+
+def _enregistrer_fichiers(batch, files):
     stored, total = [], 0
     used = set()
     for f in files:
@@ -450,10 +461,9 @@ def _controler_dimensions(name, data):
         with Image.open(io.BytesIO(data), formats=FORMATS_SCAN) as im:
             largeur, hauteur = im.size
     except Image.DecompressionBombError as exc:
-        raise ValueError(f"Image démesurée dans {name} : plus grande qu'une copie A3 "
-                         "scannée à 1200 ppp, ce n'est pas un scan de copie.") from exc
+        raise ValueError(gettext("Image démesurée dans %(name)s : plus grande qu'une copie A3 scannée à 1200 ppp, ce n'est pas un scan de copie.") % {"name": name}) from exc
     except Exception as exc:  # noqa: BLE001 — quelle qu'en soit la raison
-        raise ValueError(f"Format d'image non reconnu : {name}") from exc
+        raise ValueError(gettext("Format d'image non reconnu : %(name)s") % {"name": name}) from exc
     if largeur * hauteur <= MAX_PIXELS_PAGE:
         return 1, False, False
     reduction = _reduction_pour(largeur, hauteur)
@@ -601,7 +611,7 @@ def _open_pages(name, data, differer=False):
             with (_GROS_DECODAGE if gros else contextlib.nullcontext()):
                 img = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), drapeaux)
             if img is None:
-                raise ValueError(f"Format d'image non reconnu : {name}")
+                raise ValueError(gettext("Format d'image non reconnu : %(name)s") % {"name": name})
             return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR) if img.ndim == 2 else img
         yield [(name, (lambda: _ADecoder(decode)) if differer else decode)]
         return
@@ -624,9 +634,7 @@ def _open_pages(name, data, differer=False):
             # compris) se dessine ramené à une A3 à SCAN_DPI ; une page sans scan (vide,
             # dessin : un fichier piégé) reste refusée
             if echelle < SCAN_DPI / 72 and not _image_pleine_page(doc[i]):
-                raise ValueError(f"Page démesurée ({rect.width / 72 * 2.54:.0f} × "
-                                 f"{rect.height / 72 * 2.54:.0f} cm) : une copie se "
-                                 "scanne en A4 ou A3.")
+                raise ValueError(gettext('Page démesurée (%(v)s × %(v2)s cm) : une copie se scanne en A4 ou A3.') % {"v": format(rect.width / 72 * 2.54, '.0f'), "v2": format(rect.height / 72 * 2.54, '.0f')})
             pix = doc[i].get_pixmap(matrix=pymupdf.Matrix(echelle, echelle),
                                     colorspace=pymupdf.csRGB)
             img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
@@ -637,12 +645,33 @@ def _open_pages(name, data, differer=False):
 
 
 def _run_in_thread(batch_ids):
+    """Lit les lots l'un après l'autre. Le verrou de chacun est pris dès le départ : un lot
+    qui attend son tour n'est ni « interrompu » à l'écran, ni repris par reprendre_lots dans
+    un autre processus, qui le lisait en même temps (deux lecteurs, et deux inscriptions
+    automatiques d'un même candidat). Un lot supprimé entre-temps n'arrête plus les suivants
+    (24 novembre 2026). Un processus arrêté rend ses verrous : les lots restants sont repris
+    comme avant."""
     close_old_connections()
+    tenus = []
     try:
         for batch_id in batch_ids:
-            run_batch(batch_id)
+            with connection.cursor() as curseur:
+                curseur.execute("SELECT pg_try_advisory_lock(%s, %s)", [VERROU_LOTS, batch_id])
+                if curseur.fetchone()[0]:
+                    tenus.append(batch_id)
+        for batch_id in batch_ids:
+            try:
+                run_batch(batch_id)
+            except Exception:  # noqa: BLE001 — lot supprimé pendant qu'il attendait…
+                log.exception("Lot %s : lecture abandonnée", batch_id)
+            finally:
+                if batch_id in tenus:
+                    tenus.remove(batch_id)
+                    with connection.cursor() as curseur:
+                        curseur.execute("SELECT pg_advisory_unlock(%s, %s)",
+                                        [VERROU_LOTS, batch_id])
     finally:
-        connection.close()
+        connection.close()          # rend aussi les verrous encore tenus
 
 
 def start_batch(batch):
@@ -657,7 +686,9 @@ def start_batches(batches):
     l'autre (« Lancer la correction » d'un concours corrigé après scan).
     Les lots passent aussitôt « en cours » pour ne pas être lancés deux fois."""
     ids = [b.pk for b in batches]
-    ScanBatch.objects.filter(pk__in=ids).update(status="processing")
+    # updated_at : update() ne le touche pas, et un lot envoyé il y a longtemps passait pour
+    # interrompu avant même que son fil ne prenne les verrous
+    ScanBatch.objects.filter(pk__in=ids).update(status="processing", updated_at=timezone.now())
     t = threading.Thread(target=_run_in_thread, args=(ids,),
                          name=f"quizscan-lots-{'-'.join(map(str, ids[:5]))}",
                          daemon=True)
@@ -675,10 +706,10 @@ class CorrigeIncomplet(RuntimeError):
         if len(self.manquantes) > 15:
             nums += " …"
         super().__init__(
-            f"{len(self.manquantes)} question(s) QCM sans bonne réponse "
-            f"(n° {nums}). Renseignez-les — à la main ou en scannant la fiche "
-            "remplie avec le corrigé — avant de lancer la correction : sans "
-            "elles, ces questions seraient comptées fausses pour tout le monde.")
+            gettext("%(n)s question(s) QCM sans bonne réponse (n° %(nums)s). Renseignez-les — "
+                    "à la main ou en scannant la fiche remplie avec le corrigé — avant de "
+                    "lancer la correction : sans elles, ces questions seraient comptées "
+                    "fausses pour tout le monde.") % {"n": len(self.manquantes), "nums": nums})
 
 
 def corrige_incomplet(quiz):
@@ -730,8 +761,8 @@ def supprimer_lot(lot, utilisateur):
     """
     if lot.status == "processing" and not is_stalled(lot):
         raise LotEnCours(
-            "Ce lot est en cours de correction : attendez la fin du "
-            "traitement avant de le supprimer.")
+            gettext("Ce lot est en cours de correction : attendez la fin du "
+            "traitement avant de le supprimer."))
 
     copies = list(lot.sheets.all())
     fichiers = [getattr(c, champ).name for c in copies
@@ -746,7 +777,9 @@ def supprimer_lot(lot, utilisateur):
     dossier = f"uploads/lot_{lot.pk}"
 
     with transaction.atomic():
-        journal.noter(utilisateur, "lot_supprime", quiz=lot.quiz, objet=str(lot),
+        with translation.override("fr"):     # le journal reste en français
+            nom_du_lot = str(lot)
+        journal.noter(utilisateur, "lot_supprime", quiz=lot.quiz, objet=nom_du_lot,
                       avant=f"{n_pages} page(s), dont {n_attribuees} attribuée(s)",
                       apres="supprimé")
         lot.delete()
@@ -802,7 +835,7 @@ def read_answer_key(quiz, files, label=""):
     Retourne (pages, nb_renseignees, questions_ambigues)."""
     layout = quiz.layout_json
     if not layout:
-        raise ValueError("Générez d'abord la fiche de réponses PDF.")
+        raise ValueError(gettext("Générez d'abord la fiche de réponses PDF."))
     questions = {q.order: q for q in quiz.questions.filter(qtype="qcm")}
 
     pages, ambigues, appliquees = [], [], {}
@@ -861,9 +894,7 @@ def _lire_page_corrige(feuille, img, layout, questions, appliquees, ambigues):
     feuille.page_index = page_index
     if page_index >= len(layout["pages"]):
         raise omr.MarkerError(
-            f"Repères de la page {page_index + 1} alors que la fiche n'en "
-            f"compte que {len(layout['pages'])} : cette page ne vient pas de "
-            "la fiche de ce quiz.")
+            gettext("Repères de la page %(page_index)s alors que la fiche n'en compte que %(len)s : cette page ne vient pas de la fiche de ce quiz.") % {"page_index": page_index + 1, "len": len(layout['pages'])})
     page_layout = layout["pages"][page_index]
     resultats = omr.read_bubbles(warped, page_layout)
 
@@ -921,6 +952,32 @@ def zones_lues_changees(ancienne, nouvelle):
                for cle in _ZONES_LUES)
 
 
+def seule_la_decimale_change(ancienne, nouvelle):
+    """La grille de la note n'a fait que gagner des cases de décimale, les anciennes restées à
+    leur place avec leur valeur (,0 / ,5 devenus ,00 ,25 ,50 ,75 le 24 novembre 2026), et rien
+    d'autre de lu n'a bougé : une copie imprimée avant se lit juste avec la nouvelle
+    disposition."""
+    pages, avant_pages = nouvelle.get("pages", []), ancienne.get("pages", [])
+    if len(pages) != len(avant_pages):
+        return False
+    change = False
+    for page, avant in zip(pages, avant_pages):
+        if any(page.get(cle) != avant.get(cle) for cle in _ZONES_LUES if cle != "note_grid"):
+            return False
+        grille, grille_avant = page.get("note_grid") or {}, avant.get("note_grid") or {}
+        if grille == grille_avant:
+            continue
+        if (not grille.get("modele") == grille_avant.get("modele") == "demi"
+                or grille["rows"][0] != grille_avant["rows"][0]):
+            return False
+        valeurs = dict(zip(map(tuple, grille["rows"][1]), grille.get("valeurs") or [0.0, 0.5]))
+        if any(valeurs.get(tuple(case)) != valeur for case, valeur in
+               zip(grille_avant["rows"][1], grille_avant.get("valeurs") or [0.0, 0.5])):
+            return False
+        change = True
+    return change
+
+
 def fiche_grille_perimee(quiz):
     """La feuille de réponses de ce quiz porte-t-elle encore les cases
     NOM/PRÉNOM, retirées depuis là où un code QR identifie la copie ?
@@ -969,6 +1026,11 @@ def regenerer_fiche_compatible(quiz):
     ancienne = quiz.layout_json
     if quiz.id_mode == "qr" or not quiz.sheet_pdf or not ancienne:
         return False
+    # Écrit en matières : des copies et un sujet par matière, refaits par « Régénérer ». Ici
+    # les trois étaient remplacés par une seule feuille, leurs liens perdus (24 novembre
+    # 2026) ; le titre changé fait de toute façon demander la régénération (signature).
+    if ancienne.get("documents_matieres"):
+        return False
     try:
         nouvelle = layout_mod.build_layout(quiz)
     except layout_mod.TooManyPages:
@@ -981,8 +1043,9 @@ def regenerer_fiche_compatible(quiz):
     pdf = sheet_pdf.generate_sheet_pdf(quiz, nouvelle)
     # Le PDF est celui du quiz tel qu'il est : son empreinte est l'actuelle.
     nouvelle["signature"] = layout_mod.layout_signature(quiz)
-    if "sujet_version" in ancienne:
-        nouvelle["sujet_version"] = ancienne["sujet_version"]
+    for cle in ("sujet_version", "nb_copies", "nb_pages"):     # mêmes copies, mêmes pages
+        if cle in ancienne:
+            nouvelle[cle] = ancienne[cle]
     quiz.layout_json = nouvelle
     quiz.sheet_pdf.save(f"fiche_quiz_{quiz.pk}.pdf", ContentFile(pdf), save=False)
     quiz.save(update_fields=["layout_json", "sheet_pdf"])
@@ -1069,7 +1132,8 @@ def renommer_epreuve(quiz, titre, utilisateur):
     # création (views.quiz_create, éventuellement suffixée « (2) »). On la
     # renomme si elle porte encore ce nom-là ; un nom choisi à la main reste.
     groupe = quiz.class_group
-    anciens_noms = (_nom_liste_concours(ancien), f"Concours — {ancien}"[:110])
+    anciens_noms = (_nom_liste_concours(ancien),
+                    *(f"{mot} — {ancien}"[:110] for mot in MOTS_CONCOURS_NOM))
     if quiz.auto_enroll and groupe.name.startswith(anciens_noms):
         base = _nom_liste_concours(titre)
         nom, i = base, 2
@@ -1084,10 +1148,18 @@ def renommer_epreuve(quiz, titre, utilisateur):
     return feuille, sujet
 
 
+# « Concours — titre » s'écrit dans la langue de l'interface (24 novembre 2026) : un nom
+# donné en français ou en arabe reste reconnu au renommage.
+MOTS_CONCOURS_NOM = ("Concours", "مناظرة")
+
+
 def _nom_liste_concours(titre):
     """Nom de la liste de candidats d'un concours, tiré de son titre (même
     règle que views.quiz_create)."""
-    return (titre if "concours" in titre.lower() else f"Concours — {titre}")[:110]
+    mots = MOTS_CONCOURS_NOM if translation.get_language() == "ar" else MOTS_CONCOURS_NOM[:1]
+    if any(mot.lower() in titre.lower() for mot in mots):
+        return titre[:110]
+    return (gettext("Concours — %(titre)s") % {"titre": titre})[:110]
 
 
 # Marque des images de contrôle nettoyées (nom du fichier) : le nettoyage
@@ -1346,7 +1418,7 @@ def _lire_page(img, layout, questions, quiz):
         try:
             img = img.decoder()
             if img is None:
-                raise ValueError("Image JPEG de la page illisible.")
+                raise ValueError(gettext("Image JPEG de la page illisible."))
         except Exception as e:  # noqa: BLE001 — même suite qu'une page illisible au rendu
             return _Lecture(erreur=e)
     lecture = _Lecture(image_jpg=_jpg(img, 82))
@@ -1356,10 +1428,7 @@ def _lire_page(img, layout, questions, quiz):
         pages = layout["pages"]
         if page_index >= len(pages):
             raise omr.MarkerError(
-                f"Repères de la page {page_index + 1} alors que la fiche du quiz "
-                f"n'en compte que {len(pages)} : la fiche a été régénérée depuis "
-                "l'impression de cette copie. Réimprimez la fiche en cours ou "
-                "régénérez-la à l'identique.")
+                gettext("Repères de la page %(page_index)s alors que la fiche du quiz n'en compte que %(len)s : la fiche a été régénérée depuis l'impression de cette copie. Réimprimez la fiche en cours ou régénérez-la à l'identique.") % {"page_index": page_index + 1, "len": len(pages)})
         page_layout = pages[page_index]
         lecture.warped, lecture.page_layout = warped, page_layout
         if page_layout.get("qr"):
@@ -1468,6 +1537,20 @@ def _retrouver_candidat(students, etudiant_pk, autre, quiz):
 
 
 def _enregistrer_page(sheet, lecture, students, questions, quiz):
+    """La page lue entre en base d'un seul tenant : sa fiche et ses réponses, ou rien. Un
+    arrêt du serveur entre les deux laissait une copie « lue » sans réponse, que la reprise
+    du lot sautait (24 novembre 2026). Les candidats ajoutés à la liste par cette page sont
+    annulés avec elle."""
+    deja = len(students)
+    try:
+        with transaction.atomic():
+            _enregistrer_page_d_un_tenant(sheet, lecture, students, questions, quiz)
+    except BaseException:
+        del students[deja:]
+        raise
+
+
+def _enregistrer_page_d_un_tenant(sheet, lecture, students, questions, quiz):
     """L'identification (liste des candidats, registre, OCR du nom en secours)
     et l'enregistrement d'une page lue : dans le fil qui a la base, page après page."""
     language = quiz.language
@@ -1667,11 +1750,11 @@ def retirer_matiere(quiz, question):
     plus qu'une note : retirer la dernière ne se fait pas). ValueError sinon."""
     matieres = quiz.matieres
     if question not in matieres:
-        raise ValueError("Ce n'est pas une matière de cet écrit.")
+        raise ValueError(gettext("Ce n'est pas une matière de cet écrit."))
     if len(matieres) <= 2:
-        raise ValueError("Un écrit en matières en garde au moins deux.")
+        raise ValueError(gettext("Un écrit en matières en garde au moins deux."))
     if Answer.objects.filter(question=question).exists():
-        raise ValueError(f"« {question.text} » a déjà des copies lues : elle reste.")
+        raise ValueError(gettext('« %(text)s » a déjà des copies lues : elle reste.') % {"text": question.text})
     question.delete()
 
 
@@ -1732,9 +1815,11 @@ def enregistrer_notes_orales(quiz, notes, utilisateur):
             etudiants.setdefault(numero_propre(s.student_number), s)
     inconnus = [numero for numero, _ in notes if numero not in etudiants]
     if inconnus:
-        reste = f" (et {len(inconnus) - 10} autre(s))" if len(inconnus) > 10 else ""
-        raise ValueError("Aucune note importée : n° absent(s) de la liste de l'épreuve : "
-                         + ", ".join(inconnus[:10]) + reste + ".")
+        reste = (gettext(" (et %(n)s autre(s))") % {"n": len(inconnus) - 10}
+                 if len(inconnus) > 10 else "")
+        raise ValueError(gettext("Aucune note importée : n° absent(s) de la liste de "
+                                 "l'épreuve : %(numeros)s.") % {
+            "numeros": ", ".join(inconnus[:10]) + reste})
     matieres = quiz.matieres
     questions = {q.order: q for q in (matieres or [question_note(quiz)])}
     retenues = {ordre: _reponses_retenues(quiz, q) for ordre, q in questions.items()}
@@ -1839,6 +1924,9 @@ def rescore_quiz(quiz):
         if pts != points:
             changed.append(Answer(pk=pk, points_awarded=pts))
             sheets.add(sheet_id)
+            if len(changed) >= 5000:        # 15 000 copies : pas 300 000 objets à la fois
+                Answer.objects.bulk_update(changed, ["points_awarded"], batch_size=500)
+                changed.clear()
     Answer.objects.bulk_update(changed, ["points_awarded"], batch_size=500)
     return len(sheets)
 
@@ -2028,15 +2116,19 @@ def admissions(quiz, rows):
 # jamais une question difficile, c'est un corrigé faux.
 DISCRIMINATION = [
     (0.40, "forte",
-     "Sépare nettement ceux qui savent de ceux qui ne savent pas."),
-    (0.20, "correcte", "Sépare convenablement."),
+     gettext_lazy("Sépare nettement ceux qui savent de ceux qui ne savent pas.")),
+    (0.20, "correcte", gettext_lazy("Sépare convenablement.")),
     (0.00, "faible",
-     "Ne sépare presque pas : énoncé ambigu, ou réponse devinable."),
+     gettext_lazy("Ne sépare presque pas : énoncé ambigu, ou réponse devinable.")),
 ]
 DISCRIMINATION_NEGATIVE = (
     "suspecte",
-    "Les meilleures copies s'y trompent plus que les plus faibles : "
-    "vérifiez la bonne réponse, elle est probablement erronée.")
+    gettext_lazy("Les meilleures copies s'y trompent plus que les plus faibles : "
+                 "vérifiez la bonne réponse, elle est probablement erronée."))
+# Le niveau reste une clé française (couleur du badge, export, tests) ; voici ce qu'on
+# en affiche, dans la langue de l'interface (24 novembre 2026).
+NIVEAUX_DISCRIMINATION = {"forte": gettext_lazy("forte"), "correcte": gettext_lazy("correcte"),
+                          "faible": gettext_lazy("faible"), "suspecte": gettext_lazy("suspecte")}
 
 
 def _discrimination(rows, ordre, deja_filtrees=False):
@@ -2089,13 +2181,14 @@ def _repartition(question, reponses):
         elif a.detected_choice in comptes:
             comptes[a.detected_choice] += 1
 
-    lignes = [{"lettre": lettre, "titre": f"Réponse {lettre}", "n": comptes[i],
+    lignes = [{"lettre": lettre, "titre": gettext("Réponse %(lettre)s") % {"lettre": lettre},
+               "n": comptes[i],
                "pct": round(comptes[i] / total * 100),
                "bonne": i == question.correct_choice}
               for i, lettre in question.letter_options]
     # Colonnes étroites : le libellé court sous la barre, le long en infobulle.
-    for court, titre, n in (("✱", "Plusieurs cases cochées", multiples),
-                            ("∅", "Sans réponse", vides)):
+    for court, titre, n in (("✱", gettext("Plusieurs cases cochées"), multiples),
+                            ("∅", gettext("Sans réponse"), vides)):
         if n:
             lignes.append({"lettre": court, "titre": titre, "n": n,
                            "pct": round(n / total * 100), "bonne": False})
@@ -2124,9 +2217,9 @@ def _convergence_suspecte(stat, repartition):
     majoritaire = max(autres, key=lambda c: c["n"])
     if majoritaire["n"] / stat["n"] < CONVERGENCE:
         return None
-    return (f"Aucune copie n'a la réponse enregistrée, et "
-            f"{majoritaire['pct']} % ont coché « {majoritaire['lettre']} » : "
-            "la bonne réponse est très probablement celle-là.")
+    return (gettext("Aucune copie n'a la réponse enregistrée, et %(pct)s %% ont coché "
+                    "« %(lettre)s » : la bonne réponse est très probablement celle-là.")
+            % {"pct": majoritaire["pct"], "lettre": majoritaire["lettre"]})
 
 
 # ----------------------------------------------------------- tableau de bord
@@ -2211,10 +2304,11 @@ def codes_anonymes(quiz):
     return codes
 
 
-def changer_annee(quiz, annee):
+def changer_annee(quiz, annee, autorisees=None):
     """L'année vaut pour tout le concours : chaque étape la prend (QCM, écrit, oral).
-    Retourne le nombre d'épreuves changées."""
-    pks = [q.pk for q in chaine_epreuves(quiz)]
+    autorisees : les épreuves de qui la change ; l'étape d'un collègue qu'il ne voit pas
+    garde la sienne (24 novembre 2026). Retourne le nombre d'épreuves changées."""
+    pks = [q.pk for q in chaine_epreuves(quiz, autorisees)]
     return Quiz.objects.filter(pk__in=pks).exclude(annee=annee).update(annee=annee)
 
 
@@ -2425,6 +2519,7 @@ def lancer_generation(quiz, total, travail):
     debut = time.time()
     _noter_etat(cle, {"etat": "en_cours", "fait": 0, "total": total, "debut": debut,
                       "maj": debut}, essais=10)
+    langue = translation.get_language()     # les messages, dans la langue de qui lance
 
     def fil():
         close_old_connections()
@@ -2437,12 +2532,14 @@ def lancer_generation(quiz, total, travail):
                 _noter_etat(cle, {"etat": "en_cours", "fait": fait, "total": total,
                                   "debut": debut, "maj": maintenant})
         try:
-            a_dire = travail(Quiz.objects.get(pk=quiz.pk), progres)
+            with translation.override(langue):
+                a_dire = travail(Quiz.objects.get(pk=quiz.pk), progres)
             etat = {"etat": "fini", "messages": a_dire}
         except Exception as exc:  # noqa: BLE001 — dit sur la page de l'épreuve
             log.exception("génération des documents de l'épreuve %s", quiz.pk)
-            etat = {"etat": "erreur", "messages": [
-                ("error", f"La génération des documents a échoué : {exc}")]}
+            with translation.override(langue):
+                texte = gettext("La génération des documents a échoué : %(exc)s") % {"exc": exc}
+            etat = {"etat": "erreur", "messages": [("error", texte)]}
         finally:
             connection.close()
         if not _noter_etat(cle, etat, essais=20):
@@ -2482,6 +2579,7 @@ def faire_passer_admis(cible):
         return 0, 0, 0
     admis = admis_de(precedente)
     ajoutes, deja = copier_etudiants(cible.class_group, admis)
+    cache.delete(_cle_etat_etape(cible))
     return ajoutes, deja, len(admis)
 
 
@@ -2491,16 +2589,38 @@ def etat_etape(cible):
     precedente = cible.epreuve_precedente
     if precedente is None:
         return None
-    admis = admis_de(precedente)
-    presents_num = set(cible.class_group.students.exclude(student_number="")
-                       .values_list("student_number", flat=True))
-    presents_nom = set(cible.class_group.students.values_list("last_name", "first_name"))
-    manquants = sum(1 for s in admis
-                    if not ((s.student_number and s.student_number in presents_num)
-                            or (not s.student_number
-                                and (s.last_name, s.first_name) in presents_nom)))
-    return {"precedente": precedente, "n_admis": len(admis), "manquants": manquants,
+    # Gardés tant que rien ne change : la page de l'écrit se recharge toutes les 5 s pendant
+    # la lecture des copies, et compter les admis d'un QCM de 15 000 copies prend plusieurs
+    # secondes et 100 Mo à chaque fois (24 novembre 2026). La clé suit les copies et le
+    # journal (notes, corrigé, note minimale) de l'étape d'avant, et la liste de celle-ci.
+    cle = _cle_etat_etape(cible)
+    chiffres = cache.get(cle)
+    if chiffres is None:
+        admis = admis_de(precedente)
+        presents_num = set(cible.class_group.students.exclude(student_number="")
+                           .values_list("student_number", flat=True))
+        presents_nom = set(cible.class_group.students.values_list("last_name", "first_name"))
+        manquants = sum(1 for s in admis
+                        if not ((s.student_number and s.student_number in presents_num)
+                                or (not s.student_number
+                                    and (s.last_name, s.first_name) in presents_nom)))
+        chiffres = (len(admis), manquants)
+        cache.set(cle, chiffres, ETAT_ETAPE_S)
+    return {"precedente": precedente, "n_admis": chiffres[0], "manquants": chiffres[1],
             "seuil": precedente.note_admission}
+
+
+ETAT_ETAPE_S = 15 * 60
+
+
+def _cle_etat_etape(cible):
+    precedente = cible.epreuve_precedente
+    copies = SheetScan.objects.filter(batch__quiz=precedente).aggregate(n=Count("pk"),
+                                                                        m=Max("pk"))
+    journal_m = Modification.objects.filter(quiz=precedente).aggregate(m=Max("pk"))["m"]
+    liste = cible.class_group.students.aggregate(n=Count("pk"), m=Max("pk"))
+    return (f"qs-etat-etape:{cible.pk}:{precedente.pk}:{precedente.note_admission}:"
+            f"{copies['n']}:{copies['m']}:{journal_m}:{liste['n']}:{liste['m']}")
 
 
 # ------------------------------------- résultats d'un concours en étapes
@@ -2679,18 +2799,20 @@ def parcours_concours(chaine):
         if atteinte >= 0:
             case, titre = cases[atteinte], chaine[atteinte].type_court
             if case["etat"] == "non_note":            # absent, ou pas encore scanné
-                final, ton = f"Non noté : {titre}", "warn"
+                final, ton = gettext("Non noté : %(titre)s") % {"titre": titre}, "warn"
             elif case["resultat"] == "refuse":
-                final, ton = f"Non admis : {titre}", "bad"
+                final, ton = gettext("Non admis : %(titre)s") % {"titre": titre}, "bad"
             elif case["resultat"] == "en_attente":
-                final, ton = f"En attente : {titre}", "warn"
+                final, ton = gettext("En attente : %(titre)s") % {"titre": titre}, "warn"
             elif case["resultat"] == "admis":
                 if atteinte == derniere:
-                    final, ton = "Admis au concours", "ok"
+                    final, ton = gettext("Admis au concours"), "ok"
                 else:
-                    final, ton = f"Admis : {titre} — étape suivante à venir", "info"
+                    final, ton = gettext("Admis : %(titre)s — étape suivante à venir") % {
+                        "titre": titre}, "info"
             else:
-                final, ton = f"Noté : {titre} (sans note minimale)", "grey"
+                final, ton = gettext("Noté : %(titre)s (sans note minimale)") % {
+                    "titre": titre}, "grey"
         derniere_note = cases[atteinte]["row"]["score"] if (
             atteinte >= 0 and cases[atteinte]["row"]) else -1
         moyenne = None
@@ -2761,9 +2883,10 @@ def bilan_admissions(quizzes, par_epreuve_max=8):
     en_matieres = {pk: matieres for pk, matieres in en_matieres.items() if matieres}
     baremes = dict(Question.objects.filter(quiz__in=quizzes)
                    .values_list("quiz_id").annotate(m=Sum("points")))
+    seules = [q for q in quizzes if q.pk not in en_matieres]
     lignes = list(Answer.objects
-                  .filter(sheet__batch__quiz__in=[q for q in quizzes if q.pk not in en_matieres],
-                          sheet__student__isnull=False)
+                  .filter(sheet__in=_premieres_copies(SheetScan.objects.filter(
+                      batch__quiz__in=seules, student__isnull=False)))
                   .values("sheet__batch__quiz_id", "sheet__student_id")
                   .annotate(total=Sum("points_awarded"),
                             attente=Count("pk", filter=Q(question__qtype="open",
@@ -2908,6 +3031,15 @@ def _notes_en_matieres(quiz, matieres):
     return notes
 
 
+def _premieres_copies(copies):
+    """Les copies retenues, comme dans compute_results : pour chaque candidat et chaque page,
+    la première lue. Une page scannée deux fois (lot envoyé deux fois) faisait additionner
+    les deux lectures au tableau de bord et dans la liste « Résultats » : 38 / 20, admis en
+    trop (24 novembre 2026). Le tri porte sur les copies, pas sur leurs réponses."""
+    return (copies.order_by("batch__quiz_id", "student_id", "page_index", "created_at", "pk")
+            .distinct("batch__quiz_id", "student_id", "page_index").values("pk"))
+
+
 def resume_epreuve(quiz):
     """Effectif, moyenne et extrêmes d'une épreuve, sans charger les copies.
 
@@ -2925,8 +3057,8 @@ def resume_epreuve(quiz):
     else:
         # une pénalité ne fait pas descendre une note sous 0 (compute_results)
         totaux = [max(total, 0.0) for total in Answer.objects
-                  .filter(sheet__batch__quiz=quiz,
-                          sheet__student__isnull=False,
+                  .filter(sheet__in=_premieres_copies(SheetScan.objects.filter(
+                              batch__quiz=quiz, student__isnull=False)),
                           points_awarded__isnull=False)
                   .values("sheet__student_id")
                   .annotate(total=Sum("points_awarded"))
@@ -3011,6 +3143,7 @@ def compute_stats(quiz, rows):
             if mesure:
                 st["discrimination"], st["discrimination_label"], \
                     st["discrimination_aide"] = mesure
+                st["discrimination_libelle"] = NIVEAUX_DISCRIMINATION[st["discrimination_label"]]
                 st["corrige_suspect"] = st["discrimination"] < 0
             st["repartition"] = _repartition(q, reponses)
             convergence = _convergence_suspecte(st, st["repartition"])
@@ -3018,6 +3151,7 @@ def compute_stats(quiz, rows):
                 st["corrige_suspect"] = True
                 st["discrimination_aide"] = convergence
                 st["discrimination_label"] = "suspecte"
+                st["discrimination_libelle"] = NIVEAUX_DISCRIMINATION["suspecte"]
         else:
             st["success"] = (round(st["points_sum"] / (st["graded"] * q.points) * 100)
                              if st["graded"] and q.points else 0)

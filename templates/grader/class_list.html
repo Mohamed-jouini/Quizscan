@@ -1,31 +1,31 @@
-{% extends "grader/base.html" %}
+{% extends "grader/base.html" %}{% load i18n %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
-    <h1>Classes</h1>
+    <h1>{% translate "Classes" %}</h1>
     <p class="page-head__meta">
-      <b>{{ classes|length }}</b> classe(s) · <b>{{ quizzes|length }}</b> quiz
-      — cliquez sur un bouton pour l'ouvrir.
+      <b>{{ classes|length }}</b> {% translate "classe(s) ·" %} <b>{{ quizzes|length }}</b> {% blocktranslate trimmed %}quiz
+      — cliquez sur un bouton pour l'ouvrir.{% endblocktranslate %}
     </p>
   </div>
 </header>
 
 <div class="card">
   <div class="card__head">
-    <h2>Mes classes ({{ classes|length }})</h2>
+    <h2>{% blocktranslate trimmed with classes=classes|length %}Mes classes ({{ classes }}){% endblocktranslate %}</h2>
     {% if perms.grader.creer_epreuve %}
     <form class="nouvelle-classe" method="post">{% csrf_token %}
       {{ form.name }}
-      <button class="btn" type="submit">Créer la classe</button>
+      <button class="btn" type="submit">{% translate "Créer la classe" %}</button>
     </form>
     {% endif %}
   </div>
   {{ form.name.errors }}
   {% if not perms.grader.creer_epreuve %}
-  <p class="helptext">Votre compte est en lecture seule : demandez le droit « créer des épreuves » à l'administrateur pour créer une classe.</p>
+  <p class="helptext">{% translate "Votre compte est en lecture seule : demandez le droit « créer des épreuves » à l'administrateur pour créer une classe." %}</p>
   {% endif %}
   {% if classes %}
-  <div class="groupes" tabindex="0" role="region" aria-label="Mes classes">
+  <div class="groupes" tabindex="0" role="region" aria-label="{% translate "Mes classes" %}">
     {% for c in classes %}
     <article class="groupe carte-bouton">
       <header class="groupe__tete">
@@ -36,8 +36,8 @@
       </header>
       <div class="groupe__bas">
         <dl class="chiffres-epreuve">
-          <div><dt>Étudiants</dt><dd>{{ c.n_etudiants }}</dd></div>
-          <div><dt>Quiz</dt><dd>{{ c.n_quiz }}</dd></div>
+          <div><dt>{% translate "Étudiants" %}</dt><dd>{{ c.n_etudiants }}</dd></div>
+          <div><dt>{% translate "Quiz" %}</dt><dd>{{ c.n_quiz }}</dd></div>
         </dl>
       </div>
     </article>
@@ -48,26 +48,26 @@
     <span class="empty__icon">
       <svg viewBox="0 0 24 24"><path d="M3 19.5a6.5 6.5 0 0 1 13 0"/><circle cx="9.5" cy="8" r="3.5"/><path d="M17 11.5a4.5 4.5 0 0 1 4 4.5"/><circle cx="17.5" cy="6.5" r="2.5"/></svg>
     </span>
-    <span class="empty__title">Aucune classe pour le moment</span>
-    <p>Créez-en une ci-dessus, puis importez ses étudiants.</p>
+    <span class="empty__title">{% translate "Aucune classe pour le moment" %}</span>
+    <p>{% translate "Créez-en une ci-dessus, puis importez ses étudiants." %}</p>
   </div>
   {% endif %}
 </div>
 
 <div class="card">
-  <h2>Quiz de classe ({{ quizzes|length }})</h2>
+  <h2>{% blocktranslate trimmed with quizzes=quizzes|length %}Quiz de classe ({{ quizzes }}){% endblocktranslate %}</h2>
   {% if quizzes %}
-  {% include "grader/_groupes_epreuves.html" with groupes=quizzes libelle="Quiz de classe" resultats=False %}
+  {% include "grader/_groupes_epreuves.html" with groupes=quizzes libelle=_("Quiz de classe") resultats=False %}
   {% else %}
   <div class="empty">
     <span class="empty__icon">
       <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9.5 12h6M9.5 16h4"/></svg>
     </span>
-    <span class="empty__title">Aucun quiz de classe</span>
-    <p>Un quiz se rattache à une classe : ses étudiants sont déjà connus, et
-       chaque copie est identifiée par le nom manuscrit ou le QR de l'étiquette.</p>
+    <span class="empty__title">{% translate "Aucun quiz de classe" %}</span>
+    <p>{% blocktranslate trimmed %}Un quiz se rattache à une classe : ses étudiants sont déjà connus, et
+       chaque copie est identifiée par le nom manuscrit ou le QR de l'étiquette.{% endblocktranslate %}</p>
     {% if perms.grader.creer_epreuve %}
-    <a class="btn" href="{% url 'quiz_create' %}">Créer le premier quiz</a>
+    <a class="btn" href="{% url 'quiz_create' %}">{% translate "Créer le premier quiz" %}</a>
     {% endif %}
   </div>
   {% endif %}

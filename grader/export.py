@@ -5,6 +5,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from .langue import en_francais
+
 
 RESULTAT = {"admis": "Admis", "en_attente": "En attente", "refuse": "Non admis"}
 
@@ -25,6 +27,7 @@ def _nombre(v):
         return False
 
 
+@en_francais
 def notes_orales_workbook(quiz, lignes):
     """Modèle Excel des notes d'un oral (seule voie de saisie depuis le 13 novembre 2026) :
     un candidat par ligne, dans l'ordre des salles, avec la note déjà importée s'il en a
@@ -79,6 +82,7 @@ def notes_orales_workbook(quiz, lignes):
     return buf.getvalue()
 
 
+@en_francais
 def copies_manquantes_workbook(quiz, manquantes):
     """Les copies pas encore scannées d'une épreuve (services.copies_manquantes, toutes) :
     une ligne par candidat, dans l'ordre des copies, salle par salle (13 novembre 2026)."""
@@ -109,6 +113,7 @@ def copies_manquantes_workbook(quiz, manquantes):
     return buf.getvalue()
 
 
+@en_francais
 def candidats_workbook(group, etudiants, avec_fiches):
     """La liste des candidats en Excel, colonnes et ordre de la page « Candidats »
     (demande du 8 novembre 2026). Les intitulés sont de ceux que l'import
@@ -120,7 +125,7 @@ def candidats_workbook(group, etudiants, avec_fiches):
     headers = ["N° d'inscription", "Prénom", "Nom"]
     if avec_fiches:
         headers += ["CIN", "Lieu de délivrance", "Délivrée le", "Né(e) le", "Centre", "Salle"]
-    ws.append([f"{group.name} — liste des candidats ({len(etudiants)})"])
+    ws.append(_sans_formule([f"{group.name} — liste des candidats ({len(etudiants)})"]))
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
     ws["A1"].font = Font(bold=True, size=13)
     ws.append(headers)
@@ -152,6 +157,7 @@ def candidats_workbook(group, etudiants, avec_fiches):
     return buf.getvalue()
 
 
+@en_francais
 def results_workbook(quiz, rows, stats=None, admission=None):
     wb = Workbook()
     ws = wb.active
@@ -169,7 +175,7 @@ def results_workbook(quiz, rows, stats=None, admission=None):
     # écrit en matières (13 novembre 2026) : la note de chacune ; « Note » est leur moyenne
     matieres = quiz.matieres
     headers += [f"{m.text} (coef. {m.coefficient:g})" for m in matieres]
-    ws.append([f"{quiz.title} — {quiz.class_group.name}"])
+    ws.append(_sans_formule([f"{quiz.title} — {quiz.class_group.name}"]))
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
     ws["A1"].font = Font(bold=True, size=13)
     ws.append(headers)
@@ -201,9 +207,9 @@ def results_workbook(quiz, rows, stats=None, admission=None):
         # Liste des admis, par ordre de mérite : ce qui s'affiche ou se publie.
         wa = wb.create_sheet("Admis")
         sur20 = f", soit {admission['seuil20']:g} / 20" if qcm else ""
-        wa.append([f"{quiz.title} — admis (note minimale "
-                   f"{admission['seuil']:g} / {admission['max_score'] or 0:g}{sur20}) : "
-                   f"{admission['n_admis']} sur {admission['n']}"])
+        wa.append(_sans_formule([f"{quiz.title} — admis (note minimale "
+                                 f"{admission['seuil']:g} / {admission['max_score'] or 0:g}"
+                                 f"{sur20}) : {admission['n_admis']} sur {admission['n']}"]))
         wa["A1"].font = Font(bold=True, size=12)
         entetes = ["Rang", "Prénom", "Nom", "N° inscription", "Points" if qcm else "Note",
                    "Sur", "Bonnes réponses", "Note sur 20" if qcm else "Pourcentage"]
@@ -214,9 +220,9 @@ def results_workbook(quiz, rows, stats=None, admission=None):
             cell.fill = head_fill
         for r in admission["admis"]:
             s = r["student"]
-            wa.append([r["rang"], s.first_name, s.last_name, s.student_number,
-                       r["score"], r["max_score"], r["correct"],
-                       r["note20"] if qcm else r["pct"] / 100])
+            wa.append(_sans_formule([r["rang"], s.first_name, s.last_name, s.student_number,
+                                     r["score"], r["max_score"], r["correct"],
+                                     r["note20"] if qcm else r["pct"] / 100]))
             wa.cell(row=wa.max_row, column=8).number_format = "0.00" if qcm else "0%"
         for i, w in enumerate([7, 18, 22, 14, 8, 6, 15, 12], start=1):
             wa.column_dimensions[get_column_letter(i)].width = w
@@ -277,6 +283,7 @@ def results_workbook(quiz, rows, stats=None, admission=None):
 ETATS_CASE = {"admis": "Admis", "refuse": "Non admis", "en_attente": "En attente"}
 
 
+@en_francais
 def parcours_workbook(parcours):
     """Résultats d'un concours en étapes : une ligne par candidat, pour
     chaque épreuve la note, le pourcentage (QCM : la note sur 20) et le résultat,
@@ -291,7 +298,7 @@ def parcours_workbook(parcours):
                     f"{q.title} — {'note sur 20' if q.est_qcm else '%'}",
                     f"{q.title} — résultat"]
     headers += ["Moyenne finale (/20)", "Résultat final"]    # المعدل النهائي
-    ws.append([" → ".join(q.title for q in epreuves)])
+    ws.append(_sans_formule([" → ".join(q.title for q in epreuves)]))
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
     ws["A1"].font = Font(bold=True, size=13)
     ws.append(headers)
@@ -327,6 +334,7 @@ def parcours_workbook(parcours):
     return buf.getvalue()
 
 
+@en_francais
 def admis_concours_workbook(parcours):
     """Liste des admis au concours (résultat final « Admis au concours », demande du
     16 novembre 2026) : rang sur la moyenne finale, prénom, nom, n° d'inscription, les notes de

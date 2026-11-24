@@ -1,18 +1,18 @@
-{% extends "grader/base.html" %}
-{% block title %}{{ quiz.title }} — QuizScan{% endblock %}
+{% extends "grader/base.html" %}{% load i18n qs_langue %}
+{% block title %}{% blocktranslate trimmed with title=quiz.title %}{{ title }} — QuizScan{% endblocktranslate %}{% endblock %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
     <h1>{{ fil.titre|default:quiz.title }}</h1>
-    <p class="page-head__meta"><span class="badge info">Épreuve écrite</span>
+    <p class="page-head__meta"><span class="badge info">{% translate "Épreuve écrite" %}</span>
       {% if fil.intitule %}<span>{{ fil.intitule }}</span>{% endif %}
-      <span>{% if quiz.auto_enroll %}Concours{% if quiz.annee %} · <bdi lang="ar">{{ quiz.get_annee_display }}</bdi>{% endif %}{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b>{% if etape %} · candidats : admis <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>{% endif %}</span></p>
+      <span>{% if quiz.auto_enroll %}{% translate "Concours" %}{% if quiz.annee %} · <bdi lang="ar">{{ quiz.get_annee_display }}</bdi>{% endif %}{% else %}{{ quiz.class_group.name }}{% endif %} {% translate "· note sur" %} <b>{{ quiz.note_sur|floatformat:"-2" }}</b>{% if etape %} {% translate "· candidats : admis" %} <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>{% endif %}</span></p>
   </div>
   <div class="page-head__actions">
     <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
-    <a class="btn small secondary" href="{% url 'class_detail' quiz.class_group.pk %}">{% if quiz.auto_enroll %}Candidats{% else %}Étudiants{% endif %} &amp; étiquettes QR</a>
-    {% if quiz.auto_enroll %}<a class="btn small secondary" href="{% url 'class_candidats_xlsx' quiz.class_group.pk %}">Exporter les candidats (Excel)</a>{% endif %}
-    <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">Résultats</a>
+    <a class="btn small secondary" href="{% url 'class_detail' quiz.class_group.pk %}">{% if quiz.auto_enroll %}{% translate "Candidats" %}{% else %}{% translate "Étudiants" %}{% endif %} {% translate "&amp; étiquettes QR" %}</a>
+    {% if quiz.auto_enroll %}<a class="btn small secondary" href="{% url 'class_candidats_xlsx' quiz.class_group.pk %}">{% translate "Exporter les candidats (Excel)" %}</a>{% endif %}
+    <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">{% translate "Résultats" %}</a>
   </div>
 </header>
 {% include "grader/_fil_etapes.html" with lien="quiz_detail" %}
@@ -22,53 +22,53 @@
 {% if perimee %}
 <div class="note note--warn">
   <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
-  <div class="note__body">Les documents ne suivent plus les réglages (barème, format, nombre de pages, identification{% if quiz.copies_nominatives %} ou liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% endif %}) : <b>régénérez les documents</b> avant de distribuer de nouvelles copies.</div>
+  <div class="note__body">{% translate "Les documents ne suivent plus les réglages (barème, grille de la note, format, nombre de pages, identification" %}{% if quiz.copies_nominatives %} {% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidats,étudiants" %}ou liste des {{ auto_enroll }}{% endblocktranslate %}{% endif %}) : <b>{% translate "régénérez les documents" %}</b> {% translate "avant de distribuer de nouvelles copies." %}</div>
 </div>
 {% endif %}
 {% include "grader/_correction_en_attente.html" %}
 
 <div class="grid2">
   <div class="card">
-    <h2>1. {% if matieres %}Les matières{% else %}Le sujet{% endif %}</h2>
+    <h2>1. {% if matieres %}{% translate "Les matières" %}{% else %}{% translate "Le sujet" %}{% endif %}</h2>
     {% if perms.grader.creer_epreuve %}
     <form method="post">{% csrf_token %}
-      <label for="id_title">Titre de l'épreuve</label>
+      <label for="id_title">{% translate "Titre de l'épreuve" %}</label>
       <input id="id_title" type="text" name="title" value="{{ quiz.title }}" maxlength="200" required>
       {% if matieres %}
-      {# Écrit en matières (13 novembre 2026) : nom, coefficient, sujet, durée et date de chacune #}
-      <p class="helptext">La note de l'écrit est la moyenne des matières pondérée par leurs coefficients, sur {{ quiz.note_sur|floatformat:"-2" }} ; la note minimale porte sur elle. Chaque matière a sa page de garde, ses copies et son sujet, imprimés à part pour sa séance.</p>
+      {#Écrit en matières (13 novembre 2026) : nom, coefficient, sujet, durée et date de chacune#}
+      <p class="helptext">{% blocktranslate trimmed with note_sur=quiz.note_sur|floatformat:"-2" %}La note de l'écrit est la moyenne des matières pondérée par leurs coefficients, sur {{ note_sur }} ; la note minimale porte sur elle. Chaque matière a sa page de garde, ses copies et son sujet, imprimés à part pour sa séance.{% endblocktranslate %}</p>
       {% for m in matieres %}
       <fieldset class="matiere" id="matiere_{{ m.pk }}">
-        <legend>Matière {{ forloop.counter }}</legend>
+        <legend>{% blocktranslate trimmed with counter=forloop.counter %}Matière {{ counter }}{% endblocktranslate %}</legend>
         <div class="matiere__tete">
           <div>
-            <label for="matiere_{{ m.pk }}_nom">Nom</label>
+            <label for="matiere_{{ m.pk }}_nom">{% translate "Nom" %}</label>
             <input id="matiere_{{ m.pk }}_nom" type="text" name="matiere_{{ m.pk }}_nom" value="{{ m.text }}" maxlength="500" required dir="auto">
           </div>
           <div>
-            <label for="matiere_{{ m.pk }}_coefficient">Coefficient</label>
+            <label for="matiere_{{ m.pk }}_coefficient">{% translate "Coefficient" %}</label>
             <input id="matiere_{{ m.pk }}_coefficient" class="champ--court" type="number" step="0.1" min="0.1" max="99" name="matiere_{{ m.pk }}_coefficient" value="{{ m.coefficient|stringformat:'g' }}" required>
           </div>
         </div>
-        <label for="matiere_{{ m.pk }}_sujet">Sujet</label>
-        <textarea id="matiere_{{ m.pk }}_sujet" name="matiere_{{ m.pk }}_sujet" rows="5" dir="auto" placeholder="Une ligne vide sépare deux paragraphes.">{{ m.sujet }}</textarea>
+        <label for="matiere_{{ m.pk }}_sujet">{% translate "Sujet" %}</label>
+        <textarea id="matiere_{{ m.pk }}_sujet" name="matiere_{{ m.pk }}_sujet" rows="5" dir="auto" placeholder="{% translate "Une ligne vide sépare deux paragraphes." %}">{{ m.sujet }}</textarea>
         <div class="matiere__tete">
           <div>
-            <label for="matiere_{{ m.pk }}_duree">Durée</label>
-            <input id="matiere_{{ m.pk }}_duree" class="champ--duree" type="text" name="matiere_{{ m.pk }}_duree" value="{{ m.duree }}" maxlength="60" placeholder="Ex. 3 h">
+            <label for="matiere_{{ m.pk }}_duree">{% translate "Durée" %}</label>
+            <input id="matiere_{{ m.pk }}_duree" class="champ--duree" type="text" name="matiere_{{ m.pk }}_duree" value="{{ m.duree }}" maxlength="60" placeholder="{% translate "Ex. 3 h" %}">
           </div>
           <div>
-            <label for="matiere_{{ m.pk }}_date">Date</label>
+            <label for="matiere_{{ m.pk }}_date">{% translate "Date" %}</label>
             <input id="matiere_{{ m.pk }}_date" type="date" name="matiere_{{ m.pk }}_date" value="{{ m.date_epreuve|date:'Y-m-d' }}" min="2000-01-01" max="9999-12-31">
           </div>
         </div>
-        {% if matieres|length > 2 %}<p><button class="btn small secondary" name="retirer_matiere" value="{{ m.pk }}" type="submit" formnovalidate>Retirer cette matière</button></p>{% endif %}
+        {% if matieres|length > 2 %}<p><button class="btn small secondary" name="retirer_matiere" value="{{ m.pk }}" type="submit" formnovalidate>{% translate "Retirer cette matière" %}</button></p>{% endif %}
       </fieldset>
       {% endfor %}
-      <p><button class="btn small secondary" name="ajouter_matiere" value="1" type="submit" formnovalidate>Ajouter une matière</button></p>
+      <p><button class="btn small secondary" name="ajouter_matiere" value="1" type="submit" formnovalidate>{% translate "Ajouter une matière" %}</button></p>
       {% elif quiz.auto_enroll %}
-      <p class="helptext">L'écrit d'un concours compte trois matières (قانون مدني، قانون جزائي، الحريات الأساسية), chacune avec son sujet, ses copies et son coefficient.
-        <button class="btn small secondary" name="creer_matieres" value="1" type="submit" formnovalidate>Passer en trois matières</button></p>
+      <p class="helptext">{% translate "L'écrit d'un concours compte trois matières (قانون مدني، قانون جزائي، الحريات الأساسية), chacune avec son sujet, ses copies et son coefficient." %}
+        <button class="btn small secondary" name="creer_matieres" value="1" type="submit" formnovalidate>{% translate "Passer en trois matières" %}</button></p>
       {% endif %}
       {{ form.non_field_errors }}
       {% for field in form %}
@@ -78,10 +78,10 @@
         {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
       </div>
       {% endfor %}
-      <p><button class="btn" name="reglages" value="1" type="submit">Enregistrer</button></p>
+      <p><button class="btn" name="reglages" value="1" type="submit">{% translate "Enregistrer" %}</button></p>
     </form>
     {% elif matieres %}
-    {% for m in matieres %}<h3 dir="auto">{{ m.text }} <small>(coefficient {{ m.coefficient|floatformat:"-2" }})</small></h3>
+    {% for m in matieres %}<h3 dir="auto">{{ m.text }} <small>{% blocktranslate trimmed with coefficient=m.coefficient|floatformat:"-2" %}(coefficient {{ coefficient }}){% endblocktranslate %}</small></h3>
     <p class="pre-ligne" dir="auto">{{ m.sujet|default:"Sujet non rédigé." }}</p>{% endfor %}
     {% else %}
     <p class="pre-ligne">{{ quiz.sujet_texte|default:"Sujet non rédigé." }}</p>
@@ -90,75 +90,75 @@
 
   <div>
     <div class="card">
-      <h2>2. Documents à imprimer</h2>
+      <h2>{% translate "2. Documents à imprimer" %}</h2>
       {% if perms.grader.creer_epreuve %}
       <form method="post">{% csrf_token %}
         {% if quiz.exemplaires_anonymes %}
-        <label for="id_nb">Nombre de copies anonymes</label>
+        <label for="id_nb">{% translate "Nombre de copies anonymes" %}</label>
         <input id="id_nb" class="champ--court" type="number" name="nb" value="100" min="1" max="2000">
         {% else %}
         {% include "grader/_nombre_copies.html" %}
         {% endif %}
-        <p><button class="btn" name="generer" value="1" type="submit"{% if generation.etat == "en_cours" %} disabled title="Génération en cours"{% endif %}>
-          {% if quiz.sheet_pdf %}Régénérer les documents{% else %}Générer le sujet et les copies{% endif %}</button></p>
+        <p><button class="btn" name="generer" value="1" type="submit"{% if generation.etat == "en_cours" %} disabled title="{% translate "Génération en cours" %}"{% endif %}>
+          {% if quiz.sheet_pdf %}{% translate "Régénérer les documents" %}{% else %}{% translate "Générer le sujet et les copies" %}{% endif %}</button></p>
       </form>
       {% endif %}
       {% if documents_matieres %}
-      {# écrit en matières : le sujet, les copies et la liste de chaque séance #}
+      {#écrit en matières : le sujet, les copies et la liste de chaque séance#}
       {% for d in documents_matieres %}
       <h3 class="documents__matiere" dir="auto">{{ d.nom }}</h3>
       <div class="documents">
         <a class="document" href="{{ d.sujet_url }}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>
-          <span><b>Sujet</b><small>énoncé à distribuer (non scanné)</small></span></a>
+          <span><b>{% translate "Sujet" %}</b><small>{% translate "énoncé à distribuer (non scanné)" %}</small></span></a>
         <a class="document" href="{{ d.copies_url }}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>
-          <span><b>Copies</b><small>{{ quiz.layout_json.nb_copies }} copie{{ quiz.layout_json.nb_copies|pluralize }}, soit {{ d.nb_pages }} page{{ d.nb_pages|pluralize }} dans le PDF{% if quiz.copies_nominatives or quiz.id_mode == "qr" %}, salle par salle{% endif %}</small></span></a>
+          <span><b>{% translate "Copies" %}</b><small>{% blocktranslate trimmed with nb_copies=quiz.layout_json.nb_copies nb_copies2=quiz.layout_json.nb_copies|pluralize nb_pages=d.nb_pages nb_pages2=d.nb_pages|pluralize %}{{ nb_copies }} copie{{ nb_copies2 }}, soit {{ nb_pages }} page{{ nb_pages2 }} dans le PDF{% endblocktranslate %}{% if quiz.copies_nominatives or quiz.id_mode == "qr" %}{% translate ", salle par salle" %}{% endif %}</small></span></a>
         <a class="document" href="{% url 'quiz_emargement_pdf' quiz.pk %}?matiere={{ d.order }}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="M15 16l1.5 1.5L19 15"/></svg>
-          <span><b>Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }} par salle</b><small>pour la signature de présence à cette séance</small></span></a>
+          <span><b>{% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidats,étudiants" %}Liste des {{ auto_enroll }} par salle{% endblocktranslate %}</b><small>{% translate "pour la signature de présence à cette séance" %}</small></span></a>
       </div>
       {% endfor %}
-      <span class="helptext">Copies de chaque matière : {% if quiz.layout_json.format == "a3" %}page de garde + {{ quiz.layout_json.pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à plier au milieu{% else %}{% with n=quiz.layout_json.pages_redaction %}page de garde{% if n %} + {{ n }} page{{ n|pluralize }} lignée{{ n|pluralize }}{% endif %}{% if quiz.layout_json.pages_blanches %} + 1 page blanche au dos de la dernière feuille{% endif %}, en A4 à 100 %, recto-verso sur le bord long{% endwith %}{% endif %}. La page de garde porte le nom de la matière.</span>
+      <span class="helptext">{% translate "Copies de chaque matière :" %} {% if quiz.layout_json.format == "a3" %}{% blocktranslate trimmed with pages_redaction=quiz.layout_json.pages_redaction %}page de garde + {{ pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à plier au milieu{% endblocktranslate %}{% else %}{% with n=quiz.layout_json.pages_redaction %}{% translate "page de garde" %}{% if n %} {% blocktranslate trimmed with n2=n|pluralize %}+ {{ n }} page{{ n2 }} lignée{{ n2 }}{% endblocktranslate %}{% endif %}{% if quiz.layout_json.pages_blanches %} {% translate "+ 1 page blanche au dos de la dernière feuille" %}{% endif %}{% translate ", en A4 à 100 %, recto-verso sur le bord long" %}{% endwith %}{% endif %}{% translate ". La page de garde porte le nom de la matière." %}</span>
       {% elif quiz.sheet_pdf %}
       <div class="documents">
         {% if quiz.subject_pdf %}<a class="document" href="{{ quiz.subject_pdf.url }}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>
-          <span><b>Sujet</b><small>énoncé à distribuer (non scanné)</small></span></a>{% endif %}
+          <span><b>{% translate "Sujet" %}</b><small>{% translate "énoncé à distribuer (non scanné)" %}</small></span></a>{% endif %}
         <a class="document" href="{{ quiz.sheet_pdf.url }}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 14h6M9 17h4"/></svg>
-          <span><b>Copies</b>
-            {% with n=quiz.layout_json.nb_copies p=quiz.layout_json.nb_pages %}{% if n %}<small>{{ n }} copie{{ n|pluralize }}, soit {{ p }} page{{ p|pluralize }} dans le PDF{% if quiz.layout_json.format == "a3" %} (recto et verso de chaque feuille){% endif %}{% if quiz.copies_nominatives or quiz.id_mode == "qr" %}, salle par salle{% endif %}</small>{% endif %}{% endwith %}
-            <small>{% if quiz.layout_json.format == "a3" %}page de garde + {{ quiz.layout_json.pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à plier au milieu{% else %}{% with n=quiz.layout_json.pages_redaction|default:quiz.pages_redaction %}page de garde{% if n %} + {{ n }} page{{ n|pluralize }} lignée{{ n|pluralize }}{% endif %}{% if quiz.layout_json.pages_blanches %} + 1 page blanche au dos de la dernière feuille{% endif %}, en A4 à 100 %, recto-verso sur le bord long{% endwith %}{% endif %}</small></span></a>
+          <span><b>{% translate "Copies" %}</b>
+            {% with n=quiz.layout_json.nb_copies p=quiz.layout_json.nb_pages %}{% if n %}<small>{% blocktranslate trimmed with n2=n|pluralize p2=p|pluralize %}{{ n }} copie{{ n2 }}, soit {{ p }} page{{ p2 }} dans le PDF{% endblocktranslate %}{% if quiz.layout_json.format == "a3" %} {% translate "(recto et verso de chaque feuille)" %}{% endif %}{% if quiz.copies_nominatives or quiz.id_mode == "qr" %}{% translate ", salle par salle" %}{% endif %}</small>{% endif %}{% endwith %}
+            <small>{% if quiz.layout_json.format == "a3" %}{% blocktranslate trimmed with pages_redaction=quiz.layout_json.pages_redaction %}page de garde + {{ pages_redaction }} pages lignées, en A3 recto-verso sur le bord court, à 100 %, à plier au milieu{% endblocktranslate %}{% else %}{% with n=quiz.layout_json.pages_redaction|default:quiz.pages_redaction %}{% translate "page de garde" %}{% if n %} {% blocktranslate trimmed with n2=n|pluralize %}+ {{ n }} page{{ n2 }} lignée{{ n2 }}{% endblocktranslate %}{% endif %}{% if quiz.layout_json.pages_blanches %} {% translate "+ 1 page blanche au dos de la dernière feuille" %}{% endif %}{% translate ", en A4 à 100 %, recto-verso sur le bord long" %}{% endwith %}{% endif %}</small></span></a>
         <a class="document" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">
           <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h3"/><path d="M15 16l1.5 1.5L19 15"/></svg>
-          <span><b>Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% if quiz.place_anonyme %} et des places{% endif %} par salle</b><small>une liste par salle, dans l'ordre des copies{% if quiz.place_anonyme %}, n° de place et nom{% endif %}, pour la signature de présence</small></span></a>
+          <span><b>{% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidats,étudiants" %}Liste des {{ auto_enroll }}{% endblocktranslate %}{% if quiz.place_anonyme %} {% translate "et des places" %}{% endif %} {% translate "par salle" %}</b><small>{% translate "une liste par salle, dans l'ordre des copies" %}{% if quiz.place_anonyme %}{% translate ", n° de place et nom" %}{% endif %}{% translate ", pour la signature de présence" %}</small></span></a>
       </div>
-      {% else %}<p class="helptext">Enregistrez le sujet puis générez les documents.</p>{% endif %}
-      <span class="helptext">Seule la page de garde est lue ; les pages lignées scannées avec elle (au dos, en recto-verso) sont ignorées.{% if matieres %} Les copies de toutes les matières peuvent passer ensemble : la page de garde dit sa matière.{% endif %}
-        {% if quiz.layout_json.format == "a3" %}Copies A3 : passez les feuilles dépliées, en format A3 et recto seul (le verso n'est pas lu).{% endif %}
-        {% if quiz.id_mode == "sticker" or quiz.id_mode == "grid" %}Chaque étudiant colle son étiquette QR sur la page de garde{% if quiz.id_mode == "grid" %} ou noircit son n° d'inscription{% endif %}.{% endif %}</span>
+      {% else %}<p class="helptext">{% translate "Enregistrez le sujet puis générez les documents." %}</p>{% endif %}
+      <span class="helptext">{% translate "Seule la page de garde est lue ; les pages lignées scannées avec elle (au dos, en recto-verso) sont ignorées." %}{% if matieres %} {% translate "Les copies de toutes les matières peuvent passer ensemble : la page de garde dit sa matière." %}{% endif %}
+        {% if quiz.layout_json.format == "a3" %}{% translate "Copies A3 : passez les feuilles dépliées, en format A3 et recto seul (le verso n'est pas lu)." %}{% endif %}
+        {% if quiz.id_mode == "sticker" or quiz.id_mode == "grid" %}{% translate "Chaque étudiant colle son étiquette QR sur la page de garde" %}{% if quiz.id_mode == "grid" %} {% translate "ou noircit son n° d'inscription" %}{% endif %}.{% endif %}</span>
     </div>
 
     <div class="card">
-      <h2>3. Copies corrigées à scanner</h2>
+      <h2>{% translate "3. Copies corrigées à scanner" %}</h2>
       {% if perms.grader.corriger_copies %}
       <form method="post" action="{% url 'quiz_upload' quiz.pk %}" enctype="multipart/form-data">{% csrf_token %}
         <label>{{ upload_form.label.label }}</label>{{ upload_form.label }}
         <label>{{ upload_form.files.label }}</label>{{ upload_form.files }}
         <span class="helptext">{{ upload_form.files.help_text }}</span>
-        <p><button class="btn" type="submit" {% if not quiz.sheet_pdf %}disabled title="Générez d'abord les documents"{% endif %}>{% if deferred %}Téléverser (correction lancée plus tard){% else %}Lire les notes et les affecter{% endif %}</button></p>
-        {% if deferred %}<span class="helptext">Correction après scan : les copies sont mises en
-          attente ; le bouton « Lancer la correction » apparaît en haut de la page.</span>{% endif %}
+        <p><button class="btn" type="submit" {% if not quiz.sheet_pdf %}disabled title="{% translate "Générez d'abord les documents" %}"{% endif %}>{% if deferred %}{% translate "Téléverser (correction lancée plus tard)" %}{% else %}{% translate "Lire les notes et les affecter" %}{% endif %}</button></p>
+        {% if deferred %}<span class="helptext">{% blocktranslate trimmed %}Correction après scan : les copies sont mises en
+          attente ; le bouton « Lancer la correction » apparaît en haut de la page.{% endblocktranslate %}</span>{% endif %}
       </form>
-      {% else %}<p class="helptext">Votre compte ne téléverse pas de copies.</p>{% endif %}
+      {% else %}<p class="helptext">{% translate "Votre compte ne téléverse pas de copies." %}</p>{% endif %}
       {% if batches %}
       <div class="table-wrap">
         <table>
-          <tr><th>Lot</th><th>Date</th><th>Pages</th><th>Identifiées</th></tr>
+          <tr><th>{% translate "Lot" %}</th><th>{% translate "Date" %}</th><th>{% translate "Pages" %}</th><th>{% translate "Identifiées" %}</th></tr>
           {% for b in batches %}
           <tr class="ligne-lien"><td><a class="ligne-lien__cible" href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
-              {% if b.status == "pending" %}<span class="badge info" title="En attente de « Lancer la correction »">en attente</span>{% elif b.is_processing %}<span class="badge warn">lecture {{ b.processed_pages }}/{{ b.total_pages }}</span>{% endif %}</td>
+              {% if b.status == "pending" %}<span class="badge info" title="{% translate "En attente de « Lancer la correction »" %}">{% translate "en attente" %}</span>{% elif b.is_processing %}<span class="badge warn">{% blocktranslate trimmed with processed_pages=b.processed_pages total_pages=b.total_pages %}lecture {{ processed_pages }}/{{ total_pages }}{% endblocktranslate %}</span>{% endif %}</td>
             <td>{{ b.created_at|date:"d/m/Y H:i" }}</td><td>{% if b.status == "pending" %}{{ b.total_pages }}{% else %}{{ b.sheets.count }}{% endif %}</td><td>{{ b.identified_count }}</td></tr>
           {% endfor %}
         </table>
@@ -170,7 +170,7 @@
 
 {% if journal %}
 <div class="card">
-  <h2>Journal de l'épreuve</h2>
+  <h2>{% translate "Journal de l'épreuve" %}</h2>
   {% include "grader/_journal.html" with entrees=journal %}
 </div>
 {% endif %}

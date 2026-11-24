@@ -153,7 +153,11 @@ def main():
         r = Client().post("/comptes/login/?next=/classes/",
                           dict(donnees, username="cpt_retour", password=ANCIEN))
         assert r.status_code == 302 and r["Location"] == "/", (donnees, r.status_code)
-    assert 'name="next"' not in Client().get("/comptes/login/?next=/classes/").content.decode()
+    # le formulaire de connexion n'a pas de « next » (le bouton de langue, formulaire à part
+    # depuis le 24 novembre 2026, a le sien : il revient à la page où l'on était)
+    page = Client().get("/comptes/login/?next=/classes/").content.decode()
+    connexion = next(f for f in page.split("<form")[1:] if 'name="password"' in f)
+    assert 'name="next"' not in connexion.split("</form>")[0]
     # un enseignant garde le formulaire de l'administration, qu'il n'a pas le droit d'ouvrir
     assert cp.get("/comptes/administration/").status_code == 200
     ca = Client()

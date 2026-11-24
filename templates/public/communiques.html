@@ -1,7 +1,7 @@
-{% extends "public/base.html" %}
-{% block title %}Communiqués{% endblock %}
+{% extends "public/base.html" %}{% load i18n %}
+{% block title %}{% translate "Communiqués" %}{% endblock %}
 {% block content %}
-<section class="pub-hero pub-hero--court"><h1>Communiqués</h1></section>
+<section class="pub-hero pub-hero--court"><h1>{% translate "Communiqués" %}</h1></section>
 <section class="pub-section">
   {% if page_avis.object_list %}
   <div class="pub-cartes pub-cartes--liste">
@@ -9,7 +9,8 @@
     {% include "public/_carte_avis.html" with longueur=240 %}
     {% endfor %}
   </div>
-  {% include "grader/_pagination.html" with page=page_avis label="Communiqués" %}
-  {% else %}<p class="pub-vide">Aucun communiqué publié pour l'instant.</p>{% endif %}
+  {% translate "Communiqués" as libelle %}
+  {% include "grader/_pagination.html" with page=page_avis label=libelle %}
+  {% else %}<p class="pub-vide">{% translate "Aucun communiqué publié pour l'instant." %}</p>{% endif %}
 </section>
 {% endblock %}

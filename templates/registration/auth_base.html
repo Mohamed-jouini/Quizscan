@@ -1,4 +1,4 @@
-{% comment %}
+{% load i18n %}{% comment %}
 Gabarit commun aux deux pages de connexion (enseignant et administration).
 
 Mise en page : une carte arrondie en deux colonnes — le formulaire à gauche,
@@ -10,11 +10,11 @@ Les couleurs et la mise en page viennent de la feuille unique
 (grader/static/grader/quizscan.css), partagée avec l'espace enseignant et
 l'administration, et le thème clair / sombre de grader/theme.js.
 {% endcomment %}{% load static qs_statique %}<!doctype html>
-<html lang="fr">
+<html lang="{{ LANGUAGE_CODE|default:"fr" }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Connexion — QuizScan{% endblock %}</title>
+<title>{% block title %}{% translate "Connexion — QuizScan" %}{% endblock %}</title>
 <link rel="stylesheet" href="{% statique 'grader/quizscan.css' %}">
 <script src="{% statique 'grader/theme.js' %}"></script>
 <script defer src="{% statique 'grader/pages.js' %}"></script>
@@ -23,7 +23,7 @@ l'administration, et le thème clair / sombre de grader/theme.js.
 <body class="auth-page">
 <main class="auth">
   <div class="auth__panel">
-    <div class="auth__tools">{% include "grader/_theme_toggle.html" %}</div>
+    <div class="auth__tools">{% include "grader/_langue.html" %}{% include "grader/_theme_toggle.html" %}</div>
     <div class="brand">
       <span class="brand__mark">
         <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>

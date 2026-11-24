@@ -1,21 +1,24 @@
-{% comment %}
+{% load i18n %}{% comment %}
 Barre de pagination réutilisable. Conserve les autres paramètres de l'URL
 (filtre par lot, étudiant…) en ne remplaçant que « page ».
 ancre (facultatif) : revenir sur la liste plutôt qu'en haut de la page.
 Un commentaire {# … #} ne tient que sur UNE ligne : sur plusieurs, Django ne
 le reconnaît pas et l'affiche tel quel dans la page.
+En arabe (espace public, 24 novembre 2026), les flèches sont tournées vers la droite pour
+revenir en arrière : c'est le sens de lecture.
 {% endcomment %}
 {% if page.paginator.num_pages > 1 %}
 <p class="helptext" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
   {% if page.has_previous %}
-    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page=1{% if ancre %}#{{ ancre }}{% endif %}">⏮ Début</a>
-    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.previous_page_number }}{% if ancre %}#{{ ancre }}{% endif %}">◀ Précédent</a>
+    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page=1{% if ancre %}#{{ ancre }}{% endif %}">{% translate "⏮ Début" %}</a>
+    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.previous_page_number }}{% if ancre %}#{{ ancre }}{% endif %}">{% translate "◀ Précédent" %}</a>
   {% endif %}
-  <span>{{ label|default:"Lignes" }} {{ page.start_index }} à {{ page.end_index }}
-        sur {{ page.paginator.count }} — page {{ page.number }} / {{ page.paginator.num_pages }}</span>
+  <span>{% blocktranslate trimmed with libelle=label|default:_("Lignes") debut=page.start_index fin=page.end_index total=page.paginator.count numero=page.number pages=page.paginator.num_pages %}
+        {{ libelle }} {{ debut }} à {{ fin }}
+        sur {{ total }} — page {{ numero }} / {{ pages }}{% endblocktranslate %}</span>
   {% if page.has_next %}
-    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.next_page_number }}{% if ancre %}#{{ ancre }}{% endif %}">Suivant ▶</a>
-    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.paginator.num_pages }}{% if ancre %}#{{ ancre }}{% endif %}">Fin ⏭</a>
+    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.next_page_number }}{% if ancre %}#{{ ancre }}{% endif %}">{% translate "Suivant ▶" %}</a>
+    <a class="btn small secondary" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page.paginator.num_pages }}{% if ancre %}#{{ ancre }}{% endif %}">{% translate "Fin ⏭" %}</a>
   {% endif %}
 </p>
 {% endif %}

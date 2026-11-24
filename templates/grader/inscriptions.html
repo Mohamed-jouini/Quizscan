@@ -1,16 +1,16 @@
-{% extends "grader/base.html" %}
-{% block title %}Inscriptions — QuizScan{% endblock %}
+{% extends "grader/base.html" %}{% load i18n %}
+{% block title %}{% translate "Inscriptions — QuizScan" %}{% endblock %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
-    <h1>Inscriptions</h1>
-    <p class="page-head__meta"><span><b>{{ total }}</b> étudiant(s) inscrit(s) au registre de l'établissement</span></p>
-    <p class="helptext">Chacun a sa carte avec un QR code (n°, prénom et nom). Les listes de candidats importées dans un concours ou une classe sont vérifiées contre ce registre.</p>
+    <h1>{% translate "Inscriptions" %}</h1>
+    <p class="page-head__meta"><span><b>{{ total }}</b> {% translate "étudiant(s) inscrit(s) au registre de l'établissement" %}</span></p>
+    <p class="helptext">{% translate "Chacun a sa carte avec un QR code (n°, prénom et nom). Les listes de candidats importées dans un concours ou une classe sont vérifiées contre ce registre." %}</p>
   </div>
   <div class="page-head__actions">
     {% if n_trouves %}
     <a class="btn small secondary" href="{% url 'inscriptions_cartes' %}{% if recherche %}?q={{ recherche|urlencode }}{% endif %}"
-       target="_blank">Cartes d'inscription (PDF){% if recherche %} — recherche{% endif %}</a>
+       target="_blank">{% translate "Cartes d'inscription (PDF)" %}{% if recherche %} {% translate "— recherche" %}{% endif %}</a>
     {% endif %}
   </div>
 </header>
@@ -20,7 +20,7 @@
 {% if perms.grader.creer_epreuve %}
 <div class="grid2 grid2--large">
   <div class="card">
-    <h2>{% if modifie %}Modifier l'inscription de {{ modifie.nom_complet|default:modifie.numero }}{% else %}Inscrire un étudiant{% endif %}</h2>
+    <h2>{% if modifie %}{% blocktranslate trimmed with nom_complet=modifie.nom_complet|default:modifie.numero %}Modifier l'inscription de {{ nom_complet }}{% endblocktranslate %}{% else %}{% translate "Inscrire un étudiant" %}{% endif %}</h2>
     <form method="post" class="form-inscription" id="fiche-inscrit">{% csrf_token %}
       {% if modifie %}<input type="hidden" name="modifier" value="{{ modifie.pk }}">{% endif %}
       {{ form.non_field_errors }}
@@ -35,15 +35,15 @@
         <div>{{ form.centre.label_tag }}{{ form.centre }}{{ form.centre.errors }}</div>
         <div>{{ form.salle.label_tag }}{{ form.salle }}{{ form.salle.errors }}</div>
       </div>
-      <span class="helptext"><b>Facultatifs : centre et salle.</b> CIN : 8 chiffres (ou n° de passeport). Le QR code de la carte contient le n° d'inscription, le prénom et le nom — jamais la CIN.</span>
-      <p><button class="btn" name="inscrire" value="1" type="submit">{% if modifie %}Enregistrer{% else %}Inscrire et créer son QR code{% endif %}</button>
-        {% if modifie %}<a class="btn secondary" href="{% url 'inscriptions' %}">Annuler</a>{% endif %}</p>
+      <span class="helptext"><b>{% translate "Facultatifs : centre et salle." %}</b> {% translate "CIN : 8 chiffres (ou n° de passeport). Le QR code de la carte contient le n° d'inscription, le prénom et le nom — jamais la CIN." %}</span>
+      <p><button class="btn" name="inscrire" value="1" type="submit">{% if modifie %}{% translate "Enregistrer" %}{% else %}{% translate "Inscrire et créer son QR code" %}{% endif %}</button>
+        {% if modifie %}<a class="btn secondary" href="{% url 'inscriptions' %}">{% translate "Annuler" %}</a>{% endif %}</p>
     </form>
   </div>
   <div class="card">
-    <h2>Importer la liste Excel</h2>
-    {% include "grader/_import_liste.html" with champ=fichier.file bouton="importer_liste" libelle="Remplir le registre" %}
-    <p class="helptext">Chaque ligne crée la fiche de son n°, ou complète celle qui existe. Une liste qui ne donne que des noms et des n° n'inscrit personne.</p>
+    <h2>{% translate "Importer la liste Excel" %}</h2>
+    {% include "grader/_import_liste.html" with champ=fichier.file bouton="importer_liste" libelle=_("Remplir le registre") %}
+    <p class="helptext">{% translate "Chaque ligne crée la fiche de son n°, ou complète celle qui existe. Une liste qui ne donne que des noms et des n° n'inscrit personne." %}</p>
   </div>
 </div>
 {% endif %}
@@ -51,19 +51,19 @@
 <form class="recherche-etudiant" method="get" role="search">
   <div class="recherche-etudiant__champ">
     <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-    <label for="id_q" class="visually-hidden">Rechercher un inscrit</label>
+    <label for="id_q" class="visually-hidden">{% translate "Rechercher un inscrit" %}</label>
     <input id="id_q" type="search" name="q" value="{{ recherche }}" autocomplete="off"
-           placeholder="Rechercher — prénom, nom, n° d'inscription, CIN, centre ou salle">
+           placeholder="{% translate "Rechercher — prénom, nom, n° d'inscription, CIN, centre ou salle" %}">
     {% if recherche %}
     <a class="recherche-etudiant__effacer" href="{% url 'inscriptions' %}"
-       title="Effacer la recherche" aria-label="Effacer la recherche">
+       title="{% translate "Effacer la recherche" %}" aria-label="{% translate "Effacer la recherche" %}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
     {% endif %}
   </div>
-  <button class="btn" type="submit">Rechercher</button>
+  <button class="btn" type="submit">{% translate "Rechercher" %}</button>
   {% if recherche %}
   <span class="recherche-etudiant__bilan {% if not n_trouves %}is-vide{% endif %}">
-    {{ n_trouves }} résultat{{ n_trouves|pluralize }} pour « {{ recherche }} »</span>
+    {% blocktranslate trimmed with n_trouves2=n_trouves|pluralize %}{{ n_trouves }} résultat{{ n_trouves2 }} pour « {{ recherche }} »{% endblocktranslate %}</span>
   {% endif %}
 </form>
 
@@ -72,52 +72,52 @@
   <form method="post">{% csrf_token %}
     <input type="hidden" name="q" value="{{ recherche }}">
     <div class="barre-choix">
-      <label for="id_groupe">Ajouter les étudiants cochés à</label>
+      <label for="id_groupe">{% translate "Ajouter les étudiants cochés à" %}</label>
       <select id="id_groupe" name="groupe">
-        {% for g, concours in groupes %}{% if concours %}<option value="{{ g.pk }}">Concours — {{ g.name }}</option>{% endif %}{% endfor %}
-        {% for g, concours in groupes %}{% if not concours %}<option value="{{ g.pk }}">Classe — {{ g.name }}</option>{% endif %}{% endfor %}
+        {% for g, concours in groupes %}{% if concours %}<option value="{{ g.pk }}">{% blocktranslate trimmed with name=g.name %}Concours — {{ name }}{% endblocktranslate %}</option>{% endif %}{% endfor %}
+        {% for g, concours in groupes %}{% if not concours %}<option value="{{ g.pk }}">{% blocktranslate trimmed with name=g.name %}Classe — {{ name }}{% endblocktranslate %}</option>{% endif %}{% endfor %}
       </select>
-      <button class="btn small" name="ajouter" value="1" type="submit" {% if not groupes %}disabled{% endif %}>Ajouter</button>
+      <button class="btn small" name="ajouter" value="1" type="submit" {% if not groupes %}disabled{% endif %}>{% translate "Ajouter" %}</button>
       <button class="btn small secondary" type="submit" formaction="{% url 'inscriptions_cartes' %}"
-              formtarget="_blank">Cartes des cochés (PDF)</button>
+              formtarget="_blank">{% translate "Cartes des cochés (PDF)" %}</button>
     </div>
-    {% if not groupes %}<p class="helptext">Créez d'abord une classe ou un concours pour y ajouter des inscrits.</p>{% endif %}
-    {% include "grader/_pagination.html" with page=page_inscrits label="Inscrits" querystring=querystring %}
+    {% if not groupes %}<p class="helptext">{% translate "Créez d'abord une classe ou un concours pour y ajouter des inscrits." %}</p>{% endif %}
+    {% include "grader/_pagination.html" with page=page_inscrits label=_("Inscrits") querystring=querystring %}
     <div class="table-wrap table-wrap--ajuste">
       <table>
-        <tr><th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="Tout cocher"></th>
-          <th>N°</th><th>Prénom et nom</th><th>CIN</th><th>Lieu</th><th>Délivrée le</th><th>Né(e) le</th><th>Centre</th><th>Salle</th><th>Listes</th><th>QR</th><th></th></tr>
+        <tr><th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="{% translate "Tout cocher" %}"></th>
+          <th>{% translate "N°" %}</th><th>{% translate "Prénom et nom" %}</th><th>{% translate "CIN" %}</th><th>{% translate "Lieu" %}</th><th>{% translate "Délivrée le" %}</th><th>{% translate "Né(e) le" %}</th><th>{% translate "Centre" %}</th><th>{% translate "Salle" %}</th><th>{% translate "Listes" %}</th><th>{% translate "QR" %}</th><th></th></tr>
         {% for i in page_inscrits %}
         <tr class="ligne-lien">
-          <td class="col-choix"><input type="checkbox" name="choix" value="{{ i.pk }}" aria-label="Choisir {{ i.nom_complet|default:i.numero }}"></td>
+          <td class="col-choix"><input type="checkbox" name="choix" value="{{ i.pk }}" aria-label="{% blocktranslate trimmed with nom_complet=i.nom_complet|default:i.numero %}Choisir {{ nom_complet }}{% endblocktranslate %}"></td>
           <td>{% if user.is_superuser or i.cree_par_id == user.pk %}<a class="ligne-lien__cible ligne-lien__nom" href="?modifier={{ i.pk }}#fiche-inscrit"><b>{{ i.numero }}</b></a>{% else %}<b>{{ i.numero }}</b>{% endif %}</td>
           <td>{{ i.prenom }} <b>{{ i.nom|default:"—" }}</b>
-            {% if not i.fiche_complete %}<span class="badge warn" title="Nom, CIN, lieu ou date de délivrance, ou date de naissance manquant">fiche à compléter</span>{% endif %}</td>
+            {% if not i.fiche_complete %}<span class="badge warn" title="{% translate "Nom, CIN, lieu ou date de délivrance, ou date de naissance manquant" %}">{% translate "fiche à compléter" %}</span>{% endif %}</td>
           <td>{{ i.cin|default:"—" }}</td>
           <td>{{ i.cin_lieu|default:"—" }}</td>
           <td>{{ i.cin_date|date:"d/m/Y"|default:"—" }}</td>
           <td>{{ i.date_naissance|date:"d/m/Y"|default:"—" }}</td>
           <td>{{ i.centre|default:"—" }}</td>
           <td class="cellule--serree">{{ i.salle|default:"—" }}</td>
-          <td title="Classes et concours où figure cet étudiant">{% if i.n_places %}{{ i.n_places }}{% else %}<span class="helptext">—</span>{% endif %}</td>
-          <td><img class="qr-mini" src="{% url 'inscrit_qr' i.pk %}" alt="QR {{ i.nom_complet }}" width="46" height="46" loading="lazy"></td>
+          <td title="{% translate "Classes et concours où figure cet étudiant" %}">{% if i.n_places %}{{ i.n_places }}{% else %}<span class="helptext">—</span>{% endif %}</td>
+          <td><img class="qr-mini" src="{% url 'inscrit_qr' i.pk %}" alt="{% blocktranslate trimmed with nom_complet=i.nom_complet %}QR {{ nom_complet }}{% endblocktranslate %}" width="46" height="46" loading="lazy"></td>
           <td class="actions-ligne">
-            <a class="btn small secondary" href="{% url 'inscriptions_cartes' %}?choix={{ i.pk }}" target="_blank">Carte</a>
+            <a class="btn small secondary" href="{% url 'inscriptions_cartes' %}?choix={{ i.pk }}" target="_blank">{% translate "Carte" %}</a>
             {% if user.is_superuser or i.cree_par_id == user.pk %}
             <button class="btn small danger" name="supprimer" value="{{ i.pk }}" type="submit"
-                    data-confirmer="Retirer {{ i.nom_complet|default:i.numero }} du registre ? Ses classes et concours le gardent.">✕</button>
+                    data-confirmer="{% blocktranslate trimmed with nom_complet=i.nom_complet|default:i.numero %}Retirer {{ nom_complet }} du registre ? Ses classes et concours le gardent.{% endblocktranslate %}">✕</button>
             {% endif %}
           </td>
         </tr>
         {% endfor %}
       </table>
     </div>
-    {% include "grader/_pagination.html" with page=page_inscrits label="Inscrits" querystring=querystring %}
+    {% include "grader/_pagination.html" with page=page_inscrits label=_("Inscrits") querystring=querystring %}
   </form>
     {% elif recherche %}
-  <p>Aucun inscrit ne correspond à « {{ recherche }} ».</p>
+  <p>{% blocktranslate trimmed %}Aucun inscrit ne correspond à « {{ recherche }} ».{% endblocktranslate %}</p>
   {% else %}
-  <p>Aucun étudiant inscrit pour l'instant : inscrivez-en un ci-dessus, ou importez la liste Excel.</p>
+  <p>{% translate "Aucun étudiant inscrit pour l'instant : inscrivez-en un ci-dessus, ou importez la liste Excel." %}</p>
   {% endif %}
 </div>
 {% endblock %}

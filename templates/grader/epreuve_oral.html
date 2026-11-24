@@ -1,63 +1,63 @@
-{% extends "grader/base.html" %}
-{% block title %}{{ quiz.title }} — QuizScan{% endblock %}
+{% extends "grader/base.html" %}{% load i18n qs_langue %}
+{% block title %}{% blocktranslate trimmed with title=quiz.title %}{{ title }} — QuizScan{% endblocktranslate %}{% endblock %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
     <h1>{{ fil.titre|default:quiz.title }}</h1>
-    <p class="page-head__meta"><span class="badge info">Épreuve orale</span>
+    <p class="page-head__meta"><span class="badge info">{% translate "Épreuve orale" %}</span>
       {% if fil.intitule %}<span>{{ fil.intitule }}</span>{% endif %}
-      <span>{% if quiz.auto_enroll %}Concours{% if quiz.annee %} · <bdi lang="ar">{{ quiz.get_annee_display }}</bdi>{% endif %}{% else %}{{ quiz.class_group.name }}{% endif %} · note sur <b>{{ quiz.note_sur|floatformat:"-2" }}</b> · <b>{{ n_notes }}</b> / {{ lignes|length }} noté(s){% if etape %} · candidats : admis <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>{% endif %}</span></p>
+      <span>{% if quiz.auto_enroll %}{% translate "Concours" %}{% if quiz.annee %} · <bdi lang="ar">{{ quiz.get_annee_display }}</bdi>{% endif %}{% else %}{{ quiz.class_group.name }}{% endif %} {% translate "· note sur" %} <b>{{ quiz.note_sur|floatformat:"-2" }}</b> · <b>{{ n_notes }}</b> {% blocktranslate trimmed with lignes=lignes|length %}/ {{ lignes }} noté(s){% endblocktranslate %}{% if etape %} {% translate "· candidats : admis" %} <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>{% endif %}</span></p>
   </div>
   <div class="page-head__actions">
     <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
-    <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">Résultats</a>
+    <a class="btn small" href="{% url 'quiz_results' quiz.pk %}">{% translate "Résultats" %}</a>
   </div>
 </header>
 {% include "grader/_fil_etapes.html" with lien="quiz_detail" %}
 {% include "grader/_etape_precedente.html" %}
 
-{# Notes de l'oral : un fichier Excel, et lui seul (demande de l'utilisateur, 13 novembre 2026). #}
+{#Notes de l'oral : un fichier Excel, et lui seul (demande de l'utilisateur, 13 novembre 2026).#}
 <div class="grid2">
   <div class="card">
-    <h2>1. Modèle Excel des notes</h2>
+    <h2>{% translate "1. Modèle Excel des notes" %}</h2>
     {% if matieres %}
-    <p class="helptext">Classeur en arabe, un {{ quiz.auto_enroll|yesno:"candidat,étudiant" }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, n° de CIN, et une colonne par note à remplir, sur {{ quiz.note_sur|floatformat:"-2" }} (<bdi dir="rtl" lang="ar">{% for m in matieres %}{{ m.text }}{% if not forloop.last %}، {% endif %}{% endfor %}</bdi>). Les notes déjà importées y figurent.</p>
+    <p class="helptext">{% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidat,étudiant" note_sur=quiz.note_sur|floatformat:"-2" %}Classeur en arabe, un {{ auto_enroll }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, n° de CIN, et une colonne par note à remplir, sur {{ note_sur }} ({% endblocktranslate %}<bdi dir="rtl" lang="ar">{% for m in matieres %}{{ m.text }}{% if not forloop.last %}، {% endif %}{% endfor %}</bdi>{% translate "). Les notes déjà importées y figurent." %}</p>
     {% else %}
-    <p class="helptext">Classeur en arabe, un {{ quiz.auto_enroll|yesno:"candidat,étudiant" }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, n° de CIN, et la colonne de la note (<bdi lang="ar">العدد</bdi>, sur {{ quiz.note_sur|floatformat:"-2" }}) à remplir. Les notes déjà importées y figurent.</p>
+    <p class="helptext">{% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidat,étudiant" %}Classeur en arabe, un {{ auto_enroll }} par ligne, dans l'ordre des salles : n° d'inscription, prénom, nom, n° de CIN, et la colonne de la note ({% endblocktranslate %}<bdi lang="ar">العدد</bdi>{% blocktranslate trimmed with note_sur=quiz.note_sur|floatformat:"-2" %}, sur {{ note_sur }}) à remplir. Les notes déjà importées y figurent.{% endblocktranslate %}</p>
     {% endif %}
     {% if lignes %}
     <div class="documents">
       <a class="document" href="{% url 'quiz_notes_oral_xlsx' quiz.pk %}">
         <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 10h16M4 15h16M10 4v16"/></svg>
-        <span><b>Modèle Excel des notes</b><small>{{ lignes|length }} {{ quiz.auto_enroll|yesno:"candidat(s),étudiant(s)" }}, note sur {{ quiz.note_sur|floatformat:"-2" }}</small></span></a>
-      {# plus de « Liste des candidats par salle » à l'oral (demande du 16 novembre 2026) #}
+        <span><b>{% translate "Modèle Excel des notes" %}</b><small>{% blocktranslate trimmed with lignes=lignes|length auto_enroll=quiz.auto_enroll|oui_non:"candidat(s),étudiant(s)" note_sur=quiz.note_sur|floatformat:"-2" %}{{ lignes }} {{ auto_enroll }}, note sur {{ note_sur }}{% endblocktranslate %}</small></span></a>
+      {#plus de « Liste des candidats par salle » à l'oral (demande du 16 novembre 2026)#}
     </div>
     {% else %}
-    <p>Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} :
-      <a href="{% url 'class_detail' quiz.class_group.pk %}">ajoutez-les d'abord</a> (import Excel ou registre des inscriptions).</p>
+    <p>{% translate "Aucun" %} {% if quiz.auto_enroll %}{% translate "candidat" %}{% else %}{% translate "étudiant" %}{% endif %} :
+      <a href="{% url 'class_detail' quiz.class_group.pk %}">{% translate "ajoutez-les d'abord" %}</a> {% translate "(import Excel ou registre des inscriptions)." %}</p>
     {% endif %}
   </div>
 
   <div class="card">
-    <h2>2. Importer les notes</h2>
+    <h2>{% translate "2. Importer les notes" %}</h2>
     {% if perms.grader.corriger_copies %}
     <form method="post" enctype="multipart/form-data">{% csrf_token %}
-      <label for="id_fichier_notes">Fichier Excel rempli (.xlsx)</label>
+      <label for="id_fichier_notes">{% translate "Fichier Excel rempli (.xlsx)" %}</label>
       <input id="id_fichier_notes" type="file" name="fichier" accept=".xlsx" required>
-      <p><button class="btn" name="importer_notes" value="1" type="submit" {% if not lignes %}disabled title="Ajoutez d'abord les {{ quiz.auto_enroll|yesno:'candidats,étudiants' }}"{% endif %}>Importer les notes</button></p>
+      <p><button class="btn" name="importer_notes" value="1" type="submit" {% if not lignes %}disabled title="{% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:'candidats,étudiants' %}Ajoutez d'abord les {{ auto_enroll }}{% endblocktranslate %}"{% endif %}>{% translate "Importer les notes" %}</button></p>
     </form>
-    <span class="helptext">Seule voie de saisie des notes de l'oral. Une note vide est passée ; une note déjà importée est remplacée, et le journal le garde. Une seule ligne fausse (n° absent de la liste, note qui n'est pas un nombre de 0 à {{ quiz.note_sur|floatformat:"-2" }}, n° en double) et rien n'est importé : le message la nomme.</span>
-    {% else %}<p class="helptext">Votre compte n'importe pas de notes.</p>{% endif %}
+    <span class="helptext">{% blocktranslate trimmed with note_sur=quiz.note_sur|floatformat:"-2" %}Seule voie de saisie des notes de l'oral. Une note vide est passée ; une note déjà importée est remplacée, et le journal le garde. Une seule ligne fausse (n° absent de la liste, note qui n'est pas un nombre de 0 à {{ note_sur }}, n° en double) et rien n'est importé : le message la nomme.{% endblocktranslate %}</span>
+    {% else %}<p class="helptext">{% translate "Votre compte n'importe pas de notes." %}</p>{% endif %}
   </div>
 </div>
 
 <div class="grid2 grid2--large">
   <div class="card">
-    <h2>Notes de l'oral</h2>
+    <h2>{% translate "Notes de l'oral" %}</h2>
     {% if lignes %}
     <div class="table-wrap">
       <table>
-        <tr><th>Prénom et nom</th><th>N° d'inscription</th><th>N° CIN</th>{% if matieres %}{% for m in matieres %}<th dir="auto">{{ m.text }}{% if m.coefficient != 1 %} <small>× {{ m.coefficient|floatformat:"-2" }}</small>{% endif %}</th>{% endfor %}<th>Moyenne / {{ quiz.note_sur|floatformat:"-2" }}</th>{% else %}<th>Note / {{ quiz.note_sur|floatformat:"-2" }}</th>{% endif %}<th>Origine</th></tr>
+        <tr><th>{% translate "Prénom et nom" %}</th><th>{% translate "N° d'inscription" %}</th><th>{% translate "N° CIN" %}</th>{% if matieres %}{% for m in matieres %}<th dir="auto">{{ m.text }}{% if m.coefficient != 1 %} <small>× {{ m.coefficient|floatformat:"-2" }}</small>{% endif %}</th>{% endfor %}<th>{% blocktranslate trimmed with note_sur=quiz.note_sur|floatformat:"-2" %}Moyenne / {{ note_sur }}{% endblocktranslate %}</th>{% else %}<th>{% blocktranslate trimmed with note_sur=quiz.note_sur|floatformat:"-2" %}Note / {{ note_sur }}{% endblocktranslate %}</th>{% endif %}<th>{% translate "Origine" %}</th></tr>
         {% for e, etat, reponses, moyenne in lignes %}
         <tr>
           <td><b>{{ e.full_name }}</b></td>
@@ -66,29 +66,29 @@
           {% for r in reponses %}<td>{% if r and r.points_awarded is not None %}<span class="score">{{ r.points_awarded|floatformat:"-2" }}</span>{% else %}—{% endif %}</td>{% endfor %}
           {% if matieres %}<td>{% if moyenne is not None %}<b>{{ moyenne|floatformat:"-2" }}</b>{% else %}—{% endif %}</td>{% endif %}
           <td>
-            {% if etat == "importee" %}<span class="badge ok">importée</span>
-            {% elif etat == "partielle" %}<span class="badge warn">notes incomplètes</span>
-            {% elif etat == "lue" %}<a class="btn small secondary" href="{% url 'sheet_review' reponses.0.sheet.pk %}">fiche scannée</a>
-            {% elif etat == "illisible" %}<a class="btn small" href="{% url 'sheet_review' reponses.0.sheet.pk %}">fiche scannée, note illisible</a>
-            {% else %}<span class="badge grey">pas encore notée</span>{% endif %}
+            {% if etat == "importee" %}<span class="badge ok">{% translate "importée" %}</span>
+            {% elif etat == "partielle" %}<span class="badge warn">{% translate "notes incomplètes" %}</span>
+            {% elif etat == "lue" %}<a class="btn small secondary" href="{% url 'sheet_review' reponses.0.sheet.pk %}">{% translate "fiche scannée" %}</a>
+            {% elif etat == "illisible" %}<a class="btn small" href="{% url 'sheet_review' reponses.0.sheet.pk %}">{% translate "fiche scannée, note illisible" %}</a>
+            {% else %}<span class="badge grey">{% translate "pas encore notée" %}</span>{% endif %}
           </td>
         </tr>
         {% endfor %}
       </table>
     </div>
     {% if lot_import and perms.grader.corriger_copies %}
-    <p><a class="btn small secondary" href="{% url 'batch_delete' lot_import.pk %}">Supprimer les notes importées</a></p>
+    <p><a class="btn small secondary" href="{% url 'batch_delete' lot_import.pk %}">{% translate "Supprimer les notes importées" %}</a></p>
     {% endif %}
     {% else %}
-    <p class="helptext">Pas encore de {{ quiz.auto_enroll|yesno:"candidats,étudiants" }} dans la liste.</p>
+    <p class="helptext">{% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidats,étudiants" %}Pas encore de {{ auto_enroll }} dans la liste.{% endblocktranslate %}</p>
     {% endif %}
   </div>
 
   <div class="card">
-    <h2>Réglages</h2>
+    <h2>{% translate "Réglages" %}</h2>
     {% if perms.grader.creer_epreuve %}
     <form method="post">{% csrf_token %}
-      <label for="id_title">Titre de l'épreuve</label>
+      <label for="id_title">{% translate "Titre de l'épreuve" %}</label>
       <input id="id_title" type="text" name="title" value="{{ quiz.title }}" maxlength="200" required>
       {{ form.note_sur.errors }}
       <label for="{{ form.note_sur.id_for_label }}">{{ form.note_sur.label }}</label>{{ form.note_sur }}
@@ -96,33 +96,33 @@
       <label for="{{ form.note_admission.id_for_label }}">{{ form.note_admission.label }}</label>{{ form.note_admission }}
       <span class="helptext">{{ form.note_admission.help_text }}</span>
       {% if matieres %}
-      {# notes de l'oral par matière (13 novembre 2026) : nom et coefficient de chacune #}
-      <p class="helptext">La note de l'oral est la moyenne de ses notes pondérée par leurs coefficients, sur {{ quiz.note_sur|floatformat:"-2" }} ; la note minimale porte sur elle.</p>
+      {#notes de l'oral par matière (13 novembre 2026) : nom et coefficient de chacune#}
+      <p class="helptext">{% blocktranslate trimmed with note_sur=quiz.note_sur|floatformat:"-2" %}La note de l'oral est la moyenne de ses notes pondérée par leurs coefficients, sur {{ note_sur }} ; la note minimale porte sur elle.{% endblocktranslate %}</p>
       {% for m in matieres %}
       <div class="matiere__tete">
         <div>
-          <label for="matiere_{{ m.pk }}_nom">Note {{ forloop.counter }}</label>
+          <label for="matiere_{{ m.pk }}_nom">{% blocktranslate trimmed with counter=forloop.counter %}Note {{ counter }}{% endblocktranslate %}</label>
           <input id="matiere_{{ m.pk }}_nom" type="text" name="matiere_{{ m.pk }}_nom" value="{{ m.text }}" maxlength="500" required dir="auto">
         </div>
         <div>
-          <label for="matiere_{{ m.pk }}_coefficient">Coefficient</label>
+          <label for="matiere_{{ m.pk }}_coefficient">{% translate "Coefficient" %}</label>
           <input id="matiere_{{ m.pk }}_coefficient" class="champ--court" type="number" step="0.1" min="0.1" max="99" name="matiere_{{ m.pk }}_coefficient" value="{{ m.coefficient|stringformat:'g' }}" required>
         </div>
-        {% if matieres|length > 2 %}<div><button class="btn small secondary" name="retirer_matiere" value="{{ m.pk }}" type="submit" formnovalidate>Retirer</button></div>{% endif %}
+        {% if matieres|length > 2 %}<div><button class="btn small secondary" name="retirer_matiere" value="{{ m.pk }}" type="submit" formnovalidate>{% translate "Retirer" %}</button></div>{% endif %}
       </div>
       {% endfor %}
-      <p><button class="btn small secondary" name="ajouter_matiere" value="1" type="submit" formnovalidate>Ajouter une note</button></p>
+      <p><button class="btn small secondary" name="ajouter_matiere" value="1" type="submit" formnovalidate>{% translate "Ajouter une note" %}</button></p>
       {% endif %}
-      <p><button class="btn secondary" name="reglages" value="1" type="submit">Enregistrer</button></p>
+      <p><button class="btn secondary" name="reglages" value="1" type="submit">{% translate "Enregistrer" %}</button></p>
     </form>
     {% endif %}
-    <p class="helptext">Liste des admis, bulletins et publication sur l'espace public : page <a href="{% url 'quiz_results' quiz.pk %}">Résultats</a>.</p>
+    <p class="helptext">{% translate "Liste des admis, bulletins et publication sur l'espace public : page" %} <a href="{% url 'quiz_results' quiz.pk %}">{% translate "Résultats" %}</a>.</p>
   </div>
 </div>
 
 {% if journal %}
 <div class="card">
-  <h2>Journal de l'épreuve</h2>
+  <h2>{% translate "Journal de l'épreuve" %}</h2>
   {% include "grader/_journal.html" with entrees=journal %}
 </div>
 {% endif %}

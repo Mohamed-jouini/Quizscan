@@ -27,6 +27,7 @@ import numpy as np
 
 PAGES_MAX = 40          # un questionnaire, pas un livre : 15 s environ par 8 pages
 RESOLUTION = 300
+MAX_PIXELS_OCR = 40_000_000   # comme services.MAX_PIXELS_PAGE
 HAUTEUR_ENCRE = 22      # pixels d'encre par ligne que Tesseract lit le mieux
 LANGUES = {"ar": "ara", "fr": "fra"}
 
@@ -164,7 +165,12 @@ def lignes_du_pdf(doc, langue="fr"):
         raise OcrIndisponible(f"paquet de langue de Tesseract absent : {', '.join(manquantes)}")
     bandes = []
     for page in list(doc)[:PAGES_MAX]:
-        pix = page.get_pixmap(dpi=RESOLUTION, colorspace=pymupdf.csGRAY)
+        # page géante (PDF piégé : 40 000 × 40 000 pixels à 300 ppp, 1,6 Go) : lue moins
+        # finement, au plus MAX_PIXELS_OCR, comme les copies scannées (24 novembre 2026)
+        pixels = (page.rect.width / 72 * RESOLUTION) * (page.rect.height / 72 * RESOLUTION)
+        dpi = RESOLUTION if pixels <= MAX_PIXELS_OCR else max(
+            1, int(RESOLUTION * (MAX_PIXELS_OCR / pixels) ** 0.5))
+        pix = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
         gris = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width).copy()
         bandes += _bandes(_sans_puces(gris))
 

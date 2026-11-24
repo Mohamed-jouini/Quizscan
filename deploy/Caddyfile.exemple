@@ -23,6 +23,20 @@
 # Contrôle : « docker compose logs quizscan | grep Connexion » doit montrer
 # l'adresse publique des enseignants, pas celle d'un proxy.
 #
+# Clients lents (24 novembre 2026) : quelques connexions qui envoient leurs en-têtes
+# octet par octet occupaient les fils de l'application. Dans le même bloc global :
+#         {
+#             servers {
+#                 timeouts {
+#                     read_header 15s
+#                     idle 2m
+#                 }
+#             }
+#         }
+# Pas de « read_body » ni de « write » : un envoi de 10 000 copies ou une longue vidéo
+# de communiqué serait coupé. Un envoi de plus d'1 Mo sans compte est de toute façon
+# refusé par l'application avant d'être lu (grader/securite.py, EnvoiAnonymeRefuse).
+#
 # Vérification : docker compose exec quizscan python manage.py verifier_deploiement
 
 

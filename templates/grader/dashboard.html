@@ -1,19 +1,19 @@
-{% extends "grader/base.html" %}
-{% block title %}Tableau de bord — QuizScan{% endblock %}
+{% extends "grader/base.html" %}{% load i18n %}
+{% block title %}{% translate "Tableau de bord — QuizScan" %}{% endblock %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
-    <h1>Tableau de bord</h1>
+    <h1>{% translate "Tableau de bord" %}</h1>
     <p class="page-head__meta">
-      Vos épreuves, vos copies scannées et ce qui reste à faire.
+      {% translate "Vos épreuves, vos copies scannées et ce qui reste à faire." %}
     </p>
   </div>
 </header>
 
-{# ---- Ce qui attend une action. En tête, et seulement quand il y a quelque chose à dire. #}
+{#---- Ce qui attend une action. En tête, et seulement quand il y a quelque chose à dire.#}
 {% if epreuves_douteuses or epreuves_bloquees or n_attention or lots_en_attente or n_open_pending %}
 <section class="card a-faire" aria-labelledby="titre-a-faire">
-  <h2 id="titre-a-faire">À faire</h2>
+  <h2 id="titre-a-faire">{% translate "À faire" %}</h2>
   <ul class="a-faire__liste">
 
     {% if epreuves_douteuses %}
@@ -22,8 +22,8 @@
         <svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
       </span>
       <div class="a-faire__texte">
-        <a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_results' epreuves_douteuses.0.quiz.pk %}">Bonne réponse à vérifier sur {{ epreuves_douteuses|length }} épreuve{{ epreuves_douteuses|pluralize }}.</a>
-        Aucune copie n'a la réponse enregistrée et presque toutes ont coché la même autre case : c'est le signe d'un corrigé erroné.
+        <a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_results' epreuves_douteuses.0.quiz.pk %}">{% blocktranslate trimmed with epreuves_douteuses=epreuves_douteuses|length epreuves_douteuses2=epreuves_douteuses|pluralize %}Bonne réponse à vérifier sur {{ epreuves_douteuses }} épreuve{{ epreuves_douteuses2 }}.{% endblocktranslate %}</a>
+        {% translate "Aucune copie n'a la réponse enregistrée et presque toutes ont coché la même autre case : c'est le signe d'un corrigé erroné." %}
       </div>
     </li>
     {% endif %}
@@ -34,8 +34,8 @@
         <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
       </span>
       <div class="a-faire__texte">
-        <a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_detail' epreuves_bloquees.0.pk %}">{{ epreuves_bloquees|length }} épreuve{{ epreuves_bloquees|pluralize }} au corrigé incomplet.</a>
-        La correction ne peut pas démarrer tant qu'une bonne réponse manque : ces questions seraient comptées fausses pour tout le monde.
+        <a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_detail' epreuves_bloquees.0.pk %}">{% blocktranslate trimmed with epreuves_bloquees=epreuves_bloquees|length epreuves_bloquees2=epreuves_bloquees|pluralize %}{{ epreuves_bloquees }} épreuve{{ epreuves_bloquees2 }} au corrigé incomplet.{% endblocktranslate %}</a>
+        {% translate "La correction ne peut pas démarrer tant qu'une bonne réponse manque : ces questions seraient comptées fausses pour tout le monde." %}
       </div>
     </li>
     {% endif %}
@@ -46,8 +46,8 @@
         <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M12 11v4"/><path d="M12 18h.01"/></svg>
       </span>
       <div class="a-faire__texte">
-        {% if copie_a_reprendre %}<a class="carte-bouton__lien a-faire__titre" href="{% url 'sheet_review' copie_a_reprendre.pk %}">{{ n_attention }} copie{{ n_attention|pluralize }} à reprendre.</a>{% else %}<b>{{ n_attention }} copie{{ n_attention|pluralize }} à reprendre.</b>{% endif %}
-        Un incident de lecture : QR illisible, repères manqués ou candidat non reconnu{% if causes %}
+        {% if copie_a_reprendre %}<a class="carte-bouton__lien a-faire__titre" href="{% url 'sheet_review' copie_a_reprendre.pk %}">{% blocktranslate trimmed with n_attention2=n_attention|pluralize %}{{ n_attention }} copie{{ n_attention2 }} à reprendre.{% endblocktranslate %}</a>{% else %}<b>{% blocktranslate trimmed with n_attention2=n_attention|pluralize %}{{ n_attention }} copie{{ n_attention2 }} à reprendre.{% endblocktranslate %}</b>{% endif %}
+        {% translate "Un incident de lecture : QR illisible, repères manqués ou candidat non reconnu" %}{% if causes %}
         ({% for c in causes %}{{ c.n }} {{ c.libelle }}{% if not forloop.last %}, {% endif %}{% endfor %}){% endif %}.
       </div>
     </li>
@@ -59,8 +59,8 @@
         <svg viewBox="0 0 24 24"><path d="M4 8.5 12 4l8 4.5-8 4.5z"/><path d="M4 13l8 4.5 8-4.5"/><path d="M4 17.5 12 22l8-4.5"/></svg>
       </span>
       <div class="a-faire__texte">
-        <a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_detail' lots_en_attente.0.quiz_id %}#correction-en-attente">{{ pages_en_attente }} page{{ pages_en_attente|pluralize }} reçue{{ pages_en_attente|pluralize }}, correction jamais lancée</a>
-        ({{ lots_en_attente|length }} lot{{ lots_en_attente|pluralize }}). Ces copies sont en lieu sûr, mais personne n'a cliqué sur « Lancer la correction ».
+        <a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_detail' lots_en_attente.0.quiz_id %}#correction-en-attente">{% blocktranslate trimmed with pages_en_attente2=pages_en_attente|pluralize %}{{ pages_en_attente }} page{{ pages_en_attente2 }} reçue{{ pages_en_attente2 }}, correction jamais lancée{% endblocktranslate %}</a>
+        {% blocktranslate trimmed with lots_en_attente=lots_en_attente|length lots_en_attente2=lots_en_attente|pluralize %}({{ lots_en_attente }} lot{{ lots_en_attente2 }}). Ces copies sont en lieu sûr, mais personne n'a cliqué sur « Lancer la correction ».{% endblocktranslate %}
       </div>
     </li>
     {% endif %}
@@ -71,8 +71,8 @@
         <svg viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></svg>
       </span>
       <div class="a-faire__texte">
-        {% if epreuve_a_noter %}<a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_results' epreuve_a_noter.pk %}">{{ n_open_pending }} réponse{{ n_open_pending|pluralize }} manuscrite{{ n_open_pending|pluralize }} à noter.</a>{% else %}<b>{{ n_open_pending }} réponse{{ n_open_pending|pluralize }} manuscrite{{ n_open_pending|pluralize }} à noter.</b>{% endif %}
-        Travail normal de correction, pas un incident : ces réponses n'ont pas de bonne réponse mécanique.
+        {% if epreuve_a_noter %}<a class="carte-bouton__lien a-faire__titre" href="{% url 'quiz_results' epreuve_a_noter.pk %}">{% blocktranslate trimmed with n_open_pending2=n_open_pending|pluralize %}{{ n_open_pending }} réponse{{ n_open_pending2 }} manuscrite{{ n_open_pending2 }} à noter.{% endblocktranslate %}</a>{% else %}<b>{% blocktranslate trimmed with n_open_pending2=n_open_pending|pluralize %}{{ n_open_pending }} réponse{{ n_open_pending2 }} manuscrite{{ n_open_pending2 }} à noter.{% endblocktranslate %}</b>{% endif %}
+        {% translate "Travail normal de correction, pas un incident : ces réponses n'ont pas de bonne réponse mécanique." %}
       </div>
     </li>
     {% endif %}
@@ -80,83 +80,83 @@
 </section>
 {% endif %}
 
-{# ---- Les quatre chiffres que l'enseignant regarde en premier ---- #}
+{#---- Les quatre chiffres que l'enseignant regarde en premier ----#}
 <div class="tiles">
   <div class="tile tile--accent{% if batches %} tile--lien{% endif %}">
-    <span class="tile__label">{% if batches %}<a class="tile__cible" href="{% url 'batch_detail' batches.0.pk %}">Copies scannées</a>{% else %}Copies scannées{% endif %}</span>
+    <span class="tile__label">{% if batches %}<a class="tile__cible" href="{% url 'batch_detail' batches.0.pk %}">{% translate "Copies scannées" %}</a>{% else %}{% translate "Copies scannées" %}{% endif %}</span>
     <div class="tile__row">
       <span class="tile__value">{{ n_sheets }}</span>
-      <div class="spark" title="Copies reçues sur les 7 derniers jours">
-        {% for d in week %}<i title="{{ d.date|date:'d/m' }} : {{ d.count }} copie(s)"><b style="height:{{ d.height }}%"></b></i>{% endfor %}
+      <div class="spark" title="{% translate "Copies reçues sur les 7 derniers jours" %}">
+        {% for d in week %}<i title="{% blocktranslate trimmed with date=d.date|date:'d/m' d_count=d.count %}{{ date }} : {{ d_count }} copie(s){% endblocktranslate %}"><b style="height:{{ d.height }}%"></b></i>{% endfor %}
       </div>
     </div>
     <span class="tile__note">
-      {% if week_total %}<b class="tile__fort">+{{ week_total }} cette semaine</b> · {% endif %}{{ n_quizzes }} épreuve{{ n_quizzes|pluralize }} ·
-      {{ n_classes }} classe{{ n_classes|pluralize }} · {{ n_students }} étudiant{{ n_students|pluralize }}{% if n_candidats %} · {{ n_candidats }} candidat{{ n_candidats|pluralize }} aux concours{% endif %}
+      {% if week_total %}<b class="tile__fort">{% blocktranslate trimmed %}+{{ week_total }} cette semaine{% endblocktranslate %}</b> · {% endif %}{% blocktranslate trimmed with n_quizzes2=n_quizzes|pluralize n_classes2=n_classes|pluralize n_students2=n_students|pluralize %}{{ n_quizzes }} épreuve{{ n_quizzes2 }} ·
+      {{ n_classes }} classe{{ n_classes2 }} · {{ n_students }} étudiant{{ n_students2 }}{% endblocktranslate %}{% if n_candidats %} {% blocktranslate trimmed with n_candidats2=n_candidats|pluralize %}· {{ n_candidats }} candidat{{ n_candidats2 }} aux concours{% endblocktranslate %}{% endif %}
     </span>
   </div>
 
   <div class="tile{% if lot_recent %} tile--lien{% endif %}">
-    <span class="tile__label">{% if lot_recent %}<a class="tile__cible" href="{% url 'batch_detail' lot_recent.lot.pk %}">Lecture automatique</a>{% else %}Lecture automatique{% endif %}</span>
+    <span class="tile__label">{% if lot_recent %}<a class="tile__cible" href="{% url 'batch_detail' lot_recent.lot.pk %}">{% translate "Lecture automatique" %}</a>{% else %}{% translate "Lecture automatique" %}{% endif %}</span>
     <div class="tile__row">
       <span class="tile__value">{{ auto_pct }}<span class="tile__unit">%</span></span>
-      {# anneau de progression : circonférence 2*pi*r = 125.6 pour r = 20 #}
+      {#anneau de progression : circonférence 2*pi*r = 125.6 pour r = 20#}
       <svg class="donut" viewBox="0 0 54 54" role="img"
-           aria-label="{{ auto_pct }} % des copies lues sans intervention">
+           aria-label="{% blocktranslate trimmed %}{{ auto_pct }} % des copies lues sans intervention{% endblocktranslate %}">
         <circle class="bg" cx="27" cy="27" r="20"/>
         <circle class="fg" cx="27" cy="27" r="20" stroke-dasharray="125.6"
                 style="stroke-dashoffset:calc(125.6px * (100 - {{ auto_pct }}) / 100)"/>
       </svg>
     </div>
     <span class="tile__note">
-      {{ n_auto }} sur {{ n_sheets }} depuis le début{% if lot_recent %}
-      {# Le cumul ne bouge plus après quelques centaines de copies : c'est le dernier lot qui dit si la séance de scan s'est bien passée. #}
-      · dernier lot <b>{{ lot_recent.lues }}/{{ lot_recent.pages }}</b>{% endif %}
+      {% blocktranslate trimmed %}{{ n_auto }} sur {{ n_sheets }} depuis le début{% endblocktranslate %}{% if lot_recent %}
+      {#Le cumul ne bouge plus après quelques centaines de copies : c'est le dernier lot qui dit si la séance de scan s'est bien passée.#}
+      {% translate "· dernier lot" %} <b>{{ lot_recent.lues }}/{{ lot_recent.pages }}</b>{% endif %}
     </span>
   </div>
 
   <div class="tile tile--lien">
-    <span class="tile__label"><a class="tile__cible" href="{% url 'resultats_list' %}">Admis / réussis</a></span>
+    <span class="tile__label"><a class="tile__cible" href="{% url 'resultats_list' %}">{% translate "Admis / réussis" %}</a></span>
     <div class="tile__row tile__row--gauche">
       <span class="tile__value">{{ bilan.admis }}<span class="tile__unit">/ {{ bilan.jugees }}</span></span>
       {% if bilan.jugees %}<span class="chip">{{ bilan.pct_admis }} %</span>{% endif %}
     </div>
     {% if bilan.jugees %}
     <div class="barre-empilee" role="img"
-         aria-label="{{ bilan.admis }} admis, {{ bilan.attente }} en attente, {{ bilan.refuses }} non admis sur {{ bilan.jugees }}">
+         aria-label="{% blocktranslate trimmed with admis=bilan.admis attente=bilan.attente refuses=bilan.refuses jugees=bilan.jugees %}{{ admis }} admis, {{ attente }} en attente, {{ refuses }} non admis sur {{ jugees }}{% endblocktranslate %}">
       {% if bilan.admis %}<i class="pastille--admis" style="width:{{ bilan.w_admis|stringformat:'s' }}%"></i>{% endif %}
       {% if bilan.attente %}<i class="pastille--attente" style="width:{{ bilan.w_attente|stringformat:'s' }}%"></i>{% endif %}
       {% if bilan.refuses %}<i class="pastille--refuses" style="width:{{ bilan.w_refuses|stringformat:'s' }}%"></i>{% endif %}
     </div>
-    <span class="tile__note">{{ bilan.refuses }} non admis{% if bilan.attente %} · {{ bilan.attente }} en attente{% endif %}</span>
+    <span class="tile__note">{% blocktranslate trimmed with refuses=bilan.refuses %}{{ refuses }} non admis{% endblocktranslate %}{% if bilan.attente %} {% blocktranslate trimmed with attente=bilan.attente %}· {{ attente }} en attente{% endblocktranslate %}{% endif %}</span>
     {% else %}
-    <span class="tile__note">Aucune note minimale fixée : fixez-la sur la page Résultats d'une épreuve.</span>
+    <span class="tile__note">{% translate "Aucune note minimale fixée : fixez-la sur la page Résultats d'une épreuve." %}</span>
     {% endif %}
   </div>
 
   <div class="tile tile--lien">
-    <span class="tile__label"><a class="tile__cible" href="{% url 'resultats_list' %}">Moyenne générale</a></span>
+    <span class="tile__label"><a class="tile__cible" href="{% url 'resultats_list' %}">{% translate "Moyenne générale" %}</a></span>
     <div class="tile__row tile__row--gauche">
       <span class="tile__value">{{ bilan.moyenne_pct }}<span class="tile__unit">%</span></span>
-      {% if bilan.n_notes %}<span class="chip">{{ bilan.reussite_50 }} % ont la moitié</span>{% endif %}
+      {% if bilan.n_notes %}<span class="chip">{% blocktranslate trimmed with reussite_50=bilan.reussite_50 %}{{ reussite_50 }} % ont la moitié{% endblocktranslate %}</span>{% endif %}
     </div>
-    <span class="tile__note">{% if bilan.n_notes %}du barème, sur {{ bilan.n_notes }} note{{ bilan.n_notes|pluralize }} et {{ bilan.n_epreuves }} épreuve{{ bilan.n_epreuves|pluralize }}{% else %}Aucune note pour l'instant.{% endif %}</span>
+    <span class="tile__note">{% if bilan.n_notes %}{% blocktranslate trimmed with n_notes=bilan.n_notes n_notes2=bilan.n_notes|pluralize n_epreuves=bilan.n_epreuves n_epreuves2=bilan.n_epreuves|pluralize %}du barème, sur {{ n_notes }} note{{ n_notes2 }} et {{ n_epreuves }} épreuve{{ n_epreuves2 }}{% endblocktranslate %}{% else %}{% translate "Aucune note pour l'instant." %}{% endif %}</span>
   </div>
 </div>
 
 <div class="bord">
-  {# ---- Mes épreuves : un bloc par concours, l'admission de chaque étape ---- #}
+  {#---- Mes épreuves : un bloc par concours, l'admission de chaque étape ----#}
   <div class="bord__principal">
     <section class="card" aria-labelledby="titre-epreuves">
       <div class="card__head">
-        <h2 id="titre-epreuves">Mes épreuves</h2>
+        <h2 id="titre-epreuves">{% translate "Mes épreuves" %}</h2>
         <span class="legende" aria-hidden="true">
-          <span><i class="pastille pastille--admis"></i>Admis</span>
-          <span><i class="pastille pastille--attente"></i>En attente</span>
-          <span><i class="pastille pastille--refuses"></i>Non admis</span>
+          <span><i class="pastille pastille--admis"></i>{% translate "Admis" %}</span>
+          <span><i class="pastille pastille--attente"></i>{% translate "En attente" %}</span>
+          <span><i class="pastille pastille--refuses"></i>{% translate "Non admis" %}</span>
         </span>
         <span class="spacer"></span>
-        <a class="btn small secondary" href="{% url 'resultats_list' %}">Tout voir{% if n_groupes > groupes|length %} ({{ n_groupes }}){% endif %}</a>
+        <a class="btn small secondary" href="{% url 'resultats_list' %}">{% translate "Tout voir" %}{% if n_groupes > groupes|length %} ({{ n_groupes }}){% endif %}</a>
       </div>
       {% if groupes %}
       {% include "grader/_bord_epreuves.html" %}
@@ -165,71 +165,71 @@
         <span class="empty__icon">
           <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9.5 12h6M9.5 16h4"/></svg>
         </span>
-        <span class="empty__title">Aucune épreuve pour le moment</span>
-        <p>Une épreuve rassemble les questions, la fiche à imprimer et les
-           copies scannées.</p>
+        <span class="empty__title">{% translate "Aucune épreuve pour le moment" %}</span>
+        <p>{% blocktranslate trimmed %}Une épreuve rassemble les questions, la fiche à imprimer et les
+           copies scannées.{% endblocktranslate %}</p>
         {% if perms.grader.creer_epreuve %}
-        <a class="btn" href="{% url 'quiz_create' %}">Créer la première</a>
+        <a class="btn" href="{% url 'quiz_create' %}">{% translate "Créer la première" %}</a>
         {% endif %}
       </div>
       {% endif %}
     </section>
 
-    {# ---- Rappel du cycle, utile tant qu'il n'y a pas de données ---- #}
+    {#---- Rappel du cycle, utile tant qu'il n'y a pas de données ----#}
     {% if not batches %}
     <div class="card">
-      <h2>Le cycle d'une épreuve</h2>
+      <h2>{% translate "Le cycle d'une épreuve" %}</h2>
       <ol class="steps">
-        <li>Créez une <a href="{% url 'class_list' %}">classe</a> et importez la liste des étudiants.</li>
-        <li>Créez un <a href="{% url 'quiz_create' %}">quiz</a> : questions QCM et questions manuscrites.</li>
-        <li>Générez et imprimez la <b>fiche de réponses PDF</b>.</li>
-        <li>Après l'épreuve, scannez les copies et téléversez le PDF ou les images.</li>
-        <li>Corrigez les parties manuscrites à l'écran, puis exportez les notes.</li>
+        <li>{% translate "Créez une" %} <a href="{% url 'class_list' %}">{% translate "classe" %}</a> {% translate "et importez la liste des étudiants." %}</li>
+        <li>{% translate "Créez un" %} <a href="{% url 'quiz_create' %}">{% translate "quiz" %}</a> {% translate ": questions QCM et questions manuscrites." %}</li>
+        <li>{% translate "Générez et imprimez la" %} <b>{% translate "fiche de réponses PDF" %}</b>.</li>
+        <li>{% translate "Après l'épreuve, scannez les copies et téléversez le PDF ou les images." %}</li>
+        <li>{% translate "Corrigez les parties manuscrites à l'écran, puis exportez les notes." %}</li>
       </ol>
     </div>
     {% endif %}
   </div>
 
-  <aside class="bord__cote" aria-label="Résumé">
+  <aside class="bord__cote" aria-label="{% translate "Résumé" %}">
     {% if bilan.n_notes %}
     <div class="card">
-      <h2>Répartition des résultats</h2>
-      <p class="helptext helptext--serre">Nombre de notes par tranche, en % du barème de chaque épreuve.</p>
+      <h2>{% translate "Répartition des résultats" %}</h2>
+      <p class="helptext helptext--serre">{% translate "Nombre de notes par tranche, en % du barème de chaque épreuve." %}</p>
       <div class="histo" role="img"
            aria-label="{% for r in bilan.repartition %}{{ r.libelle }} : {{ r.n }}{% if not forloop.last %} ; {% endif %}{% endfor %}">
         {% for r in bilan.repartition %}
-        <div class="histo__col" title="{{ r.libelle }} : {{ r.n }} note{{ r.n|pluralize }} ({{ r.part }} %)">
+        <div class="histo__col" title="{% blocktranslate trimmed with libelle=r.libelle n=r.n n2=r.n|pluralize part=r.part %}{{ libelle }} : {{ n }} note{{ n2 }} ({{ part }} %){% endblocktranslate %}">
           <span class="histo__n">{{ r.n }}</span>
           <span class="histo__piste"><i style="height:{{ r.hauteur }}%"></i></span>
           <span class="histo__lib">{{ r.libelle }}</span>
         </div>
         {% endfor %}
       </div>
-      {% if bilan.n_sans_seuil %}<p class="helptext helptext--serre">{{ bilan.n_sans_seuil }} épreuve{{ bilan.n_sans_seuil|pluralize }} sans note minimale : comptée{{ bilan.n_sans_seuil|pluralize }} dans la moyenne et la répartition, pas dans l'admission.</p>{% endif %}
+      {% if bilan.n_sans_seuil %}<p class="helptext helptext--serre">{% blocktranslate trimmed with n_sans_seuil=bilan.n_sans_seuil n_sans_seuil2=bilan.n_sans_seuil|pluralize %}{{ n_sans_seuil }} épreuve{{ n_sans_seuil2 }} sans note minimale : comptée{{ n_sans_seuil2 }} dans la moyenne et la répartition, pas dans l'admission.{% endblocktranslate %}</p>{% endif %}
     </div>
     {% endif %}
 
     {% if derniere %}
     <a class="tile carte-bouton bord__tuile" href="{% url 'quiz_results' derniere.quiz.pk %}">
-      <span class="tile__label">Dernière épreuve corrigée</span>
+      <span class="tile__label">{% translate "Dernière épreuve corrigée" %}</span>
       <div class="tile__row tile__row--gauche">
         <span class="tile__value">{{ derniere.moyenne|floatformat:"-2" }}<span class="tile__unit">/ {{ derniere.bareme|floatformat:"-2" }}</span></span>
         <span class="chip {% if derniere.pct < 50 %}bad{% elif derniere.pct < 65 %}warn{% endif %}">{% if derniere.quiz.est_qcm %}{{ derniere.moyenne20|floatformat:"-2" }} / 20{% else %}{{ derniere.pct }} %{% endif %}</span>
       </div>
-      <span class="tile__note"><b>{{ derniere.nom_court|truncatechars:40 }}</b> — {{ derniere.n }} copie{{ derniere.n|pluralize }} notée{{ derniere.n|pluralize }}, de {{ derniere.plus_basse|floatformat:"-2" }} à {{ derniere.meilleure|floatformat:"-2" }}.</span>
+      <span class="tile__note"><b>{{ derniere.nom_court|truncatechars:40 }}</b> {% blocktranslate trimmed with n=derniere.n n2=derniere.n|pluralize plus_basse=derniere.plus_basse|floatformat:"-2" meilleure=derniere.meilleure|floatformat:"-2" %}— {{ n }} copie{{ n2 }} notée{{ n2 }}, de {{ plus_basse }} à {{ meilleure }}.{% endblocktranslate %}</span>
     </a>
     {% endif %}
 
     <div class="tile bord__tuile">
-      <span class="tile__label">Temps de correction épargné</span>
+      <span class="tile__label">{% translate "Temps de correction épargné" %}</span>
       <div class="tile__row tile__row--gauche">
         <span class="tile__value">{{ temps_epargne.valeur|floatformat:"-1" }}<span class="tile__unit">{{ temps_epargne.unite }}</span></span>
       </div>
-      <span class="tile__note">{{ copies_lues }} copie{{ copies_lues|pluralize }} lue{{ copies_lues|pluralize }} par la machine, sur la base de {{ minutes_par_copie }} minutes de correction à la main par copie. C'est une hypothèse, pas une mesure.</span>
+      <span class="tile__note">{% blocktranslate trimmed with copies_lues2=copies_lues|pluralize %}{{ copies_lues }} copie{{ copies_lues2 }} lue{{ copies_lues2 }} par la machine, sur la base de {{ minutes_par_copie }} minutes de correction à la main par copie. C'est une hypothèse, pas une mesure.{% endblocktranslate %}</span>
     </div>
 
     <div class="card">
-      <h2>Derniers lots de copies</h2>
+      <h2>{% translate "Derniers lots de copies" %}</h2>
       {% if batches %}
       <ul class="bord-lots">
         {% for b in batches %}
@@ -240,29 +240,29 @@
           </span>
           <span class="bord-lots__etat">
             {% if b.status == "processing" %}<span class="badge warn">{{ b.processed_pages }}/{{ b.total_pages }}</span>
-            {% elif b.status == "pending" %}<span class="badge grey">en attente</span>
-            {% elif b.status == "error" %}<span class="badge bad">erreur</span>
-            {% else %}<span class="badge ok">{{ b.sheets.count }} page{{ b.sheets.count|pluralize }}</span>{% endif %}
+            {% elif b.status == "pending" %}<span class="badge grey">{% translate "en attente" %}</span>
+            {% elif b.status == "error" %}<span class="badge bad">{% translate "erreur" %}</span>
+            {% else %}<span class="badge ok">{% blocktranslate trimmed with sheets_count=b.sheets.count sheets_count2=b.sheets.count|pluralize %}{{ sheets_count }} page{{ sheets_count2 }}{% endblocktranslate %}</span>{% endif %}
             {{ b.created_at|date:"d/m H:i" }}
           </span>
         </li>
         {% endfor %}
       </ul>
       {% else %}
-      <p class="helptext helptext--serre">Aucun lot scanné. Générez la fiche
-        d'une épreuve, imprimez-la, puis téléversez les copies.</p>
+      <p class="helptext helptext--serre">{% blocktranslate trimmed %}Aucun lot scanné. Générez la fiche
+        d'une épreuve, imprimez-la, puis téléversez les copies.{% endblocktranslate %}</p>
       {% endif %}
     </div>
   </aside>
 </div>
 
 <div class="chiffres">
-  <span class="chiffre"><b>{{ autres.qcm }}</b> QCM</span>
-  <span class="chiffre"><b>{{ autres.ecrit }}</b> écrit{{ autres.ecrit|pluralize }}</span>
-  <span class="chiffre"><b>{{ autres.oral }}</b> ora{{ autres.oral|pluralize:"l,ux" }}</span>
-  <span class="chiffre"><b>{{ autres.concours }}</b> concours</span>
-  <a class="chiffre" href="{% url 'public_accueil' %}" target="_blank" rel="noopener"><b>{{ autres.publiees }}</b> résultat{{ autres.publiees|pluralize }} publié{{ autres.publiees|pluralize }}</a>
-  <a class="chiffre" href="{% url 'inscriptions' %}"><b>{{ autres.inscrits }}</b> inscrit{{ autres.inscrits|pluralize }} au registre</a>
-  <a class="chiffre" href="{% url 'communiques' %}"><b>{{ autres.communiques }}</b> communiqué{{ autres.communiques|pluralize }} publié{{ autres.communiques|pluralize }}</a>
+  <span class="chiffre"><b>{{ autres.qcm }}</b> {% translate "QCM" %}</span>
+  <span class="chiffre"><b>{{ autres.ecrit }}</b> {% blocktranslate trimmed with ecrit=autres.ecrit|pluralize %}écrit{{ ecrit }}{% endblocktranslate %}</span>
+  <span class="chiffre"><b>{{ autres.oral }}</b> {% blocktranslate trimmed with oral=autres.oral|pluralize:"l,ux" %}ora{{ oral }}{% endblocktranslate %}</span>
+  <span class="chiffre"><b>{{ autres.concours }}</b> {% translate "concours" %}</span>
+  <a class="chiffre" href="{% url 'public_accueil' %}" target="_blank" rel="noopener"><b>{{ autres.publiees }}</b> {% blocktranslate trimmed with publiees=autres.publiees|pluralize %}résultat{{ publiees }} publié{{ publiees }}{% endblocktranslate %}</a>
+  <a class="chiffre" href="{% url 'inscriptions' %}"><b>{{ autres.inscrits }}</b> {% blocktranslate trimmed with inscrits=autres.inscrits|pluralize %}inscrit{{ inscrits }} au registre{% endblocktranslate %}</a>
+  <a class="chiffre" href="{% url 'communiques' %}"><b>{{ autres.communiques }}</b> {% blocktranslate trimmed with communiques=autres.communiques|pluralize %}communiqué{{ communiques }} publié{{ communiques }}{% endblocktranslate %}</a>
 </div>
 {% endblock %}

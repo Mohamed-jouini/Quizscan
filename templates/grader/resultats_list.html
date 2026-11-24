@@ -1,31 +1,31 @@
-{% extends "grader/base.html" %}
-{% block title %}Résultats — QuizScan{% endblock %}
+{% extends "grader/base.html" %}{% load i18n %}
+{% block title %}{% translate "Résultats — QuizScan" %}{% endblock %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
-    <h1>Résultats</h1>
+    <h1>{% translate "Résultats" %}</h1>
     <p class="page-head__meta">
-      <b>{{ concours|length }}</b> concours · <b>{{ classes|length }}</b> quiz de classe
-      — cliquez sur un bouton pour ouvrir ses résultats.
+      <b>{{ concours|length }}</b> {% translate "concours ·" %} <b>{{ classes|length }}</b> {% blocktranslate trimmed %}quiz de classe
+      — cliquez sur un bouton pour ouvrir ses résultats.{% endblocktranslate %}
     </p>
   </div>
 </header>
 
 <div class="card">
-  <div class="card__head"><h2>Concours ({{ concours|length }})</h2></div>
+  <div class="card__head"><h2>{% blocktranslate trimmed with concours=concours|length %}Concours ({{ concours }}){% endblocktranslate %}</h2></div>
   {% if concours %}
-  {% include "grader/_groupes_epreuves.html" with groupes=concours libelle="Liste des concours" resultats=True %}
+  {% include "grader/_groupes_epreuves.html" with groupes=concours libelle=_("Liste des concours") resultats=True %}
   {% else %}
-  <p class="helptext">Aucun concours pour le moment.</p>
+  <p class="helptext">{% translate "Aucun concours pour le moment." %}</p>
   {% endif %}
 </div>
 
 <div class="card">
-  <div class="card__head"><h2>Quiz de classe ({{ classes|length }})</h2></div>
+  <div class="card__head"><h2>{% blocktranslate trimmed with classes=classes|length %}Quiz de classe ({{ classes }}){% endblocktranslate %}</h2></div>
   {% if classes %}
-  {% include "grader/_groupes_epreuves.html" with groupes=classes libelle="Liste des quiz de classe" resultats=True %}
+  {% include "grader/_groupes_epreuves.html" with groupes=classes libelle=_("Liste des quiz de classe") resultats=True %}
   {% else %}
-  <p class="helptext">Aucun quiz de classe pour le moment.</p>
+  <p class="helptext">{% translate "Aucun quiz de classe pour le moment." %}</p>
   {% endif %}
 </div>
 {% endblock %}

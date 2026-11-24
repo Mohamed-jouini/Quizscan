@@ -1,13 +1,13 @@
-{% extends "erreur.html" %}
-{# Refus CSRF : presque toujours une page restée ouverte trop longtemps, ou #}
-{# un formulaire renvoyé après une déconnexion. On le dit simplement.       #}
-{% block titre %}Formulaire expiré{% endblock %}
+{% extends "erreur.html" %}{% load i18n %}
+{#Refus CSRF : presque toujours une page restée ouverte trop longtemps, ou#}
+{#un formulaire renvoyé après une déconnexion. On le dit simplement.#}
+{% block titre %}{% translate "Formulaire expiré" %}{% endblock %}
 {% block code %}403{% endblock %}
-{% block titre_page %}Formulaire expiré{% endblock %}
+{% block titre_page %}{% translate "Formulaire expiré" %}{% endblock %}
 {% block texte %}
-<p>Le formulaire n'a pas pu être envoyé : la page était probablement restée
-  ouverte trop longtemps, ou vous avez été déconnecté entre-temps.</p>
-<p>Revenez en arrière, <b>rechargez la page</b>, puis recommencez.</p>
-{% if no_cookie %}<p>Votre navigateur semble refuser les cookies de ce site :
-  ils sont nécessaires pour se connecter.</p>{% endif %}
+<p>{% blocktranslate trimmed %}Le formulaire n'a pas pu être envoyé : la page était probablement restée
+  ouverte trop longtemps, ou vous avez été déconnecté entre-temps.{% endblocktranslate %}</p>
+<p>{% translate "Revenez en arrière," %} <b>{% translate "rechargez la page" %}</b>{% translate ", puis recommencez." %}</p>
+{% if no_cookie %}<p>{% blocktranslate trimmed %}Votre navigateur semble refuser les cookies de ce site :
+  ils sont nécessaires pour se connecter.{% endblocktranslate %}</p>{% endif %}
 {% endblock %}

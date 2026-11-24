@@ -1,20 +1,20 @@
-{% extends "grader/base.html" %}
+{% extends "grader/base.html" %}{% load i18n %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
     <h1>{{ batch }}</h1>
     <p class="page-head__meta">
-      <b>{{ batch.quiz.title }}</b> · {{ batch.total_pages }} page(s)
+      <b>{{ batch.quiz.title }}</b> {% blocktranslate trimmed with total_pages=batch.total_pages %}· {{ total_pages }} page(s){% endblocktranslate %}
     </p>
   </div>
   <div class="page-head__actions">
-    <a class="btn small secondary" href="{% url 'quiz_detail' batch.quiz.pk %}">← Retour au quiz</a>
+    <a class="btn small secondary" href="{% url 'quiz_detail' batch.quiz.pk %}">{% translate "← Retour au quiz" %}</a>
     {% if first_review_id %}
-    <a class="btn small secondary" href="{% url 'sheet_review' first_review_id %}">Vérifier les copies une à une</a>
+    <a class="btn small secondary" href="{% url 'sheet_review' first_review_id %}">{% translate "Vérifier les copies une à une" %}</a>
     {% endif %}
-    <a class="btn small" href="{% url 'quiz_results' batch.quiz.pk %}?batch={{ batch.pk }}">Résultats du lot</a>
+    <a class="btn small" href="{% url 'quiz_results' batch.quiz.pk %}?batch={{ batch.pk }}">{% translate "Résultats du lot" %}</a>
     {% if perms.grader.corriger_copies %}
-    <a class="btn small danger" href="{% url 'batch_delete' batch.pk %}">Supprimer ce lot</a>
+    <a class="btn small danger" href="{% url 'batch_delete' batch.pk %}">{% translate "Supprimer ce lot" %}</a>
     {% endif %}
   </div>
 </header>
@@ -23,20 +23,20 @@
 <div class="note">
   <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg></span>
   <div class="note__body">
-    <b>{{ batch.total_pages }} page(s) reçue(s), en attente de correction</b>
-    (concours corrigé après scan).
-    <span class="helptext">La correction se lance sur la
-      <a href="{% url 'quiz_detail' batch.quiz.pk %}#correction-en-attente">page de l'épreuve</a>,
-      pour tous ses lots en attente d'un coup.</span>
+    <b>{% blocktranslate trimmed with total_pages=batch.total_pages %}{{ total_pages }} page(s) reçue(s), en attente de correction{% endblocktranslate %}</b>
+    {% translate "(concours corrigé après scan)." %}
+    <span class="helptext">{% translate "La correction se lance sur la" %}
+      <a href="{% url 'quiz_detail' batch.quiz.pk %}#correction-en-attente">{% translate "page de l'épreuve" %}</a>{% blocktranslate trimmed %},
+      pour tous ses lots en attente d'un coup.{% endblocktranslate %}</span>
   </div>
 </div>
 {% elif batch.is_processing and not stalled %}
 <div class="note">
   <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
   <div class="note__body">
-    <b>Correction automatique en cours : {{ batch.processed_pages }} / {{ batch.total_pages }}
-    copie(s) notée(s)</b> ({{ batch.progress_pct }} %) — cette page se met à jour toute seule ;
-    les notes déjà calculées sont disponibles dans les résultats.
+    <b>{% blocktranslate trimmed with processed_pages=batch.processed_pages total_pages=batch.total_pages %}Correction automatique en cours : {{ processed_pages }} / {{ total_pages }}
+    copie(s) notée(s){% endblocktranslate %}</b> {% blocktranslate trimmed with progress_pct=batch.progress_pct %}({{ progress_pct }} %) — cette page se met à jour toute seule ;
+    les notes déjà calculées sont disponibles dans les résultats.{% endblocktranslate %}
     <div class="progress"><i style="width:{{ batch.progress_pct }}%"></i></div>
   </div>
 </div>
@@ -45,14 +45,14 @@
 <div class="note note--bad">
   <span class="note__icon"><svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg></span>
   <div class="note__body">
-    Le traitement de ce lot s'est interrompu à {{ batch.processed_pages }} / {{ batch.total_pages }}
-    page(s){% if batch.error_message %} ({{ batch.error_message }}){% endif %}.
+    {% blocktranslate trimmed with processed_pages=batch.processed_pages total_pages=batch.total_pages %}Le traitement de ce lot s'est interrompu à {{ processed_pages }} / {{ total_pages }}
+    page(s){% endblocktranslate %}{% if batch.error_message %} ({{ batch.error_message }}){% endif %}.
     {% if perms.grader.corriger_copies %}
     <form class="inline" method="post">{% csrf_token %}
-      <button class="btn small" name="resume" value="1" type="submit">Reprendre la correction</button>
+      <button class="btn small" name="resume" value="1" type="submit">{% translate "Reprendre la correction" %}</button>
     </form>
     {% endif %}
-    <span class="helptext">Les pages déjà notées ne sont pas relues.</span>
+    <span class="helptext">{% translate "Les pages déjà notées ne sont pas relues." %}</span>
   </div>
 </div>
 {% endif %}
@@ -60,51 +60,51 @@
 <div class="note note--ok">
   <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.6 2.6L16 9.5"/></svg></span>
   <div class="note__body">
-    <b>{{ n_auto }}/{{ n_total }} copie(s) corrigée(s) automatiquement</b> —
-    les notes sont déjà disponibles dans les résultats.
-    {% if n_attention %}{{ n_attention }} copie(s) demandent votre attention
-      (non identifiées ou illisibles).{% endif %}
+    <b>{% blocktranslate trimmed %}{{ n_auto }}/{{ n_total }} copie(s) corrigée(s) automatiquement{% endblocktranslate %}</b> {% blocktranslate trimmed %}—
+    les notes sont déjà disponibles dans les résultats.{% endblocktranslate %}
+    {% if n_attention %}{% blocktranslate trimmed %}{{ n_attention }} copie(s) demandent votre attention
+      (non identifiées ou illisibles).{% endblocktranslate %}{% endif %}
     {% if n_a_identifier and perms.grader.corriger_copies %}
     <form class="inline" method="post">{% csrf_token %}
-      <button class="btn small" name="reidentifier" value="1" type="submit">Identifier automatiquement ({{ n_a_identifier }})</button>
+      <button class="btn small" name="reidentifier" value="1" type="submit">{% blocktranslate trimmed %}Identifier automatiquement ({{ n_a_identifier }}){% endblocktranslate %}</button>
     </form>
     {% endif %}
-    {% if n_open_pending %}{{ n_open_pending }} réponse(s) manuscrite(s)
-      restent à noter à l'écran.{% endif %}
+    {% if n_open_pending %}{% blocktranslate trimmed %}{{ n_open_pending }} réponse(s) manuscrite(s)
+      restent à noter à l'écran.{% endblocktranslate %}{% endif %}
     {% if not n_attention and not n_open_pending %}
-      La vérification copie par copie est facultative.{% endif %}
+      {% translate "La vérification copie par copie est facultative." %}{% endif %}
   </div>
 </div>
 {% endif %}
 <div class="card">
-  {% include "grader/_pagination.html" with page=sheets_page label="Pages" %}
+  {% include "grader/_pagination.html" with page=sheets_page label=_("Pages") %}
   <div class="table-wrap">
     <table>
-    <tr><th>Page</th><th>Aperçu</th><th>{% if batch.quiz.type_epreuve == "ecrit" %}Identification lue{% else %}Nom lu (OCR){% endif %}</th><th>Étudiant</th><th>Statut</th><th></th></tr>
+    <tr><th>{% translate "Page" %}</th><th>{% translate "Aperçu" %}</th><th>{% if batch.quiz.type_epreuve == "ecrit" %}{% translate "Identification lue" %}{% else %}{% translate "Nom lu (OCR)" %}{% endif %}</th><th>{% translate "Étudiant" %}</th><th>{% translate "Statut" %}</th><th></th></tr>
     {% for s in sheets_page %}
     <tr class="ligne-lien">
-      <td>{% if s.status == "ok" or s.status == "no_match" %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'sheet_review' s.pk %}">{{ s.source_name }}</a>{% else %}{{ s.source_name }}{% endif %}<br><span class="helptext">page fiche {{ s.page_index|add:1 }}</span></td>
-      <td>{% if s.name_crop %}<img class="thumb" src="{{ s.name_crop.url }}" alt="nom">{% endif %}</td>
-      <td>{% if s.id_read %}{% if s.id_read.isdigit %}n° {% endif %}{{ s.id_read }}{% else %}{{ s.ocr_name_raw|default:"—" }}{% endif %}</td>
+      <td>{% if s.status == "ok" or s.status == "no_match" %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'sheet_review' s.pk %}">{{ s.source_name }}</a>{% else %}{{ s.source_name }}{% endif %}<br><span class="helptext">{% blocktranslate trimmed with page_index=s.page_index|add:1 %}page fiche {{ page_index }}{% endblocktranslate %}</span></td>
+      <td>{% if s.name_crop %}<img class="thumb" src="{{ s.name_crop.url }}" alt="{% translate "nom" %}">{% endif %}</td>
+      <td>{% if s.id_read %}{% if s.id_read.isdigit %}{% translate "n°" %} {% endif %}{{ s.id_read }}{% else %}{{ s.ocr_name_raw|default:"—" }}{% endif %}</td>
       <td>{% if s.student %}<b>{{ s.student.full_name }}</b>
-          <span class="helptext">confiance {{ s.match_score|floatformat:0 }} %</span>
-          {% else %}<span class="badge bad">non identifié</span>{% endif %}</td>
+          <span class="helptext">{% blocktranslate trimmed with match_score=s.match_score|floatformat:0 %}confiance {{ match_score }} %{% endblocktranslate %}</span>
+          {% else %}<span class="badge bad">{% translate "non identifié" %}</span>{% endif %}</td>
       <td>
-        {% if s.status == "ok" %}<span class="badge ok">Lu</span>
-        {% elif s.status == "no_match" %}<span class="badge warn">À identifier</span>
-        {% elif s.status == "no_markers" %}<span class="badge bad">Repères non détectés</span>
-        {% elif s.status == "ignoree" %}<span class="badge grey">{% if "blanche" in s.error_message %}Page blanche{% else %}Page de rédaction{% endif %}</span>
+        {% if s.status == "ok" %}<span class="badge ok">{% translate "Lu" %}</span>
+        {% elif s.status == "no_match" %}<span class="badge warn">{% translate "À identifier" %}</span>
+        {% elif s.status == "no_markers" %}<span class="badge bad">{% translate "Repères non détectés" %}</span>
+        {% elif s.status == "ignoree" %}<span class="badge grey">{% if "blanche" in s.error_message %}{% translate "Page blanche" %}{% else %}{% translate "Page de rédaction" %}{% endif %}</span>
         {% else %}<span class="badge bad">{{ s.get_status_display }}</span>{% endif %}
         {% if s.error_message %}<span class="helptext">{{ s.error_message }}</span>{% endif %}
       </td>
       <td>{% if s.status == "ok" or s.status == "no_match" %}
-        <a class="btn small" href="{% url 'sheet_review' s.pk %}">Vérifier / corriger</a>{% endif %}</td>
+        <a class="btn small" href="{% url 'sheet_review' s.pk %}">{% translate "Vérifier / corriger" %}</a>{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="6">{% if batch.status == "pending" %}Pages pas encore lues : elles le seront au lancement de la correction.{% else %}Aucune page dans ce lot.{% endif %}</td></tr>
+    <tr><td colspan="6">{% if batch.status == "pending" %}{% translate "Pages pas encore lues : elles le seront au lancement de la correction." %}{% else %}{% translate "Aucune page dans ce lot." %}{% endif %}</td></tr>
     {% endfor %}
   </table>
   </div>
-  {% include "grader/_pagination.html" with page=sheets_page label="Pages" %}
+  {% include "grader/_pagination.html" with page=sheets_page label=_("Pages") %}
 </div>
 {% endblock %}

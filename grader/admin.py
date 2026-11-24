@@ -1,6 +1,7 @@
 from django.contrib import admin, messages
 from django.contrib.auth.models import Group
 from django.utils.html import format_html
+from django.utils.translation import gettext, gettext_lazy
 
 from . import journal, services, useradmin
 from .admin_titres import TitresFrancais
@@ -30,9 +31,9 @@ admin.site.password_change_template = "admin/password_change_form.html"
 admin.site.password_change_done_template = "admin/password_change_done.html"
 admin.site.login_template = "registration/login_admin.html"
 admin.site.login_form = AdminLoginForm
-admin.site.site_header = "QuizScan — administration"
-admin.site.site_title = "QuizScan"
-admin.site.index_title = "Comptes, classes, épreuves et copies"
+admin.site.site_header = gettext_lazy("QuizScan — administration")
+admin.site.site_title = gettext_lazy("QuizScan")
+admin.site.index_title = gettext_lazy("Comptes, classes, épreuves et copies")
 
 
 # La page d'accueil de l'administration est la seule à lister les tables (la
@@ -64,7 +65,7 @@ def _index_enrichi(request, extra_context=None):
             table["icone"] = ICONES.get(
                 table.get("object_name", "").lower(), "table")
             if table.get("object_name") == "Modification":
-                table["name"] = "Journal des modifications"
+                table["name"] = gettext("Journal des modifications")
     return reponse
 
 
@@ -75,13 +76,13 @@ admin.site.index = _index_enrichi
 # explicatives, écrites pour les formulaires. Dans une liste ou un filtre
 # elles débordent et rendent le tableau illisible : on en donne ici une
 # version courte.
-SHEET_MODE_COURT = {"full": "Questionnaire complet",
-                    "split": "Sujet séparé",
-                    "grid": "Grille seule"}
-ID_MODE_COURT = {"name": "OCR du nom",
-                 "grid": "Grille de n°",
-                 "qr": "QR nominatif",
-                 "sticker": "Étiquette QR"}
+SHEET_MODE_COURT = {"full": gettext_lazy("Questionnaire complet"),
+                    "split": gettext_lazy("Sujet séparé"),
+                    "grid": gettext_lazy("Grille seule")}
+ID_MODE_COURT = {"name": gettext_lazy("OCR du nom"),
+                 "grid": gettext_lazy("Grille de n°"),
+                 "qr": gettext_lazy("QR nominatif"),
+                 "sticker": gettext_lazy("Étiquette QR")}
 
 
 # État d'un lot, d'une copie ou d'un corrigé : une pastille de couleur se
@@ -100,7 +101,7 @@ def pastille_etat(obj):
 class AvecPastilleEtat:
     """Colonne « État » en pastille, triable comme le champ."""
 
-    @admin.display(description="État", ordering="status")
+    @admin.display(description=gettext_lazy("État"), ordering="status")
     def etat(self, obj):
         return pastille_etat(obj)
 
@@ -131,9 +132,9 @@ admin.site.unregister(Group)
 
 @admin.register(ClassGroup)
 class ClassGroupAdmin(TitresFrancais, admin.ModelAdmin):
-    titre_liste = "Classes"
-    titre_ajout = "Nouvelle classe"
-    titre_modification = "Modifier la classe"
+    titre_liste = gettext_lazy("Classes")
+    titre_ajout = gettext_lazy("Nouvelle classe")
+    titre_modification = gettext_lazy("Modifier la classe")
     list_display = ("name", "ses_enseignants", "nb_etudiants", "le_jour")
     list_filter = ("enseignants",)
     search_fields = ("name",)
@@ -153,25 +154,25 @@ class ClassGroupAdmin(TitresFrancais, admin.ModelAdmin):
         qs = super().get_queryset(request).prefetch_related("enseignants")
         return qs.classes() if getattr(request, "classes_seules", False) else qs
 
-    @admin.display(description="Enseignants")
+    @admin.display(description=gettext_lazy("Enseignants"))
     def ses_enseignants(self, obj):
         noms = [u.get_full_name() or u.username for u in obj.enseignants.all()]
         return ", ".join(noms) if noms else "—"
 
-    @admin.display(description="Étudiants")
+    @admin.display(description=gettext_lazy("Étudiants"))
     def nb_etudiants(self, obj):
         return obj.students.count()
 
-    @admin.display(description="Créée le", ordering="created_at")
+    @admin.display(description=gettext_lazy("Créée le"), ordering="created_at")
     def le_jour(self, obj):
         return obj.created_at.strftime("%d/%m/%Y")
 
 
 @admin.register(Student)
 class StudentAdmin(TitresFrancais, admin.ModelAdmin):
-    titre_liste = "Étudiants"
-    titre_ajout = "Nouvel étudiant"
-    titre_modification = "Modifier l'étudiant"
+    titre_liste = gettext_lazy("Étudiants")
+    titre_ajout = gettext_lazy("Nouvel étudiant")
+    titre_modification = gettext_lazy("Modifier l'étudiant")
     list_display = ("first_name", "last_name", "student_number", "class_group")
     list_filter = ("class_group__owner",)
     search_fields = ("first_name", "last_name", "student_number")
@@ -189,9 +190,9 @@ class StudentAdmin(TitresFrancais, admin.ModelAdmin):
 
 @admin.register(Inscrit)
 class InscritAdmin(TitresFrancais, admin.ModelAdmin):
-    titre_liste = "Inscriptions"
-    titre_ajout = "Nouvelle inscription"
-    titre_modification = "Modifier l'inscription"
+    titre_liste = gettext_lazy("Inscriptions")
+    titre_ajout = gettext_lazy("Nouvelle inscription")
+    titre_modification = gettext_lazy("Modifier l'inscription")
     list_display = ("numero", "prenom", "nom", "cin", "cin_lieu", "cin_date",
                     "date_naissance", "centre", "salle", "cree_le")
     search_fields = ("numero", "prenom", "nom", "cin", "centre", "salle")
@@ -202,9 +203,9 @@ class InscritAdmin(TitresFrancais, admin.ModelAdmin):
 
 @admin.register(Communique)
 class CommuniqueAdmin(TitresFrancais, admin.ModelAdmin):
-    titre_liste = "Communiqués"
-    titre_ajout = "Nouveau communiqué"
-    titre_modification = "Modifier le communiqué"
+    titre_liste = gettext_lazy("Communiqués")
+    titre_ajout = gettext_lazy("Nouveau communiqué")
+    titre_modification = gettext_lazy("Modifier le communiqué")
     list_display = ("titre", "publie", "cree_le", "auteur")
     list_filter = ("publie",)
     search_fields = ("titre", "texte")
@@ -224,14 +225,14 @@ class QuestionInline(admin.TabularInline):
 
 @admin.register(Quiz)
 class QuizAdmin(TitresFrancais, admin.ModelAdmin):
-    titre_liste = "Quiz"
-    titre_ajout = "Nouveau quiz"
-    titre_modification = "Modifier le quiz"
+    titre_liste = gettext_lazy("Quiz")
+    titre_ajout = gettext_lazy("Nouveau quiz")
+    titre_modification = gettext_lazy("Modifier le quiz")
     list_display = ("title", "class_group", "nb_questions", "type_de_fiche",
                     "identification", "le_jour")
     list_filter = ("owner", "language", "auto_enroll",
-                   _filtre_court("sheet_mode", "type de fiche", SHEET_MODE_COURT),
-                   _filtre_court("id_mode", "identification", ID_MODE_COURT))
+                   _filtre_court("sheet_mode", gettext_lazy("type de fiche"), SHEET_MODE_COURT),
+                   _filtre_court("id_mode", gettext_lazy("identification"), ID_MODE_COURT))
     search_fields = ("title",)
     list_select_related = ("class_group", "owner")
     raw_id_fields = ("class_group",)
@@ -245,6 +246,8 @@ class QuizAdmin(TitresFrancais, admin.ModelAdmin):
             journal.noter(request.user, "penalite", quiz=obj,
                           objet="Pénalité par mauvaise réponse",
                           avant=penalite, apres=obj.wrong_penalty)
+            if penalite != obj.wrong_penalty:
+                _recalculer(obj)
             journal.noter(request.user, "note_admission", quiz=obj,
                           objet="Note minimale d'admission",
                           avant=note, apres=obj.note_admission)
@@ -263,8 +266,9 @@ class QuizAdmin(TitresFrancais, admin.ModelAdmin):
         supprimes, compte, permissions, proteges = super().get_deleted_objects(objs, request)
         for liste in self._listes_orphelines(objs):
             n = liste.students.count()
-            supprimes.append(f"Liste de candidats du concours : {liste.name} "
-                             f"({n} candidat{'s' if n > 1 else ''})")
+            supprimes.append(gettext("Liste de candidats du concours : %(nom)s (%(n)s "
+                                     "candidat%(s)s)") % {"nom": liste.name, "n": n,
+                                                          "s": "s" if n > 1 else ""})
         return supprimes, compte, permissions, proteges
 
     def delete_model(self, request, obj):
@@ -292,35 +296,39 @@ class QuizAdmin(TitresFrancais, admin.ModelAdmin):
             if f.instance.pk:
                 journal.question_supprimee(request.user, f.instance)
         super().save_formset(request, form, formset, change)
+        a_recalculer = False
         for f in formset.forms:
             q = f.instance
             if q.pk in avant and q.pk not in supprimees:
                 bonne, bareme = avant[q.pk]
                 journal.question_modifiee(request.user, q, bonne_avant=bonne,
                                           bareme_avant=bareme)
+                a_recalculer |= (bonne, bareme) != (q.correct_choice, q.points)
+        if a_recalculer:
+            _recalculer(form.instance)
 
-    @admin.display(description="Type de fiche", ordering="sheet_mode")
+    @admin.display(description=gettext_lazy("Type de fiche"), ordering="sheet_mode")
     def type_de_fiche(self, obj):
         return SHEET_MODE_COURT.get(obj.sheet_mode, obj.sheet_mode)
 
-    @admin.display(description="Identification", ordering="id_mode")
+    @admin.display(description=gettext_lazy("Identification"), ordering="id_mode")
     def identification(self, obj):
         return ID_MODE_COURT.get(obj.id_mode, obj.id_mode)
 
-    @admin.display(description="Questions")
+    @admin.display(description=gettext_lazy("Questions"))
     def nb_questions(self, obj):
         return obj.questions.count()
 
-    @admin.display(description="Créée le", ordering="created_at")
+    @admin.display(description=gettext_lazy("Créée le"), ordering="created_at")
     def le_jour(self, obj):
         return obj.created_at.strftime("%d/%m/%Y")
 
 
 @admin.register(Question)
 class QuestionAdmin(TitresFrancais, admin.ModelAdmin):
-    titre_liste = "Questions"
-    titre_ajout = "Nouvelle question"
-    titre_modification = "Modifier la question"
+    titre_liste = gettext_lazy("Questions")
+    titre_ajout = gettext_lazy("Nouvelle question")
+    titre_modification = gettext_lazy("Modifier la question")
     # La premiere colonne ouvre la question : elle doit donc la designer,
     # pas nommer l'epreuve a laquelle elle appartient.
     list_display = ("intitule_court", "quiz", "qtype", "points")
@@ -337,6 +345,8 @@ class QuestionAdmin(TitresFrancais, admin.ModelAdmin):
             journal.question_modifiee(request.user, obj,
                                       bonne_avant=ancienne.correct_choice,
                                       bareme_avant=ancienne.points)
+            if (ancienne.correct_choice, ancienne.points) != (obj.correct_choice, obj.points):
+                _recalculer(obj.quiz)
 
     def delete_model(self, request, obj):
         journal.question_supprimee(request.user, obj)
@@ -347,17 +357,18 @@ class QuestionAdmin(TitresFrancais, admin.ModelAdmin):
             journal.question_supprimee(request.user, q)
         super().delete_queryset(request, queryset)
 
-    @admin.display(description="Question", ordering="order")
+    @admin.display(description=gettext_lazy("Question"), ordering="order")
     def intitule_court(self, obj):
         texte = (obj.text or "").strip()
-        return f"Q{obj.order} — {texte[:60]}" if texte else f"Question {obj.order}" 
+        return (f"Q{obj.order} — {texte[:60]}" if texte
+                else gettext("Question %(n)s") % {"n": obj.order})
 
 
 @admin.register(ScanBatch)
 class ScanBatchAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
-    titre_liste = "Lots de scans"
-    titre_ajout = "Nouveau lot de scans"
-    titre_modification = "Modifier le lot de scans"
+    titre_liste = gettext_lazy("Lots de scans")
+    titre_ajout = gettext_lazy("Nouveau lot de scans")
+    titre_modification = gettext_lazy("Modifier le lot de scans")
     list_display = ("__str__", "quiz", "etat", "avancement", "le_jour")
     list_filter = ("status", "quiz__owner")
     list_select_related = ("quiz",)
@@ -380,23 +391,22 @@ class ScanBatchAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
             try:
                 services.supprimer_lot(lot, request.user)
             except services.LotEnCours:
-                messages.warning(request, f"« {lot} » est en cours de "
-                                          "correction : il n'a pas été supprimé.")
+                messages.warning(request, gettext("« %(lot)s » est en cours de correction : il n'a pas été supprimé.") % {"lot": lot})
 
-    @admin.display(description="Avancement")
+    @admin.display(description=gettext_lazy("Avancement"))
     def avancement(self, obj):
         return f"{obj.processed_pages} / {obj.total_pages}"
 
-    @admin.display(description="Reçu le", ordering="created_at")
+    @admin.display(description=gettext_lazy("Reçu le"), ordering="created_at")
     def le_jour(self, obj):
         return obj.created_at.strftime("%d/%m/%Y %H:%M")
 
 
 @admin.register(SheetScan)
 class SheetScanAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
-    titre_liste = "Pages scannées"
-    titre_ajout = "Nouvelle page scannée"
-    titre_modification = "Modifier la page scannée"
+    titre_liste = gettext_lazy("Pages scannées")
+    titre_ajout = gettext_lazy("Nouvelle page scannée")
+    titre_modification = gettext_lazy("Modifier la page scannée")
     list_display = ("__str__", "batch", "student", "etat", "numero_lu")
     list_filter = ("status", "batch__quiz__owner")
     search_fields = ("source_name", "ocr_name_raw", "id_read")
@@ -420,7 +430,7 @@ class SheetScanAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
             journal.copie_supprimee(request.user, copie)
         super().delete_queryset(request, queryset)
 
-    @admin.display(description="N° lu", ordering="id_read")
+    @admin.display(description=gettext_lazy("N° lu"), ordering="id_read")
     def numero_lu(self, obj):
         return obj.id_read or "—"
 
@@ -429,9 +439,9 @@ class SheetScanAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
 class AnswerKeySheetAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
     """Corrigés scannés — conservés en lecture seule : ce sont des pièces
     justificatives de l'origine du barème, pas des données à retoucher."""
-    titre_liste = "Corrigés scannés"
-    titre_modification = "Modifier le corrigé scanné"
-    titre_consultation = "Corrigé scanné"
+    titre_liste = gettext_lazy("Corrigés scannés")
+    titre_modification = gettext_lazy("Modifier le corrigé scanné")
+    titre_consultation = gettext_lazy("Corrigé scanné")
     # Le lien ouvrait la fiche du corrige mais affichait le nom de
     # l'epreuve : on nomme le corrige, l'epreuve suit dans sa colonne.
     list_display = ("fichier", "quiz", "page", "nb_lues", "etat", "le_jour")
@@ -444,15 +454,15 @@ class AnswerKeySheetAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
                        "overlay_image", "status", "detected", "unreadable",
                        "error_message", "created_at")
 
-    @admin.display(description="Corrigé scanné", ordering="source_name")
+    @admin.display(description=gettext_lazy("Corrigé scanné"), ordering="source_name")
     def fichier(self, obj):
-        return obj.source_name or f"corrigé #{obj.pk}"
+        return obj.source_name or gettext("corrigé #%(n)s") % {"n": obj.pk}
 
-    @admin.display(description="Page", ordering="page_index")
+    @admin.display(description=gettext_lazy("Page"), ordering="page_index")
     def page(self, obj):
         return obj.page_index + 1
 
-    @admin.display(description="Scanné le", ordering="created_at")
+    @admin.display(description=gettext_lazy("Scanné le"), ordering="created_at")
     def le_jour(self, obj):
         return obj.created_at.strftime("%d/%m/%Y")
 
@@ -462,9 +472,9 @@ class AnswerKeySheetAdmin(AvecPastilleEtat, TitresFrancais, admin.ModelAdmin):
 
 @admin.register(Answer)
 class AnswerAdmin(TitresFrancais, admin.ModelAdmin):
-    titre_liste = "Réponses"
-    titre_ajout = "Nouvelle réponse"
-    titre_modification = "Modifier la réponse"
+    titre_liste = gettext_lazy("Réponses")
+    titre_ajout = gettext_lazy("Nouvelle réponse")
+    titre_modification = gettext_lazy("Modifier la réponse")
     list_display = ("reponse", "sheet", "intitule_question", "points",
                     "a_la_main")
     list_display_links = ("reponse",)
@@ -496,24 +506,24 @@ class AnswerAdmin(TitresFrancais, admin.ModelAdmin):
                                      multiple_avant=ancienne.is_multiple,
                                      note_avant=ancienne.points_awarded)
 
-    @admin.display(description="Réponse lue")
+    @admin.display(description=gettext_lazy("Réponse lue"))
     def reponse(self, obj):
         return obj.detected_letter or "—"
 
-    @admin.display(description="Question", ordering="question__order")
+    @admin.display(description=gettext_lazy("Question"), ordering="question__order")
     def intitule_question(self, obj):
         # « Q1 (QCM (lecture automatique)) » tenait sur deux lignes dans une
         # colonne qui n'a besoin que du numero et du genre de question.
-        genre = "QCM" if obj.question.qtype == "qcm" else "manuscrite"
+        genre = gettext("QCM") if obj.question.qtype == "qcm" else gettext("manuscrite")
         return f"Q{obj.question.order} · {genre}"
 
-    @admin.display(description="Points", ordering="points_awarded")
+    @admin.display(description=gettext_lazy("Points"), ordering="points_awarded")
     def points(self, obj):
         if obj.points_awarded is None:
             return "—"
         return f"{obj.points_awarded:g}"
 
-    @admin.display(description="Note manuelle", boolean=True,
+    @admin.display(description=gettext_lazy("Note manuelle"), boolean=True,
                    ordering="manually_set")
     def a_la_main(self, obj):
         return obj.manually_set
@@ -526,8 +536,8 @@ class JournalAdmin(TitresFrancais, admin.ModelAdmin):
     Ni ajout, ni modification, ni suppression, même pour un administrateur :
     un journal qu'on peut retoucher ne prouve plus rien.
     """
-    titre_liste = "Journal des modifications"
-    titre_consultation = "Détail d'une modification"
+    titre_liste = gettext_lazy("Journal des modifications")
+    titre_consultation = gettext_lazy("Détail d'une modification")
     list_display = ("le_moment", "auteur_nom", "action", "quiz_titre", "objet",
                     "avant", "apres")
     list_display_links = ("le_moment",)
@@ -536,7 +546,7 @@ class JournalAdmin(TitresFrancais, admin.ModelAdmin):
     date_hierarchy = "quand"
     list_per_page = 50
 
-    @admin.display(description="Date", ordering="quand")
+    @admin.display(description=gettext_lazy("Date"), ordering="quand")
     def le_moment(self, obj):
         return obj.quand.strftime("%d/%m/%Y %H:%M")
 
@@ -548,3 +558,11 @@ class JournalAdmin(TitresFrancais, admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+def _recalculer(quiz):
+    """Bonne réponse, barème ou pénalité changés dans l'administration : les copies sont
+    recalculées, comme depuis la page de l'épreuve. Sans cela, « justes » suivait le nouveau
+    corrigé mais la note et l'admission gardaient l'ancien (24 novembre 2026)."""
+    from . import services
+    services.rescore_quiz(quiz)

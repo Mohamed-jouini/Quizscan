@@ -1,10 +1,10 @@
-{# Copie du gabarit de Django : le texte de la loupe y était écrit en  #}
-{# anglais, en dur (alt="Search"), hors de toute traduction.          #}
+{#Copie du gabarit de Django : le texte de la loupe y était écrit en#}
+{#anglais, en dur (alt="Search"), hors de toute traduction.#}
 {% load i18n static %}
 {% if cl.search_fields %}
 <div id="toolbar"><form id="changelist-search" method="get" role="search">
-<div>{# le div est requis pour un HTML valide #}
-<label for="searchbar"><img src="{% static "admin/img/search.svg" %}" alt="Rechercher"></label>
+<div>{#le div est requis pour un HTML valide#}
+<label for="searchbar"><img src="{% static "admin/img/search.svg" %}" alt="{% translate "Rechercher" %}"></label>
 <input type="text" size="40" name="{{ search_var }}" value="{{ cl.query }}" id="searchbar"{% if cl.search_help_text %} aria-describedby="searchbar_helptext"{% endif %}>
 <input type="submit" value="{% translate 'Search' %}">
 {% if show_result_count %}

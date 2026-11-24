@@ -1,21 +1,21 @@
-{% extends "grader/base.html" %}
+{% extends "grader/base.html" %}{% load i18n qs_langue %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
     <h1>{{ fil.titre|default:quiz.title }}</h1>
     <p class="page-head__meta">
-      <span class="badge info">Épreuve QCM</span>
+      <span class="badge info">{% translate "Épreuve QCM" %}</span>
       {% if fil.intitule %}<span>{{ fil.intitule }}</span>{% endif %}
-      <span class="badge grey">{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %}</span>
+      <span class="badge grey">{% if quiz.auto_enroll %}{% translate "Concours" %}{% else %}{{ quiz.class_group.name }}{% endif %}</span>
       {% if quiz.annee %}<span class="badge grey">{{ quiz.get_annee_display }}</span>{% endif %}
       <span class="badge grey">{{ quiz.get_language_display }}</span>
-      Barème total : <b>{{ quiz.max_score|floatformat:"-2" }} points</b>
-      {% if quiz.wrong_penalty %} — pénalité {{ quiz.wrong_penalty }} pt / faute{% endif %}
+      {% translate "Barème total :" %} <b>{% blocktranslate trimmed with max_score=quiz.max_score|floatformat:"-2" %}{{ max_score }} points{% endblocktranslate %}</b>
+      {% if quiz.wrong_penalty %} {% blocktranslate trimmed with wrong_penalty=quiz.wrong_penalty %}— pénalité {{ wrong_penalty }} pt / faute{% endblocktranslate %}{% endif %}
     </p>
   </div>
   <div class="page-head__actions">
-    <a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}">Voir les résultats</a>
-    <a class="btn small" href="{% url 'class_detail' quiz.class_group.pk %}">Candidats &amp; étiquettes QR</a>
+    <a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}">{% translate "Voir les résultats" %}</a>
+    <a class="btn small" href="{% url 'class_detail' quiz.class_group.pk %}">{% translate "Candidats &amp; étiquettes QR" %}</a>
   </div>
 </header>
 {% include "grader/_fil_etapes.html" with lien="quiz_detail" %}
@@ -24,9 +24,9 @@
 <div class="note">
   <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg></span>
   <div class="note__body">
-    <b>Concours</b> — importez la liste des candidats (fichier Excel : Prénom, Nom,
-    N° d'inscription) et générez leurs étiquettes QR depuis la page
-    <a href="{% url 'class_detail' quiz.class_group.pk %}"><b>« Candidats &amp; étiquettes QR »</b></a>.
+    <b>{% translate "Concours" %}</b> {% blocktranslate trimmed %}— importez la liste des candidats (fichier Excel : Prénom, Nom,
+    N° d'inscription) et générez leurs étiquettes QR depuis la page{% endblocktranslate %}
+    <a href="{% url 'class_detail' quiz.class_group.pk %}"><b>{% translate "« Candidats &amp; étiquettes QR »" %}</b></a>.
   </div>
 </div>
 {% endif %}
@@ -35,23 +35,23 @@
 <form class="card reglages" method="post">
   {% csrf_token %}
   <div class="reglages__large">
-    <label for="id_title_reglages">{% if quiz.auto_enroll %}Titre du concours{% else %}Titre de l'épreuve{% endif %}</label>
+    <label for="id_title_reglages">{% if quiz.auto_enroll %}{% translate "Titre du concours" %}{% else %}{% translate "Titre de l'épreuve" %}{% endif %}</label>
     <input id="id_title_reglages" class="champ--titre" type="text" name="title"
            maxlength="200" required value="{{ quiz.title }}">
   </div>
   {% if quiz.auto_enroll %}
   <div class="reglages__large">
     <div class="radios">
-      <label>Année</label>
+      <label>{% translate "Année" %}</label>
       {% for val, libelle in quiz.ANNEES %}
       <label><input type="radio" name="annee" value="{{ val }}" {% if quiz.annee == val %}checked{% endif %}> {{ libelle }}</label>
       {% endfor %}
     </div>
-    <span class="helptext helptext--serre">Vaut pour toutes les étapes du concours. Le code d'anonymat des copies à talon commence toujours par X en 1re année, par Y en 2e.</span>
+    <span class="helptext helptext--serre">{% translate "Vaut pour toutes les étapes du concours. Le code d'anonymat des copies à talon commence toujours par X en 1re année, par Y en 2e." %}</span>
   </div>
   {% endif %}
   <div class="reglages__large">
-    <label>Type de fiche</label>
+    <label>{% translate "Type de fiche" %}</label>
     <select name="sheet_mode">
       {% for val, label in quiz.SHEET_MODES %}
       <option value="{{ val }}" {% if quiz.sheet_mode == val %}selected{% endif %}>{{ label }}</option>
@@ -59,16 +59,16 @@
     </select>
   </div>
   <div class="reglages__large">
-    <label for="id_versions">Versions du sujet</label>
+    <label for="id_versions">{% translate "Versions du sujet" %}</label>
     <select id="id_versions" name="versions">
       {% for val, label in quiz.VERSIONS %}
       <option value="{{ val }}" {% if quiz.versions == val %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
-    <span class="helptext helptext--serre">Deux versions : la version B a ses questions, et les choix de chacune, dans un autre ordre. « VERSION A » ou « VERSION B » est imprimé sur le sujet et sur la feuille de réponses, lu au scan, et chaque copie est corrigée selon sa version. Avec un questionnaire complet ou un sujet séparé seulement ; évitez alors les choix du type « toutes les réponses ci-dessus ».</span>
+    <span class="helptext helptext--serre">{% translate "Deux versions : la version B a ses questions, et les choix de chacune, dans un autre ordre. « VERSION A » ou « VERSION B » est imprimé sur le sujet et sur la feuille de réponses, lu au scan, et chaque copie est corrigée selon sa version. Avec un questionnaire complet ou un sujet séparé seulement ; évitez alors les choix du type « toutes les réponses ci-dessus »." %}</span>
   </div>
   <div class="reglages__large">
-    <label>Identification des copies</label>
+    <label>{% translate "Identification des copies" %}</label>
     <select name="id_mode">
       {% for val, label in id_modes %}
       <option value="{{ val }}" {% if quiz.id_mode == val %}selected{% endif %}>{{ label }}</option>
@@ -77,70 +77,70 @@
   </div>
   <div class="reglages__large">
     <div class="radios">
-      <label>Présentation des copies</label>
+      <label>{% translate "Présentation des copies" %}</label>
       {% for val, libelle in quiz.ANONYMATS %}
       <label><input type="radio" name="anonymat" value="{{ val }}" {% if quiz.anonymat == val %}checked{% endif %}> {{ libelle }}</label>
       {% endfor %}
     </div>
-    <span class="helptext helptext--serre">Talon : le nom est en haut de la page, découpé au massicot avant la correction. N° de place : aucun nom sur la copie, le surveillant a la liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }} et des places. Dans les deux cas, une copie par étudiant avec son QR (identification « QR code »).</span>
+    <span class="helptext helptext--serre">{% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidats,étudiants" %}Talon : le nom est en haut de la page, découpé au massicot avant la correction. N° de place : aucun nom sur la copie, le surveillant a la liste des {{ auto_enroll }} et des places. Dans les deux cas, une copie par étudiant avec son QR (identification « QR code »).{% endblocktranslate %}</span>
   </div>
   <div id="row_id_digits">
-    <label>Chiffres du n° d'inscription</label>
+    <label>{% translate "Chiffres du n° d'inscription" %}</label>
     <input class="champ--court" type="number" name="id_digits"
            value="{{ quiz.id_digits }}" min="3" max="10">
   </div>
   <div>
-    <label>Pénalité par mauvaise réponse</label>
+    <label>{% translate "Pénalité par mauvaise réponse" %}</label>
     <input class="champ--court" type="text" name="wrong_penalty"
            value="{{ quiz.wrong_penalty|floatformat:'-2' }}">
   </div>
   <div>
-    <label for="id_note_admission">{% if quiz.auto_enroll %}Note minimale d'admission{% else %}Note minimale de réussite{% endif %}</label>
+    <label for="id_note_admission">{% if quiz.auto_enroll %}{% translate "Note minimale d'admission" %}{% else %}{% translate "Note minimale de réussite" %}{% endif %}</label>
     <input id="id_note_admission" class="champ--court" type="text" inputmode="decimal"
            name="note_admission" value="{{ quiz.note_admission|default_if_none:''|floatformat:'-2' }}"
            placeholder="—">
-    <span class="helptext helptext--serre">sur {{ quiz.max_score|floatformat:"-2" }} pts</span>
+    <span class="helptext helptext--serre">{% blocktranslate trimmed with max_score=quiz.max_score|floatformat:"-2" %}sur {{ max_score }} pts{% endblocktranslate %}</span>
   </div>
   {% if quiz.auto_enroll %}
   <div>
-    <label>Correction des copies</label>
+    <label>{% translate "Correction des copies" %}</label>
     <select class="champ--auto" name="grading_mode">
-      <option value="immediate" {% if quiz.grading_mode == "immediate" %}selected{% endif %}>Immédiate (dès le téléversement)</option>
-      <option value="deferred" {% if quiz.grading_mode == "deferred" %}selected{% endif %}>Après scan (bouton « Lancer la correction »)</option>
+      <option value="immediate" {% if quiz.grading_mode == "immediate" %}selected{% endif %}>{% translate "Immédiate (dès le téléversement)" %}</option>
+      <option value="deferred" {% if quiz.grading_mode == "deferred" %}selected{% endif %}>{% translate "Après scan (bouton « Lancer la correction »)" %}</option>
     </select>
   </div>
   {% endif %}
   {% if quiz.sheet_mode == "split" %}
   <div class="reglages__large">
-    <label for="id_entete">En-tête du sujet</label>
+    <label for="id_entete">{% translate "En-tête du sujet" %}</label>
     <textarea id="id_entete" class="champ--entete" name="entete" rows="3"
-              placeholder="Vide : en-tête de l'institut. Sinon, une ligne par ligne : ministère, établissement… (la dernière ligne est aussi imprimée en haut des copies)">{{ quiz.entete }}</textarea>
+              placeholder="{% translate "Vide : en-tête de l'institut. Sinon, une ligne par ligne : ministère, établissement… (la dernière ligne est aussi imprimée en haut des copies)" %}">{{ quiz.entete }}</textarea>
   </div>
   <div>
-    <label for="id_duree">Durée de l'épreuve</label>
+    <label for="id_duree">{% translate "Durée de l'épreuve" %}</label>
     <input id="id_duree" class="champ--duree" type="text" name="duree" maxlength="60"
            value="{{ quiz.duree }}" placeholder="1 h 30">
   </div>
   <div>
-    <label for="id_date_epreuve">Date de l'épreuve</label>
+    <label for="id_date_epreuve">{% translate "Date de l'épreuve" %}</label>
     <input id="id_date_epreuve" class="champ--date" type="date" name="date_epreuve"
            min="2000-01-01" max="9999-12-31" value="{{ quiz.date_epreuve|date:'Y-m-d' }}">
   </div>
   <div class="reglages__large">
-    <label for="id_format_impression">Format du sujet</label>
+    <label for="id_format_impression">{% translate "Format du sujet" %}</label>
     <select id="id_format_impression" name="format_impression">
       {% for val, label in quiz.FORMATS %}
       <option value="{{ val }}" {% if quiz.format_impression == val %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
-    <span class="helptext helptext--serre">La feuille de réponses reste en A4.</span>
+    <span class="helptext helptext--serre">{% translate "La feuille de réponses reste en A4." %}</span>
   </div>
   {% endif %}
-  <button class="btn small" name="update_settings" value="1" type="submit">Enregistrer les réglages</button>
+  <button class="btn small" name="update_settings" value="1" type="submit">{% translate "Enregistrer les réglages" %}</button>
   <span class="helptext reglages__aide">
-    Choisissez « Sujet séparé + feuille de réponses » pour obtenir deux PDF (questions d'un
+    {% blocktranslate trimmed %}Choisissez « Sujet séparé + feuille de réponses » pour obtenir deux PDF (questions d'un
     côté, grille de l'autre), puis cliquez sur « Régénérer les PDF » plus bas.
-    Le nombre de choix (A, B, C…) se règle pour chaque question.
+    Le nombre de choix (A, B, C…) se règle pour chaque question.{% endblocktranslate %}
   </span>
 </form>
 {% endif %}
@@ -156,51 +156,51 @@
     {% for cv in corrige_versions %}
     <div class="corrige-versions__cote">
       {% if sans_corrige %}
-      <h2>Corrigé incomplet — version {{ cv.version }}</h2>
+      <h2>{% blocktranslate trimmed with version=cv.version %}Corrigé incomplet — version {{ version }}{% endblocktranslate %}</h2>
       <p class="helptext helptext--serre">
-        {{ sans_corrige|length }} question(s) sur {{ n_qcm }} sans bonne réponse : n°
-        {% for n in cv.manquantes %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if cv.version != "A" %} (numéros de la version {{ cv.version }}){% endif %}.
-        <b>La correction des copies ne peut pas démarrer</b> tant qu'il en manque une.
+        {% blocktranslate trimmed with sans_corrige=sans_corrige|length %}{{ sans_corrige }} question(s) sur {{ n_qcm }} sans bonne réponse : n°{% endblocktranslate %}
+        {% for n in cv.manquantes %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if cv.version != "A" %} {% blocktranslate trimmed with version=cv.version %}(numéros de la version {{ version }}){% endblocktranslate %}{% endif %}.
+        <b>{% translate "La correction des copies ne peut pas démarrer" %}</b> {% translate "tant qu'il en manque une." %}
       </p>
       {% else %}
-      <h2>Corrigé complet — version {{ cv.version }}</h2>
-      <p class="helptext helptext--serre">{{ n_qcm }} question(s) QCM{% if cv.version != "A" %}, dans l'ordre de la version {{ cv.version }}{% endif %} : les copies peuvent être corrigées.</p>
+      <h2>{% blocktranslate trimmed with version=cv.version %}Corrigé complet — version {{ version }}{% endblocktranslate %}</h2>
+      <p class="helptext helptext--serre">{% blocktranslate trimmed %}{{ n_qcm }} question(s) QCM{% endblocktranslate %}{% if cv.version != "A" %}{% blocktranslate trimmed with version=cv.version %}, dans l'ordre de la version {{ version }}{% endblocktranslate %}{% endif %} {% translate ": les copies peuvent être corrigées." %}</p>
       {% endif %}
       {% if perms.grader.creer_epreuve %}
       <form method="post" action="{% url 'quiz_answer_key' quiz.pk %}" enctype="multipart/form-data">
         {% csrf_token %}
         <input type="hidden" name="version" value="{{ cv.version }}">
-        <label class="label--haut" for="{{ cv.form.files.id_for_label }}">Fiche du corrigé scannée — version {{ cv.version }}</label>
+        <label class="label--haut" for="{{ cv.form.files.id_for_label }}">{% blocktranslate trimmed with version=cv.version %}Fiche du corrigé scannée — version {{ version }}{% endblocktranslate %}</label>
         {{ cv.form.files }}
-        <span class="helptext">La copie du correcteur de la version {{ cv.version }}, noircie en suivant le sujet {{ cv.version }}, puis scannée.</span>
+        <span class="helptext">{% blocktranslate trimmed with version=cv.version %}La copie du correcteur de la version {{ version }}, noircie en suivant le sujet {{ version }}, puis scannée.{% endblocktranslate %}</span>
         <p style="margin-bottom:0"><button class="btn" type="submit"
-          {% if not quiz.sheet_pdf %}disabled title="Générez d'abord la fiche PDF"{% endif %}>
-          Lire le corrigé scanné — version {{ cv.version }}</button></p>
+          {% if not quiz.sheet_pdf %}disabled title="{% translate "Générez d'abord la fiche PDF" %}"{% endif %}>
+          {% blocktranslate trimmed with version=cv.version %}Lire le corrigé scanné — version {{ version }}{% endblocktranslate %}</button></p>
       </form>
       {% endif %}
       {% include "grader/_corriges_scannes.html" with fiches=cv.fiches %}
     </div>
     {% endfor %}
   </div>
-  <span class="helptext">Un seul corrigé pour les deux versions : une fiche A ou une fiche B le remplit pour les deux, et il se règle aussi à la main dans le tableau de la version A. Les fiches de corrigé sont conservées avec l'épreuve : elles font foi sur l'origine du barème.</span>
+  <span class="helptext">{% translate "Un seul corrigé pour les deux versions : une fiche A ou une fiche B le remplit pour les deux, et il se règle aussi à la main dans le tableau de la version A. Les fiches de corrigé sont conservées avec l'épreuve : elles font foi sur l'origine du barème." %}</span>
 </div>
 {% elif n_qcm %}
 <div class="card {% if sans_corrige %}card--alerte{% else %}card--valide{% endif %}">
   <div class="card__duo card__duo--haut">
     <div class="card__duo-texte">
       {% if sans_corrige %}
-      <h2>Corrigé incomplet —
-        {{ sans_corrige|length }} question(s) sur {{ n_qcm }} sans bonne réponse</h2>
+      <h2>{% blocktranslate trimmed with sans_corrige=sans_corrige|length %}Corrigé incomplet —
+        {{ sans_corrige }} question(s) sur {{ n_qcm }} sans bonne réponse{% endblocktranslate %}</h2>
       <p class="helptext helptext--serre">
-        Questions n° {% for n in sans_corrige %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}.
-        <b>La correction des copies ne peut pas démarrer</b> tant qu'il en manque
+        {% translate "Questions n°" %} {% for n in sans_corrige %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}.
+        <b>{% translate "La correction des copies ne peut pas démarrer" %}</b> {% blocktranslate trimmed %}tant qu'il en manque
         une : ces questions seraient comptées fausses pour tout le monde.
         Renseignez-les dans le tableau ci-dessous, ou scannez la fiche remplie
-        avec les bonnes réponses.
+        avec les bonnes réponses.{% endblocktranslate %}
       </p>
       {% else %}
-      <h2>Corrigé complet — {{ n_qcm }} question(s) QCM</h2>
-      <p class="helptext helptext--serre">Les copies peuvent être corrigées.</p>
+      <h2>{% blocktranslate trimmed %}Corrigé complet — {{ n_qcm }} question(s) QCM{% endblocktranslate %}</h2>
+      <p class="helptext helptext--serre">{% translate "Les copies peuvent être corrigées." %}</p>
       {% endif %}
     </div>
     {% if perms.grader.creer_epreuve %}
@@ -211,54 +211,54 @@
       {{ answer_key_form.files }}
       <span class="helptext">{{ answer_key_form.files.help_text }}</span>
       <p style="margin-bottom:0"><button class="btn" type="submit"
-        {% if not quiz.sheet_pdf %}disabled title="Générez d'abord la fiche PDF"{% endif %}>
-        Lire le corrigé scanné</button></p>
+        {% if not quiz.sheet_pdf %}disabled title="{% translate "Générez d'abord la fiche PDF" %}"{% endif %}>
+        {% translate "Lire le corrigé scanné" %}</button></p>
     </form>
     {% endif %}
   </div>
 
   {% if answer_key_sheets %}
   {% include "grader/_corriges_scannes.html" with fiches=answer_key_sheets %}
-  <span class="helptext">Les fiches de corrigé sont conservées avec l'épreuve :
-    elles font foi sur l'origine du barème.{% if n_answer_key_sheets > 12 %}
-    ({{ n_answer_key_sheets }} au total, les 12 plus récentes sont affichées.){% endif %}</span>
+  <span class="helptext">{% blocktranslate trimmed %}Les fiches de corrigé sont conservées avec l'épreuve :
+    elles font foi sur l'origine du barème.{% endblocktranslate %}{% if n_answer_key_sheets > 12 %}
+    {% blocktranslate trimmed %}({{ n_answer_key_sheets }} au total, les 12 plus récentes sont affichées.){% endblocktranslate %}{% endif %}</span>
   {% endif %}
 </div>
 {% endif %}
 
 {% if pages_etiquette > 1 %}
 <ul class="messages"><li class="error">
-  ⚠️ Cette fiche compte {{ pages_etiquette }} pages : chaque candidat doit coller une étiquette QR
-  sur chaque page{% if quiz.id_mode == "grid" %} ou noircir son n° dans la grille de chaque page{% endif %},
+  {% blocktranslate trimmed %}⚠️ Cette fiche compte {{ pages_etiquette }} pages : chaque candidat doit coller une étiquette QR
+  sur chaque page{% endblocktranslate %}{% if quiz.id_mode == "grid" %} {% translate "ou noircir son n° dans la grille de chaque page" %}{% endif %}{% blocktranslate trimmed %},
   sinon les réponses de la page restent hors de sa note. La planche en imprime
-  {{ pages_etiquette }} par candidat : réimprimez-la si elle date d'avant cette fiche.
-  {% if quiz.sheet_mode == "full" %}Avec « Sujet séparé + feuille de réponses », bien plus de
-  questions tiennent sur une page.{% endif %}
+  {{ pages_etiquette }} par candidat : réimprimez-la si elle date d'avant cette fiche.{% endblocktranslate %}
+  {% if quiz.sheet_mode == "full" %}{% blocktranslate trimmed %}Avec « Sujet séparé + feuille de réponses », bien plus de
+  questions tiennent sur une page.{% endblocktranslate %}{% endif %}
 </li></ul>
 {% endif %}
 
 {% if layout_stale %}
 <ul class="messages"><li class="error">
-  ⚠️ Ce qui est imprimé sur la fiche (titre, questions, réglages{% if quiz.copies_nominatives %}, liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% endif %}) a changé
-  depuis la génération du PDF. Régénérez la fiche avant d'imprimer et de scanner.
+  {% translate "⚠️ Ce qui est imprimé sur la fiche (titre, questions, réglages" %}{% if quiz.copies_nominatives %}{% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidats,étudiants" %}, liste des {{ auto_enroll }}{% endblocktranslate %}{% endif %}{% blocktranslate trimmed %}) a changé
+  depuis la génération du PDF. Régénérez la fiche avant d'imprimer et de scanner.{% endblocktranslate %}
 </li></ul>
 {% endif %}
 
 <div class="grid2">
   <div class="card">
-    <h2>Questions ({{ quiz.questions.count }}){% if version_b %} — version A{% endif %}</h2>
+    <h2>{% blocktranslate trimmed with questions_count=quiz.questions.count %}Questions ({{ questions_count }}){% endblocktranslate %}{% if version_b %} {% translate "— version A" %}{% endif %}</h2>
     {% if quiz.questions.all %}
     {% comment %}« ajuste » : les textes vont à la ligne dans la demi-largeur de la carte ; sans
       cela, une ligne de choix un peu longue repoussait la bonne réponse et la croix hors de
       la carte (questionnaire de 50 questions de l'utilisateur, 6 novembre 2026).{% endcomment %}
     <div class="table-wrap table-wrap--ajuste table-wrap--defile table-wrap--questions" tabindex="0"
-         role="region" aria-label="Questions{% if version_b %} de la version A{% endif %}">
+         role="region" aria-label="{% if version_b %}{% translate 'Questions de la version A' %}{% else %}{% translate 'Questions' %}{% endif %}">
       <table>
-      <tr><th>N°</th><th>Question</th><th>Bonne rép.</th><th>Barème</th><th></th></tr>
+      <tr><th>{% translate "N°" %}</th><th>{% translate "Question" %}</th><th>{% translate "Bonne rép." %}</th><th>{% translate "Barème" %}</th><th></th></tr>
       {% for q in quiz.questions.all %}
       <tr>
         <td>{{ q.order }}</td>
-        <td>{% if q.qtype == "qcm" %}QCM · {{ q.num_bubbles }} choix{% else %}Manuscrite{% endif %}
+        <td>{% if q.qtype == "qcm" %}{% blocktranslate trimmed with num_bubbles=q.num_bubbles %}QCM · {{ num_bubbles }} choix{% endblocktranslate %}{% else %}{% translate "Manuscrite" %}{% endif %}
             {% if q.text %}<span class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>{{ q.text|truncatechars:50 }}</span>{% endif %}
             {% if q.qtype == "qcm" and q.choices %}
               <div class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>
@@ -269,141 +269,141 @@
         <td colspan="2">
           <form class="inline qedit" method="post">{% csrf_token %}
             {% if q.qtype == "qcm" %}
-            <select name="correct" title="Bonne réponse"
+            <select name="correct" title="{% translate "Bonne réponse" %}"
                     {% if q.correct_choice is None %}class="champ--manquant"{% endif %}
                     data-montrer-bouton>
-              <option value="" {% if q.correct_choice is None %}selected{% endif %}>— à définir —</option>
+              <option value="" {% if q.correct_choice is None %}selected{% endif %}>{% translate "— à définir —" %}</option>
               {% for i, letter in q.letter_options %}
               <option value="{{ i }}" {% if q.correct_choice == i %}selected{% endif %}>{{ letter }}</option>
               {% endfor %}
             </select>
             {% endif %}
-            {% if q.qtype == "qcm" %}<span class="helptext" title="Chaque QCM vaut 1 point">1 pt</span>{% else %}
-            <input type="text" name="points" value="{{ q.points|floatformat:'-2' }}" title="Barème (points)"
-                   data-montrer-bouton> pt{% endif %}
-            <button class="btn small" name="edit_question" value="{{ q.pk }}" hidden title="Enregistrer — les notes sont recalculées">✓</button>
+            {% if q.qtype == "qcm" %}<span class="helptext" title="{% translate "Chaque QCM vaut 1 point" %}">{% translate "1 pt" %}</span>{% else %}
+            <input type="text" name="points" value="{{ q.points|floatformat:'-2' }}" title="{% translate "Barème (points)" %}"
+                   data-montrer-bouton> {% translate "pt" %}{% endif %}
+            <button class="btn small" name="edit_question" value="{{ q.pk }}" hidden title="{% translate "Enregistrer — les notes sont recalculées" %}">✓</button>
           </form>
         </td>
         <td><form class="inline" method="post">{% csrf_token %}
           <button class="btn small danger" name="delete_question" value="{{ q.pk }}"
-                  data-confirmer="Supprimer la question {{ q.order }} ?">✕</button>
+                  data-confirmer="{% blocktranslate trimmed with order=q.order %}Supprimer la question {{ order }} ?{% endblocktranslate %}">✕</button>
         </form></td>
         {% else %}
-        {# Sans le droit de modifier l'epreuve : les memes valeurs, en clair. #}
+        {#Sans le droit de modifier l'epreuve : les memes valeurs, en clair.#}
         <td>{% if q.qtype == "qcm" %}{{ q.correct_letter|default:"—" }}{% else %}—{% endif %}</td>
-        <td>{{ q.points|floatformat:"-2" }} pt</td>
+        <td>{% blocktranslate trimmed with points=q.points|floatformat:"-2" %}{{ points }} pt{% endblocktranslate %}</td>
         <td></td>
         {% endif %}
       </tr>
       {% endfor %}
     </table>
     </div>
-    <span class="helptext">Chaque QCM vaut 1 point. Le corrigé (et le barème des réponses manuscrites) reste modifiable après l'épreuve :
-      les notes des copies déjà scannées sont recalculées immédiatement.</span>
-    {% else %}<p>Aucune question pour le moment.</p>{% endif %}
+    <span class="helptext">{% blocktranslate trimmed %}Chaque QCM vaut 1 point. Le corrigé (et le barème des réponses manuscrites) reste modifiable après l'épreuve :
+      les notes des copies déjà scannées sont recalculées immédiatement.{% endblocktranslate %}</span>
+    {% else %}<p>{% translate "Aucune question pour le moment." %}</p>{% endif %}
 
     <h2 style="margin-top:20px">
-      {% if quiz.sheet_mode == "split" %}Documents PDF{% else %}Fiche de réponses{% endif %}
+      {% if quiz.sheet_mode == "split" %}{% translate "Documents PDF" %}{% else %}{% translate "Fiche de réponses" %}{% endif %}
     </h2>
     {% if perms.grader.creer_epreuve %}
     <form method="post">{% csrf_token %}
       {% if quiz.exemplaires_anonymes %}
-        <label>Nombre d'exemplaires de la fiche anonyme</label>
+        <label>{% translate "Nombre d'exemplaires de la fiche anonyme" %}</label>
         <input type="number" name="qr_count" value="100" min="1" max="2000"
                style="width:120px;margin-bottom:8px">
-        <span class="helptext" style="margin-bottom:8px">Les exemplaires sont
+        <span class="helptext" style="margin-bottom:8px">{% blocktranslate trimmed %}Les exemplaires sont
           identiques : l'identification vient de l'étiquette QR du candidat,
-          collée dans l'emplacement réservé de sa copie.</span>
+          collée dans l'emplacement réservé de sa copie.{% endblocktranslate %}</span>
       {% else %}
         {% include "grader/_nombre_copies.html" %}
       {% endif %}
-      <button class="btn" name="generate_pdf" value="1" type="submit"{% if generation.etat == "en_cours" %} disabled title="Génération en cours"{% endif %}>
-        {% if quiz.sheet_pdf %}Régénérer les PDF{% else %}Générer les PDF{% endif %}
+      <button class="btn" name="generate_pdf" value="1" type="submit"{% if generation.etat == "en_cours" %} disabled title="{% translate "Génération en cours" %}"{% endif %}>
+        {% if quiz.sheet_pdf %}{% translate "Régénérer les PDF" %}{% else %}{% translate "Générer les PDF" %}{% endif %}
       </button>
       {% comment %}Deux versions : le sujet et la feuille de chacune, plus le PDF des deux
         ensemble (demande du 23 novembre 2026) ; sauf les copies nominatives, chacune déjà
         dans sa version.{% endcomment %}
       {% if quiz.sheet_mode == "split" and quiz.subject_pdf and not quiz.layout_json.versions %}
-        <a class="btn secondary" href="{{ quiz.subject_pdf.url }}" target="_blank">📄 Sujet (questions)</a>
+        <a class="btn secondary" href="{{ quiz.subject_pdf.url }}" target="_blank">{% translate "📄 Sujet (questions)" %}</a>
       {% endif %}
       {% if quiz.sheet_pdf %}
         {% if not quiz.layout_json.versions %}
         <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">
-          {% if quiz.sheet_mode == "split" %}📝 Feuille de réponses{% else %}📄 Télécharger la fiche{% endif %}</a>
+          {% if quiz.sheet_mode == "split" %}{% translate "📝 Feuille de réponses" %}{% else %}{% translate "📄 Télécharger la fiche" %}{% endif %}</a>
         {% elif quiz.id_mode == "qr" %}
-        <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">📝 Copies (A et B alternées)</a>
+        <a class="btn secondary" href="{{ quiz.sheet_pdf.url }}" target="_blank">{% translate "📝 Copies (A et B alternées)" %}</a>
         {% endif %}
-        <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">📋 Liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}{% if quiz.place_anonyme %} et des places{% endif %} par salle</a>
+        <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">{% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidats,étudiants" %}📋 Liste des {{ auto_enroll }}{% endblocktranslate %}{% if quiz.place_anonyme %} {% translate "et des places" %}{% endif %} {% translate "par salle" %}</a>
         {% if quiz.a_des_qcm %}
         {% if quiz.layout_json.versions %}
-        {% for v in quiz.layout_json.versions %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}?version={{ v }}" target="_blank" title="La feuille de réponses de la version {{ v }}, sans candidat : noircissez-y les bonnes réponses en suivant le sujet {{ v }}, puis envoyez-la dans « Corrigé scanné »">✅ Copie du correcteur — version {{ v }}</a>{% endfor %}
-        {% else %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}" target="_blank" title="La feuille de réponses sans candidat : noircissez-y les bonnes réponses, puis envoyez-la dans « Corrigé scanné »">✅ Copie du correcteur</a>{% endif %}
+        {% for v in quiz.layout_json.versions %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}?version={{ v }}" target="_blank" title="{% blocktranslate trimmed %}La feuille de réponses de la version {{ v }}, sans candidat : noircissez-y les bonnes réponses en suivant le sujet {{ v }}, puis envoyez-la dans « Corrigé scanné »{% endblocktranslate %}">{% blocktranslate trimmed %}✅ Copie du correcteur — version {{ v }}{% endblocktranslate %}</a>{% endfor %}
+        {% else %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}" target="_blank" title="{% translate "La feuille de réponses sans candidat : noircissez-y les bonnes réponses, puis envoyez-la dans « Corrigé scanné »" %}">{% translate "✅ Copie du correcteur" %}</a>{% endif %}
         {% endif %}
       {% endif %}
       {% if quiz.sheet_pdf and quiz.layout_json.versions %}
-      <div class="versions-documents" aria-label="Documents de chaque version">
+      <div class="versions-documents" aria-label="{% translate "Documents de chaque version" %}">
         {% for v in quiz.layout_json.versions %}
-        {% if quiz.sheet_mode == "split" %}<a class="btn secondary" href="{% url 'quiz_version_pdf' quiz.pk v 'sujet' %}" target="_blank">📄 Sujet — version {{ v }}</a>{% endif %}
-        {% if quiz.id_mode != "qr" %}<a class="btn secondary" href="{% url 'quiz_version_pdf' quiz.pk v 'feuille' %}" target="_blank">📝 {% if quiz.sheet_mode == "split" %}Feuille de réponses{% else %}Fiche{% endif %} — version {{ v }}</a>{% endif %}
+        {% if quiz.sheet_mode == "split" %}<a class="btn secondary" href="{% url 'quiz_version_pdf' quiz.pk v 'sujet' %}" target="_blank">{% blocktranslate trimmed %}📄 Sujet — version {{ v }}{% endblocktranslate %}</a>{% endif %}
+        {% if quiz.id_mode != "qr" %}<a class="btn secondary" href="{% url 'quiz_version_pdf' quiz.pk v 'feuille' %}" target="_blank">📝 {% if quiz.sheet_mode == "split" %}{% translate "Feuille de réponses" %}{% else %}{% translate "Fiche" %}{% endif %} {% blocktranslate trimmed %}— version {{ v }}{% endblocktranslate %}</a>{% endif %}
         {% endfor %}
       </div>
       {% endif %}
     </form>
     {% endif %}
-    {% if quiz.sheet_pdf and quiz.layout_json.versions %}<span class="helptext"><b>Deux versions, A et B</b> : la version B a ses questions et leurs choix dans un autre ordre. Remettez à chaque candidat {% if quiz.sheet_mode == "split" %}le sujet et la feuille de réponses de la même version{% else %}une fiche, en alternant A et B{% endif %} : la version est imprimée en haut de chaque page et lue au scan, chaque copie est corrigée selon la sienne.{% if quiz.id_mode == "qr" %} Les copies nominatives alternent A et B dans l'ordre des salles.{% endif %}</span>{% endif %}
-    {% if quiz.sheet_pdf and quiz.a_des_qcm %}<span class="helptext"><b>Copie du correcteur</b> : la feuille de réponses sans candidat, marquée « CORRIGÉ ». Le correcteur y noircit la bonne réponse de chaque question, puis la scanne dans « Corrigé scanné » : le corrigé se remplit tout seul.{% if quiz.layout_json.versions %} En deux versions, une seule suffit, A ou B, selon le sujet que suit le correcteur : l'une ou l'autre remplit le même corrigé, pour les deux versions.{% endif %}</span>{% endif %}
+    {% if quiz.sheet_pdf and quiz.layout_json.versions %}<span class="helptext"><b>{% translate "Deux versions, A et B" %}</b> {% translate ": la version B a ses questions et leurs choix dans un autre ordre. Remettez à chaque candidat" %} {% if quiz.sheet_mode == "split" %}{% translate "le sujet et la feuille de réponses de la même version" %}{% else %}{% translate "une fiche, en alternant A et B" %}{% endif %} {% translate ": la version est imprimée en haut de chaque page et lue au scan, chaque copie est corrigée selon la sienne." %}{% if quiz.id_mode == "qr" %} {% translate "Les copies nominatives alternent A et B dans l'ordre des salles." %}{% endif %}</span>{% endif %}
+    {% if quiz.sheet_pdf and quiz.a_des_qcm %}<span class="helptext"><b>{% translate "Copie du correcteur" %}</b> {% translate ": la feuille de réponses sans candidat, marquée « CORRIGÉ ». Le correcteur y noircit la bonne réponse de chaque question, puis la scanne dans « Corrigé scanné » : le corrigé se remplit tout seul." %}{% if quiz.layout_json.versions %} {% translate "En deux versions, une seule suffit, A ou B, selon le sujet que suit le correcteur : l'une ou l'autre remplit le même corrigé, pour les deux versions." %}{% endif %}</span>{% endif %}
     <span class="helptext">
       {% if quiz.sheet_mode == "split" %}
-        <b>Sujet</b> : les questions et leurs choix, à distribuer (non scanné).
-        <b>Feuille de réponses</b> : la grille de cases à imprimer, faire remplir
-        puis scanner.
-        {% if quiz.format_impression == "a3" %}Imprimez le sujet en A3 recto-verso sur le bord
-        court, à 100 %, puis pliez-le au milieu ; la feuille de réponses en A4 à 100 %.
-        {% else %}Imprimez les deux en A4 à 100 %.{% endif %}
+        <b>{% translate "Sujet" %}</b> {% translate ": les questions et leurs choix, à distribuer (non scanné)." %}
+        <b>{% translate "Feuille de réponses" %}</b> {% blocktranslate trimmed %}: la grille de cases à imprimer, faire remplir
+        puis scanner.{% endblocktranslate %}
+        {% if quiz.format_impression == "a3" %}{% blocktranslate trimmed %}Imprimez le sujet en A3 recto-verso sur le bord
+        court, à 100 %, puis pliez-le au milieu ; la feuille de réponses en A4 à 100 %.{% endblocktranslate %}
+        {% else %}{% translate "Imprimez les deux en A4 à 100 %." %}{% endif %}
       {% elif quiz.id_mode == "qr" and not quiz.exemplaires_anonymes %}
-        Imprimez en A4 à 100 % et distribuez à chacun la sienne : les copies sortent salle
-        par salle (registre des inscriptions), dans l'ordre de la liste des {{ quiz.auto_enroll|yesno:"candidats,étudiants" }}.
+        {% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidats,étudiants" %}Imprimez en A4 à 100 % et distribuez à chacun la sienne : les copies sortent salle
+        par salle (registre des inscriptions), dans l'ordre de la liste des {{ auto_enroll }}.{% endblocktranslate %}
       {% elif quiz.id_mode == "grid" %}
-        Imprimez cette fiche en A4 (100 %, sans mise à l'échelle) : une copie par étudiant.
+        {% blocktranslate trimmed %}Imprimez cette fiche en A4 (100 %, sans mise à l'échelle) : une copie par étudiant.
         Chacun colle son étiquette QR dans le cadre en haut à droite
-        (<a href="{% url 'class_detail' quiz.class_group.pk %}">planche d'étiquettes</a>),
-        ou à défaut noircit son n° d'inscription.
+        ({% endblocktranslate %}<a href="{% url 'class_detail' quiz.class_group.pk %}">{% translate "planche d'étiquettes" %}</a>{% blocktranslate trimmed %}),
+        ou à défaut noircit son n° d'inscription.{% endblocktranslate %}
       {% else %}
-        Imprimez cette fiche en A4 (100 %, sans mise à l'échelle) : une copie par étudiant.
+        {% translate "Imprimez cette fiche en A4 (100 %, sans mise à l'échelle) : une copie par étudiant." %}
       {% endif %}
     </span>
   </div>
 
   <div>
     {% if version_b %}
-    {# QCM en deux versions (23 novembre 2026) : la version B, en regard de la version A #}
+    {#QCM en deux versions (23 novembre 2026) : la version B, en regard de la version A#}
     <div class="card" id="version-b">
-      <h2>Questions ({{ version_b|length }}) — version B</h2>
+      <h2>{% blocktranslate trimmed with version_b=version_b|length %}Questions ({{ version_b }}) — version B{% endblocktranslate %}</h2>
       <div class="table-wrap table-wrap--ajuste table-wrap--defile table-wrap--questions" tabindex="0"
-           role="region" aria-label="Questions de la version B">
+           role="region" aria-label="{% translate "Questions de la version B" %}">
         <table>
-        <tr><th>N°</th><th>Question</th><th>Version A</th><th>Bonne rép.</th><th>Barème</th></tr>
+        <tr><th>{% translate "N°" %}</th><th>{% translate "Question" %}</th><th>{% translate "Version A" %}</th><th>{% translate "Bonne rép." %}</th><th>{% translate "Barème" %}</th></tr>
         {% for l in version_b %}
         <tr>
           <td>{{ l.num }}</td>
-          <td>{% if l.question.qtype == "qcm" %}QCM · {{ l.question.num_bubbles }} choix{% else %}Manuscrite{% endif %}
+          <td>{% if l.question.qtype == "qcm" %}{% blocktranslate trimmed with num_bubbles=l.question.num_bubbles %}QCM · {{ num_bubbles }} choix{% endblocktranslate %}{% else %}{% translate "Manuscrite" %}{% endif %}
               {% if l.question.text %}<span class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>{{ l.question.text|truncatechars:50 }}</span>{% endif %}
               {% if l.choix %}<div class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>
                 {% for ch in l.choix %}{{ ch }}{% if not forloop.last %} · {% endif %}{% endfor %}
               </div>{% endif %}</td>
-          <td>n° {{ l.question.order }}</td>
+          <td>{% translate "n°" %} {{ l.question.order }}</td>
           <td>{% if l.question.qtype == "qcm" %}<b>{{ l.bonne|default:"—" }}</b>{% else %}—{% endif %}</td>
-          <td>{{ l.question.points|floatformat:"-2" }} pt</td>
+          <td>{% blocktranslate trimmed with points=l.question.points|floatformat:"-2" %}{{ points }} pt{% endblocktranslate %}</td>
         </tr>
         {% endfor %}
         </table>
       </div>
-      <span class="helptext">{% if version_b_apercu %}<b>Aperçu</b> : la version B est fixée à la génération des PDF. {% endif %}Les questions de la version B et leurs choix, dans l'ordre imprimé. Sa bonne réponse suit le corrigé de la version A : modifiez-le dans le tableau de la version A, les deux versions se corrigent ensemble.</span>
+      <span class="helptext">{% if version_b_apercu %}<b>{% translate "Aperçu" %}</b> {% translate ": la version B est fixée à la génération des PDF." %} {% endif %}{% translate "Les questions de la version B et leurs choix, dans l'ordre imprimé. Sa bonne réponse suit le corrigé de la version A : modifiez-le dans le tableau de la version A, les deux versions se corrigent ensemble." %}</span>
     </div>
     {% endif %}
     {% if perms.grader.creer_epreuve %}
     <div class="card">
-      <h2>Ajout rapide de QCM (corrigé)</h2>
+      <h2>{% translate "Ajout rapide de QCM (corrigé)" %}</h2>
       <form method="post">{% csrf_token %}
         {{ bulk_form.non_field_errors }}
         {{ bulk_form.answer_key.errors }}
@@ -411,46 +411,46 @@
         <span class="helptext">{{ bulk_form.answer_key.help_text }}</span>
         {{ bulk_form.num_choices.errors }}
         <label>{{ bulk_form.num_choices.label }}</label>{{ bulk_form.num_choices }}
-        <span class="helptext">Chaque QCM vaut 1 point.</span>
-        <p><button class="btn" name="bulk_add" value="1" type="submit">Créer les questions</button></p>
+        <span class="helptext">{% translate "Chaque QCM vaut 1 point." %}</span>
+        <p><button class="btn" name="bulk_add" value="1" type="submit">{% translate "Créer les questions" %}</button></p>
       </form>
     </div>
     <div class="card">
-      <h2>Importer un questionnaire</h2>
+      <h2>{% translate "Importer un questionnaire" %}</h2>
       <form method="post" enctype="multipart/form-data">{% csrf_token %}
         {{ import_form.file }}
-        <span class="helptext">Excel (colonnes Question, A, B, C…, Réponse, Barème — voir
-          <code>modele_questions.xlsx</code>), Word, PDF, texte ou Markdown (.md) : questions
-          numérotées « 1. … », choix « A) … » ou « أ) … », bonne réponse marquée d'un
-          <b>*</b> ou ligne « Réponse : B », barème « (2 pts) ». Une question sans choix
+        <span class="helptext">{% translate "Excel (colonnes Question, A, B, C…, Réponse, Barème — voir" %}
+          <code>{% translate "modele_questions.xlsx" %}</code>{% blocktranslate trimmed %}), Word, PDF, texte ou Markdown (.md) : questions
+          numérotées « 1. … », choix « A) … » ou « أ) … », bonne réponse marquée d'un{% endblocktranslate %}
+          <b>*</b> {% blocktranslate trimmed %}ou ligne « Réponse : B », barème « (2 pts) ». Une question sans choix
           devient manuscrite ; sans bonne réponse, elle s'importe et se complète ensuite.
           Un PDF sans texte (scanné, ou imprimé avec « Microsoft Print to PDF ») est lu par
-          reconnaissance de caractères (OCR) : relisez ensuite ses questions.</span>
-        <p><button class="btn" name="import_questions" value="1" type="submit">Importer</button></p>
+          reconnaissance de caractères (OCR) : relisez ensuite ses questions.{% endblocktranslate %}</span>
+        <p><button class="btn" name="import_questions" value="1" type="submit">{% translate "Importer" %}</button></p>
       </form>
     </div>
     <div class="card">
-      <h2>Banque de questions</h2>
+      <h2>{% translate "Banque de questions" %}</h2>
       {% if bank_form.fields.source.queryset.exists %}
       <form method="post">{% csrf_token %}
         {{ bank_form.non_field_errors }}
         <label>{{ bank_form.source.label }}</label>{{ bank_form.source }}
         {{ bank_form.orders.errors }}
         <label>{{ bank_form.orders.label }}</label>{{ bank_form.orders }}
-        <span class="helptext">Les questions de vos épreuves précédentes (intitulé, choix,
-          bonne réponse, barème) sont copiées à la suite de ce quiz.</span>
-        <p><button class="btn secondary" name="copy_questions" value="1" type="submit">Reprendre les questions</button></p>
+        <span class="helptext">{% blocktranslate trimmed %}Les questions de vos épreuves précédentes (intitulé, choix,
+          bonne réponse, barème) sont copiées à la suite de ce quiz.{% endblocktranslate %}</span>
+        <p><button class="btn secondary" name="copy_questions" value="1" type="submit">{% translate "Reprendre les questions" %}</button></p>
       </form>
       {% else %}
-      <p class="helptext">Vos questions sont conservées d'une épreuve à l'autre : dès qu'un
-        autre de vos quiz contient des questions, vous pourrez les reprendre ici.</p>
+      <p class="helptext">{% blocktranslate trimmed %}Vos questions sont conservées d'une épreuve à l'autre : dès qu'un
+        autre de vos quiz contient des questions, vous pourrez les reprendre ici.{% endblocktranslate %}</p>
       {% endif %}
     </div>
     <div class="card">
-      <h2>Ajouter une question</h2>
+      <h2>{% translate "Ajouter une question" %}</h2>
       <form method="post">{% csrf_token %}
         {% if qform.errors %}<ul class="messages"><li class="error">
-          La question n'a pas été ajoutée : corrigez les champs signalés ci-dessous.
+          {% translate "La question n'a pas été ajoutée : corrigez les champs signalés ci-dessous." %}
           {% for e in qform.non_field_errors %}<br><b>{{ e }}</b>{% endfor %}
         </li></ul>{% endif %}
         {% for field in qform %}
@@ -460,7 +460,7 @@
             {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
           </div>
         {% endfor %}
-        <p><button class="btn" name="add_question" value="1" type="submit">Ajouter</button></p>
+        <p><button class="btn" name="add_question" value="1" type="submit">{% translate "Ajouter" %}</button></p>
       </form>
     </div>
     {% endif %}
@@ -468,10 +468,11 @@
 </div>
 
 
-<span hidden data-lettres="{{ choice_letters_full|join:',' }}" data-cases="{{ quiz.num_choices|default:4 }}"></span>
+<span hidden data-lettres="{{ choice_letters_full|join:',' }}" data-cases="{{ quiz.num_choices|default:4 }}"
+      data-a-definir="{% translate "— à définir plus tard —" %}"></span>
 
 <div class="card">
-  <h2>Copies scannées</h2>
+  <h2>{% translate "Copies scannées" %}</h2>
   {% if perms.grader.corriger_copies %}
   <form method="post" action="{% url 'quiz_upload' quiz.pk %}" enctype="multipart/form-data">
     {% csrf_token %}
@@ -484,32 +485,32 @@
         <span class="helptext">{{ upload_form.files.help_text }}</span>
       </div>
     </div>
-    <p><button class="btn" type="submit" {% if not quiz.sheet_pdf %}disabled title="Générez d'abord la fiche PDF"{% endif %}>
-      {% if deferred or sans_corrige %}Téléverser (correction lancée plus tard){% else %}Téléverser et corriger automatiquement{% endif %}</button></p>
-    {% if sans_corrige %}<span class="helptext">Le corrigé est incomplet : les copies
+    <p><button class="btn" type="submit" {% if not quiz.sheet_pdf %}disabled title="{% translate "Générez d'abord la fiche PDF" %}"{% endif %}>
+      {% if deferred or sans_corrige %}{% translate "Téléverser (correction lancée plus tard)" %}{% else %}{% translate "Téléverser et corriger automatiquement" %}{% endif %}</button></p>
+    {% if sans_corrige %}<span class="helptext">{% blocktranslate trimmed %}Le corrigé est incomplet : les copies
       seront reçues et mises en attente, puis corrigées dès que toutes les bonnes
-      réponses seront renseignées.</span>{% endif %}
-    {% if deferred %}<span class="helptext">Correction après scan : les copies sont mises en
-      attente ; le bouton « ▶ Lancer la correction » apparaît en haut de la page.</span>{% endif %}
+      réponses seront renseignées.{% endblocktranslate %}</span>{% endif %}
+    {% if deferred %}<span class="helptext">{% blocktranslate trimmed %}Correction après scan : les copies sont mises en
+      attente ; le bouton « ▶ Lancer la correction » apparaît en haut de la page.{% endblocktranslate %}</span>{% endif %}
   </form>
   {% else %}
-  <p class="helptext helptext--serre">Votre compte ne téléverse pas de copies.
-    Les lots déjà reçus restent consultables ci-dessous.</p>
+  <p class="helptext helptext--serre">{% blocktranslate trimmed %}Votre compte ne téléverse pas de copies.
+    Les lots déjà reçus restent consultables ci-dessous.{% endblocktranslate %}</p>
   {% endif %}
 
   {% if batches %}
   <div class="table-wrap">
     <table>
-    <tr><th>Lot</th><th>Date</th><th>Pages</th><th>Identifiées</th><th></th></tr>
+    <tr><th>{% translate "Lot" %}</th><th>{% translate "Date" %}</th><th>{% translate "Pages" %}</th><th>{% translate "Identifiées" %}</th><th></th></tr>
     {% for b in batches %}
     <tr class="ligne-lien">
       <td><a class="ligne-lien__cible" href="{% url 'batch_detail' b.pk %}">{{ b }}</a>
-          {% if b.is_processing %}<span class="badge warn">correction {{ b.processed_pages }}/{{ b.total_pages }}</span>
-          {% elif b.status == "pending" %}<span class="badge grey">en attente — {{ b.total_pages }} page(s)</span>{% endif %}</td>
+          {% if b.is_processing %}<span class="badge warn">{% blocktranslate trimmed with processed_pages=b.processed_pages total_pages=b.total_pages %}correction {{ processed_pages }}/{{ total_pages }}{% endblocktranslate %}</span>
+          {% elif b.status == "pending" %}<span class="badge grey">{% blocktranslate trimmed with total_pages=b.total_pages %}en attente — {{ total_pages }} page(s){% endblocktranslate %}</span>{% endif %}</td>
       <td>{{ b.created_at|date:"d/m/Y H:i" }}</td>
       <td>{{ b.sheets.count }}</td>
       <td>{{ b.identified_count }}</td>
-      <td><a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}?batch={{ b.pk }}">Résultats du lot</a></td>
+      <td><a class="btn small secondary" href="{% url 'quiz_results' quiz.pk %}?batch={{ b.pk }}">{% translate "Résultats du lot" %}</a></td>
     </tr>
     {% endfor %}
   </table>
@@ -519,16 +520,16 @@
 {% if journal %}
 <div class="card">
   <div class="card__head">
-    <h2>Journal de l'épreuve</h2>
+    <h2>{% translate "Journal de l'épreuve" %}</h2>
     <span class="spacer"></span>
     {% if n_journal > journal|length %}
-    <span class="helptext helptext--serre">{{ journal|length }} plus récentes
-      sur {{ n_journal }}</span>
+    <span class="helptext helptext--serre">{% blocktranslate trimmed with journal=journal|length %}{{ journal }} plus récentes
+      sur {{ n_journal }}{% endblocktranslate %}</span>
     {% endif %}
   </div>
-  <p class="helptext helptext--serre">Bonnes réponses, barème, notes,
+  <p class="helptext helptext--serre">{% blocktranslate trimmed %}Bonnes réponses, barème, notes,
     attributions et suppressions : chaque geste qui change une note est
-    tracé ici avec son auteur.</p>
+    tracé ici avec son auteur.{% endblocktranslate %}</p>
   {% include "grader/_journal.html" with entrees=journal %}
 </div>
 {% endif %}

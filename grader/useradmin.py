@@ -21,6 +21,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import Permission
 from django.urls import reverse
 from django.utils.html import format_html
+from django.utils.translation import gettext, gettext_lazy
 
 from . import droits
 from .admin_titres import TitresFrancais
@@ -38,8 +39,8 @@ def _permission(nom_complet):
 ROLE_ENSEIGNANT = "enseignant"
 ROLE_ADMIN = "admin"
 ROLES = [
-    (ROLE_ENSEIGNANT, "Enseignant — ses classes, ses épreuves, ses copies"),
-    (ROLE_ADMIN, "Administrateur — gère les comptes et voit toutes les données"),
+    (ROLE_ENSEIGNANT, gettext_lazy("Enseignant — ses classes, ses épreuves, ses copies")),
+    (ROLE_ADMIN, gettext_lazy("Administrateur — gère les comptes et voit toutes les données")),
 ]
 
 
@@ -56,36 +57,37 @@ class CompteChangeForm(forms.ModelForm):
     un compte ouvre l'administration et voit tout, ou ni l'un ni l'autre.
     """
     role = forms.ChoiceField(
-        label="Rôle", choices=ROLES, widget=forms.RadioSelect,
-        help_text="Un enseignant n'accède qu'à ses propres données.")
+        label=gettext_lazy("Rôle"), choices=ROLES, widget=forms.RadioSelect,
+        help_text=gettext_lazy("Un enseignant n'accède qu'à ses propres données."))
 
     classes = forms.ModelMultipleChoiceField(
-        label="Classes de cet enseignant", required=False,
+        label=gettext_lazy("Classes de cet enseignant"), required=False,
         queryset=ClassGroup.objects.none(),
         widget=forms.CheckboxSelectMultiple,
-        help_text="Il ne voit que les classes cochées, leurs étudiants et les "
-                  "épreuves qui s'y rattachent. Une classe peut être confiée à "
-                  "plusieurs enseignants : la cocher ici n'en retire pas les "
+        help_text=gettext_lazy("Il voit les classes cochées, leurs étudiants et les "
+                  "épreuves qui s'y rattachent, ainsi que les épreuves qu'il a créées "
+                  "lui-même, même si leur classe est décochée. Une classe peut être "
+                  "confiée à plusieurs enseignants : la cocher ici n'en retire pas les "
                   "collègues qui l'ont déjà. Une classe décochée n'est pas "
-                  "supprimée.")
+                  "supprimée."))
 
     # La liste de candidats d'un concours n'est pas une classe (23 novembre 2026) : elle se
     # coche à part, une par étape du concours.
     concours = forms.ModelMultipleChoiceField(
-        label="Concours de cet enseignant", required=False,
+        label=gettext_lazy("Concours de cet enseignant"), required=False,
         queryset=ClassGroup.objects.none(),
         widget=forms.CheckboxSelectMultiple,
-        help_text="Les listes de candidats des concours, une par étape : il voit les "
-                  "étapes cochées, leurs candidats, copies et résultats.")
+        help_text=gettext_lazy("Les listes de candidats des concours, une par étape : il voit les "
+                  "étapes cochées, leurs candidats, copies et résultats."))
 
     peut_creer = forms.BooleanField(
-        label="Créer des épreuves", required=False,
-        help_text="Saisir les questions, régler la fiche, produire les PDF.")
+        label=gettext_lazy("Créer des épreuves"), required=False,
+        help_text=gettext_lazy("Saisir les questions, régler la fiche, produire les PDF."))
     peut_corriger = forms.BooleanField(
-        label="Corriger les copies", required=False,
-        help_text="Téléverser les copies scannées, lancer la correction et "
+        label=gettext_lazy("Corriger les copies"), required=False,
+        help_text=gettext_lazy("Téléverser les copies scannées, lancer la correction et "
                   "la vérifier. Ne permet pas de modifier la note d'un QCM : "
-                  "elle est établie par lecture optique.")
+                  "elle est établie par lecture optique."))
 
     class Meta:
         model = User
@@ -113,8 +115,8 @@ class CompteChangeForm(forms.ModelForm):
             self.fields["peut_corriger"].initial = True
 
         self.fields["is_active"].help_text = (
-            "Décochez pour fermer l'accès sans supprimer le compte : les "
-            "classes, épreuves et copies de cet enseignant sont conservées.")
+            gettext_lazy("Décochez pour fermer l'accès sans supprimer le compte : les "
+            "classes, épreuves et copies de cet enseignant sont conservées."))
 
     def clean_classes(self):
         """Refuse deux classes de même nom pour un même enseignant.
@@ -126,10 +128,9 @@ class CompteChangeForm(forms.ModelForm):
         noms = [c.name for c in choisies]
         collisions = sorted({n for n in noms if noms.count(n) > 1})
         if collisions:
-            raise forms.ValidationError(
-                "Plusieurs des classes cochées s'appellent : "
-                + ", ".join(collisions)
-                + ". Renommez l'une d'elles avant de les attribuer ensemble.")
+            raise forms.ValidationError(gettext(
+                "Plusieurs des classes cochées s'appellent : %(noms)s. Renommez l'une d'elles "
+                "avant de les attribuer ensemble.") % {"noms": ", ".join(collisions)})
         return choisies
 
     def save(self, commit=True):
@@ -190,9 +191,9 @@ admin.site.unregister(User)
 
 @admin.register(User)
 class CompteAdmin(TitresFrancais, UserAdmin):
-    titre_liste = "Utilisateurs"
-    titre_ajout = "Nouveau compte"
-    titre_modification = "Modifier le compte"
+    titre_liste = gettext_lazy("Utilisateurs")
+    titre_ajout = gettext_lazy("Nouveau compte")
+    titre_modification = gettext_lazy("Modifier le compte")
     form = CompteChangeForm
     list_display = ("username", "nom_complet", "role", "ses_classes",
                     "autorisations", "actif", "mot_de_passe_lien")
@@ -202,68 +203,69 @@ class CompteAdmin(TitresFrancais, UserAdmin):
     readonly_fields = ("mot_de_passe", "last_login", "date_joined")
 
     fieldsets = (
-        ("Compte", {"fields": ("username", "mot_de_passe")}),
-        ("Identité", {"fields": ("first_name", "last_name", "email")}),
-        ("Accès", {"fields": ("role", "is_active")}),
-        ("Classes", {
-            "description": "Les classes dont cet enseignant a la charge.",
+        (gettext_lazy("Compte"), {"fields": ("username", "mot_de_passe")}),
+        (gettext_lazy("Identité"), {"fields": ("first_name", "last_name", "email")}),
+        (gettext_lazy("Accès"), {"fields": ("role", "is_active")}),
+        (gettext_lazy("Classes"), {
+            "description": gettext_lazy("Les classes dont cet enseignant a la charge."),
             "fields": ("classes",)}),
-        ("Concours", {
-            "description": "Les concours dont il a la charge (chaque étape a sa liste "
-                           "de candidats).",
+        (gettext_lazy("Concours"), {
+            "description": gettext_lazy("Les concours dont il a la charge (chaque étape a sa "
+                                        "liste de candidats)."),
             "fields": ("concours",)}),
-        ("Autorisations", {
-            "description": "Les deux gestes se donnent séparément. Dans tous "
-                           "les cas, la note d'un QCM reste celle de la "
-                           "lecture optique : un enseignant ne la modifie pas.",
+        (gettext_lazy("Autorisations"), {
+            "description": gettext_lazy("Les deux gestes se donnent séparément. Dans tous "
+                                        "les cas, la note d'un QCM reste celle de la "
+                                        "lecture optique : un enseignant ne la modifie pas."),
             "fields": ("peut_creer", "peut_corriger")}),
-        ("Permissions détaillées", {
+        (gettext_lazy("Permissions détaillées"), {
             "classes": ("collapse",),
-            "description": "Réglages avancés de Django. Le rôle ci-dessus "
-                           "suffit dans la plupart des établissements.",
+            "description": gettext_lazy("Réglages avancés de Django. Le rôle ci-dessus "
+                                        "suffit dans la plupart des établissements."),
             "fields": ("groups", "user_permissions")}),
-        ("Historique", {"classes": ("collapse",),
-                        "fields": ("last_login", "date_joined")}),
+        (gettext_lazy("Historique"), {"classes": ("collapse",),
+                                      "fields": ("last_login", "date_joined")}),
     )
     add_fieldsets = (
-        ("Nouveau compte", {
+        (gettext_lazy("Nouveau compte"), {
             "fields": ("username", "usable_password", "password1", "password2"),
-            "description": "L'identifiant et le mot de passe seront remis à "
-                           "l'enseignant ; il pourra changer son mot de passe "
-                           "depuis son espace. L'écran suivant demandera ses "
-                           "classes et ses autorisations."}),
+            "description": gettext_lazy("L'identifiant et le mot de passe seront remis à "
+                                        "l'enseignant ; il pourra changer son mot de passe "
+                                        "depuis son espace. L'écran suivant demandera ses "
+                                        "classes et ses autorisations.")}),
     )
 
-    @admin.display(description="Nom", ordering="last_name")
+    @admin.display(description=gettext_lazy("Nom"), ordering="last_name")
     def nom_complet(self, obj):
         return obj.get_full_name() or "—"
 
-    @admin.display(description="Rôle", ordering="is_superuser")
+    @admin.display(description=gettext_lazy("Rôle"), ordering="is_superuser")
     def role(self, obj):
         if obj.is_superuser:
-            return format_html('<span class="qs-tag qs-tag--admin">Administrateur</span>')
-        return format_html('<span class="qs-tag">Enseignant</span>')
+            return format_html('<span class="qs-tag qs-tag--admin">{}</span>',
+                               gettext("Administrateur"))
+        return format_html('<span class="qs-tag">{}</span>', gettext("Enseignant"))
 
-    @admin.display(description="Classes")
+    @admin.display(description=gettext_lazy("Classes"))
     def ses_classes(self, obj):
         noms = list(obj.classes_attribuees.classes().values_list("name", flat=True))
         return ", ".join(noms) if noms else "—"
 
-    @admin.display(description="Autorisations")
+    @admin.display(description=gettext_lazy("Autorisations"))
     def autorisations(self, obj):
         if obj.is_superuser:
-            return format_html('<span class="qs-tag qs-tag--admin">tout</span>')
+            return format_html('<span class="qs-tag qs-tag--admin">{}</span>', gettext("tout"))
         tags = []
         if droits.peut_creer(obj):
-            tags.append("créer")
+            tags.append(gettext("créer"))
         if droits.peut_corriger(obj):
-            tags.append("corriger")
+            tags.append(gettext("corriger"))
         if not tags:
-            return format_html('<span class="qs-tag">lecture seule</span>')
+            return format_html('<span class="qs-tag">{}</span>', gettext("lecture seule"))
         return format_html(
             "".join('<span class="qs-tag">{}</span> ' for _ in tags), *tags)
 
-    @admin.display(description="Actif", boolean=True, ordering="is_active")
+    @admin.display(description=gettext_lazy("Actif"), boolean=True, ordering="is_active")
     def actif(self, obj):
         return obj.is_active
 
@@ -278,13 +280,13 @@ class CompteAdmin(TitresFrancais, UserAdmin):
             f"{self.admin_site.name}:{meta.app_label}_{meta.model_name}"
             "_password_change", args=[obj.pk])
 
-    @admin.display(description="Mot de passe")
+    @admin.display(description=gettext_lazy("Mot de passe"))
     def mot_de_passe_lien(self, obj):
         return format_html(
-            '<a class="qs-pw-link" href="{}">Modifier</a>',
-            self._url_mot_de_passe(obj))
+            '<a class="qs-pw-link" href="{}">{}</a>',
+            self._url_mot_de_passe(obj), gettext("Modifier"))
 
-    @admin.display(description="Mot de passe")
+    @admin.display(description=gettext_lazy("Mot de passe"))
     def mot_de_passe(self, obj):
         """Ligne du formulaire : pas d'empreinte, juste un bouton.
 
@@ -294,12 +296,10 @@ class CompteAdmin(TitresFrancais, UserAdmin):
             return "—"
         if not obj.has_usable_password():
             return format_html(
-                '<span class="qs-pw-none">Aucun mot de passe utilisable — '
-                'ce compte ne peut pas se connecter.</span> '
-                '<a class="button qs-pw-btn" href="{}">Définir un '
-                'mot de passe</a>', self._url_mot_de_passe(obj))
+                '<span class="qs-pw-none">{}</span> <a class="button qs-pw-btn" href="{}">{}</a>',
+                gettext("Aucun mot de passe utilisable — ce compte ne peut pas se connecter."),
+                self._url_mot_de_passe(obj), gettext("Définir un mot de passe"))
         return format_html(
-            '<a class="button qs-pw-btn" href="{}">Modifier le mot '
-            'de passe</a><p class="help qs-pw-help">Un mot de passe ne se '
-            'relit pas : il ne peut être que remplacé.</p>',
-            self._url_mot_de_passe(obj))
+            '<a class="button qs-pw-btn" href="{}">{}</a><p class="help qs-pw-help">{}</p>',
+            self._url_mot_de_passe(obj), gettext("Modifier le mot de passe"),
+            gettext("Un mot de passe ne se relit pas : il ne peut être que remplacé."))

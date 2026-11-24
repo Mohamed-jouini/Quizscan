@@ -115,6 +115,11 @@ LABELS = {
                           "compris.",
         "entier": "Partie entière", "demi": "Décimale",
         "note_max_demi": "La note ne dépasse pas {n} : avec {n}, noircissez ,0.",
+        # par quarts de point (24 novembre 2026)
+        "note_aide_quarts": "Écrivez la note en clair, puis noircissez sa partie entière "
+                            "(0 à {n}) et sa décimale (,00 ,25 ,50 ou ,75) : une case par "
+                            "ligne, ,00 compris.",
+        "note_max_quarts": "La note ne dépasse pas {n} : avec {n}, noircissez ,00.",
         "oral_instr": "Fiche d'évaluation orale — l'examinateur noircit la note "
                       "puis scanne la fiche : la note est affectée à l'étudiant.",
         "observations": "Observations de l'examinateur",
@@ -164,6 +169,9 @@ LABELS = {
                           "(0 أو 5): خانة واحدة في كل سطر، والصفر كذلك.",
         "entier": "الجزء الصحيح", "demi": "الكسر",
         "note_max_demi": "لا يتجاوز العدد {n}: مع {n} املأ خانة الصفر في الكسر.",
+        "note_aide_quarts": "اكتب العدد بوضوح، ثم املأ جزأه الصحيح (من 0 إلى {n}) وكسره "
+                            "(00 أو 25 أو 50 أو 75): خانة واحدة في كل سطر، والصفر كذلك.",
+        "note_max_quarts": "لا يتجاوز العدد {n}: مع {n} املأ خانة 00 في الكسر.",
         "oral_instr": "بطاقة تقييم شفاهي — يملأ الممتحن العدد ثم تُمسح البطاقة ضوئيا.",
         "observations": "ملاحظات الممتحن",
         "redaction": "ورقة التحرير",
@@ -884,15 +892,19 @@ def _dessiner_grille_note(c, draw, g, T, lang):
 
 
 def _dessiner_grille_demi(c, draw, g, T):
-    """Grille de la note d'un écrit par demi-points (demande de l'utilisateur, 13 novembre
-    2026) : la note en clair et la signature en haut ; dessous, la partie entière de 0 au
-    barème sur une ligne, puis la décimale, « ,0 » ou « ,5 » (layout._add_note_grid_demi)."""
+    """Grille de la note d'un écrit (demande de l'utilisateur, 13 novembre 2026) : la note en
+    clair et la signature en haut ; dessous, la partie entière de 0 au barème sur une ligne,
+    puis la décimale (layout._add_note_grid_demi) : ,00 ,25 ,50 ,75 depuis le 24 novembre
+    2026, ,0 ou ,5 sur une disposition enregistrée avant (sans « valeurs »)."""
     x, y, w, h = g["rect"]
     sur = f"{g['sur']:g}"
+    valeurs = g.get("valeurs") or [0.0, 0.5]
+    quarts = len(valeurs) > 2
     c.setLineWidth(1.1)
     c.roundRect(x * mm, _y(y, h), w * mm, h * mm, 2.5 * mm, stroke=1, fill=0)
     draw(T["note_titre"].format(n=sur), x + 4.0, _y(g["title_y"]), 9.5, bold=True)
-    draw(T["note_aide_demi"].format(n=sur), x + 4.0, _y(g["title_y"] + 4.5), 6.8, gray=0.35)
+    draw(T["note_aide_quarts" if quarts else "note_aide_demi"].format(n=sur), x + 4.0,
+         _y(g["title_y"] + 4.5), 6.8, gray=0.35)
     # la note en clair, la signature du correcteur
     c.setLineWidth(0.8)
     nx, ny, nw, nh = g["note_box"]
@@ -907,15 +919,17 @@ def _dessiner_grille_demi(c, draw, g, T):
     for k, (cx, _) in enumerate(entiers):
         draw(str(k), cx, _y(g["header_y"]), 6.5, align="center", gray=0.35)
     c.setLineWidth(0.6)
+    decimales = ([f",{round(v * 100):02d}" for v in valeurs] if quarts
+                 else [f",{round(v * 10)}" for v in valeurs])
     for kind, row, textes in (("entier", entiers, [str(k) for k in range(len(entiers))]),
-                              ("demi", demis, [",0", ",5"])):
+                              ("demi", demis, decimales)):
         draw(T[kind], x + 4.0, _y(row[0][1] + 1.2), 8, bold=True)
         for (cx, cy), texte in zip(row, textes):
             c.circle(cx * mm, _y(cy), g["r"] * mm, stroke=1, fill=0)
             draw(texte, cx, _y(cy + 0.7), 5, align="center", gray=0.6)
-    # la note ne dépasse pas le barème : avec 20, « ,0 »
-    draw(T["note_max_demi"].format(n=sur), demis[-1][0] + 6.0, _y(demis[0][1] + 1.0), 7,
-         gray=0.35)
+    # la note ne dépasse pas le barème : avec 20, « ,00 »
+    draw(T["note_max_quarts" if quarts else "note_max_demi"].format(n=sur),
+         demis[-1][0] + 6.0, _y(demis[0][1] + 1.0), 7, gray=0.35)
 
 
 # Version du dessin du SUJET. À augmenter à chaque changement de ce qu'il

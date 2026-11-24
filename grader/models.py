@@ -8,7 +8,8 @@ from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
-from django.utils.text import get_valid_filename
+from django.utils.text import format_lazy, get_valid_filename
+from django.utils.translation import gettext, gettext_lazy, pgettext_lazy
 
 # Hauteur maximale d'une zone de réponse manuscrite (mm) : au-delà, le bloc
 # ne tient plus dans la zone imprimable d'une page A4 (voir layout.py).
@@ -53,21 +54,21 @@ class ClassGroup(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL,
                               on_delete=models.SET_NULL,
                               null=True, related_name="class_groups",
-                              verbose_name="créée par")
+                              verbose_name=gettext_lazy("créée par"))
     # Une classe peut être tenue par plusieurs enseignants, et un enseignant
     # tenir plusieurs classes. Ce sont eux qui la voient, ainsi que ses
     # épreuves, copies et résultats.
     enseignants = models.ManyToManyField(
         settings.AUTH_USER_MODEL, related_name="classes_attribuees", blank=True,
-        verbose_name="enseignants")
-    name = models.CharField("nom de la classe", max_length=120)
-    created_at = models.DateTimeField("créée le", auto_now_add=True)
+        verbose_name=gettext_lazy("enseignants"))
+    name = models.CharField(gettext_lazy("nom de la classe"), max_length=120)
+    created_at = models.DateTimeField(gettext_lazy("créée le"), auto_now_add=True)
 
     objects = ClassGroupQuerySet.as_manager()
 
     class Meta:
-        verbose_name = "classe"
-        verbose_name_plural = "classes"
+        verbose_name = gettext_lazy("classe")
+        verbose_name_plural = gettext_lazy("classes")
         ordering = ["name"]
         unique_together = [("owner", "name")]
 
@@ -90,32 +91,32 @@ class Inscrit(models.Model):
     n° d'inscription, quelles que soient les classes ou concours où elle
     figure ensuite. C'est la référence contre laquelle une liste de
     candidats importée est vérifiée (même n°, même nom ?)."""
-    numero = models.CharField("n° d'inscription", max_length=40, unique=True)
-    nom = models.CharField("nom", max_length=80)
-    prenom = models.CharField("prénom", max_length=80)
+    numero = models.CharField(gettext_lazy("n° d'inscription"), max_length=40, unique=True)
+    nom = models.CharField(pgettext_lazy("personne", "nom"), max_length=80)
+    prenom = models.CharField(gettext_lazy("prénom"), max_length=80)
     # Identité complémentaire (facultative). La CIN n'est pas dans le QR de
     # la carte : donnée personnelle, elle reste dans l'application.
-    cin = models.CharField("n° de CIN", max_length=20, blank=True, db_index=True,
-                           help_text="Carte d'identité nationale (8 chiffres) ou "
-                                     "n° de passeport.")
-    cin_lieu = models.CharField("lieu de délivrance de la CIN", max_length=80, blank=True)
-    cin_date = models.DateField("date de délivrance de la CIN", null=True, blank=True)
-    date_naissance = models.DateField("date de naissance", null=True, blank=True)
+    cin = models.CharField(gettext_lazy("n° de CIN"), max_length=20, blank=True, db_index=True,
+                           help_text=gettext_lazy("Carte d'identité nationale (8 chiffres) ou "
+                                     "n° de passeport."))
+    cin_lieu = models.CharField(gettext_lazy("lieu de délivrance de la CIN"), max_length=80, blank=True)
+    cin_date = models.DateField(gettext_lazy("date de délivrance de la CIN"), null=True, blank=True)
+    date_naissance = models.DateField(gettext_lazy("date de naissance"), null=True, blank=True)
     # Là où il compose : remplacés par chaque nouvelle liste importée.
-    centre = models.CharField("centre", max_length=150, blank=True,
-                              help_text="Centre d'examen.")
-    salle = models.CharField("salle", max_length=60, blank=True)
-    etablissement = models.CharField("établissement", max_length=150, blank=True,
-                                     help_text="Établissement d'origine.")
-    email = models.EmailField("adresse e-mail", blank=True)
+    centre = models.CharField(gettext_lazy("centre"), max_length=150, blank=True,
+                              help_text=gettext_lazy("Centre d'examen."))
+    salle = models.CharField(gettext_lazy("salle"), max_length=60, blank=True)
+    etablissement = models.CharField(gettext_lazy("établissement"), max_length=150, blank=True,
+                                     help_text=gettext_lazy("Établissement d'origine."))
+    email = models.EmailField(gettext_lazy("adresse e-mail"), blank=True)
     cree_par = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                                  null=True, blank=True, related_name="+",
-                                 verbose_name="inscrit par")
-    cree_le = models.DateTimeField("inscrit le", auto_now_add=True)
+                                 verbose_name=gettext_lazy("inscrit par"))
+    cree_le = models.DateTimeField(gettext_lazy("inscrit le"), auto_now_add=True)
 
     class Meta:
-        verbose_name = "inscription"
-        verbose_name_plural = "inscriptions"
+        verbose_name = gettext_lazy("inscription")
+        verbose_name_plural = gettext_lazy("inscriptions")
         ordering = ["nom", "prenom"]
 
     @property
@@ -137,18 +138,18 @@ class Inscrit(models.Model):
 
 class Student(models.Model):
     class_group = models.ForeignKey(ClassGroup, on_delete=models.CASCADE,
-                                    related_name="students", verbose_name="classe")
-    last_name = models.CharField("nom", max_length=80)
-    first_name = models.CharField("prénom", max_length=80)
-    student_number = models.CharField("n° d'inscription", max_length=40, blank=True)
+                                    related_name="students", verbose_name=gettext_lazy("classe"))
+    last_name = models.CharField(pgettext_lazy("personne", "nom"), max_length=80)
+    first_name = models.CharField(gettext_lazy("prénom"), max_length=80)
+    student_number = models.CharField(gettext_lazy("n° d'inscription"), max_length=40, blank=True)
     # Fiche du registre des inscriptions (même n°), quand elle existe.
     inscrit = models.ForeignKey(Inscrit, on_delete=models.SET_NULL, null=True,
                                 blank=True, related_name="places",
-                                verbose_name="inscription")
+                                verbose_name=gettext_lazy("inscription"))
 
     class Meta:
-        verbose_name = "étudiant"
-        verbose_name_plural = "étudiants"
+        verbose_name = gettext_lazy("étudiant")
+        verbose_name_plural = gettext_lazy("étudiants")
         ordering = ["last_name", "first_name"]
 
     @property
@@ -197,190 +198,190 @@ def choice_letter(index, language="fr"):
 
 
 class Quiz(models.Model):
-    LANGUAGES = [("fr", "Français"), ("ar", "العربية (arabe)")]
+    LANGUAGES = [("fr", gettext_lazy("Français")), ("ar", gettext_lazy("العربية (arabe)"))]
     SHEET_MODES = [
-        ("full", "Questionnaire complet — les questions et leurs choix sont imprimés sur la fiche"),
-        ("split", "Sujet séparé + feuille de réponses — deux documents (questions d'un côté, grille de l'autre)"),
-        ("grid", "Fiche de réponses seule — grille compacte, le sujet est distribué à part"),
+        ("full", gettext_lazy("Questionnaire complet — les questions et leurs choix sont imprimés sur la fiche")),
+        ("split", gettext_lazy("Sujet séparé + feuille de réponses — deux documents (questions d'un côté, grille de l'autre)")),
+        ("grid", gettext_lazy("Fiche de réponses seule — grille compacte, le sujet est distribué à part")),
     ]
     # SET_NULL, pour la même raison que ClassGroup.owner : une épreuve et
     # ses copies survivent au compte qui les a créées.
     owner = models.ForeignKey(settings.AUTH_USER_MODEL,
                               on_delete=models.SET_NULL,
                               null=True, related_name="quizzes",
-                              verbose_name="enseignant")
-    title = models.CharField("titre", max_length=200)
+                              verbose_name=gettext_lazy("enseignant"))
+    title = models.CharField(gettext_lazy("titre"), max_length=200)
     # Nature de l'épreuve. QCM : cases noircies, lues au scan. Écrit : copie
     # rédigée, corrigée à la main ; le correcteur noircit la note dans la
     # grille de la page de garde, lue au scan avec l'identité (QR ou n°).
     # Oral : notes importées d'un fichier Excel, seule voie depuis le 13 novembre 2026
     # (libellé du choix ci-dessous inchangé : forms.QuizForm l'affiche à jour).
     TYPES = [
-        ("qcm", "QCM — cases à noircir, corrigées automatiquement"),
-        ("ecrit", "Écrit (rédaction) — copie corrigée à la main, note "
-                  "noircie par le correcteur puis scannée"),
-        ("oral", "Oral — notes saisies à l'écran"),
+        ("qcm", gettext_lazy("QCM — cases à noircir, corrigées automatiquement")),
+        ("ecrit", gettext_lazy("Écrit (rédaction) — copie corrigée à la main, note "
+                  "noircie par le correcteur puis scannée")),
+        ("oral", gettext_lazy("Oral — notes saisies à l'écran")),
     ]
-    type_epreuve = models.CharField("type d'épreuve", max_length=6, choices=TYPES,
+    type_epreuve = models.CharField(gettext_lazy("type d'épreuve"), max_length=6, choices=TYPES,
                                     default="qcm")
     note_sur = models.FloatField(
-        "note sur", default=20.0,
+        gettext_lazy("note sur"), default=20.0,
         validators=[MinValueValidator(1), MaxValueValidator(999)],
-        help_text="Écrit et oral : barème de la note (ex. 20).")
+        help_text=gettext_lazy("Écrit et oral : barème de la note (ex. 20)."))
     sujet_texte = models.TextField(
-        "énoncé du sujet", blank=True,
-        help_text="Écrit : texte du sujet, imprimé dans le document « Sujet ». "
-                  "Une ligne vide sépare deux paragraphes.")
+        gettext_lazy("énoncé du sujet"), blank=True,
+        help_text=gettext_lazy("Écrit : texte du sujet, imprimé dans le document « Sujet ». "
+                  "Une ligne vide sépare deux paragraphes."))
     pages_redaction = models.PositiveSmallIntegerField(
-        "pages de rédaction", default=1,
+        gettext_lazy("pages de rédaction"), default=1,
         validators=[MaxValueValidator(6)],
-        help_text="Écrit : feuilles lignées imprimées après la page de garde "
-                  "(0 à 6). Elles ne se scannent pas.")
+        help_text=gettext_lazy("Écrit : feuilles lignées imprimées après la page de garde "
+                  "(0 à 6). Elles ne se scannent pas."))
     # Une feuille A3 pliée au milieu porte quatre pages A4 : les copies d'un écrit,
     # le sujet d'un QCM. La feuille de réponses d'un QCM reste en A4 : sur une feuille
     # A3 de deux pages à lire, le scan n'en retrouverait qu'une.
-    FORMATS = [("a4", "A4"), ("a3", "A3 recto-verso, plié au milieu")]
+    FORMATS = [("a4", "A4"), ("a3", gettext_lazy("A3 recto-verso, plié au milieu"))]
     format_impression = models.CharField(
-        "format d'impression", max_length=2, choices=FORMATS, default="a4",
-        help_text="Écrit : les copies. QCM : le sujet.")
+        gettext_lazy("format d'impression"), max_length=2, choices=FORMATS, default="a4",
+        help_text=gettext_lazy("Écrit : les copies. QCM : le sujet."))
     # Copie nominative dont le nom est imprimé sur un TALON, en haut de la
     # page, hors du cadre de lecture : découpé avant la correction, il rend
     # la copie anonyme ; le QR (dans le cadre) identifie toujours l'étudiant.
     talon_nom = models.BooleanField(
-        "nom sur un talon à découper", default=False,
-        help_text="Chaque copie porte le nom et le QR de l'étudiant ; le nom est "
+        gettext_lazy("nom sur un talon à découper"), default=False,
+        help_text=gettext_lazy("Chaque copie porte le nom et le QR de l'étudiant ; le nom est "
                   "sur un talon à découper (massicot) avant la correction. La "
-                  "copie reste lisible au scan, et anonyme pour le correcteur.")
+                  "copie reste lisible au scan, et anonyme pour le correcteur."))
     # Autre choix (exclusif du talon) : AUCUN nom sur la copie, seulement un
     # n° de place et le QR ; la liste de placement et d'émargement dit au
     # surveillant qui s'assoit où (bulletin.generate_liste_emargement).
     place_anonyme = models.BooleanField(
-        "copie anonyme à n° de place", default=False,
-        help_text="Chaque copie porte un n° de place et le QR de l'étudiant, "
+        gettext_lazy("copie anonyme à n° de place"), default=False,
+        help_text=gettext_lazy("Chaque copie porte un n° de place et le QR de l'étudiant, "
                   "jamais son nom ; une liste de placement et d'émargement est "
-                  "imprimée pour le surveillant.")
+                  "imprimée pour le surveillant."))
     # Concours en plusieurs étapes (QCM -> écrit -> oral) : les candidats de
     # cette épreuve sont les admis de l'épreuve précédente.
     epreuve_precedente = models.ForeignKey(
         "self", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="epreuves_suivantes",
-        verbose_name="candidats : admis de l'épreuve",
-        help_text="Étape suivante d'un concours : seuls les admis de cette "
-                  "épreuve sont candidats.")
+        verbose_name=gettext_lazy("candidats : admis de l'épreuve"),
+        help_text=gettext_lazy("Étape suivante d'un concours : seuls les admis de cette "
+                  "épreuve sont candidats."))
     class_group = models.ForeignKey(ClassGroup, on_delete=models.PROTECT,
-                                    related_name="quizzes", verbose_name="classe")
+                                    related_name="quizzes", verbose_name=gettext_lazy("classe"))
     ID_MODES = [
-        ("name", "OCR du nom manuscrit (fiches identiques pour toute la classe)"),
-        ("grid", "Grille de n° d'inscription à noircir (fiches identiques, lecture exacte)"),
-        ("qr", "QR code — fiches nominatives pré-imprimées (une fiche par étudiant, "
-               "identification instantanée et infaillible)"),
-        ("sticker", "QR code — étiquette autocollante par candidat (planche d'étiquettes "
-                    "à coller dans l'emplacement réservé ; lue automatiquement au scan)"),
+        ("name", gettext_lazy("OCR du nom manuscrit (fiches identiques pour toute la classe)")),
+        ("grid", gettext_lazy("Grille de n° d'inscription à noircir (fiches identiques, lecture exacte)")),
+        ("qr", gettext_lazy("QR code — fiches nominatives pré-imprimées (une fiche par étudiant, "
+               "identification instantanée et infaillible)")),
+        ("sticker", gettext_lazy("QR code — étiquette autocollante par candidat (planche d'étiquettes "
+                    "à coller dans l'emplacement réservé ; lue automatiquement au scan)")),
     ]
     id_mode = models.CharField(
-        "identification des copies", max_length=8, choices=ID_MODES, default="name")
+        gettext_lazy("identification des copies"), max_length=8, choices=ID_MODES, default="name")
     id_digits = models.PositiveSmallIntegerField(
-        "chiffres du n° d'inscription", default=6,
-        help_text="Utilisé uniquement avec la grille : nombre de chiffres "
-                  "du numéro d'inscription (ex. 6).")
+        gettext_lazy("chiffres du n° d'inscription"), default=6,
+        help_text=gettext_lazy("Utilisé uniquement avec la grille : nombre de chiffres "
+                  "du numéro d'inscription (ex. 6)."))
     auto_enroll = models.BooleanField(
-        "mode concours : créer automatiquement les candidats", default=False,
-        help_text="Aucune saisie préalable des étudiants : chaque copie scannée "
+        gettext_lazy("mode concours : créer automatiquement les candidats"), default=False,
+        help_text=gettext_lazy("Aucune saisie préalable des étudiants : chaque copie scannée "
                   "crée son candidat à partir du numéro lu (grille de n° ou QR de "
                   "l'étiquette). La fiche concours ne demande aucune écriture au "
                   "candidat ; importez ensuite une liste « numéro;NOM;Prénom » "
-                  "pour attacher les noms officiels aux numéros.")
+                  "pour attacher les noms officiels aux numéros."))
     # Moyenne finale d'un concours (المعدل النهائي, demande de l'utilisateur, 13 novembre
     # 2026) : la moyenne des notes sur 20 de ses étapes (QCM, écrit, oral), pondérée par ce
     # coefficient de chacune ; réglé sur la page des résultats du concours.
     coefficient_final = models.FloatField(
-        "coefficient dans la moyenne finale", default=1.0,
+        gettext_lazy("coefficient dans la moyenne finale"), default=1.0,
         validators=[MinValueValidator(0), MaxValueValidator(99)],
-        help_text="Concours : poids de l'étape dans la moyenne finale (0 : elle n'y compte "
-                  "pas).")
+        help_text=gettext_lazy("Concours : poids de l'étape dans la moyenne finale (0 : elle n'y compte "
+                  "pas)."))
     # Année d'un concours de l'institut, choisie à sa création (demande de l'utilisateur,
     # 13 novembre 2026) et commune à ses étapes. Le code d'anonymat des copies à talon
     # commence par X en 1re année, par Y en 2e (qr.premiere_lettre). Vide : épreuve de
     # classe, ou concours créé avant ce choix.
     ANNEES = [("1", "السنة الأولى"), ("2", "السنة الثانية")]
     annee = models.CharField(
-        "année", max_length=1, choices=ANNEES, blank=True, default="",
-        help_text="Concours : 1re ou 2e année. Le code d'anonymat des copies à talon "
-                  "commence par X en 1re année, par Y en 2e.")
+        gettext_lazy("année"), max_length=1, choices=ANNEES, blank=True, default="",
+        help_text=gettext_lazy("Concours : 1re ou 2e année. Le code d'anonymat des copies à talon "
+                  "commence par X en 1re année, par Y en 2e."))
     language = models.CharField(
-        "langue du questionnaire", max_length=2, choices=LANGUAGES, default="fr",
-        help_text="Détermine la langue de la fiche de réponses (sens d'écriture, "
-                  "lettres des choix) et de la lecture OCR du nom.")
+        gettext_lazy("langue du questionnaire"), max_length=2, choices=LANGUAGES, default="fr",
+        help_text=gettext_lazy("Détermine la langue de la fiche de réponses (sens d'écriture, "
+                  "lettres des choix) et de la lecture OCR du nom."))
     GRADING_MODES = [
-        ("immediate", "Correction immédiate — chaque lot est corrigé dès son téléversement"),
-        ("deferred", "Correction après scan — on téléverse toutes les copies, puis on "
-                     "clique sur « Lancer la correction »"),
+        ("immediate", gettext_lazy("Correction immédiate — chaque lot est corrigé dès son téléversement")),
+        ("deferred", gettext_lazy("Correction après scan — on téléverse toutes les copies, puis on "
+                     "clique sur « Lancer la correction »")),
     ]
     grading_mode = models.CharField(
-        "correction des copies", max_length=10, choices=GRADING_MODES,
+        gettext_lazy("correction des copies"), max_length=10, choices=GRADING_MODES,
         default="immediate")
     sheet_mode = models.CharField(
-        "type de fiche", max_length=6, choices=SHEET_MODES, default="full")
+        gettext_lazy("type de fiche"), max_length=6, choices=SHEET_MODES, default="full")
     # QCM en deux versions (demande de l'utilisateur, 23 novembre 2026) : la version B a
     # ses questions et, dans chacune, ses choix dans un autre ordre ; la version est
     # imprimée sur la feuille et lue au scan (layout.VERSIONS)
     VERSIONS = [
-        (1, "Une seule version"),
-        (2, "Deux versions, A et B — questions et choix dans un autre ordre"),
+        (1, gettext_lazy("Une seule version")),
+        (2, gettext_lazy("Deux versions, A et B — questions et choix dans un autre ordre")),
     ]
     versions = models.PositiveSmallIntegerField(
-        "versions du sujet", choices=VERSIONS, default=1,
-        help_text="QCM : la version B mélange les questions et leurs choix ; chaque copie "
-                  "porte sa version et se corrige selon elle.")
+        gettext_lazy("versions du sujet"), choices=VERSIONS, default=1,
+        help_text=gettext_lazy("QCM : la version B mélange les questions et leurs choix ; chaque copie "
+                  "porte sa version et se corrige selon elle."))
     num_choices = models.PositiveSmallIntegerField(
-        "nombre de choix par question QCM", default=4,
+        gettext_lazy("nombre de choix par question QCM"), default=4,
         validators=[MinValueValidator(2), MaxValueValidator(MAX_CHOICES)],
-        help_text=f"Ex. 4 pour A, B, C, D (2 à {MAX_CHOICES})")
+        help_text=format_lazy(gettext_lazy("Ex. 4 pour A, B, C, D (2 à {n})"), n=MAX_CHOICES))
     wrong_penalty = models.FloatField(
-        "pénalité par mauvaise réponse", default=0.0,
-        help_text="Points retirés pour chaque mauvaise réponse QCM (0 = pas de pénalité)")
+        gettext_lazy("pénalité par mauvaise réponse"), default=0.0,
+        help_text=gettext_lazy("Points retirés pour chaque mauvaise réponse QCM (0 = pas de pénalité)"))
     # Seuil de réussite (concours : note d'admission), sur le barème de
     # l'épreuve. Sans lui, QuizScan ne peut pas dire qui a réussi.
     note_admission = models.FloatField(
-        "note minimale de réussite", null=True, blank=True,
+        gettext_lazy("note minimale de réussite"), null=True, blank=True,
         validators=[MinValueValidator(0)],
-        help_text="Sur le barème de l'épreuve (ex. 10 pour 10 / 20). Concours : "
-                  "note d'admission. Vide : pas de liste des admis.")
+        help_text=gettext_lazy("Sur le barème de l'épreuve (ex. 10 pour 10 / 20). Concours : "
+                  "note d'admission. Vide : pas de liste des admis."))
     # Disposition de la fiche (coordonnées en mm), figée à la génération du PDF
     layout_json = models.JSONField(null=True, blank=True, editable=False)
-    sheet_pdf = models.FileField("fiche de réponses (PDF)", upload_to="sheets/",
+    sheet_pdf = models.FileField(gettext_lazy("fiche de réponses (PDF)"), upload_to="sheets/",
                                  null=True, blank=True)
     # Sujet séparé (questions seules) — mode "split"
-    subject_pdf = models.FileField("sujet — questions (PDF)", upload_to="sheets/",
+    subject_pdf = models.FileField(gettext_lazy("sujet — questions (PDF)"), upload_to="sheets/",
                                    null=True, blank=True)
     # Cartouche du sujet, à la manière des sujets de concours : institutions
     # dans une case, intitulé et durée au centre. Facultatifs.
     entete = models.TextField(
-        "en-tête du sujet", blank=True,
-        help_text="Une ligne par ligne : ministère, établissement… "
-                  "Imprimé dans le cartouche du sujet.")
+        gettext_lazy("en-tête du sujet"), blank=True,
+        help_text=gettext_lazy("Une ligne par ligne : ministère, établissement… "
+                  "Imprimé dans le cartouche du sujet."))
     duree = models.CharField(
-        "durée de l'épreuve", max_length=60, blank=True,
-        help_text="Ex. « 1 h 30 » ou « ساعة ونصف ».")
+        gettext_lazy("durée de l'épreuve"), max_length=60, blank=True,
+        help_text=gettext_lazy("Ex. « 1 h 30 » ou « ساعة ونصف »."))
     date_epreuve = models.DateField(
-        "date de l'épreuve", null=True, blank=True,
-        help_text="Imprimée dans le cartouche du sujet, la durée dessous.")
+        gettext_lazy("date de l'épreuve"), null=True, blank=True,
+        help_text=gettext_lazy("Imprimée dans le cartouche du sujet, la durée dessous."))
     # Espace public : chaque étudiant y consulte sa note avec son
     # n° d'inscription ; la liste des admis peut y être affichée en plus.
     resultats_publies = models.BooleanField(
-        "résultats publiés", default=False,
-        help_text="Chaque étudiant consulte sa note sur l'espace public avec "
-                  "son n° d'inscription.")
+        gettext_lazy("résultats publiés"), default=False,
+        help_text=gettext_lazy("Chaque étudiant consulte sa note sur l'espace public avec "
+                  "son n° d'inscription."))
     admis_publies = models.BooleanField(
-        "liste des admis publiée", default=False,
-        help_text="La liste des admis (rang, n°, nom) est affichée sur "
-                  "l'espace public.")
-    publie_le = models.DateTimeField("publié le", null=True, blank=True)
-    created_at = models.DateTimeField("créée le", auto_now_add=True)
+        gettext_lazy("liste des admis publiée"), default=False,
+        help_text=gettext_lazy("La liste des admis (rang, n°, nom) est affichée sur "
+                  "l'espace public."))
+    publie_le = models.DateTimeField(gettext_lazy("publié le"), null=True, blank=True)
+    created_at = models.DateTimeField(gettext_lazy("créée le"), auto_now_add=True)
 
     class Meta:
-        verbose_name = "quiz"
-        verbose_name_plural = "quiz"
+        verbose_name = gettext_lazy("quiz")
+        verbose_name_plural = gettext_lazy("quiz")
         ordering = ["-created_at"]
         # Les deux droits que l'administration accorde compte par compte.
         # Ils sont portés par Quiz parce que c'est l'objet central, mais ils
@@ -423,9 +424,9 @@ class Quiz(models.Model):
     # Présentation des copies nominatives (QR imprimé) : nom imprimé, nom sur
     # un talon à découper, ou copie anonyme à n° de place.
     ANONYMATS = [
-        ("", "Standard — selon l'identification choisie"),
-        ("talon", "Nom sur un talon à découper avant la correction"),
-        ("place", "Copie anonyme : n° de place + liste des candidats"),
+        ("", gettext_lazy("Standard — selon l'identification choisie")),
+        ("talon", gettext_lazy("Nom sur un talon à découper avant la correction")),
+        ("place", gettext_lazy("Copie anonyme : n° de place + liste des candidats")),
     ]
 
     @property
@@ -434,13 +435,16 @@ class Quiz(models.Model):
 
     @property
     def type_court(self):
-        """Nom court du type d'épreuve : une étape dans la liste des concours."""
-        return {"qcm": "QCM", "ecrit": "Écrit", "oral": "Oral"}.get(self.type_epreuve, "")
+        """Nom court du type d'épreuve : une étape dans la liste des concours. Traduit dans
+        l'espace public en arabe (24 novembre 2026) ; en français ailleurs."""
+        nom = {"qcm": "QCM", "ecrit": "Écrit", "oral": "Oral"}.get(self.type_epreuve, "")
+        return gettext(nom) if nom else ""
 
     @property
     def de_type(self):
         """Une étape dans une phrase : « admis du QCM », « admis de l'écrit »."""
-        return {"qcm": "du QCM", "ecrit": "de l'écrit", "oral": "de l'oral"}.get(self.type_epreuve, "")
+        return {"qcm": gettext("du QCM"), "ecrit": gettext("de l'écrit"),
+                "oral": gettext("de l'oral")}.get(self.type_epreuve, "")
 
     @property
     def copies_nominatives(self):
@@ -488,51 +492,52 @@ class Quiz(models.Model):
 
 
 class Question(models.Model):
-    TYPE_CHOICES = [("qcm", "QCM (lecture automatique)"),
-                    ("open", "Réponse manuscrite (correction manuelle)")]
+    TYPE_CHOICES = [("qcm", gettext_lazy("QCM (lecture automatique)")),
+                    ("open", gettext_lazy("Réponse manuscrite (correction manuelle)"))]
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="questions")
-    order = models.PositiveSmallIntegerField("n°")
-    qtype = models.CharField("type", max_length=4, choices=TYPE_CHOICES, default="qcm")
-    text = models.CharField("intitulé de la question", max_length=500, blank=True)
+    order = models.PositiveSmallIntegerField(gettext_lazy("n°"))
+    qtype = models.CharField(gettext_lazy("type"), max_length=4, choices=TYPE_CHOICES, default="qcm")
+    text = models.CharField(gettext_lazy("intitulé de la question"), max_length=500, blank=True)
     # Textes des choix de réponse (questionnaire complet) : liste de chaînes
-    choices = models.JSONField("choix de réponse", default=list, blank=True)
+    choices = models.JSONField(gettext_lazy("choix de réponse"), default=list, blank=True)
     points = models.FloatField(
-        "barème (points)", default=1.0,
-        help_text="Une QCM vaut toujours 1 point ; barème libre pour une "
-                  "réponse manuscrite.")
+        gettext_lazy("barème (points)"), default=1.0,
+        help_text=gettext_lazy("Une QCM vaut toujours 1 point ; barème libre pour une "
+                  "réponse manuscrite."))
     # Pour les QCM : index de la bonne réponse (0=A, 1=B, ...)
-    correct_choice = models.PositiveSmallIntegerField("bonne réponse", null=True, blank=True)
+    correct_choice = models.PositiveSmallIntegerField(gettext_lazy("bonne réponse"), null=True, blank=True)
     # Nombre de cases quand le texte des choix n'est pas saisi (grille seule)
     num_choices = models.PositiveSmallIntegerField(
-        "nombre de choix", null=True, blank=True,
+        gettext_lazy("nombre de choix"), null=True, blank=True,
         validators=[MinValueValidator(2), MaxValueValidator(MAX_CHOICES)],
-        help_text="Nombre de cases A, B, C… de cette question (si le texte "
-                  f"des choix n'est pas saisi) ; 2 à {MAX_CHOICES}.")
+        help_text=format_lazy(gettext_lazy("Nombre de cases A, B, C… de cette question (si le "
+                                           "texte des choix n'est pas saisi) ; 2 à {n}."),
+                              n=MAX_CHOICES))
     # Hauteur de la zone de réponse manuscrite sur la fiche (mm)
     open_height_mm = models.PositiveSmallIntegerField(
-        "hauteur zone réponse (mm)", default=25,
+        gettext_lazy("hauteur zone réponse (mm)"), default=25,
         validators=[MinValueValidator(10), MaxValueValidator(MAX_OPEN_HEIGHT_MM)],
-        help_text=f"10 à {MAX_OPEN_HEIGHT_MM} mm (une zone plus haute ne "
-                  "tiendrait pas sur une page A4).")
+        help_text=format_lazy(gettext_lazy("10 à {n} mm (une zone plus haute ne tiendrait pas "
+                                           "sur une page A4)."), n=MAX_OPEN_HEIGHT_MM))
     # Écrit en plusieurs matières (demande de l'utilisateur, 13 novembre 2026 : à l'écrit
     # d'un concours, قانون مدني، قانون جزائي، الحريات الأساسية) : chaque matière est une
     # question notée de l'épreuve, son intitulé est le nom de la matière. Elle a sa page de
     # garde, son sujet, sa durée et sa date ; la note de l'écrit est la moyenne des
     # matières pondérée par leurs coefficients (services.compute_results).
     coefficient = models.FloatField(
-        "coefficient", default=1.0,
+        gettext_lazy("coefficient"), default=1.0,
         validators=[MinValueValidator(0.1), MaxValueValidator(99)],
-        help_text="Écrit en matières : poids de la matière dans la moyenne de l'écrit.")
+        help_text=gettext_lazy("Écrit en matières : poids de la matière dans la moyenne de l'écrit."))
     sujet = models.TextField(
-        "énoncé du sujet", blank=True,
-        help_text="Écrit en matières : le sujet de la matière. Une ligne vide sépare "
-                  "deux paragraphes.")
-    duree = models.CharField("durée", max_length=60, blank=True)
-    date_epreuve = models.DateField("date", null=True, blank=True)
+        gettext_lazy("énoncé du sujet"), blank=True,
+        help_text=gettext_lazy("Écrit en matières : le sujet de la matière. Une ligne vide sépare "
+                  "deux paragraphes."))
+    duree = models.CharField(gettext_lazy("durée"), max_length=60, blank=True)
+    date_epreuve = models.DateField(gettext_lazy("date"), null=True, blank=True)
 
     class Meta:
-        verbose_name = "question"
-        verbose_name_plural = "questions"
+        verbose_name = gettext_lazy("question")
+        verbose_name_plural = gettext_lazy("questions")
         ordering = ["order"]
         unique_together = [("quiz", "order")]
 
@@ -574,30 +579,31 @@ class ScanBatch(models.Model):
 
     La correction se fait en arrière-plan dès l'envoi : `total_pages` et
     `processed_pages` alimentent le bandeau de progression du lot."""
-    STATUS = [("pending", "En attente de correction"),
-              ("processing", "Correction en cours"),
-              ("done", "Terminé"),
-              ("error", "Erreur")]
+    STATUS = [("pending", gettext_lazy("En attente de correction")),
+              ("processing", gettext_lazy("Correction en cours")),
+              ("done", gettext_lazy("Terminé")),
+              ("error", gettext_lazy("Erreur"))]
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE,
-                             related_name="batches", verbose_name="épreuve")
-    label = models.CharField("libellé", max_length=120, blank=True)
-    status = models.CharField("état", max_length=12, choices=STATUS, default="done")
-    total_pages = models.PositiveIntegerField("pages à traiter", default=0)
-    processed_pages = models.PositiveIntegerField("pages traitées", default=0)
-    error_message = models.TextField("message d'erreur", blank=True)
+                             related_name="batches", verbose_name=gettext_lazy("épreuve"))
+    label = models.CharField(gettext_lazy("libellé"), max_length=120, blank=True)
+    status = models.CharField(gettext_lazy("état"), max_length=12, choices=STATUS, default="done")
+    total_pages = models.PositiveIntegerField(gettext_lazy("pages à traiter"), default=0)
+    processed_pages = models.PositiveIntegerField(gettext_lazy("pages traitées"), default=0)
+    error_message = models.TextField(gettext_lazy("message d'erreur"), blank=True)
     # fichiers d'origine conservés pour la reprise d'un traitement interrompu
     source_files = models.JSONField(default=list, blank=True, editable=False)
-    created_at = models.DateTimeField("reçu le", auto_now_add=True)
-    updated_at = models.DateTimeField("mis à jour le", auto_now=True)
+    created_at = models.DateTimeField(gettext_lazy("reçu le"), auto_now_add=True)
+    updated_at = models.DateTimeField(gettext_lazy("mis à jour le"), auto_now=True)
 
     class Meta:
-        verbose_name = "lot de scans"
-        verbose_name_plural = "lots de scans"
+        verbose_name = gettext_lazy("lot de scans")
+        verbose_name_plural = gettext_lazy("lots de scans")
         ordering = ["-created_at"]
 
     def __str__(self):
         # à l'heure de Tunis, comme la colonne « Date » (en UTC, le nom retardait d'une heure)
-        return self.label or f"Lot du {timezone.localtime(self.created_at):%d/%m/%Y %H:%M}"
+        return self.label or gettext("Lot du %(date)s") % {
+            "date": f"{timezone.localtime(self.created_at):%d/%m/%Y %H:%M}"}
 
     @property
     def identified_count(self):
@@ -615,46 +621,47 @@ class ScanBatch(models.Model):
 
 
 class SheetScan(models.Model):
-    STATUS = [("pending", "En attente"),
-              ("ok", "Lu avec succès"),
-              ("no_markers", "Repères non détectés"),
+    STATUS = [("pending", gettext_lazy("En attente")),
+              ("ok", gettext_lazy("Lu avec succès")),
+              ("no_markers", gettext_lazy("Repères non détectés")),
               # écrit : page de rédaction scannée avec la copie (sans repères)
-              ("ignoree", "Page de rédaction, ignorée"),
-              ("no_match", "Étudiant non identifié"),
-              ("error", "Erreur")]
+              ("ignoree", gettext_lazy("Page de rédaction, ignorée")),
+              ("no_match", gettext_lazy("Étudiant non identifié")),
+              ("error", gettext_lazy("Erreur"))]
     batch = models.ForeignKey(ScanBatch, on_delete=models.CASCADE,
-                              related_name="sheets", verbose_name="lot")
-    page_index = models.PositiveSmallIntegerField("page de la fiche", default=0)
-    source_name = models.CharField("fichier d'origine", max_length=200, blank=True)
-    image = models.ImageField("image scannée", upload_to="scans/")
-    warped_image = models.ImageField("image redressée", upload_to="warped/",
+                              related_name="sheets", verbose_name=gettext_lazy("lot"))
+    page_index = models.PositiveSmallIntegerField(gettext_lazy("page de la fiche"), default=0)
+    source_name = models.CharField(gettext_lazy("fichier d'origine"), max_length=200, blank=True)
+    image = models.ImageField(gettext_lazy("image scannée"), upload_to="scans/")
+    warped_image = models.ImageField(gettext_lazy("image redressée"), upload_to="warped/",
                                      null=True, blank=True)
-    overlay_image = models.ImageField("image de contrôle", upload_to="overlays/",
+    overlay_image = models.ImageField(gettext_lazy("image de contrôle"), upload_to="overlays/",
                                       null=True, blank=True)
-    name_crop = models.ImageField("zone du nom", upload_to="crops/",
+    name_crop = models.ImageField(gettext_lazy("zone du nom"), upload_to="crops/",
                                   null=True, blank=True)
-    status = models.CharField("état", max_length=12, choices=STATUS,
+    status = models.CharField(gettext_lazy("état"), max_length=12, choices=STATUS,
                               default="pending")
-    id_read = models.CharField("n° d'inscription lu", max_length=20, blank=True)
-    ocr_name_raw = models.CharField("nom lu (OCR)", max_length=200, blank=True)
-    match_score = models.FloatField("score de rapprochement", default=0.0)
+    id_read = models.CharField(gettext_lazy("n° d'inscription lu"), max_length=20, blank=True)
+    ocr_name_raw = models.CharField(gettext_lazy("nom lu (OCR)"), max_length=200, blank=True)
+    match_score = models.FloatField(gettext_lazy("score de rapprochement"), default=0.0)
     student = models.ForeignKey(Student, on_delete=models.SET_NULL, null=True, blank=True,
-                                related_name="sheets", verbose_name="étudiant")
-    student_confirmed = models.BooleanField("identification confirmée", default=False)
+                                related_name="sheets", verbose_name=gettext_lazy("étudiant"))
+    student_confirmed = models.BooleanField(gettext_lazy("identification confirmée"), default=False)
     # Page non identifiée dont l'alerte a été fermée (« × ») sur la page des
     # résultats : elle reste « à identifier » dans son lot, elle n'est
     # simplement plus signalée. Une nouvelle page non identifiée l'est.
-    alerte_masquee = models.BooleanField("alerte masquée", default=False)
-    error_message = models.TextField("message d'erreur", blank=True)
-    created_at = models.DateTimeField("reçue le", auto_now_add=True)
+    alerte_masquee = models.BooleanField(gettext_lazy("alerte masquée"), default=False)
+    error_message = models.TextField(gettext_lazy("message d'erreur"), blank=True)
+    created_at = models.DateTimeField(gettext_lazy("reçue le"), auto_now_add=True)
 
     class Meta:
-        verbose_name = "page scannée"
-        verbose_name_plural = "pages scannées"
+        verbose_name = gettext_lazy("page scannée")
+        verbose_name_plural = gettext_lazy("pages scannées")
         ordering = ["created_at"]
 
     def __str__(self):
-        return f"{self.source_name} (page {self.page_index + 1})"
+        return gettext("%(fichier)s (page %(n)s)") % {"fichier": self.source_name,
+                                                     "n": self.page_index + 1}
 
 
 class AnswerKeySheet(models.Model):
@@ -664,33 +671,34 @@ class AnswerKeySheet(models.Model):
     Chaque page téléversée est conservée avec le quiz — image d'origine et
     image de contrôle — pour garder la trace de l'origine du barème : c'est
     elle qui fait foi en cas de contestation après l'épreuve."""
-    STATUS = [("ok", "Corrigé lu"),
-              ("partial", "Corrigé lu partiellement"),
-              ("no_markers", "Repères non détectés"),
-              ("error", "Erreur")]
+    STATUS = [("ok", gettext_lazy("Corrigé lu")),
+              ("partial", gettext_lazy("Corrigé lu partiellement")),
+              ("no_markers", gettext_lazy("Repères non détectés")),
+              ("error", gettext_lazy("Erreur"))]
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE,
                              related_name="answer_key_sheets",
-                             verbose_name="épreuve")
-    page_index = models.PositiveSmallIntegerField("page de la fiche", default=0)
-    source_name = models.CharField("fichier d'origine", max_length=200, blank=True)
-    image = models.ImageField("image scannée", upload_to="corriges/")
-    overlay_image = models.ImageField("image de contrôle", upload_to="corriges/",
+                             verbose_name=gettext_lazy("épreuve"))
+    page_index = models.PositiveSmallIntegerField(gettext_lazy("page de la fiche"), default=0)
+    source_name = models.CharField(gettext_lazy("fichier d'origine"), max_length=200, blank=True)
+    image = models.ImageField(gettext_lazy("image scannée"), upload_to="corriges/")
+    overlay_image = models.ImageField(gettext_lazy("image de contrôle"), upload_to="corriges/",
                                       null=True, blank=True)
-    status = models.CharField("état", max_length=12, choices=STATUS, default="ok")
+    status = models.CharField(gettext_lazy("état"), max_length=12, choices=STATUS, default="ok")
     # {numéro de question: index de la bonne réponse lue}
-    detected = models.JSONField("réponses lues", default=dict, blank=True)
+    detected = models.JSONField(gettext_lazy("réponses lues"), default=dict, blank=True)
     # numéros des questions illisibles sur cette page (vide ou plusieurs cases)
-    unreadable = models.JSONField("questions illisibles", default=list, blank=True)
-    error_message = models.TextField("message d'erreur", blank=True)
-    created_at = models.DateTimeField("scanné le", auto_now_add=True)
+    unreadable = models.JSONField(gettext_lazy("questions illisibles"), default=list, blank=True)
+    error_message = models.TextField(gettext_lazy("message d'erreur"), blank=True)
+    created_at = models.DateTimeField(gettext_lazy("scanné le"), auto_now_add=True)
 
     class Meta:
-        verbose_name = "corrigé scanné"
-        verbose_name_plural = "corrigés scannés"
+        verbose_name = gettext_lazy("corrigé scanné")
+        verbose_name_plural = gettext_lazy("corrigés scannés")
         ordering = ["-created_at", "page_index"]
 
     def __str__(self):
-        return f"{self.source_name} (page {self.page_index + 1})"
+        return gettext("%(fichier)s (page %(n)s)") % {"fichier": self.source_name,
+                                                     "n": self.page_index + 1}
 
     @property
     def nb_lues(self):
@@ -699,24 +707,24 @@ class AnswerKeySheet(models.Model):
 
 class Answer(models.Model):
     sheet = models.ForeignKey(SheetScan, on_delete=models.CASCADE,
-                              related_name="answers", verbose_name="copie")
+                              related_name="answers", verbose_name=gettext_lazy("copie"))
     question = models.ForeignKey(Question, on_delete=models.CASCADE,
-                                 related_name="answers", verbose_name="question")
+                                 related_name="answers", verbose_name=gettext_lazy("question"))
     # QCM
     detected_choice = models.SmallIntegerField(  # 0=A ... ; None = vide
-        "case lue", null=True, blank=True)
-    is_multiple = models.BooleanField("plusieurs cases cochées", default=False)
-    fill_ratios = models.JSONField("taux de remplissage", null=True, blank=True)
+        gettext_lazy("case lue"), null=True, blank=True)
+    is_multiple = models.BooleanField(gettext_lazy("plusieurs cases cochées"), default=False)
+    fill_ratios = models.JSONField(gettext_lazy("taux de remplissage"), null=True, blank=True)
     # Manuscrit
-    open_crop = models.ImageField("zone manuscrite", upload_to="crops/",
+    open_crop = models.ImageField(gettext_lazy("zone manuscrite"), upload_to="crops/",
                                   null=True, blank=True)
     # Notation
-    points_awarded = models.FloatField("points attribués", null=True, blank=True)
-    manually_set = models.BooleanField("note saisie à la main", default=False)
+    points_awarded = models.FloatField(gettext_lazy("points attribués"), null=True, blank=True)
+    manually_set = models.BooleanField(gettext_lazy("note saisie à la main"), default=False)
 
     class Meta:
-        verbose_name = "réponse"
-        verbose_name_plural = "réponses"
+        verbose_name = gettext_lazy("réponse")
+        verbose_name_plural = gettext_lazy("réponses")
         unique_together = [("sheet", "question")]
         ordering = ["question__order"]
 
@@ -730,7 +738,8 @@ class Answer(models.Model):
 
     def __str__(self):
         # Sans cela, l'administration affichait « Answer object (5099) ».
-        return f"{self.sheet} — question {self.question.order}"
+        return gettext("%(copie)s — question %(n)s") % {"copie": self.sheet,
+                                                       "n": self.question.order}
 
     @property
     def is_blank(self):
@@ -758,44 +767,44 @@ class Modification(models.Model):
     supprimé, ou d'un enseignant parti, qu'on voudra retrouver.
     """
     ACTIONS = [
-        ("note", "Note d'une réponse"),
-        ("case_qcm", "Case de QCM rectifiée"),
-        ("identification", "Attribution de la copie"),
-        ("bonne_reponse", "Bonne réponse"),
-        ("bareme", "Barème d'une question"),
-        ("penalite", "Pénalité par mauvaise réponse"),
-        ("question_supprimee", "Question supprimée"),
-        ("copie_supprimee", "Copie supprimée"),
-        ("lot_supprime", "Lot de copies supprimé"),
-        ("corrige_supprime", "Corrigé scanné supprimé"),
-        ("titre", "Titre de l'épreuve"),
-        ("etudiant", "Identité d'un étudiant noté"),
-        ("note_admission", "Note minimale d'admission"),
-        ("publication", "Publication des résultats"),
+        ("note", gettext_lazy("Note d'une réponse")),
+        ("case_qcm", gettext_lazy("Case de QCM rectifiée")),
+        ("identification", gettext_lazy("Attribution de la copie")),
+        ("bonne_reponse", gettext_lazy("Bonne réponse")),
+        ("bareme", gettext_lazy("Barème d'une question")),
+        ("penalite", gettext_lazy("Pénalité par mauvaise réponse")),
+        ("question_supprimee", gettext_lazy("Question supprimée")),
+        ("copie_supprimee", gettext_lazy("Copie supprimée")),
+        ("lot_supprime", gettext_lazy("Lot de copies supprimé")),
+        ("corrige_supprime", gettext_lazy("Corrigé scanné supprimé")),
+        ("titre", gettext_lazy("Titre de l'épreuve")),
+        ("etudiant", gettext_lazy("Identité d'un étudiant noté")),
+        ("note_admission", gettext_lazy("Note minimale d'admission")),
+        ("publication", gettext_lazy("Publication des résultats")),
     ]
-    quand = models.DateTimeField("date", auto_now_add=True, db_index=True)
+    quand = models.DateTimeField(gettext_lazy("date"), auto_now_add=True, db_index=True)
     auteur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                                null=True, blank=True, related_name="+",
-                               verbose_name="compte")
-    auteur_nom = models.CharField("auteur", max_length=150)
-    action = models.CharField("geste", max_length=20, choices=ACTIONS)
+                               verbose_name=gettext_lazy("compte"))
+    auteur_nom = models.CharField(gettext_lazy("auteur"), max_length=150)
+    action = models.CharField(gettext_lazy("geste"), max_length=20, choices=ACTIONS)
     quiz = models.ForeignKey(Quiz, on_delete=models.SET_NULL, null=True,
                              blank=True, related_name="modifications",
-                             verbose_name="épreuve")
-    quiz_titre = models.CharField("épreuve (titre)", max_length=200, blank=True)
+                             verbose_name=gettext_lazy("épreuve"))
+    quiz_titre = models.CharField(gettext_lazy("épreuve (titre)"), max_length=200, blank=True)
     copie = models.ForeignKey(SheetScan, on_delete=models.SET_NULL, null=True,
                               blank=True, related_name="modifications",
-                              verbose_name="copie")
-    objet = models.CharField("objet", max_length=200)
-    avant = models.CharField("avant", max_length=200, blank=True)
-    apres = models.CharField("après", max_length=200, blank=True)
+                              verbose_name=gettext_lazy("copie"))
+    objet = models.CharField(gettext_lazy("objet"), max_length=200)
+    avant = models.CharField(gettext_lazy("avant"), max_length=200, blank=True)
+    apres = models.CharField(gettext_lazy("après"), max_length=200, blank=True)
 
     class Meta:
-        verbose_name = "modification"
+        verbose_name = gettext_lazy("modification")
         # « modifications » et non « journal des modifications » : Django
         # compte avec ce mot (« 5 modifications »). Le titre « Journal des
         # modifications » est posé par l'administration (JournalAdmin).
-        verbose_name_plural = "modifications"
+        verbose_name_plural = gettext_lazy("modifications")
         ordering = ["-quand", "-pk"]
 
     def __str__(self):
@@ -805,20 +814,20 @@ class Modification(models.Model):
 class Communique(models.Model):
     """Avis publié sur l'espace public : dates d'examen, convocations,
     salles, consignes… Visible de tous dès qu'il est publié."""
-    titre = models.CharField("titre", max_length=200)
-    texte = models.TextField("texte")
+    titre = models.CharField(gettext_lazy("titre"), max_length=200)
+    texte = models.TextField(gettext_lazy("texte"))
     publie = models.BooleanField(
-        "publié", default=True,
-        help_text="Décoché : le communiqué est gardé en brouillon, invisible "
-                  "du public.")
+        gettext_lazy("publié"), default=True,
+        help_text=gettext_lazy("Décoché : le communiqué est gardé en brouillon, invisible "
+                  "du public."))
     auteur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                                null=True, blank=True, related_name="+",
-                               verbose_name="auteur")
-    cree_le = models.DateTimeField("date", auto_now_add=True)
+                               verbose_name=gettext_lazy("auteur"))
+    cree_le = models.DateTimeField(gettext_lazy("date"), auto_now_add=True)
 
     class Meta:
-        verbose_name = "communiqué"
-        verbose_name_plural = "communiqués"
+        verbose_name = gettext_lazy("communiqué")
+        verbose_name_plural = gettext_lazy("communiqués")
         ordering = ["-cree_le"]
 
     def __str__(self):
@@ -843,13 +852,14 @@ class Communique(models.Model):
 
     @property
     def resume_pieces(self):
-        """« 2 images · 1 vidéo · 1 document », ou "" sans pièce jointe."""
+        """« 2 images · 1 vidéo · 1 document », ou "" sans pièce jointe. En arabe (espace
+        public, 24 novembre 2026) : un libellé pour un, un autre pour plusieurs."""
         parts = []
-        for n, un, plusieurs in ((len(self.images), "image", "images"),
-                                 (len(self.videos), "vidéo", "vidéos"),
-                                 (len(self.documents), "document", "documents")):
+        for n, un, plusieurs in ((len(self.images), "%(n)s image", "%(n)s images"),
+                                 (len(self.videos), "%(n)s vidéo", "%(n)s vidéos"),
+                                 (len(self.documents), "%(n)s document", "%(n)s documents")):
             if n:
-                parts.append(f"{n} {un if n == 1 else plusieurs}")
+                parts.append(gettext(un if n == 1 else plusieurs) % {"n": n})
         return " · ".join(parts)
 
 
@@ -858,18 +868,18 @@ class PieceJointe(models.Model):
     (lue dans la page) ou document (à télécharger). Servi par
     views_public.piece_jointe — au public dès que le communiqué est publié —
     et jamais par /media/, réservé au personnel (voir grader/pieces.py)."""
-    GENRES = [("image", "image"), ("video", "vidéo"), ("document", "document")]
+    GENRES = [("image", gettext_lazy("image")), ("video", gettext_lazy("vidéo")), ("document", gettext_lazy("document"))]
     communique = models.ForeignKey(Communique, on_delete=models.CASCADE,
-                                   related_name="pieces", verbose_name="communiqué")
-    fichier = models.FileField("fichier", upload_to="communiques/%Y/%m/", max_length=255)
-    nom = models.CharField("nom du fichier", max_length=200)
-    genre = models.CharField("genre", max_length=10, choices=GENRES)
-    taille = models.PositiveBigIntegerField("taille (octets)", default=0)
-    ajoute_le = models.DateTimeField("ajoutée le", auto_now_add=True)
+                                   related_name="pieces", verbose_name=gettext_lazy("communiqué"))
+    fichier = models.FileField(gettext_lazy("fichier"), upload_to="communiques/%Y/%m/", max_length=255)
+    nom = models.CharField(gettext_lazy("nom du fichier"), max_length=200)
+    genre = models.CharField(gettext_lazy("genre"), max_length=10, choices=GENRES)
+    taille = models.PositiveBigIntegerField(gettext_lazy("taille (octets)"), default=0)
+    ajoute_le = models.DateTimeField(gettext_lazy("ajoutée le"), auto_now_add=True)
 
     class Meta:
-        verbose_name = "pièce jointe"
-        verbose_name_plural = "pièces jointes"
+        verbose_name = gettext_lazy("pièce jointe")
+        verbose_name_plural = gettext_lazy("pièces jointes")
         ordering = ["pk"]
 
     def __str__(self):

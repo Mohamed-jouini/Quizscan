@@ -55,8 +55,8 @@ def jpg(img):
 
 
 def noircir(img, grille, note):
-    """La note noircie par le correcteur : partie entière, puis ,0 ou ,5."""
-    entier, demi = int(note), int(round((note - int(note)) * 2))
+    """La note noircie par le correcteur : partie entière, puis ,00 ,25 ,50 ou ,75."""
+    entier, demi = int(note), int(round((note - int(note)) * 4))   # ,00 ,25 ,50 ,75
     for row, d in zip(grille["rows"], [entier, demi]):
         cx, cy = row[d]
         cv2.circle(img, (mm2px(cx), mm2px(cy)), mm2px(grille["r"] * 0.9), (20, 20, 20), -1)
@@ -147,6 +147,19 @@ def main():
         assert NOMS[k] in texte_liste and "Signature entrée" in texte_liste
     page = c.get(reverse("quiz_detail", args=[quiz.pk])).content.decode()
     assert all(default_storage.url(d["copies"]) in page for d in docs)
+    # chaque document s'ouvre par le site pour l'enseignant (ceux des matières 2 et 3
+    # répondaient « introuvable » : seul le premier était retrouvé ; 24 novembre 2026)
+    for d in docs:
+        for cle in ("copies", "sujet"):
+            assert c.get(default_storage.url(d[cle])).status_code == 200, (d["nom"], cle)
+    # renommer l'épreuve ne remplace pas les documents des matières par une seule feuille
+    titre = quiz.title
+    services.renommer_epreuve(quiz, f"{titre} (renommé)", prof)
+    services.renommer_epreuve(quiz, titre, prof)
+    quiz.refresh_from_db()
+    assert [d["nom"] for d in quiz.layout_json["documents_matieres"]] == NOMS
+    assert quiz.sheet_pdf.name == quiz.layout_json["documents_matieres"][0]["copies"]
+    docs = quiz.layout_json["documents_matieres"]
     assert "Copies manquantes" not in c.get(reverse("quiz_results", args=[quiz.pk])).content.decode(), \
         "rien d'envoyé : pas encore de liste"
     print(f"  documents : sujet, copies ({par_copie} pages par copie) et liste par salle de "

@@ -1,20 +1,20 @@
-{% comment %}
+{% load i18n qs_langue %}{% comment %}
 Nombre de copies quand il ne se choisit pas (voir Quiz.exemplaires_anonymes). Mode QR : une copie
 par étudiant, à son QR, donc ni plus ni moins que la liste. Autres modes : un seul exemplaire,
 le même pour tous, à imprimer autant de fois qu'il le faut. Paramètre : quiz.
 {% endcomment %}
-{% with n=quiz.class_group.students.count qui=quiz.auto_enroll|yesno:"candidat,étudiant" %}
+{% with n=quiz.class_group.students.count qui=quiz.auto_enroll|oui_non:"candidat,étudiant" %}
 <p class="helptext">
   {% if quiz.id_mode != "qr" and quiz.layout_json.versions %}
-  {# deux versions (23 novembre 2026) : un exemplaire de chacune #}
-  <b>Deux versions, A et B</b> : imprimez {% if quiz.sheet_mode == "split" %}la feuille de réponses{% else %}la fiche{% endif %} de chaque version pour la moitié des {{ qui }}s{% if n %} ({{ n }} en tout){% endif %}, en les alternant.
+  {#deux versions (23 novembre 2026) : un exemplaire de chacune#}
+  <b>{% translate "Deux versions, A et B" %}</b> {% translate ": imprimez" %} {% if quiz.sheet_mode == "split" %}{% translate "la feuille de réponses" %}{% else %}{% translate "la fiche" %}{% endif %} {% blocktranslate trimmed %}de chaque version pour la moitié des {{ qui }}s{% endblocktranslate %}{% if n %} {% blocktranslate trimmed %}({{ n }} en tout){% endblocktranslate %}{% endif %}{% translate ", en les alternant." %}
   {% elif quiz.id_mode != "qr" %}
-  <b>Un seul exemplaire</b> dans le PDF, le même pour tous : imprimez-en un par {{ qui }}{% if n %} ({{ n }} en tout){% endif %}.
+  <b>{% translate "Un seul exemplaire" %}</b> {% blocktranslate trimmed %}dans le PDF, le même pour tous : imprimez-en un par {{ qui }}{% endblocktranslate %}{% if n %} {% blocktranslate trimmed %}({{ n }} en tout){% endblocktranslate %}{% endif %}.
   {% elif n %}
-  <b>{{ n }} copie{{ n|pluralize }}</b> : une par {{ qui }}, avec son {% if quiz.place_anonyme %}n° de place{% else %}nom{% endif %} et son QR.
-  Ce nombre suit la <a href="{% url 'class_detail' quiz.class_group.pk %}">liste des {{ qui }}s</a>.
+  <b>{% blocktranslate trimmed with n2=n|pluralize %}{{ n }} copie{{ n2 }}{% endblocktranslate %}</b> {% blocktranslate trimmed %}: une par {{ qui }}, avec son{% endblocktranslate %} {% if quiz.place_anonyme %}{% translate "n° de place" %}{% else %}{% translate "nom" %}{% endif %} {% blocktranslate trimmed %}et son QR.
+  Ce nombre suit la{% endblocktranslate %} <a href="{% url 'class_detail' quiz.class_group.pk %}">{% blocktranslate trimmed %}liste des {{ qui }}s{% endblocktranslate %}</a>.
   {% else %}
-  Aucun {{ qui }} pour le moment : une copie sera imprimée pour chacun.
+  {% blocktranslate trimmed %}Aucun {{ qui }} pour le moment : une copie sera imprimée pour chacun.{% endblocktranslate %}
   {% endif %}
 </p>
 {% endwith %}

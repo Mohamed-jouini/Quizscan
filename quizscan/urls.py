@@ -20,6 +20,8 @@ urlpatterns = [
          name="password_change"),
     path("comptes/password_change/done/", auth_views.PasswordChangeDoneView.as_view(),
          name="password_change_done"),
+    # bouton de langue, français ou arabe (24 novembre 2026) : vue set_language de Django
+    path("i18n/", include("django.conf.urls.i18n")),
     path("", include("grader.urls")),
 ]
 

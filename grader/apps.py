@@ -1,5 +1,6 @@
 from django.apps import AppConfig
 from django.db.models.signals import post_migrate
+from django.utils.translation import gettext_lazy
 
 # Django crée le nom de chaque permission en anglais, une fois pour toutes,
 # au moment de la migration : « Can add log entry », « Can change classe »…
@@ -33,7 +34,7 @@ class GraderConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "grader"
     # sans cela, l'administration affiche « GRADER » en en-tête de section
-    verbose_name = "Épreuves et copies"
+    verbose_name = gettext_lazy("Épreuves et copies")
 
     def ready(self):
         # Sans « sender » : chaque application crée ses permissions dans son

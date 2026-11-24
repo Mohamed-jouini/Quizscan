@@ -1,4 +1,4 @@
-{% comment %}
+{% load i18n %}{% comment %}
 Tableau de bord : un bloc par concours, comme les pages Concours et Résultats, avec l'admission de
 chaque étape. Le bloc d'une étape mène à ses résultats, ou à sa page tant qu'elle n'a pas de note.
 Paramètre : groupes (services.groupes_epreuves, avec « bilan » sur chaque étape).
@@ -10,10 +10,10 @@ Paramètre : groupes (services.groupes_epreuves, avec « bilan » sur chaque ét
     <header class="groupe__tete">
       <div class="groupe__nom">
         <h3 class="groupe__titre"><a href="{% url 'quiz_parcours' g.racine.pk %}">{{ g.titre }}</a></h3>
-        <span class="badge grey">{{ g.etapes|length }} étapes</span>
+        <span class="badge grey">{% blocktranslate trimmed with etapes=g.etapes|length %}{{ etapes }} étapes{% endblocktranslate %}</span>
         {% if not g.concours %}<span class="groupe__classe">{{ g.racine.class_group.name }}</span>{% endif %}
       </div>
-      <a class="btn small secondary" href="{% url 'quiz_parcours' g.racine.pk %}">Résultats du concours</a>
+      <a class="btn small secondary" href="{% url 'quiz_parcours' g.racine.pk %}">{% translate "Résultats du concours" %}</a>
     </header>
     <ol class="groupe__etapes">
       {% for e in g.etapes %}

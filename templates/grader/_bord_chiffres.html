@@ -1,20 +1,20 @@
-{% comment %}
+{% load i18n %}{% comment %}
 Admission d'une étape sur le tableau de bord. Paramètre : e (étape, avec son « bilan »).
 {% endcomment %}
 {% if e.bilan.seuil %}
 <div class="bord-note">
-  <span class="admission-liste__chiffre"><b>{{ e.bilan.admis }}</b> / {{ e.bilan.n }} admis · {{ e.bilan.pct_admis }} %</span>
+  <span class="admission-liste__chiffre"><b>{{ e.bilan.admis }}</b> {% blocktranslate trimmed with n=e.bilan.n pct_admis=e.bilan.pct_admis %}/ {{ n }} admis · {{ pct_admis }} %{% endblocktranslate %}</span>
   <div class="barre-empilee" role="img"
-       aria-label="{{ e.bilan.admis }} admis, {{ e.bilan.attente }} en attente, {{ e.bilan.refuses }} non admis sur {{ e.bilan.n }}">
-    {% if e.bilan.admis %}<i class="pastille--admis" style="width:{{ e.bilan.w_admis|stringformat:'s' }}%" title="Admis : {{ e.bilan.admis }}"></i>{% endif %}
-    {% if e.bilan.attente %}<i class="pastille--attente" style="width:{{ e.bilan.w_attente|stringformat:'s' }}%" title="En attente : {{ e.bilan.attente }}"></i>{% endif %}
-    {% if e.bilan.refuses %}<i class="pastille--refuses" style="width:{{ e.bilan.w_refuses|stringformat:'s' }}%" title="Non admis : {{ e.bilan.refuses }}"></i>{% endif %}
+       aria-label="{% blocktranslate trimmed with admis=e.bilan.admis attente=e.bilan.attente refuses=e.bilan.refuses n=e.bilan.n %}{{ admis }} admis, {{ attente }} en attente, {{ refuses }} non admis sur {{ n }}{% endblocktranslate %}">
+    {% if e.bilan.admis %}<i class="pastille--admis" style="width:{{ e.bilan.w_admis|stringformat:'s' }}%" title="{% blocktranslate trimmed with admis=e.bilan.admis %}Admis : {{ admis }}{% endblocktranslate %}"></i>{% endif %}
+    {% if e.bilan.attente %}<i class="pastille--attente" style="width:{{ e.bilan.w_attente|stringformat:'s' }}%" title="{% blocktranslate trimmed with attente=e.bilan.attente %}En attente : {{ attente }}{% endblocktranslate %}"></i>{% endif %}
+    {% if e.bilan.refuses %}<i class="pastille--refuses" style="width:{{ e.bilan.w_refuses|stringformat:'s' }}%" title="{% blocktranslate trimmed with refuses=e.bilan.refuses %}Non admis : {{ refuses }}{% endblocktranslate %}"></i>{% endif %}
   </div>
-  <span class="helptext helptext--serre">moyenne {% if e.quiz.est_qcm %}{{ e.bilan.moyenne20|floatformat:"-2" }} / 20{% else %}{{ e.bilan.moyenne_pct }} % du barème{% endif %} · {{ e.bilan.n }} noté{{ e.bilan.n|pluralize }}</span>
+  <span class="helptext helptext--serre">{% translate "moyenne" %} {% if e.quiz.est_qcm %}{{ e.bilan.moyenne20|floatformat:"-2" }} / 20{% else %}{% blocktranslate trimmed with moyenne_pct=e.bilan.moyenne_pct %}{{ moyenne_pct }} % du barème{% endblocktranslate %}{% endif %} {% blocktranslate trimmed with n=e.bilan.n n2=e.bilan.n|pluralize %}· {{ n }} noté{{ n2 }}{% endblocktranslate %}</span>
 </div>
 {% elif e.bilan %}
-<p class="helptext helptext--serre bord-note">{{ e.bilan.n }} noté{{ e.bilan.n|pluralize }} · moyenne {% if e.quiz.est_qcm %}{{ e.bilan.moyenne20|floatformat:"-2" }} / 20{% else %}{{ e.bilan.moyenne_pct }} %{% endif %} ·
-  <a class="bord-note__lien" href="{% url 'quiz_results' e.quiz.pk %}#admission">fixer la note minimale</a></p>
+<p class="helptext helptext--serre bord-note">{% blocktranslate trimmed with n=e.bilan.n n2=e.bilan.n|pluralize %}{{ n }} noté{{ n2 }} · moyenne{% endblocktranslate %} {% if e.quiz.est_qcm %}{{ e.bilan.moyenne20|floatformat:"-2" }} / 20{% else %}{{ e.bilan.moyenne_pct }} %{% endif %} ·
+  <a class="bord-note__lien" href="{% url 'quiz_results' e.quiz.pk %}#admission">{% translate "fixer la note minimale" %}</a></p>
 {% else %}
-<p class="chiffres-epreuve__vide bord-note">Aucune copie notée</p>
+<p class="chiffres-epreuve__vide bord-note">{% translate "Aucune copie notée" %}</p>
 {% endif %}

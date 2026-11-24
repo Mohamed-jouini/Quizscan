@@ -29,10 +29,12 @@
     champ.addEventListener("change", function () {
       var max = Number(champ.dataset.maxFichiers);
       var trop = champ.files.length > max;
+      // le texte vient de la page, dans la langue de l'interface (24 novembre 2026)
+      var modele = champ.dataset.trop || "{n} fichiers choisis : {max} au plus par envoi. "
+        + "Envoyez le reste ensuite, dans un second envoi.";
       champ.setCustomValidity(trop
-        ? champ.files.length.toLocaleString("fr-FR") + " fichiers choisis : "
-          + max.toLocaleString("fr-FR") + " au plus par envoi. Envoyez le reste ensuite, "
-          + "dans un second envoi."
+        ? modele.replace("{n}", champ.files.length.toLocaleString("fr-FR"))
+                .replace("{max}", max.toLocaleString("fr-FR"))
         : "");
       if (trop) champ.reportValidity();
     });
@@ -67,8 +69,12 @@
         : form.querySelectorAll('input[name="choix"]:checked').length;
       bouton.disabled = n === 0;
       bouton.textContent = n ? libelle + " (" + n + ")" : libelle;
-      bouton.dataset.confirmer = "Supprimer " + n + " candidat" + (n > 1 ? "s" : "")
-        + " ? Ceux qui ont des copies corrigées sont gardés.";
+      var modele = n > 1
+        ? bouton.dataset.confirmerPlusieurs
+          || "Supprimer {n} candidats ? Ceux qui ont des copies corrigées sont gardés."
+        : bouton.dataset.confirmerUn
+          || "Supprimer {n} candidat ? Ceux qui ont des copies corrigées sont gardés.";
+      bouton.dataset.confirmer = modele.replace("{n}", n);
     }
     form.addEventListener("change", function (ev) {
       if (tous && ev.target === tous) {
@@ -119,8 +125,9 @@
       var shown = input.type === "text";
       input.type = shown ? "password" : "text";
       btn.setAttribute("aria-pressed", String(!shown));
-      btn.setAttribute("aria-label", shown ? "Afficher le mot de passe"
-                                           : "Masquer le mot de passe");
+      btn.setAttribute("aria-label", shown
+        ? btn.dataset.afficher || "Afficher le mot de passe"
+        : btn.dataset.masquer || "Masquer le mot de passe");
       btn.querySelector(".off").hidden = shown;
       btn.querySelector(".on").hidden = !shown;
     });
@@ -213,7 +220,11 @@
       if (rows.points) rows.points.hidden = !open;     // une QCM vaut 1 point
 
       var cur = sel.value;
-      sel.innerHTML = '<option value="">— à définir plus tard —</option>';
+      sel.innerHTML = "";
+      var vide = document.createElement("option");
+      vide.value = "";
+      vide.textContent = donnees.dataset.aDefinir || "— à définir plus tard —";
+      sel.appendChild(vide);
       for (var i = 0; i < n; i++) {
         var o = document.createElement("option");
         o.value = i; o.textContent = letters[i];

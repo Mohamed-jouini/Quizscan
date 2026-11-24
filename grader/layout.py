@@ -178,6 +178,10 @@ def layout_signature(quiz):
         # seulement pour l'écrit et l'oral : les empreintes des fiches QCM
         # existantes ne doivent pas changer (toutes seraient « périmées »)
         data["ecrit"] = [quiz.note_sur, quiz.pages_redaction]
+        if note_par_demi_points(quiz):
+            # décimale par quarts de point (24 novembre 2026) : les documents faits avant, à
+            # ,0 / ,5, sont signalés à régénérer avant d'imprimer de nouvelles copies
+            data["note"] = "quarts"
         if quiz.type_epreuve == "ecrit" and quiz.format_impression == "a3":
             data["format"] = "a3"   # seulement si choisi : empreintes inchangées
         elif quiz.type_epreuve == "ecrit" and pages_blanches_a4(quiz.pages_redaction):
@@ -654,10 +658,15 @@ def _note_rows(note_sur):
     return entiers + ["dixiemes", "centiemes"]
 
 
-# Écrit : note par demi-points (demande de l'utilisateur, 13 novembre 2026). Une ligne de
-# cases 0..20 pour la partie entière, une ligne « ,0 / ,5 » pour la décimale ; une note
-# au-dessus du barème (20,5) est à vérifier (omr.lire_note). L'oral garde ses chiffres.
+# Écrit : une ligne de cases 0..20 pour la partie entière, une ligne pour la décimale ;
+# une note au-dessus du barème (20,25) est à vérifier (omr.lire_note). L'oral garde ses
+# chiffres. Décimale par demi-points (,0 ou ,5) le 13 novembre 2026, par quarts de point
+# depuis le 24 novembre (demande de l'utilisateur : « ,00 ,25 ,50 ,75 au lieu de ,0 et ,5 »).
 NOTE_DEMI_PAS = 6.2          # 21 cases de 0 à 20 dans la largeur du cadre (mm)
+# Une case par valeur, au pas de la partie entière : ,00 et ,50 restent où étaient ,0 et
+# ,5 (cases 0 et 2). Une copie imprimée avec les demi-points, lue avec cette disposition,
+# garde donc sa note ; la disposition enregistrée sans « valeurs » se lit ,0 / ,5.
+NOTE_DECIMALES = [0.0, 0.25, 0.5, 0.75]
 # Les deux lignes de cases sont imprimées SOUS l'emprise de l'ancienne grille à chiffres
 # (4 lignes, centres de y + 20,5 à y + 39,1) : une copie imprimée avant, lue avec cette
 # disposition, a sa ligne de la décimale vide (et le plus souvent l'autre aussi). Sa note
@@ -667,7 +676,8 @@ NOTE_DEMI_Y_DEMI = 51.5      # centre de la ligne de la décimale
 
 
 def note_par_demi_points(quiz):
-    """Grille par demi-points : écrit, barème entier de 1 à 20 (une case par point)."""
+    """Grille « partie entière + décimale » (quarts de point depuis le 24 novembre 2026 ; le
+    nom date des demi-points) : écrit, barème entier de 1 à 20 (une case par point)."""
     sur = float(getattr(quiz, "note_sur", 20) or 20)
     return (getattr(quiz, "type_epreuve", "qcm") == "ecrit" and sur.is_integer()
             and 1 <= sur <= 20)
@@ -675,17 +685,20 @@ def note_par_demi_points(quiz):
 
 def _add_note_grid_demi(page, y, note_sur, order):
     """Cadre « réservé au correcteur » d'un écrit : la note en clair et la signature en
-    haut, puis la partie entière (0..barème) et la décimale (,0 ou ,5) à noircir."""
+    haut, puis la partie entière (0..barème) et la décimale (,00 ,25 ,50 ,75) à noircir.
+    « modele » reste « demi » (dispositions enregistrées) ; « valeurs » dit la décimale."""
     n = int(note_sur)
     x, w = CONTENT_X0, CONTENT_X1 - CONTENT_X0
     x0 = CONTENT_X0 + 30.0
     y_entier, y_demi = y + NOTE_DEMI_Y_ENTIER, y + NOTE_DEMI_Y_DEMI
     entiers = [[round(x0 + k * NOTE_DEMI_PAS, 2), round(y_entier, 2)] for k in range(n + 1)]
-    demis = [[round(x0 + k * 2 * NOTE_DEMI_PAS, 2), round(y_demi, 2)] for k in range(2)]
+    demis = [[round(x0 + k * NOTE_DEMI_PAS, 2), round(y_demi, 2)]
+             for k in range(len(NOTE_DECIMALES))]
     h = round(NOTE_DEMI_Y_DEMI + ID_BUBBLE_R + 4.4, 2)
     page["note_grid"] = {
         "order": order, "r": ID_BUBBLE_R, "rows": [entiers, demis], "write_boxes": [],
-        "kinds": ["entier", "demi"], "modele": "demi", "decimales": 1, "sur": note_sur,
+        "kinds": ["entier", "demi"], "modele": "demi", "valeurs": list(NOTE_DECIMALES),
+        "decimales": 2, "sur": note_sur,
         "rect": [x, round(y, 2), w, h],
         "title_y": round(y + 6.0, 2), "header_y": round(y_entier - 4.6, 2),
         # la note écrite en clair, la signature du correcteur

@@ -5,6 +5,8 @@ d'une copie ou une bonne réponse passe par `noter`. Une seule fonction, pour
 que la règle soit la même partout : on n'écrit que ce qui a réellement
 changé, avec l'auteur, l'ancienne et la nouvelle valeur.
 """
+from django.utils import translation
+
 from .models import Modification, Quiz, choice_letter
 
 
@@ -55,7 +57,8 @@ def noter(utilisateur, action, *, objet, avant=None, apres=None,
     sont identiques : un formulaire renvoyé tel quel ne doit pas remplir le
     journal de non-événements, qui noieraient les vrais.
     """
-    avant, apres = texte(avant), texte(apres)
+    with translation.override("fr"):     # un libellé traduit reste en français ici
+        avant, apres, objet = texte(avant), texte(apres), str(objet)
     if avant == apres:
         return None
     if quiz is None and copie is not None:
@@ -92,9 +95,11 @@ def question_modifiee(utilisateur, question, *, bonne_avant, bareme_avant):
 
 def question_supprimee(utilisateur, question):
     """Supprimer une question retire ses points de toutes les copies."""
+    with translation.override("fr"):     # le journal reste en français
+        genre = question.get_qtype_display()
     noter(utilisateur, "question_supprimee", quiz=question.quiz,
           objet=f"Question {question.order}",
-          avant=f"{question.get_qtype_display()}, {texte(question.points)} pt",
+          avant=f"{genre}, {texte(question.points)} pt",
           apres="supprimée")
 
 

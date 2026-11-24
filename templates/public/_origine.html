@@ -1,0 +1,1 @@
+{% load i18n %}{# « Concours · publié le 24/11/2026 » (ou le nom de la classe). Paramètres : concours, classe, publie_le. #}{% if concours %}{% translate "Concours" %}{% else %}{{ classe }}{% endif %}{% if publie_le %}{% with date=publie_le|date:"d/m/Y" %} · {% blocktranslate %}publié le {{ date }}{% endblocktranslate %}{% endwith %}{% endif %}

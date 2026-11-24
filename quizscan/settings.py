@@ -48,9 +48,12 @@ MIDDLEWARE = [
     "grader.envois.EffacerEnvois",              # avant tout : voir grader/envois.py
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "grader.langue.Langue",                     # français ou arabe (espace public)
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # avant que le contrôle CSRF (process_view) ne lise le corps d'un envoi anonyme
+    "grader.securite.EnvoiAnonymeRefuse",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "grader.securite.EntetesSecurite",          # CSP minimale
@@ -66,6 +69,7 @@ TEMPLATES = [
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
+                "django.template.context_processors.i18n",     # LANGUAGE_CODE, LANGUAGE_BIDI
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ],
@@ -100,6 +104,11 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = "fr"
+# Français ou arabe (24 novembre 2026) : le bouton العربية / Français de l'espace public garde
+# le choix un an dans le cookie de langue ; grader/langue.py le suit dans les pages traduites
+# (l'espace public d'abord), le reste reste en français.
+LANGUAGES = [("fr", "Français"), ("ar", "العربية")]
+LANGUAGE_COOKIE_AGE = 365 * 24 * 3600
 
 TIME_ZONE = "Africa/Tunis"
 
@@ -169,7 +178,9 @@ if _env.is_file():
 
 INSECURE_DEV_SECRET_KEY = SECRET_KEY
 SECRET_KEY = os.environ.get("SECRET_KEY") or INSECURE_DEV_SECRET_KEY
-DEBUG = os.environ.get("DEBUG", "1") not in ("0", "false", "False", "no")
+# « off », « FALSE », « non »… veulent aussi dire non (seuls « 0 », « false », « False » et
+# « no » étaient compris : le reste mettait le mode débogage en marche ; 24 novembre 2026)
+DEBUG = os.environ.get("DEBUG", "1").strip().lower() not in ("0", "false", "no", "off", "non")
 if os.environ.get("ALLOWED_HOSTS"):
     ALLOWED_HOSTS = [h.strip() for h in os.environ["ALLOWED_HOSTS"].split(",")]
 if os.environ.get("CSRF_TRUSTED_ORIGINS"):
@@ -256,6 +267,7 @@ if not DEBUG:
     HTTPS = os.environ.get("HTTPS", "1") not in ("0", "false", "False", "no")
     SESSION_COOKIE_SECURE = HTTPS
     CSRF_COOKIE_SECURE = HTTPS
+    LANGUAGE_COOKIE_SECURE = HTTPS
     # Redirection http -> https : assurée par le reverse proxy. Si ce n'est
     # pas le cas chez vous, passez SECURE_SSL_REDIRECT=1.
     SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "0") == "1"

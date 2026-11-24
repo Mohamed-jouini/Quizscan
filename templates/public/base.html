@@ -2,12 +2,14 @@
 Squelette de l'espace public (sans compte) : résultats publiés et
 communiqués. Même feuille de style et même bascule de thème que le reste
 de l'application ; pas de menu latéral, une barre de navigation en haut.
-{% endcomment %}{% load static qs_statique %}<!doctype html>
-<html lang="fr">
+En français ou en arabe, de droite à gauche (24 novembre 2026) : le bouton de la barre
+passe à l'autre langue (grader/langue.py).
+{% endcomment %}{% load static qs_statique i18n %}<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Espace public{% endblock %}</title>
+<title>{% block title %}{% translate "Espace public" %}{% endblock %}</title>
 <link rel="stylesheet" href="{% statique 'grader/quizscan.css' %}">
 <script src="{% statique 'grader/theme.js' %}"></script>
 </head>
@@ -16,13 +18,14 @@ de l'application ; pas de menu latéral, une barre de navigation en haut.
 <header class="pub-tete">
   <div class="pub-tete__dedans">
     {# plus de logo QuizScan dans l'espace public (demande de l'utilisateur, 7 novembre 2026) #}
-    <nav class="pub-nav" aria-label="Espace public">
-      <a class="{% if un == 'public_accueil' %}is-active{% endif %}" href="{% url 'public_accueil' %}">Accueil</a>
-      <a class="{% if un == 'public_resultat' or un == 'public_epreuve' %}is-active{% endif %}" href="{% url 'public_resultat' %}">Résultats</a>
-      <a class="{% if un == 'public_communiques' or un == 'public_communique' %}is-active{% endif %}" href="{% url 'public_communiques' %}">Communiqués</a>
+    <nav class="pub-nav" aria-label="{% translate 'Espace public' %}">
+      <a class="{% if un == 'public_accueil' %}is-active{% endif %}" href="{% url 'public_accueil' %}">{% translate "Accueil" %}</a>
+      <a class="{% if un == 'public_resultat' or un == 'public_epreuve' %}is-active{% endif %}" href="{% url 'public_resultat' %}">{% translate "Résultats" %}</a>
+      <a class="{% if un == 'public_communiques' or un == 'public_communique' %}is-active{% endif %}" href="{% url 'public_communiques' %}">{% translate "Communiqués" %}</a>
     </nav>
     {# plus de bouton « Espace enseignant » (8 novembre 2026) : le personnel se connecte par l'adresse de l'application #}
     <span class="pub-tete__outils">
+      {% include "grader/_langue.html" %}
       {% include "grader/_theme_toggle.html" %}
     </span>
   </div>
@@ -30,7 +33,7 @@ de l'application ; pas de menu latéral, une barre de navigation en haut.
 <main class="pub-page">
 {% block content %}{% endblock %}
 </main>
-<footer class="pub-pied">Résultats et communiqués publiés par l'établissement</footer>
+<footer class="pub-pied">{% translate "Résultats et communiqués publiés par l'établissement" %}</footer>
 {% endwith %}
 </body>
 </html>

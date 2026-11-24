@@ -207,12 +207,12 @@ def verifier_ecrit(c, prof):
     assert disposition_page["lignes"]["x1"] == 196.0 and disposition_page["lignes"]["pas"] == 9.0
 
     # Lecture : chaque présentation que le scanner peut rendre.
-    sens = [("depliee.jpg", "AMRI", [15, 1], lambda f: f),
+    sens = [("depliee.jpg", "AMRI", [15, 2], lambda f: f),
             ("tournee90.jpg", "BAKIR", [8, 0],
              lambda f: cv2.rotate(f, cv2.ROTATE_90_CLOCKWISE)),
             ("tournee270.jpg", "CHERIF", [12, 1],
              lambda f: cv2.rotate(f, cv2.ROTATE_90_COUNTERCLOCKWISE)),
-            ("envers.jpg", "DALI", [9, 1], lambda f: cv2.rotate(f, cv2.ROTATE_180)),
+            ("envers.jpg", "DALI", [9, 3], lambda f: cv2.rotate(f, cv2.ROTATE_180)),
             ("pliee.jpg", "ESSID", [11, 0], lambda f: f[:, mm2px(210):])]
     numeros = {e[0]: e[2] for e in ETUDIANTS}
     envois = []
@@ -230,7 +230,7 @@ def verifier_ecrit(c, prof):
         s = feuilles[nom]
         assert s.status == "ok" and s.student and s.student.last_name == etudiant, \
             (nom, s.status, s.error_message)
-    attendu = {"AMRI": 15.5, "BAKIR": 8.0, "CHERIF": 12.5, "DALI": 9.5, "ESSID": 11.0}
+    attendu = {"AMRI": 15.5, "BAKIR": 8.0, "CHERIF": 12.25, "DALI": 9.75, "ESSID": 11.0}
     assert notes(quiz) == attendu, notes(quiz)
     print("  lecture : dépliée, tournée à 90° et 270°, à l'envers, pliée : 5 notes justes ; "
           "verso écrit ignoré OK")
@@ -240,7 +240,7 @@ def verifier_ecrit(c, prof):
     pdf2 = quiz2.sheet_pdf.read()
     images = [copie_remplie(pdf2, quiz2, 0, numeros["AMRI"], [14, 0], gauche=False),
               griffonner(render_page(pdf2, 1), (22, 28, 190, 276), 11),
-              cv2.rotate(copie_remplie(pdf2, quiz2, 0, numeros["BAKIR"], [7, 1],
+              cv2.rotate(copie_remplie(pdf2, quiz2, 0, numeros["BAKIR"], [7, 2],
                                        gauche=False), cv2.ROTATE_90_COUNTERCLOCKWISE),
               cv2.rotate(render_page(pdf2, 1), cv2.ROTATE_90_COUNTERCLOCKWISE)]
     lot = services.process_uploaded_files(
@@ -351,7 +351,7 @@ def verifier_entete_nominatif(c, prof):
     lot = services.process_uploaded_files(quiz, [
         SimpleUploadedFile("amri.jpg", jpg(recto)),
         SimpleUploadedFile("bakir.jpg", jpg(simulate_scan(cv2.rotate(
-            copie_remplie(pdf, quiz, 2, "", [8, 1], gauche=False),
+            copie_remplie(pdf, quiz, 2, "", [8, 2], gauche=False),
             cv2.ROTATE_90_CLOCKWISE)))),
         SimpleUploadedFile("verso.jpg", jpg(simulate_scan(verso)))], label="A3 nominatives")
     feuilles = {s.source_name: s for s in lot.sheets.all()}
@@ -473,7 +473,7 @@ def verifier_a4_inchange(c, prof):
     assert {k: quiz.layout_json["pages"][0].get(k) for k in services._ZONES_LUES} == zones_a4, \
         "rien de ce qui est lu ne bouge entre A4 et A3"
     ancienne = fill_sheet(render_page(pdf_a4, 0), {"pages": [page_a4]}, {}, student_number="104501")
-    ancienne = noircir_note(ancienne, page_a4["note_grid"], [10, 1])
+    ancienne = noircir_note(ancienne, page_a4["note_grid"], [10, 2])
     lot = services.process_uploaded_files(
         quiz, [SimpleUploadedFile("a4.jpg", jpg(simulate_scan(ancienne)))], label="A4 d'avant")
     s = lot.sheets.get()

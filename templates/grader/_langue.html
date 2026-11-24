@@ -1,0 +1,13 @@
+{% load i18n %}{% comment %}
+Bouton de langue (24 novembre 2026) : passe à l'autre langue, français ou arabe. Le choix
+est gardé dans le cookie de langue de Django (vue set_language), puis suivi par
+grader/langue.py ; chaque bouton est écrit dans sa propre langue.
+{% endcomment %}
+<form class="langue" method="post" action="{% url 'set_language' %}">{% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  {% if LANGUAGE_CODE == "ar" %}
+  <button class="langue__bouton" type="submit" name="language" value="fr" lang="fr" dir="ltr" title="Afficher en français">Français</button>
+  {% else %}
+  <button class="langue__bouton" type="submit" name="language" value="ar" lang="ar" dir="rtl" title="العرض باللغة العربية">العربية</button>
+  {% endif %}
+</form>

@@ -1,34 +1,34 @@
-{% extends "grader/base.html" %}
+{% extends "grader/base.html" %}{% load i18n qs_langue %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
-    <h1><a href="{% url 'quiz_detail' quiz.pk %}" title="Ouvrir l'épreuve">{{ fil.titre|default:quiz.title }}</a></h1>
+    <h1><a href="{% url 'quiz_detail' quiz.pk %}" title="{% translate "Ouvrir l'épreuve" %}">{{ fil.titre|default:quiz.title }}</a></h1>
     <p class="page-head__meta">
-      <span class="badge info">Résultats {{ quiz.de_type }}</span>
+      <span class="badge info">{% blocktranslate trimmed with de_type=quiz.de_type %}Résultats {{ de_type }}{% endblocktranslate %}</span>
       {% if fil.intitule %}<span>{{ fil.intitule }}</span>{% endif %}
-      <span>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %}{% if batch %} · lot {{ batch }}{% endif %}</span>
+      <span>{% if quiz.auto_enroll %}{% translate "Concours" %}{% else %}{{ quiz.class_group.name }}{% endif %}{% if batch %} {% blocktranslate trimmed %}· lot {{ batch }}{% endblocktranslate %}{% endif %}</span>
     </p>
   </div>
   <div class="page-head__actions">
-    <a class="btn small secondary" href="{% url 'resultats_list' %}">← Retour aux résultats</a>
+    <a class="btn small secondary" href="{% url 'resultats_list' %}">{% translate "← Retour aux résultats" %}</a>
     <a class="btn small" href="{% url 'quiz_results_xlsx' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">
-      Exporter en Excel</a>
+      {% translate "Exporter en Excel" %}</a>
     <a class="btn small" href="{% url 'quiz_bulletins_pdf' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">
-      Bulletins PDF</a>
-    {# Toujours visible : sans note minimale, il mène au réglage juste en   #}
-    {# dessous au lieu de disparaître (on ne le trouvait pas).             #}
+      {% translate "Bulletins PDF" %}</a>
+    {#Toujours visible : sans note minimale, il mène au réglage juste en#}
+    {#dessous au lieu de disparaître (on ne le trouvait pas).#}
     {% if admission.n_admis %}
     <a class="btn small" href="{% url 'quiz_bulletins_pdf' quiz.pk %}?admis=1{% if batch %}&amp;batch={{ batch.pk }}{% endif %}"
-       title="Un relevé par {% if quiz.auto_enroll %}admis{% else %}étudiant ayant réussi{% endif %}, par ordre de mérite">
-      Bulletins des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %} ({{ admission.n_admis }})</a>
+       title="{% if quiz.auto_enroll %}{% translate 'Un relevé par admis, par ordre de mérite' %}{% else %}{% translate 'Un relevé par étudiant ayant réussi, par ordre de mérite' %}{% endif %}">
+      {% if quiz.auto_enroll %}{% translate "Bulletins des admis" %}{% else %}{% translate "Bulletins des réussis" %}{% endif %} ({{ admission.n_admis }})</a>
     {% elif admission %}
     <span class="btn small secondary btn--inactif" aria-disabled="true"
-          title="Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} n'atteint la note minimale">
-      Bulletins des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %} (0)</span>
+          title="{% if quiz.auto_enroll %}{% translate "Aucun candidat n'atteint la note minimale" %}{% else %}{% translate "Aucun étudiant n'atteint la note minimale" %}{% endif %}">
+      {% if quiz.auto_enroll %}{% translate "Bulletins des admis" %}{% else %}{% translate "Bulletins des réussis" %}{% endif %} (0)</span>
     {% else %}
     <a class="btn small secondary" href="#admission"
-       title="Indiquez d'abord la note minimale {% if quiz.auto_enroll %}d'admission{% else %}de réussite{% endif %}">
-      Bulletins des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %}</a>
+       title="{% if quiz.auto_enroll %}{% translate "Indiquez d'abord la note minimale d'admission" %}{% else %}{% translate "Indiquez d'abord la note minimale de réussite" %}{% endif %}">
+      {% if quiz.auto_enroll %}{% translate "Bulletins des admis" %}{% else %}{% translate "Bulletins des réussis" %}{% endif %}</a>
     {% endif %}
   </div>
 </header>
@@ -37,9 +37,9 @@
 
 {% if batches|length > 1 %}
 <div class="filtres">
-  <span class="filtres__label">Lot</span>
+  <span class="filtres__label">{% translate "Lot" %}</span>
   <a class="filtre {% if not batch %}is-active{% endif %}"
-     href="{% url 'quiz_results' quiz.pk %}">Tous</a>
+     href="{% url 'quiz_results' quiz.pk %}">{% translate "Tous" %}</a>
   {% for b in batches %}
   <a class="filtre {% if batch.pk == b.pk %}is-active{% endif %}"
      href="?batch={{ b.pk }}">{{ b }}</a>
@@ -51,8 +51,8 @@
 <div class="note">
   <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg></span>
   <div class="note__body">
-    {{ pending_pages }} page(s) scannée(s) attendent encore la correction —
-    <a href="{% url 'quiz_detail' quiz.pk %}"><b>lancez la correction</b></a> depuis la page du concours.
+    {% blocktranslate trimmed %}{{ pending_pages }} page(s) scannée(s) attendent encore la correction —{% endblocktranslate %}
+    <a href="{% url 'quiz_detail' quiz.pk %}"><b>{% translate "lancez la correction" %}</b></a> {% translate "depuis la page du concours." %}
   </div>
 </div>
 {% endif %}
@@ -60,105 +60,105 @@
 <ul class="messages"><li class="error messages__fermable">
   <form class="messages__fermer" method="post">{% csrf_token %}
     <button type="submit" name="masquer_non_identifiees" value="1"
-            title="Masquer ce message (les pages restent à identifier dans leur lot)"
-            aria-label="Masquer ce message">×</button>
+            title="{% translate "Masquer ce message (les pages restent à identifier dans leur lot)" %}"
+            aria-label="{% translate "Masquer ce message" %}">×</button>
   </form>
-  ⚠️ {{ unmatched_total }} page(s) non identifiée(s) — leurs notes ne comptent pas encore ci-dessous.
+  {% blocktranslate trimmed %}⚠️ {{ unmatched_total }} page(s) non identifiée(s) — leurs notes ne comptent pas encore ci-dessous.{% endblocktranslate %}
   {% for s in unmatched %}
     <a href="{% url 'sheet_review' s.pk %}">{{ s.source_name }}</a>{% if not forloop.last %}, {% endif %}
   {% endfor %}
   {% if unmatched_total > unmatched|length %}
-    … et {{ unmatched_total|add:"-200" }} autre(s) — voir la liste des pages du lot.
+    {% blocktranslate trimmed with unmatched_total=unmatched_total|add:"-200" %}… et {{ unmatched_total }} autre(s) — voir la liste des pages du lot.{% endblocktranslate %}
   {% endif %}
 </li></ul>
 {% endif %}
 {% if n_masquees %}
 <form class="masquees" method="post">{% csrf_token %}
-  <span class="helptext helptext--serre">{{ n_masquees }} page(s) non identifiée(s) masquée(s) —
-    <button class="lien" type="submit" name="reafficher_non_identifiees" value="1">réafficher</button></span>
+  <span class="helptext helptext--serre">{% blocktranslate trimmed %}{{ n_masquees }} page(s) non identifiée(s) masquée(s) —{% endblocktranslate %}
+    <button class="lien" type="submit" name="reafficher_non_identifiees" value="1">{% translate "réafficher" %}</button></span>
 </form>
 {% endif %}
 {% if n_incompletes %}
 <ul class="messages"><li class="error">
-  ⚠️ {{ n_incompletes }} {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %}(s) à copie incomplète :
+  ⚠️ {{ n_incompletes }} {% if quiz.auto_enroll %}{% translate "candidat" %}{% else %}{% translate "étudiant" %}{% endif %}{% blocktranslate trimmed %}(s) à copie incomplète :
   leur note ne compte pas toutes les questions. Affectez leurs pages non identifiées ; d'ici là,
-  sous la note minimale, ils restent « En attente ».
+  sous la note minimale, ils restent « En attente ».{% endblocktranslate %}
 </li></ul>
 {% endif %}
 
 {% if perms.grader.corriger_copies and not batch %}
 <div class="card publication" id="publication">
   <div class="card__head">
-    <h2>Publication sur l'espace public</h2>
-    {% if quiz.resultats_publies or quiz.admis_publies %}<span class="badge ok">publié le {{ quiz.publie_le|date:"d/m/Y H:i" }}</span>{% else %}<span class="badge grey">non publié</span>{% endif %}
+    <h2>{% translate "Publication sur l'espace public" %}</h2>
+    {% if quiz.resultats_publies or quiz.admis_publies %}<span class="badge ok">{% blocktranslate trimmed with publie_le=quiz.publie_le|date:"d/m/Y H:i" %}publié le {{ publie_le }}{% endblocktranslate %}</span>{% else %}<span class="badge grey">{% translate "non publié" %}</span>{% endif %}
   </div>
   <form method="post" action="{% url 'quiz_publication' quiz.pk %}" class="publication__form">{% csrf_token %}
     <label class="case"><input type="checkbox" name="resultats_publies" value="1" {% if quiz.resultats_publies %}checked{% endif %}>
-      Chaque {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} consulte son résultat avec son n° d'inscription ou sa CIN : {% if quiz.auto_enroll %}admis ou non{% else %}réussi ou non{% endif %}, sans sa note{% if quiz.note_admission is None %} (indiquez d'abord la note minimale : sans elle, il lit « Résultat pas encore disponible »){% endif %}</label>
+      {% translate "Chaque" %} {% if quiz.auto_enroll %}{% translate "candidat" %}{% else %}{% translate "étudiant" %}{% endif %} {% translate "consulte son résultat avec son n° d'inscription ou sa CIN :" %} {% if quiz.auto_enroll %}{% translate "admis ou non" %}{% else %}{% translate "réussi ou non" %}{% endif %}{% translate ", sans sa note" %}{% if quiz.note_admission is None %} {% translate "(indiquez d'abord la note minimale : sans elle, il lit « Résultat pas encore disponible »)" %}{% endif %}</label>
     <label class="case"><input type="checkbox" name="admis_publies" value="1" {% if quiz.admis_publies %}checked{% endif %} {% if quiz.note_admission is None %}disabled{% endif %}>
-      Afficher la liste des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %} (n° d'inscription, prénom et nom, sans rang ni note){% if quiz.note_admission is None %} — indiquez d'abord la note minimale{% endif %}</label>
-    <p><button class="btn small" type="submit">Enregistrer la publication</button>
-      {% if quiz.resultats_publies or quiz.admis_publies %}<a class="btn small secondary" href="{% url 'public_epreuve' quiz.pk %}" target="_blank" rel="noopener">Voir la page publique</a>{% endif %}</p>
+      {% translate "Afficher la liste des" %} {% if quiz.auto_enroll %}{% translate "admis" %}{% else %}{% translate "réussis" %}{% endif %} {% translate "(n° d'inscription, prénom et nom, sans rang ni note)" %}{% if quiz.note_admission is None %} {% translate "— indiquez d'abord la note minimale" %}{% endif %}</label>
+    <p><button class="btn small" type="submit">{% translate "Enregistrer la publication" %}</button>
+      {% if quiz.resultats_publies or quiz.admis_publies %}<a class="btn small secondary" href="{% url 'public_epreuve' quiz.pk %}" target="_blank" rel="noopener">{% translate "Voir la page publique" %}</a>{% endif %}</p>
   </form>
-  {% if unmatched_total or pending_pages %}<p class="helptext">Attention : {% if unmatched_total %}{{ unmatched_total }} copie(s) non identifiée(s){% endif %}{% if unmatched_total and pending_pages %} et {% endif %}{% if pending_pages %}{{ pending_pages }} page(s) non corrigée(s){% endif %} — leurs résultats manqueront sur l'espace public, ou y resteront « Correction en cours ».</p>{% endif %}
+  {% if unmatched_total or pending_pages %}<p class="helptext">{% translate "Attention :" %} {% if unmatched_total %}{% blocktranslate trimmed %}{{ unmatched_total }} copie(s) non identifiée(s){% endblocktranslate %}{% endif %}{% if unmatched_total and pending_pages %} {% translate "et" %} {% endif %}{% if pending_pages %}{% blocktranslate trimmed %}{{ pending_pages }} page(s) non corrigée(s){% endblocktranslate %}{% endif %} {% translate "— leurs résultats manqueront sur l'espace public, ou y resteront « Correction en cours »." %}</p>{% endif %}
 </div>
 {% endif %}
 
 {% if admission %}
 <div class="card admission" id="admission">
   <div class="card__head">
-    <h2>{% if quiz.auto_enroll %}Admission{% else %}Réussite{% endif %}</h2>
-    <span class="badge grey">{% if quiz.note_distincte %}note minimale {{ admission.seuil|floatformat:"-2" }} / {{ admission.max_score|floatformat:"-2" }}{% else %}au moins {{ admission.seuil|floatformat:"-2" }} bonnes réponses sur {{ admission.max_score|floatformat:"-2" }}{% endif %}{% if quiz.est_qcm %}, soit {{ admission.seuil20|floatformat:"-2" }} / 20{% endif %}</span>
+    <h2>{% if quiz.auto_enroll %}{% translate "Admission" %}{% else %}{% translate "Réussite" %}{% endif %}</h2>
+    <span class="badge grey">{% if quiz.note_distincte %}{% blocktranslate trimmed with seuil=admission.seuil|floatformat:"-2" max_score=admission.max_score|floatformat:"-2" %}note minimale {{ seuil }} / {{ max_score }}{% endblocktranslate %}{% else %}{% blocktranslate trimmed with seuil=admission.seuil|floatformat:"-2" max_score=admission.max_score|floatformat:"-2" %}au moins {{ seuil }} bonnes réponses sur {{ max_score }}{% endblocktranslate %}{% endif %}{% if quiz.est_qcm %}{% blocktranslate trimmed with seuil20=admission.seuil20|floatformat:"-2" %}, soit {{ seuil20 }} / 20{% endblocktranslate %}{% endif %}</span>
     {% if perms.grader.creer_epreuve %}
     <details class="admission__regler">
-      <summary>Modifier la note minimale</summary>
-      {% include "grader/_note_admission_form.html" with libelle_bouton="Recalculer" %}
+      <summary>{% translate "Modifier la note minimale" %}</summary>
+      {% include "grader/_note_admission_form.html" with libelle_bouton=_("Recalculer") %}
     </details>
     {% endif %}
   </div>
   <div class="tiles tiles--admission">
     <div class="tile tile--accent">
-      <span class="tile__label">{% if quiz.auto_enroll %}Admis{% else %}Réussite{% endif %}</span>
+      <span class="tile__label">{% if quiz.auto_enroll %}{% translate "Admis" %}{% else %}{% translate "Réussite" %}{% endif %}</span>
       <span class="tile__value">{{ admission.n_admis }}<span class="tile__unit">/ {{ admission.n }}</span></span>
-      <span class="tile__note">{{ admission.pct }} % des {% if quiz.auto_enroll %}candidats{% else %}étudiants{% endif %} notés</span>
+      <span class="tile__note">{% blocktranslate trimmed with pct=admission.pct %}{{ pct }} % des{% endblocktranslate %} {% if quiz.auto_enroll %}{% translate "candidats" %}{% else %}{% translate "étudiants" %}{% endif %} {% translate "notés" %}</span>
     </div>
     <div class="tile">
-      <span class="tile__label">{% if quiz.auto_enroll %}Non admis{% else %}Sous la note minimale{% endif %}</span>
+      <span class="tile__label">{% if quiz.auto_enroll %}{% translate "Non admis" %}{% else %}{% translate "Sous la note minimale" %}{% endif %}</span>
       <span class="tile__value">{{ admission.n_refuses }}</span>
-      <span class="tile__note">copies entièrement notées</span>
+      <span class="tile__note">{% translate "copies entièrement notées" %}</span>
     </div>
     {% if admission.n_attente %}
     <div class="tile">
-      <span class="tile__label">En attente</span>
+      <span class="tile__label">{% translate "En attente" %}</span>
       <span class="tile__value">{{ admission.n_attente }}</span>
-      <span class="tile__note">sous la note minimale, mais des réponses manuscrites restent à noter</span>
+      <span class="tile__note">{% translate "sous la note minimale, mais des réponses manuscrites restent à noter" %}</span>
     </div>
     {% endif %}
   </div>
   {% if admission.n_admis and perms.grader.creer_epreuve %}
   {% if quiz.type_epreuve != "oral" or quiz.epreuves_suivantes.exists %}
   <div class="etape-suivante">
-    <span class="etape-suivante__titre">Étape suivante du concours :</span>
+    <span class="etape-suivante__titre">{% translate "Étape suivante du concours :" %}</span>
     {% for suivante in quiz.epreuves_suivantes.all %}
     <a class="btn small secondary" title="{{ suivante.title }}" href="{% url 'quiz_detail' suivante.pk %}">{{ suivante.type_court }}</a>
     {% endfor %}
     {% if quiz.type_epreuve == "qcm" %}
-    <a class="btn small" href="{% url 'quiz_create' %}?{% if quiz.auto_enroll %}concours=1&amp;{% endif %}precedente={{ quiz.pk }}&amp;type=ecrit">Créer l'écrit des {{ admission.n_admis }} admis</a>
+    <a class="btn small" href="{% url 'quiz_create' %}?{% if quiz.auto_enroll %}concours=1&amp;{% endif %}precedente={{ quiz.pk }}&amp;type=ecrit">{% blocktranslate trimmed with n_admis=admission.n_admis %}Créer l'écrit des {{ n_admis }} admis{% endblocktranslate %}</a>
     {% elif quiz.type_epreuve == "ecrit" %}
-    <a class="btn small" href="{% url 'quiz_create' %}?{% if quiz.auto_enroll %}concours=1&amp;{% endif %}precedente={{ quiz.pk }}&amp;type=oral">Créer l'oral des {{ admission.n_admis }} admis</a>
+    <a class="btn small" href="{% url 'quiz_create' %}?{% if quiz.auto_enroll %}concours=1&amp;{% endif %}precedente={{ quiz.pk }}&amp;type=oral">{% blocktranslate trimmed with n_admis=admission.n_admis %}Créer l'oral des {{ n_admis }} admis{% endblocktranslate %}</a>
     {% endif %}
   </div>
   {% endif %}
   {% endif %}
   {% if admission.admis %}
   <div class="admission__entete-liste" id="liste-admis">
-    <h3 class="admission__titre">{% if quiz.auto_enroll %}Liste des admis{% else %}Liste des étudiants ayant réussi{% endif %}, par ordre de mérite</h3>
-    <a class="btn small secondary" href="{% url 'quiz_admis_pdf' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">Exporter la liste (PDF)</a>
+    <h3 class="admission__titre">{% if quiz.auto_enroll %}{% translate "Liste des admis" %}{% else %}{% translate "Liste des étudiants ayant réussi" %}{% endif %}{% translate ", par ordre de mérite" %}</h3>
+    <a class="btn small secondary" href="{% url 'quiz_admis_pdf' quiz.pk %}{% if batch %}?batch={{ batch.pk }}{% endif %}">{% translate "Exporter la liste (PDF)" %}</a>
   </div>
-  {% include "grader/_recherche_liste.html" with ancre="liste-admis" champ="id_q_admis" sujet=quiz.auto_enroll|yesno:"admis,étudiant ayant réussi" n=admission.admis_affiches|length %}
-  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Liste par ordre de mérite">
+  {% include "grader/_recherche_liste.html" with ancre="liste-admis" champ="id_q_admis" sujet=quiz.auto_enroll|oui_non:"admis,étudiant ayant réussi" n=admission.admis_affiches|length %}
+  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="{% translate "Liste par ordre de mérite" %}">
     <table>
-    <tr><th>Rang</th><th>Prénom et nom</th><th>N° d'inscription</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>{% if quiz.est_qcm %}Note sur 20{% else %}Pourcentage{% endif %}</th>{% if quiz.est_qcm %}<th>Pourcentage</th>{% endif %}{% if quiz.note_distincte %}<th>{% if quiz.est_qcm %}Points{% else %}Note{% endif %}</th>{% endif %}</tr>
+    <tr><th>{% translate "Rang" %}</th><th>{% translate "Prénom et nom" %}</th><th>{% translate "N° d'inscription" %}</th>{% if quiz.a_des_qcm %}<th>{% translate "Bonnes réponses" %}</th>{% endif %}<th>{% if quiz.est_qcm %}{% translate "Note sur 20" %}{% else %}{% translate "Pourcentage" %}{% endif %}</th>{% if quiz.est_qcm %}<th>{% translate "Pourcentage" %}</th>{% endif %}{% if quiz.note_distincte %}<th>{% if quiz.est_qcm %}{% translate "Points" %}{% else %}{% translate "Note" %}{% endif %}</th>{% endif %}</tr>
     {% for r in admission.admis_affiches %}
     <tr class="ligne-lien">
       <td>{{ r.rang }}</td>
@@ -170,28 +170,28 @@
       {% if quiz.note_distincte %}<td class="score">{{ r.score|floatformat:"-2" }} / {{ r.max_score|floatformat:"-2" }}</td>{% endif %}
     </tr>
     {% empty %}
-    <tr><td colspan="7">Aucun {% if quiz.auto_enroll %}admis{% else %}étudiant ayant réussi{% endif %} ne correspond à « {{ recherche }} ».</td></tr>
+    <tr><td colspan="7">{% translate "Aucun" %} {% if quiz.auto_enroll %}{% translate "admis" %}{% else %}{% translate "étudiant ayant réussi" %}{% endif %} {% blocktranslate trimmed %}ne correspond à « {{ recherche }} ».{% endblocktranslate %}</td></tr>
     {% endfor %}
     </table>
   </div>
   {% else %}
-  <p class="helptext">Aucun{% if quiz.auto_enroll %} candidat admis{% else %} étudiant n'atteint la note minimale{% endif %} pour le moment.</p>
+  <p class="helptext">{% translate "Aucun" %}{% if quiz.auto_enroll %} {% translate "candidat admis" %}{% else %} {% translate "étudiant n'atteint la note minimale" %}{% endif %} {% translate "pour le moment." %}</p>
   {% endif %}
 </div>
 {% elif rows %}
 <div class="note" id="admission">
   <span class="note__icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg></span>
   <div class="note__body">
-    Pour connaître le nombre {% if quiz.auto_enroll %}d'admis, leur liste et leurs bulletins{% else %}d'étudiants ayant réussi{% endif %},
-    indiquez la <b>note minimale {% if quiz.auto_enroll %}d'admission{% else %}de réussite{% endif %}</b> :
+    {% translate "Pour connaître le nombre" %} {% if quiz.auto_enroll %}{% translate "d'admis, leur liste et leurs bulletins" %}{% else %}{% translate "d'étudiants ayant réussi" %}{% endif %}{% blocktranslate trimmed %},
+    indiquez la{% endblocktranslate %} <b>{% translate "note minimale" %} {% if quiz.auto_enroll %}{% translate "d'admission" %}{% else %}{% translate "de réussite" %}{% endif %}</b> :
     {% if perms.grader.creer_epreuve %}
     {% if quiz.auto_enroll %}
-    {% include "grader/_note_admission_form.html" with libelle_bouton="Afficher les admis" %}
+    {% include "grader/_note_admission_form.html" with libelle_bouton=_("Afficher les admis") %}
     {% else %}
-    {% include "grader/_note_admission_form.html" with libelle_bouton="Afficher les réussites" %}
+    {% include "grader/_note_admission_form.html" with libelle_bouton=_("Afficher les réussites") %}
     {% endif %}
     {% else %}
-    demandez-la à l'enseignant qui a créé l'épreuve.
+    {% translate "demandez-la à l'enseignant qui a créé l'épreuve." %}
     {% endif %}
   </div>
 </div>
@@ -199,25 +199,25 @@
 
 <div class="card" id="liste-notes">
   {% if rows %}
-  {% include "grader/_recherche_liste.html" with ancre="liste-notes" champ="id_q_notes" sujet=quiz.auto_enroll|yesno:"candidat,étudiant" n=n_trouves %}
+  {% include "grader/_recherche_liste.html" with ancre="liste-notes" champ="id_q_notes" sujet=quiz.auto_enroll|oui_non:"candidat,étudiant" n=n_trouves %}
   {% endif %}
-  {% include "grader/_pagination.html" with page=rows_page label="Étudiants" querystring=batch_qs ancre="liste-notes" %}
-  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Notes de tous les étudiants">
+  {% include "grader/_pagination.html" with page=rows_page label=_("Étudiants") querystring=batch_qs ancre="liste-notes" %}
+  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="{% translate "Notes de tous les étudiants" %}">
     <table>
     <tr>
-      <th>Étudiant</th>{% if quiz.a_des_qcm %}<th>Bonnes réponses</th>{% endif %}<th>{% if quiz.est_qcm %}Note sur 20{% else %}Pourcentage{% endif %}</th>{% if quiz.est_qcm %}<th>Pourcentage</th>{% endif %}
-      {% if quiz.note_distincte %}<th>{% if quiz.est_qcm %}Points{% elif matieres %}Moyenne{% else %}Note{% endif %}</th>{% endif %}
+      <th>{% translate "Étudiant" %}</th>{% if quiz.a_des_qcm %}<th>{% translate "Bonnes réponses" %}</th>{% endif %}<th>{% if quiz.est_qcm %}{% translate "Note sur 20" %}{% else %}{% translate "Pourcentage" %}{% endif %}</th>{% if quiz.est_qcm %}<th>{% translate "Pourcentage" %}</th>{% endif %}
+      {% if quiz.note_distincte %}<th>{% if quiz.est_qcm %}{% translate "Points" %}{% elif matieres %}{% translate "Moyenne" %}{% else %}{% translate "Note" %}{% endif %}</th>{% endif %}
       {% for m in matieres %}<th dir="auto">{{ m.text }}{% if m.coefficient != 1 %} <small>× {{ m.coefficient|floatformat:"-2" }}</small>{% endif %}</th>{% endfor %}
-      {% if quiz.a_des_qcm %}<th>Fausses</th><th>Sans réponse</th>{% endif %}
-      {% if quiz.note_distincte %}<th>{% if quiz.a_des_qcm %}Manuscrites à corriger{% else %}Note à saisir{% endif %}</th>{% endif %}
-      <th>Résultat</th><th></th>
+      {% if quiz.a_des_qcm %}<th>{% translate "Fausses" %}</th><th>{% translate "Sans réponse" %}</th>{% endif %}
+      {% if quiz.note_distincte %}<th>{% if quiz.a_des_qcm %}{% translate "Manuscrites à corriger" %}{% else %}{% translate "Note à saisir" %}{% endif %}</th>{% endif %}
+      <th>{% translate "Résultat" %}</th><th></th>
     </tr>
     {% for r in rows_page %}
     <tr class="ligne-lien">
       <td>{% if r.copie %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'sheet_review' r.copie.pk %}"><b>{{ r.student.full_name }}</b></a>{% else %}<b>{{ r.student.full_name }}</b>{% endif %}
-          {% if r.student.student_number %}<span class="helptext">n° {{ r.student.student_number }}</span>{% endif %}
-          {% if r.questions_manquantes and matieres %}<span class="badge warn" title="Copie non reçue (absent ?) ou non identifiée : la matière compte pour 0 dans la moyenne">Incomplète : {{ r.questions_manquantes }} matière{{ r.questions_manquantes|pluralize }}</span>
-          {% elif r.questions_manquantes %}<span class="badge warn" title="Page non identifiée ou non reçue : ces questions ne comptent pas dans la note">Incomplète : {{ r.questions_manquantes }} question{{ r.questions_manquantes|pluralize }}</span>{% endif %}</td>
+          {% if r.student.student_number %}<span class="helptext">{% translate "n°" %} {{ r.student.student_number }}</span>{% endif %}
+          {% if r.questions_manquantes and matieres %}<span class="badge warn" title="{% translate "Copie non reçue (absent ?) ou non identifiée : la matière compte pour 0 dans la moyenne" %}">{% blocktranslate trimmed with questions_manquantes=r.questions_manquantes questions_manquantes2=r.questions_manquantes|pluralize %}Incomplète : {{ questions_manquantes }} matière{{ questions_manquantes2 }}{% endblocktranslate %}</span>
+          {% elif r.questions_manquantes %}<span class="badge warn" title="{% translate "Page non identifiée ou non reçue : ces questions ne comptent pas dans la note" %}">{% blocktranslate trimmed with questions_manquantes=r.questions_manquantes questions_manquantes2=r.questions_manquantes|pluralize %}Incomplète : {{ questions_manquantes }} question{{ questions_manquantes2 }}{% endblocktranslate %}</span>{% endif %}</td>
       {% if quiz.a_des_qcm %}<td class="score">{{ r.correct }} / {{ r.n_qcm }}</td>{% endif %}
       <td>{% if quiz.est_qcm %}{% include "grader/_note20.html" with note=r.note20 %}{% else %}{% include "grader/_pourcentage.html" with pct=r.pct %}{% endif %}</td>
       {% if quiz.est_qcm %}<td class="score">{{ r.pct }} %</td>{% endif %}
@@ -225,25 +225,25 @@
       {% for n in r.notes_matieres %}<td class="score">{% if n is None %}—{% else %}{{ n|floatformat:"-2" }}{% endif %}</td>{% endfor %}
       {% if quiz.a_des_qcm %}<td><span class="badge bad">{{ r.wrong }}</span></td>
       <td><span class="badge grey">{{ r.blank }}</span></td>{% endif %}
-      {% if quiz.note_distincte %}<td>{% if r.pending_open %}{% if r.a_noter.image %}<a class="badge warn" href="{% url 'sheet_review' r.a_noter.pk %}" title="Ouvrir la copie pour saisir la note">{% if quiz.a_des_qcm %}{{ r.pending_open }}{% else %}Saisir la note{% endif %}</a>{% else %}<span class="badge warn">{{ r.pending_open }}</span>{% endif %}{% else %}—{% endif %}</td>{% endif %}
+      {% if quiz.note_distincte %}<td>{% if r.pending_open %}{% if r.a_noter.image %}<a class="badge warn" href="{% url 'sheet_review' r.a_noter.pk %}" title="{% translate "Ouvrir la copie pour saisir la note" %}">{% if quiz.a_des_qcm %}{{ r.pending_open }}{% else %}{% translate "Saisir la note" %}{% endif %}</a>{% else %}<span class="badge warn">{{ r.pending_open }}</span>{% endif %}{% else %}—{% endif %}</td>{% endif %}
       <td>
-        {% if r.resultat == "admis" %}<span class="badge ok">{% if quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</span>
-        {% elif r.resultat == "en_attente" %}<span class="badge warn">En attente</span>
-        {% elif r.resultat == "refuse" %}<span class="badge bad">{% if quiz.auto_enroll %}Non admis{% else %}Non réussi{% endif %}</span>
-        {% else %}<a class="helptext" href="#admission" title="Indiquez la note minimale">à fixer</a>{% endif %}
+        {% if r.resultat == "admis" %}<span class="badge ok">{% if quiz.auto_enroll %}{% translate "Admis" %}{% else %}{% translate "Réussi" %}{% endif %}</span>
+        {% elif r.resultat == "en_attente" %}<span class="badge warn">{% translate "En attente" %}</span>
+        {% elif r.resultat == "refuse" %}<span class="badge bad">{% if quiz.auto_enroll %}{% translate "Non admis" %}{% else %}{% translate "Non réussi" %}{% endif %}</span>
+        {% else %}<a class="helptext" href="#admission" title="{% translate "Indiquez la note minimale" %}">{% translate "à fixer" %}</a>{% endif %}
       </td>
       <td>{% for s in r.sheets %}{% if s.image %}
-        <a class="btn small secondary" href="{% url 'sheet_review' s.pk %}"{% if s.libelle %} dir="auto"{% endif %}>{% if quiz.type_epreuve == "oral" %}fiche{% elif s.libelle %}{{ s.libelle }}{% else %}copie p{{ s.page_index|add:1 }}{% endif %}</a>
+        <a class="btn small secondary" href="{% url 'sheet_review' s.pk %}"{% if s.libelle %} dir="auto"{% endif %}>{% if quiz.type_epreuve == "oral" %}{% translate "fiche" %}{% elif s.libelle %}{{ s.libelle }}{% else %}{% blocktranslate trimmed with page_index=s.page_index|add:1 %}copie p{{ page_index }}{% endblocktranslate %}{% endif %}</a>
       {% endif %}{% endfor %}
-        <a class="btn small secondary" title="Bulletin individuel"
+        <a class="btn small secondary" title="{% translate "Bulletin individuel" %}"
            href="{% url 'quiz_bulletins_pdf' quiz.pk %}?student={{ r.student.pk }}{% if batch %}&batch={{ batch.pk }}{% endif %}">🧾</a></td>
     </tr>
     {% empty %}
-    <tr><td colspan="12">{% if recherche %}Aucun {% if quiz.auto_enroll %}candidat{% else %}étudiant{% endif %} ne correspond à « {{ recherche }} ».{% else %}Aucune copie identifiée pour le moment.{% endif %}</td></tr>
+    <tr><td colspan="12">{% if recherche %}{% translate "Aucun" %} {% if quiz.auto_enroll %}{% translate "candidat" %}{% else %}{% translate "étudiant" %}{% endif %} {% blocktranslate trimmed %}ne correspond à « {{ recherche }} ».{% endblocktranslate %}{% else %}{% translate "Aucune copie identifiée pour le moment." %}{% endif %}</td></tr>
     {% endfor %}
   </table>
   </div>
-  {% include "grader/_pagination.html" with page=rows_page label="Étudiants" querystring=batch_qs ancre="liste-notes" %}
+  {% include "grader/_pagination.html" with page=rows_page label=_("Étudiants") querystring=batch_qs ancre="liste-notes" %}
 </div>
 
 {% if manquantes.scannees %}
@@ -256,13 +256,13 @@
     <svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
   </span>
   <div class="note__body">
-    <b>Bonne réponse à vérifier —
-      question{{ stats.suspectes|length|pluralize }}
-      n° {% for n in stats.suspectes %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}.</b>
-    Les meilleures copies s'y trompent plus que les plus faibles, ce qui
+    <b>{% blocktranslate trimmed with suspectes=stats.suspectes|length|pluralize %}Bonne réponse à vérifier —
+      question{{ suspectes }}
+      n°{% endblocktranslate %} {% for n in stats.suspectes %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}.</b>
+    {% blocktranslate trimmed %}Les meilleures copies s'y trompent plus que les plus faibles, ce qui
     n'arrive pratiquement jamais sur une question simplement difficile.
     Vérifiez la bonne réponse enregistrée : si elle est fausse, toute la
-    promotion est comptée fausse sur cette question.
+    promotion est comptée fausse sur cette question.{% endblocktranslate %}
   </div>
 </div>
 {% endif %}
@@ -270,27 +270,27 @@
 {% if stats %}
 <div class="grid2">
   <div class="card">
-    <h2>Statistiques de l'épreuve</h2>
+    <h2>{% translate "Statistiques de l'épreuve" %}</h2>
     <p>
-      {{ stats.n }} étudiant(s) —
-      moyenne <b>{{ stats.mean|floatformat:"-2" }}</b>,
-      médiane <b>{{ stats.median|floatformat:"-2" }}</b>,
-      écart-type <b>{{ stats.stdev|floatformat:"-2" }}</b>,
-      meilleure note <b>{{ stats.best|floatformat:"-2" }}</b>,
-      plus basse <b>{{ stats.worst|floatformat:"-2" }}</b>
-      (sur {{ stats.max_score|floatformat:"-2" }}).
+      {% blocktranslate trimmed with n=stats.n %}{{ n }} étudiant(s) —
+      moyenne{% endblocktranslate %} <b>{{ stats.mean|floatformat:"-2" }}</b>{% blocktranslate trimmed %},
+      médiane{% endblocktranslate %} <b>{{ stats.median|floatformat:"-2" }}</b>{% blocktranslate trimmed %},
+      écart-type{% endblocktranslate %} <b>{{ stats.stdev|floatformat:"-2" }}</b>{% blocktranslate trimmed %},
+      meilleure note{% endblocktranslate %} <b>{{ stats.best|floatformat:"-2" }}</b>{% blocktranslate trimmed %},
+      plus basse{% endblocktranslate %} <b>{{ stats.worst|floatformat:"-2" }}</b>
+      {% blocktranslate trimmed with max_score=stats.max_score|floatformat:"-2" %}(sur {{ max_score }}).{% endblocktranslate %}
     </p>
-    <p class="helptext helptext--serre">L'écart-type mesure la dispersion :
+    <p class="helptext helptext--serre">{% blocktranslate trimmed %}L'écart-type mesure la dispersion :
       petit, les notes se serrent autour de la moyenne ; grand, la classe se
-      partage entre deux groupes très inégaux.</p>
-    <h2 style="margin-top:16px">Répartition des notes{% if stats.sur20 %} sur 20{% endif %}</h2>
+      partage entre deux groupes très inégaux.{% endblocktranslate %}</p>
+    <h2 style="margin-top:16px">{% translate "Répartition des notes" %}{% if stats.sur20 %} {% translate "sur 20" %}{% endif %}</h2>
     <div class="table-wrap">
       <table>
       {% for h in stats.histogram %}
       <tr>
         <td style="width:80px">{{ h.label }}</td>
         <td><span class="bar" style="width:{{ h.bar }}%"></span>
-            &nbsp;{{ h.count }} ({{ h.pct }} %)</td>
+            {% blocktranslate trimmed with h_count=h.count pct=h.pct %}&nbsp;{{ h_count }} ({{ pct }} %){% endblocktranslate %}</td>
       </tr>
       {% endfor %}
     </table>
@@ -298,51 +298,51 @@
   </div>
   {% if quiz.a_des_qcm %}
   <div class="card">
-    <h2>Réussite par question</h2>
-    <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Réussite par question">
+    <h2>{% translate "Réussite par question" %}</h2>
+    <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="{% translate "Réussite par question" %}">
       <table>
-      <tr><th>Q</th><th>Réussite</th><th>Justes</th><th>Fausses</th><th>Vides</th>
-          <th>Discrimination</th></tr>
+      <tr><th>{% translate "Q" %}</th><th>{% translate "Réussite" %}</th><th>{% translate "Justes" %}</th><th>{% translate "Fausses" %}</th><th>{% translate "Vides" %}</th>
+          <th>{% translate "Discrimination" %}</th></tr>
       {% for s in stats.questions %}
       <tr {% if s.success < 40 %}class="ligne--alerte"{% endif %}>
         <td><b>{{ s.question.order }}</b>
-            {% if s.question.qtype == "open" %}<span class="helptext">manuscrite</span>{% endif %}</td>
+            {% if s.question.qtype == "open" %}<span class="helptext">{% translate "manuscrite" %}</span>{% endif %}</td>
         <td><span class="bar" style="width:{{ s.success }}%;max-width:80px"></span>
-            &nbsp;{{ s.success }} %</td>
+            {% blocktranslate trimmed with success=s.success %}&nbsp;{{ success }} %{% endblocktranslate %}</td>
         {% if s.question.qtype == "qcm" %}
         <td>{{ s.correct }}</td><td>{{ s.wrong }}</td><td>{{ s.blank }}</td>
         {% else %}
-        <td colspan="3"><span class="helptext">{{ s.graded }} copie(s) notée(s)</span></td>
+        <td colspan="3"><span class="helptext">{% blocktranslate trimmed with graded=s.graded %}{{ graded }} copie(s) notée(s){% endblocktranslate %}</span></td>
         {% endif %}
         <td>
           {% if s.discrimination_label %}
           <span class="badge {% if s.corrige_suspect %}bad{% elif s.discrimination_label == 'faible' %}warn{% else %}ok{% endif %}"
                 title="{{ s.discrimination_aide }}">
-            {{ s.discrimination|floatformat:2 }} · {{ s.discrimination_label }}</span>
+            {{ s.discrimination|floatformat:2 }} · {{ s.discrimination_libelle }}</span>
           {% else %}<span class="helptext">—</span>{% endif %}
         </td>
       </tr>
       {% endfor %}
     </table>
     </div>
-    <p class="helptext">Les lignes surlignées (&lt; 40 % de réussite) signalent
+    <p class="helptext">{% blocktranslate trimmed %}Les lignes surlignées (&lt; 40 % de réussite) signalent
       les questions les plus ratées. La discrimination compare la réussite du
       tiers fort et du tiers faible du classement : elle n'est calculée qu'à
-      partir de dix copies.</p>
+      partir de dix copies.{% endblocktranslate %}</p>
   </div>
   {% endif %}
 </div>
 
 {% if quiz.a_des_qcm %}
 <div class="card">
-  <h2>Où sont parties les réponses</h2>
-  <p class="helptext helptext--serre">Savoir qu'une question a fait huit
+  <h2>{% translate "Où sont parties les réponses" %}</h2>
+  <p class="helptext helptext--serre">{% blocktranslate trimmed %}Savoir qu'une question a fait huit
     fausses ne dit pas vers quoi. Si presque toutes se portent sur la même
     case, c'est soit un bon distracteur, soit un énoncé ambigu, soit une
-    bonne réponse erronée.</p>
-  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="Répartition des copies par case">
+    bonne réponse erronée.{% endblocktranslate %}</p>
+  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="{% translate "Répartition des copies par case" %}">
     <table class="table--espacee">
-    <tr><th>Q</th><th>Répartition des copies par case</th></tr>
+    <tr><th>{% translate "Q" %}</th><th>{% translate "Répartition des copies par case" %}</th></tr>
     {% for s in stats.questions %}{% if s.repartition %}
     <tr>
       <td><b>{{ s.question.order }}</b></td>
@@ -350,7 +350,7 @@
         <div class="choix">
           {% for c in s.repartition %}
           <span class="choix__part {% if c.bonne %}is-bonne{% endif %}"
-                title="{{ c.titre }} — {{ c.n }} copie(s), {{ c.pct }} %">
+                title="{% blocktranslate trimmed with titre=c.titre n=c.n pct=c.pct %}{{ titre }} — {{ n }} copie(s), {{ pct }} %{% endblocktranslate %}">
             <i class="choix__jauge"><b style="height:{{ c.pct }}%"></b></i>
             <span class="choix__lettre">{{ c.lettre }}</span>
             <small>{{ c.pct }} %</small>
@@ -362,7 +362,7 @@
     {% endif %}{% endfor %}
   </table>
   </div>
-  <p class="helptext">La case encadrée est la bonne réponse enregistrée.</p>
+  <p class="helptext">{% translate "La case encadrée est la bonne réponse enregistrée." %}</p>
 </div>
 {% endif %}
 {% endif %}

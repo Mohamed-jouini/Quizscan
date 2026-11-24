@@ -127,6 +127,50 @@ de pages scannées (scanner professionnel, PDF multi-pages ou images).
    admis à l'oral publié (absent compris), « À venir » sinon. Le concours finit par
    l'oral : un admis à l'écrit reste « À venir » tant que l'oral n'est pas publié, ou
    pas encore créé.
+   **En français ou en arabe** (depuis le 24 novembre 2026) : le bouton « العربية » de la
+   barre passe tout l'espace public en arabe, de droite à gauche (menus, verdicts,
+   résultat final, liste des admis, communiqués) ; « Français » y revient. Le choix est
+   gardé un an dans le navigateur ; sans choix, l'espace public suit la langue du
+   navigateur (un téléphone réglé en arabe l'ouvre en arabe). Les communiqués et les
+   titres des épreuves s'affichent tels qu'ils ont été saisis. Le même bouton traduit
+   tout le logiciel (voir « Langue de l'interface » ci-dessous).
+
+### Langue de l'interface (français, arabe)
+
+Tout le logiciel existe en français et en arabe (24 novembre 2026) : espace public, pages
+du personnel, administration, connexion, messages et erreurs. Le bouton « العربية » de la
+barre du haut passe en arabe, de droite à gauche (menu à droite, tableaux et formulaires
+retournés) ; « Français » revient au français. Le choix est gardé un an dans le
+navigateur, pour toutes les pages. Sans choix, l'espace public suit la langue du
+navigateur ; le reste s'ouvre en français.
+
+Ce qui reste dans la langue où il a été saisi ou produit : les données (titres
+d'épreuves, noms de listes et de candidats, communiqués), le journal des modifications,
+les messages enregistrés avec les copies au moment de leur lecture, les noms des
+permissions (administration), et les documents produits (PDF, Excel), qui suivent la
+langue de chaque épreuve comme avant. Les noms proposés à la création (« Concours —
+titre », « titre — écrit », « titre — admis de … ») sont écrits dans la langue de
+l'interface ; un nom de liste donné en français ou en arabe reste reconnu quand on
+renomme le concours.
+
+La traduction suit le mécanisme standard de Django : les textes des gabarits sont dans
+`{% translate %}` / `{% blocktranslate %}`, ceux du code dans `gettext` / `gettext_lazy`,
+leur version arabe dans `grader/locale/ar/LC_MESSAGES/django.po` (les textes propres à
+Django, en anglais dans ses gabarits, ont la traduction arabe de Django). La mise en page
+de droite à gauche vient de `dir="rtl"` : les placements de `quizscan.css` sont écrits
+en début / fin de ligne (`margin-inline-start`…), rendu identique en français. Après toute
+modification du `.po` :
+
+```bash
+python manage.py traductions
+```
+
+Elle le compile en `django.mo`, versionné : rien à compiler au déploiement, et pas besoin de
+GNU gettext (`compilemessages` de Django en dépend). `grader/langue.py` choisit la langue :
+celle du bouton (cookie de langue de Django) partout ; sans choix, celle du navigateur pour
+l'espace public (`ESPACE_PUBLIC`) et le français ailleurs. `test_e2e_langue.py` échoue si un
+texte des gabarits ou du code n'a pas sa traduction arabe, ou si le `.mo` ne suit plus le
+`.po`.
 
 ### Identification des copies : trois modes au choix (par quiz)
 
@@ -607,12 +651,14 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_scanner.py` | sorties d'un scanner à chargeur : TIFF multipage lu en entier, versos blancs ignorés, étiquettes lues en noir et blanc, PDF à 600 dpi et image à 1200 dpi décodés réduits, JPEG piégés refusés sur leur en-tête |
 | `test_e2e_a3.py` | copies d'écrit et sujet de QCM en A3 recto-verso plié : ordre des pages, sans carrés noirs, page de garde lue sur la feuille A3 dans tous les sens, en-tête et QR de l'étudiant sur la page de garde seulement, A4 inchangé |
 | `test_e2e_talon.py` | copies à talon : nom seulement sur le talon, code d'anonymat identique sur le talon et sous le QR (un par copie, gardé à la régénération), copie lue talon découpé ou non, QR effacé retrouvé par son code, écrit à talon (talon et QR sur la page de garde seulement), PDF à 1200 dpi, copie d'une autre épreuve, génération en arrière-plan |
+| `test_e2e_audit.py` | audit du 24 novembre 2026 : « nan », « inf » et « ² » refusés sans erreur 500, note minimale bornée, note lue non « saisie », imports bornés (Excel décompressé, intervalle, repère linéaire), registre entier sans doublon simultané, page enregistrée d'un seul tenant, file de lots, corrigé de l'administration recalculé, double scan compté une fois, exports sans formule, coefficients au journal, freins de connexion et de recherche, envoi anonyme borné, en-têtes de langue |
 | `test_e2e_annee.py` | année d'un concours (السنة الأولى / السنة الثانية) : choix obligatoire à la création, codes d'anonymat en X ou en Y au QCM et à l'écrit, année reprise par l'étape suivante et changée pour tout le concours |
 | `test_e2e_matieres.py` | écrit d'un concours en trois matières : réglages (noms, coefficients, sujets), sujet, copies et liste par salle de chaque matière, un seul envoi de scans, moyenne pondérée, note minimale, oral des admis, relevé et export par matière |
 | `test_e2e_import.py` | import de questionnaires et de candidats (Excel, Word, PDF, CSV), banque de questions |
 | `test_e2e_forms.py` | création d'un concours (sans classe ni case « mode concours ») et d'un quiz, nombre de choix par question jusqu'à la lecture de la copie |
 | `test_e2e_concours_classe.py` | la liste de candidats d'un concours n'est pas une classe : tableau de bord, menu « Classe », administration (liste des classes, fiche de l'enseignant), liste supprimée avec son concours |
 | `test_e2e_charge.py` | jour des résultats : liste publique des admis calculée une seule fois pour des visiteurs simultanés, la précédente servie pendant son calcul, cache en fichiers sans relecture du dossier à chaque écriture |
+| `test_e2e_langue.py` | le logiciel en arabe : bouton العربية / Français, langue du navigateur pour l'espace public, de droite à gauche partout (personnel, administration, connexion), chaque texte des gabarits et du code traduit, catalogue compilé à jour, personnel en français sans choix |
 | `test_e2e_deferred.py` | concours « correction après scan » : lots en attente, puis « Lancer la correction » (QCM, et écrit depuis sa page ; rien sur la page du lot) |
 | `test_e2e_web.py` | par l'interface : étiquettes QR d'une classe, correction en arrière-plan, secours OCR, corrigé modifié après l'épreuve, alerte de fiche périmée, droits d'accès |
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
@@ -765,11 +811,16 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   la dernière ligne de l'« En-tête du sujet » (l'établissement), ou l'institut quand il
   est vide ; un autre établissement demande de régénérer les copies. Rien de ce qui est lu
   ne bouge.
-- Note d'un écrit, par demi-points (barème entier jusqu'à 20). Dans le cadre « réservé au
-  correcteur », le correcteur écrit la note en clair et signe, puis noircit une case par
+- Note d'un écrit, par quarts de point (barème entier jusqu'à 20). Dans le cadre « réservé
+  au correcteur », le correcteur écrit la note en clair et signe, puis noircit une case par
   ligne. La première ligne donne la partie entière, de 0 à 20 ; la seconde, la décimale,
-  « ,0 » ou « ,5 ». Une ligne vide, deux cases sur une ligne ou 20,5 donnent une note
-  « à vérifier », à saisir sur l'écran de la copie. Les copies imprimées avant avec la
+  « ,00 », « ,25 », « ,50 » ou « ,75 » (depuis le 24 novembre 2026 ; « ,0 » ou « ,5 »
+  avant). Une ligne vide, deux cases sur une ligne ou une note au-dessus de 20 (20,25)
+  donnent une note « à vérifier », à saisir sur l'écran de la copie. Les cases « ,00 » et
+  « ,50 » sont à la place des anciennes « ,0 » et « ,5 » : une copie imprimée avec les
+  demi-points se lit juste, avec sa disposition comme après régénération des documents.
+  Une épreuve écrite générée avant affiche « régénérez les documents » pour imprimer la
+  nouvelle grille. Les copies imprimées avant avec la
   grille à chiffres (dizaines, unités, dixièmes, centièmes) se lisent toujours avec leur
   disposition. Régénérer leurs documents prévient que ces copies ne se liraient plus :
   scannées malgré tout, leur ligne de la décimale tombe sur du blanc, et leur note reste
@@ -1035,6 +1086,15 @@ python manage.py comptes_demo --supprimer
   et par adresse, puis refus 15 minutes ; politique de contenu (CSP) : rien ne se
   charge d'un autre domaine ; pages du personnel non conservées par le
   navigateur ; session fermée après 12 h sans activité ;
+- ajouts de l'audit du 24 novembre 2026 : 100 échecs de connexion par adresse, tous
+  comptes confondus (avant le calcul du mot de passe, qui est lourd) ; une adresse déjà
+  connectée à un compte n'est pas bloquée par les essais des autres sur ce compte ; une
+  adresse IPv6 compte pour son réseau /64 dans les freins ; le frein des recherches
+  publiques est une vraie fenêtre de 10 minutes ; un envoi de plus d'1 Mo sans compte
+  connecté est refusé avant d'être lu (`EnvoiAnonymeRefuse`) ; fichiers
+  importés contrôlés (Excel décompressé, page de PDF géante) ; notes « nan » ou « inf »
+  refusées ; formules neutralisées dans tous les exports Excel. Délais conseillés pour
+  Caddy : `deploy/Caddyfile.exemple` ;
 - **plusieurs reverse proxies à la suite** : renseignez `PROXYS_DE_CONFIANCE`
   (voir `deploy/Caddyfile.exemple`), sinon tous les visiteurs ont la même adresse
   et se partagent les limites de connexion et de recherche par n°. Contrôle :

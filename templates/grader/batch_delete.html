@@ -1,10 +1,10 @@
-{% extends "grader/base.html" %}
-{% block title %}Supprimer le lot — QuizScan{% endblock %}
+{% extends "grader/base.html" %}{% load i18n %}
+{% block title %}{% translate "Supprimer le lot — QuizScan" %}{% endblock %}
 {% block content %}
 <div class="form-page">
   <header class="page-head">
     <div class="page-head__text">
-      <h1>Supprimer le lot</h1>
+      <h1>{% translate "Supprimer le lot" %}</h1>
       <p class="page-head__meta">
         <b>{{ batch }}</b> · {{ batch.quiz.title }}
       </p>
@@ -17,12 +17,12 @@
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
     </span>
     <div class="note__body">
-      <b>Ce lot est en cours de correction.</b> Attendez la fin du traitement
+      <b>{% translate "Ce lot est en cours de correction." %}</b> {% blocktranslate trimmed %}Attendez la fin du traitement
       avant de le supprimer : on ne retire pas des copies pendant qu'elles
-      sont lues.
+      sont lues.{% endblocktranslate %}
     </div>
   </div>
-  <p><a class="btn secondary" href="{% url 'batch_detail' batch.pk %}">← Retour au lot</a></p>
+  <p><a class="btn secondary" href="{% url 'batch_detail' batch.pk %}">{% translate "← Retour au lot" %}</a></p>
 
   {% else %}
   <div class="note note--bad">
@@ -30,27 +30,27 @@
       <svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
     </span>
     <div class="note__body">
-      <b>{{ n_pages }} page{{ n_pages|pluralize }} vont être retirée{{ n_pages|pluralize }}
-        des résultats</b>{% if n_attribuees %}, dont {{ n_attribuees }}
-        déjà attribuée{{ n_attribuees|pluralize }} à un candidat{% endif %}.
+      <b>{% blocktranslate trimmed with n_pages2=n_pages|pluralize %}{{ n_pages }} page{{ n_pages2 }} vont être retirée{{ n_pages2 }}
+        des résultats{% endblocktranslate %}</b>{% if n_attribuees %}{% blocktranslate trimmed with n_attribuees2=n_attribuees|pluralize %}, dont {{ n_attribuees }}
+        déjà attribuée{{ n_attribuees2 }} à un candidat{% endblocktranslate %}{% endif %}{% blocktranslate trimmed %}.
       Leurs notes disparaissent des résultats et des bulletins, et les
-      fichiers scannés sont effacés du serveur.
+      fichiers scannés sont effacés du serveur.{% endblocktranslate %}
     </div>
   </div>
 
   <div class="card">
-    <h2>Avant de confirmer</h2>
+    <h2>{% translate "Avant de confirmer" %}</h2>
     <ul class="liste-sobre">
-      <li>Supprimez un lot téléversé <b>par erreur</b> : mauvais fichier,
-        mauvaise classe, mauvaise épreuve.</li>
-      <li>La suppression est <b>inscrite au journal des modifications</b>,
-        avec votre nom et le nombre de pages retirées.</li>
-      <li>Elle ne peut pas être annulée depuis l'application. Seule une
-        sauvegarde antérieure permet de retrouver ces copies.</li>
+      <li>{% translate "Supprimez un lot téléversé" %} <b>{% translate "par erreur" %}</b> {% blocktranslate trimmed %}: mauvais fichier,
+        mauvaise classe, mauvaise épreuve.{% endblocktranslate %}</li>
+      <li>{% translate "La suppression est" %} <b>{% translate "inscrite au journal des modifications" %}</b>{% blocktranslate trimmed %},
+        avec votre nom et le nombre de pages retirées.{% endblocktranslate %}</li>
+      <li>{% blocktranslate trimmed %}Elle ne peut pas être annulée depuis l'application. Seule une
+        sauvegarde antérieure permet de retrouver ces copies.{% endblocktranslate %}</li>
     </ul>
     <form method="post" class="actions-confirmation">{% csrf_token %}
-      <button class="btn danger" type="submit">Supprimer définitivement</button>
-      <a class="btn secondary" href="{% url 'batch_detail' batch.pk %}">Annuler</a>
+      <button class="btn danger" type="submit">{% translate "Supprimer définitivement" %}</button>
+      <a class="btn secondary" href="{% url 'batch_detail' batch.pk %}">{% translate "Annuler" %}</a>
     </form>
   </div>
   {% endif %}

@@ -28,7 +28,7 @@ from .fonts import has_arabic, load_fonts
 from .importers import _EXTRAS as COLONNES_FICHE
 from .importers import chiffres_latins, lire_date
 from .labels_pdf import _draw_text, _ellipsize
-from .models import Inscrit, Student
+from .models import ClassGroup, Inscrit, Student
 from .omr import _forme
 
 PREFIXE_QR = "QSI"
@@ -105,24 +105,41 @@ def chercher(texte):
     return trouves, inconnus
 
 
+def verrouiller_liste(groupe):
+    """Deux ajouts à la même liste en même temps (double clic sur « Importer » ou sur
+    « Mettre à jour la liste des admis ») s'attendent : chacun vérifiait les présents avant
+    que l'autre n'écrive, et tous les candidats entraient deux fois (24 novembre 2026).
+    Dans une transaction : le verrou tient jusqu'à sa fin."""
+    ClassGroup.objects.select_for_update().filter(pk=groupe.pk).first()
+
+
 @transaction.atomic
 def ajouter_a_classe(groupe, inscrits):
     """Ajoute des inscrits à une classe ou aux candidats d'un concours, sous
     leur identité du registre. Un étudiant déjà présent avec le même n° n'est
-    pas recréé (il est seulement relié au registre). Retourne (ajoutés, déjà)."""
+    pas recréé (il est seulement relié au registre). Retourne (ajoutés, déjà).
+    En quelques requêtes, et non deux par inscrit : le registre entier (15 000) y passe."""
+    verrouiller_liste(groupe)
+    presents = {}
+    for s in groupe.students.exclude(student_number=""):
+        presents.setdefault(s.student_number, s)
     ajoutes = deja = 0
+    a_creer, a_relier = [], []
     for i in inscrits:
-        present = groupe.students.filter(student_number=i.numero).first()
+        present = presents.get(i.numero)
         if present is not None:
-            if present.inscrit_id != i.pk:
+            if present.pk is not None and present.inscrit_id != i.pk:
                 present.inscrit = i
-                present.save(update_fields=["inscrit"])
+                a_relier.append(present)
             deja += 1
             continue
-        Student.objects.create(class_group=groupe, last_name=i.nom,
-                               first_name=i.prenom, student_number=i.numero,
-                               inscrit=i)
+        nouveau = Student(class_group=groupe, last_name=i.nom, first_name=i.prenom,
+                          student_number=i.numero, inscrit=i)
+        a_creer.append(nouveau)
+        presents[i.numero] = nouveau
         ajoutes += 1
+    Student.objects.bulk_create(a_creer, batch_size=1000)
+    Student.objects.bulk_update(a_relier, ["inscrit"], batch_size=1000)
     return ajoutes, deja
 
 
@@ -153,19 +170,28 @@ def copier_etudiants(groupe, etudiants):
     (même nom, prénom, n° et fiche du registre). Déjà présent — même n°, ou
     même nom et prénom quand il n'y a pas de n° — : pas recréé.
     Retourne (ajoutés, déjà présents)."""
+    verrouiller_liste(groupe)
+    numeros, noms = set(), set()
+    for numero, nom, prenom in groupe.students.values_list("student_number", "last_name",
+                                                           "first_name"):
+        if numero:
+            numeros.add(numero)
+        noms.add((nom, prenom))
     ajoutes = deja = 0
+    a_creer = []
     for e in etudiants:
         numero = (e.student_number or "").strip()
-        present = (groupe.students.filter(student_number=numero) if numero
-                   else groupe.students.filter(last_name=e.last_name,
-                                               first_name=e.first_name)).exists()
-        if present:
+        if (numero in numeros) if numero else ((e.last_name, e.first_name) in noms):
             deja += 1
             continue
-        Student.objects.create(class_group=groupe, last_name=e.last_name,
+        a_creer.append(Student(class_group=groupe, last_name=e.last_name,
                                first_name=e.first_name, student_number=numero,
-                               inscrit_id=e.inscrit_id)
+                               inscrit_id=e.inscrit_id))
+        if numero:
+            numeros.add(numero)
+        noms.add((e.last_name, e.first_name))
         ajoutes += 1
+    Student.objects.bulk_create(a_creer, batch_size=1000)
     return ajoutes, deja
 
 

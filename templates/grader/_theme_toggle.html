@@ -1,11 +1,11 @@
-{# Bouton « clair / sombre » et ses trois icones (automatique, lune, soleil). #}
+{% load i18n %}{# Bouton « clair / sombre » et ses trois icones (automatique, lune, soleil). #}
 {# Memes classes et memes identifiants de symbole que l'administration de     #}
 {# Django : la feuille unique n'a ainsi qu'un seul jeu de regles a porter,    #}
 {# et grader/theme.js un seul comportement.                                  #}
-<button type="button" class="theme-toggle" title="Changer le thème">
-  <span class="visually-hidden theme-label-when-auto">Thème : automatique</span>
-  <span class="visually-hidden theme-label-when-light">Thème : clair</span>
-  <span class="visually-hidden theme-label-when-dark">Thème : sombre</span>
+<button type="button" class="theme-toggle" title="{% translate 'Changer le thème' %}">
+  <span class="visually-hidden theme-label-when-auto">{% translate "Thème : automatique" %}</span>
+  <span class="visually-hidden theme-label-when-light">{% translate "Thème : clair" %}</span>
+  <span class="visually-hidden theme-label-when-dark">{% translate "Thème : sombre" %}</span>
   <svg aria-hidden="true" class="theme-icon-when-auto"><use href="#icon-auto"/></svg>
   <svg aria-hidden="true" class="theme-icon-when-light"><use href="#icon-sun"/></svg>
   <svg aria-hidden="true" class="theme-icon-when-dark"><use href="#icon-moon"/></svg>

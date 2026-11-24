@@ -361,15 +361,17 @@ def lire_note(warped_bgr, grille, note_sur):
     noirci, donnait 9 au lieu de 19). Une ligne ambiguë (plusieurs cases) ou une note
     au-dessus du barème aussi : None, la note reste à saisir à l'écran.
     Écrit depuis le 13 novembre 2026 (grille « demi ») : la partie entière (0..20) puis la
-    décimale (,0 ou ,5), une case noircie par ligne ; 20,5 dépasse le barème : à vérifier.
+    décimale, une case noircie par ligne ; au-dessus du barème (20,25), à vérifier. La
+    décimale se lit dans « valeurs » (,00 ,25 ,50 ,75 depuis le 24 novembre 2026) ; une
+    disposition enregistrée avant n'en a pas : ,0 ou ,5.
 
     Retourne (note | None, chiffres lus : un chiffre, ou « ? » pour une ligne à vérifier)."""
     lus = ["?" if d is None else d for d in _lire_chiffres(warped_bgr, grille)]
     if "?" in lus:
         return None, lus
     if grille.get("modele") == "demi":
-        entier, demi = lus                      # demi : 0 pour « ,0 », 1 pour « ,5 »
-        note = entier + 0.5 * demi
+        entier, k = lus                         # k : n° de la case de la décimale
+        note = entier + (grille.get("valeurs") or [0.0, 0.5])[k]
         return (None, lus) if note > note_sur else (float(note), lus)
     chiffres = lus
     decimales = grille.get("decimales", 1)

@@ -1,4 +1,4 @@
-{% comment %}
+{% load i18n %}{% comment %}
 Résultat d'un étudiant à une épreuve, sur la page « Mes résultats ». Paramètres : quiz, row.
 Le verdict seul : « Admis » ou « Non admis » (« Réussi » ou « Non réussi » hors concours),
 ni note, ni bonnes réponses, ni rang (demande de l'utilisateur, 13 novembre 2026). Tant
@@ -6,8 +6,8 @@ qu'il ne peut être dit : correction en cours, ou résultat pas encore disponibl
 note minimale).
 {% endcomment %}
 <div class="pub-note">
-  {% if row.resultat == "admis" %}<p class="pub-verdict pub-verdict--admis">{% if quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</p>
-  {% elif row.resultat == "refuse" %}<p class="pub-verdict pub-verdict--refuse">{% if quiz.auto_enroll %}Non admis{% else %}Non réussi{% endif %}</p>
-  {% elif row.resultat == "en_attente" %}<p class="pub-verdict pub-verdict--attente">Correction en cours</p>
-  {% else %}<p class="pub-verdict">Résultat pas encore disponible</p>{% endif %}
+  {% if row.resultat == "admis" %}<p class="pub-verdict pub-verdict--admis">{% if quiz.auto_enroll %}{% translate "Admis" %}{% else %}{% translate "Réussi" %}{% endif %}</p>
+  {% elif row.resultat == "refuse" %}<p class="pub-verdict pub-verdict--refuse">{% if quiz.auto_enroll %}{% translate "Non admis" %}{% else %}{% translate "Non réussi" %}{% endif %}</p>
+  {% elif row.resultat == "en_attente" %}<p class="pub-verdict pub-verdict--attente">{% translate "Correction en cours" %}</p>
+  {% else %}<p class="pub-verdict">{% translate "Résultat pas encore disponible" %}</p>{% endif %}
 </div>

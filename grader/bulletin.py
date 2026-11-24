@@ -12,6 +12,7 @@ from reportlab.pdfgen import canvas as rl_canvas
 from . import layout as L
 from .fonts import font_for, has_arabic, load_fonts, runs, shape, text_width_pt, wrap
 from .labels_pdf import _ellipsize
+from .langue import en_francais
 from .models import nom_et_prenom
 
 PAGE_W, PAGE_H = 210.0, 297.0
@@ -94,6 +95,7 @@ def _ligne_resultat(quiz, r, admission):
     return texte, couleur
 
 
+@en_francais
 def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
     """Un PDF avec une page de relevé par étudiant (rows = compute_results).
 
@@ -246,6 +248,7 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
     return buf.getvalue()
 
 
+@en_francais
 def generate_liste_admis_pdf(quiz, admission, batch=None):
     """Liste des admis par ordre de mérite, prête à afficher ou à signer.
 
@@ -367,6 +370,7 @@ def _nombre(valeur):
     return f"{valeur:g}" if valeur.is_integer() else f"{valeur:.2f}".replace(".", ",")
 
 
+@en_francais
 def generate_parcours_pdf(parcours):
     """Résultats de tout un concours (services.parcours_concours), à imprimer ou à signer :
     chaque candidat, étape par étape, et son résultat final, sur autant de pages qu'il faut
@@ -527,6 +531,7 @@ def _draw_morceaux(c, morceaux, x_centre, y, taille, gray=None):
         x += large
 
 
+@en_francais
 def generate_admis_concours_pdf(parcours):
     """Liste des admis au concours (résultat final « Admis au concours »), à afficher ou à
     signer (demande du 16 novembre 2026) : rang sur la moyenne finale, prénom et nom, n°
@@ -710,6 +715,7 @@ def _intitule_salle(salle):
     return salle if re.match(r"\s*(salle|قاعة|القاعة)", salle, re.I) else f"Salle : {salle}"
 
 
+@en_francais
 def generate_liste_emargement(quiz, lignes, matiere=""):
     """Listes d'émargement, une par salle (demande de l'utilisateur, 8 novembre 2026).
 

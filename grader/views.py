@@ -1,3 +1,4 @@
+import math
 import posixpath
 import unicodedata
 from datetime import timedelta
@@ -16,8 +17,9 @@ from django.db.models.functions import TruncDate
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import timezone, translation
 from django.views.static import serve as file_serve
+from django.utils.translation import gettext
 
 from . import bulletin as bulletin_mod
 from . import droits
@@ -49,7 +51,24 @@ def _int_or_none(value):
     Django et lève ValueError — c'est-à-dire une erreur 500 au lieu d'un
     simple « introuvable »."""
     value = (value or "").strip()
-    return int(value) if value.lstrip("-").isdigit() else None
+    # isdecimal et non isdigit : « ² » est un chiffre pour isdigit, que int() refuse (erreur
+    # 500 sur une page publique, ?page=²) ; 18 chiffres au plus (24 novembre 2026)
+    if not value.lstrip("-").isdecimal() or len(value) > 18:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _nombre_fini(texte):
+    """Nombre saisi dans un champ, virgule (ou virgule arabe « ٫ ») acceptée. Lève ValueError
+    s'il n'est pas fini : float() accepte « nan » et « inf », qu'aucun calcul de note ne
+    digère (erreur 500 sur toutes les pages de l'épreuve, 24 novembre 2026)."""
+    valeur = float(str(texte).strip().replace(",", ".").replace("٫", "."))
+    if not math.isfinite(valeur):
+        raise ValueError(texte)
+    return valeur
 
 
 # Les listes peuvent compter plusieurs milliers de lignes (concours) : une
@@ -204,12 +223,12 @@ def dashboard(request):
 
     # --- Causes des copies à reprendre ------------------------------------
     causes = [
-        {"libelle": "à identifier", "n": sheets.filter(status="no_match").count(),
-         "ton": "warn"},
-        {"libelle": "repères non détectés",
+        {"statut": "no_match", "libelle": gettext("à identifier"),
+         "n": sheets.filter(status="no_match").count(), "ton": "warn"},
+        {"statut": "no_markers", "libelle": gettext("repères non détectés"),
          "n": sheets.filter(status="no_markers").count(), "ton": "bad"},
-        {"libelle": "en erreur", "n": sheets.filter(status="error").count(),
-         "ton": "bad"},
+        {"statut": "error", "libelle": gettext("en erreur"),
+         "n": sheets.filter(status="error").count(), "ton": "bad"},
     ]
 
     # --- La dernière épreuve corrigée --------------------------------------
@@ -229,13 +248,13 @@ def dashboard(request):
     # --- Temps de correction épargné ---------------------------------------
     # Base : les copies que la machine a effectivement lues. Une copie dont
     # les repères n'ont pas été trouvés n'a fait gagner aucun temps.
-    illisibles = sum(c["n"] for c in causes if c["libelle"] != "à identifier")
+    illisibles = sum(c["n"] for c in causes if c["statut"] != "no_match")
     copies_lues = max(n_sheets - illisibles, 0)
     minutes = copies_lues * services.MINUTES_PAR_COPIE_A_LA_MAIN
     if minutes < 60:
-        temps = {"valeur": minutes, "unite": "minutes" if minutes > 1 else "minute"}
+        temps = {"valeur": minutes, "unite": gettext("minutes") if minutes > 1 else gettext("minute")}
     else:
-        temps = {"valeur": round(minutes / 60, 1), "unite": "heures"}
+        temps = {"valeur": round(minutes / 60, 1), "unite": gettext("heures")}
 
     # --- Admis, non admis, moyenne et répartition, toutes épreuves -------
     bilan = services.bilan_admissions(quizzes, par_epreuve_max=None)
@@ -320,7 +339,7 @@ def class_list(request):
     form = ClassGroupForm(request.POST or None)
     if request.method == "POST":
         # un compte « lecture seule » (sans droit) ne crée rien
-        droits.exiger(request.user, droits.CREER, "créer une classe")
+        droits.exiger(request.user, droits.CREER, gettext("créer une classe"))
     if request.method == "POST" and form.is_valid():
         group = form.save(commit=False)
         group.owner = request.user
@@ -358,6 +377,8 @@ def _save_candidates(request, group, rows):
     de concours compte des milliers de candidats. Le rapport de vérification
     reste en session pour la page de la classe. Retourne (créés, mis à jour,
     fiches ajoutées au registre)."""
+    # liste verrouillée : un double envoi du même fichier ne crée pas deux fois chacun
+    inscriptions_mod.verrouiller_liste(group)
     lignes, decomptes, nouvelles = inscriptions_mod.rapprocher(rows, request.user)
     inscriptions_mod.rattacher_nouvelles(nouvelles, _my_classes(request))
     presents = list(group.students.all())
@@ -416,15 +437,15 @@ def class_detail(request, pk):
     xlsx_form = CandidateFileForm()
     if request.method == "POST":
         if "fermer_verification" not in request.POST:
-            droits.exiger(request.user, droits.CREER, "modifier les listes d'étudiants")
+            droits.exiger(request.user, droits.CREER, gettext("modifier les listes d'étudiants"))
         if "import" in request.POST:
             import_form = StudentImportForm(request.POST)
             if import_form.is_valid():
                 rows = import_form.parse()
                 _, updated, _ = _save_candidates(request, group, rows)
-                msg = f"{len(rows)} étudiant(s) importé(s)."
+                msg = gettext('%(len)s étudiant(s) importé(s).') % {"len": len(rows)}
                 if updated:
-                    msg += f" ({updated} nom(s) mis à jour par numéro)"
+                    msg += gettext(' (%(updated)s nom(s) mis à jour par numéro)') % {"updated": updated}
                 messages.success(request, msg)
                 return redirect("class_detail", pk=pk)
         elif "import_xlsx" in request.POST:
@@ -436,17 +457,15 @@ def class_detail(request, pk):
                     messages.error(request, str(exc))
                     return redirect("class_detail", pk=pk)
                 except Exception as exc:      # noqa: BLE001 — fichier corrompu
-                    messages.error(request, f"Fichier illisible : {exc}")
+                    messages.error(request, gettext('Fichier illisible : %(exc)s') % {"exc": exc})
                     return redirect("class_detail", pk=pk)
                 if not rows:
-                    messages.error(request, "Aucun candidat trouvé dans ce fichier.")
+                    messages.error(request, gettext("Aucun candidat trouvé dans ce fichier."))
                     return redirect("class_detail", pk=pk)
                 created, updated, fiches = _save_candidates(request, group, rows)
-                msg = (f"{created + updated} candidat(s) importé(s) "
-                       f"({created} créé(s), {updated} mis à jour). "
-                       "Un QR code est disponible pour chacun.")
+                msg = (gettext('%(created)s candidat(s) importé(s) (%(created2)s créé(s), %(updated)s mis à jour). Un QR code est disponible pour chacun.') % {"created": created + updated, "created2": created, "updated": updated})
                 if fiches:
-                    msg += f" {fiches} fiche(s) ajoutée(s) au registre des inscriptions."
+                    msg += gettext(' %(fiches)s fiche(s) ajoutée(s) au registre des inscriptions.') % {"fiches": fiches}
                 messages.success(request, msg)
                 return redirect("class_detail", pk=pk)
         elif "ajouter_inscrits" in request.POST:
@@ -454,17 +473,17 @@ def class_detail(request, pk):
                 request.POST.get("numeros", ""))
             ajoutes, deja = inscriptions_mod.ajouter_a_classe(group, trouves)
             if ajoutes or deja:
-                msg = f"{ajoutes} inscrit(s) ajouté(s)"
+                msg = gettext('%(ajoutes)s inscrit(s) ajouté(s)') % {"ajoutes": ajoutes}
                 if deja:
-                    msg += f", {deja} déjà présent(s)"
+                    msg += gettext(', %(deja)s déjà présent(s)') % {"deja": deja}
                 messages.success(request, msg + ".")
             if inconnus:
-                messages.error(request, "N° absent(s) du registre des inscriptions : "
-                               + ", ".join(inconnus[:30])
-                               + (" …" if len(inconnus) > 30 else "")
-                               + ". Inscrivez-les d'abord (menu Inscriptions).")
+                messages.error(request, gettext(
+                    "N° absent(s) du registre des inscriptions : %(numeros)s. Inscrivez-les "
+                    "d'abord (menu Inscriptions).") % {
+                        "numeros": ", ".join(inconnus[:30]) + (" …" if len(inconnus) > 30 else "")})
             elif not trouves:
-                messages.error(request, "Indiquez au moins un n° d'inscription.")
+                messages.error(request, gettext("Indiquez au moins un n° d'inscription."))
             return redirect("class_detail", pk=pk)
         elif "importer_base" in request.POST:
             # Import direct depuis la base : le registre des inscriptions, ou
@@ -472,29 +491,31 @@ def class_detail(request, pk):
             source = request.POST.get("source", "")
             filtre = " ".join(request.POST.get("filtre", "").split())[:100]
             if source == "registre":
-                inscrits = list(inscriptions_mod.filtrer_inscrits(
-                    Inscrit.objects.all(), filtre)[:5000])
+                # tout le registre : le plafond de 5 000 coupait, sans rien dire, la liste
+                # d'un concours de 15 000 candidats (24 novembre 2026)
+                inscrits = list(inscriptions_mod.filtrer_inscrits(Inscrit.objects.all(), filtre))
                 ajoutes, deja = inscriptions_mod.ajouter_a_classe(group, inscrits)
-                origine = "du registre des inscriptions"
+                origine = gettext("du registre des inscriptions")
             else:
                 autre = _my_classes(request).exclude(pk=pk).filter(
                     pk=_int_or_none(source.removeprefix("groupe:"))).first()
                 if autre is None:
-                    messages.error(request, "Choisissez la liste à importer.")
+                    messages.error(request, gettext("Choisissez la liste à importer."))
                     return redirect("class_detail", pk=pk)
                 ajoutes, deja = inscriptions_mod.copier_etudiants(
                     group, inscriptions_mod.filtrer_etudiants(autre.students.all(), filtre))
-                origine = f"de « {autre.name} »"
+                origine = gettext('de « %(name)s »') % {"name": autre.name}
             if ajoutes or deja:
-                msg = f"{ajoutes} étudiant(s) importé(s) {origine}"
+                msg = gettext('%(ajoutes)s étudiant(s) importé(s) %(origine)s') % {"ajoutes": ajoutes, "origine": origine}
                 if filtre:
-                    msg += f" (filtre « {filtre} »)"
+                    msg += gettext(' (filtre « %(filtre)s »)') % {"filtre": filtre}
                 if deja:
-                    msg += f" ; {deja} déjà présent(s), non recréé(s)"
+                    msg += gettext(' ; %(deja)s déjà présent(s), non recréé(s)') % {"deja": deja}
                 messages.success(request, msg + ".")
             else:
-                messages.error(request, "Aucun étudiant à importer"
-                               + (f" pour le filtre « {filtre} »." if filtre else "."))
+                messages.error(request, (gettext(
+                    "Aucun étudiant à importer pour le filtre « %(filtre)s ».") % {"filtre": filtre})
+                    if filtre else gettext("Aucun étudiant à importer."))
             return redirect("class_detail", pk=pk)
         elif "fermer_verification" in request.POST:
             request.session.pop(f"verification_{pk}", None)
@@ -505,8 +526,7 @@ def class_detail(request, pk):
             if etudiant is not None and etudiant.sheets.exists():
                 # ses copies redeviendraient « non identifiées » et pourraient
                 # être réaffectées à un autre étudiant, avec leur note
-                messages.error(request, f"{etudiant.full_name} a des copies corrigées : "
-                                        "il ne peut pas être supprimé.")
+                messages.error(request, gettext('%(full_name)s a des copies corrigées : il ne peut pas être supprimé.') % {"full_name": etudiant.full_name})
             elif etudiant is not None:
                 etudiant.delete()
             return redirect("class_detail", pk=pk)
@@ -515,8 +535,8 @@ def class_detail(request, pk):
             # comprises ») ; jamais un candidat qui a des copies corrigées
             # (même règle qu'un par un, ci-dessus).
             if not ecrit_concours:
-                messages.error(request, "La suppression groupée est réservée aux candidats "
-                                        "de l'écrit d'un concours.")
+                messages.error(request, gettext("La suppression groupée est réservée aux candidats "
+                                        "de l'écrit d'un concours."))
                 return redirect("class_detail", pk=pk)
             if request.POST.get("tous") == "1":
                 choisis = group.students.all()
@@ -528,24 +548,24 @@ def class_detail(request, pk):
             n = sans_copie.count()
             if n:
                 sans_copie.delete()
-                messages.success(request, f"{n} candidat(s) supprimé(s).")
+                messages.success(request, gettext('%(n)s candidat(s) supprimé(s).') % {"n": n})
             gardes = list(choisis)
             if gardes:
                 noms = ", ".join(e.full_name or e.student_number for e in gardes[:10])
-                messages.error(request, f"{len(gardes)} candidat(s) gardé(s), car ils ont des "
-                                        f"copies corrigées : {noms}"
-                                        + (" …" if len(gardes) > 10 else "."))
+                messages.error(request, gettext(
+                    "%(n)s candidat(s) gardé(s), car ils ont des copies corrigées : %(noms)s") % {
+                        "n": len(gardes), "noms": noms} + (" …" if len(gardes) > 10 else "."))
             elif not n:
-                messages.error(request, "Cochez d'abord les candidats à supprimer.")
+                messages.error(request, gettext("Cochez d'abord les candidats à supprimer."))
             return redirect("class_detail", pk=pk)
     # Retour : la liste des candidats d'un concours se rejoint depuis la
     # page du concours, on y revient ; une classe, depuis la liste des classes.
     concours = (_my_quizzes(request).filter(class_group=group, auto_enroll=True)
                 .order_by("pk").first())
     if concours is not None:
-        retour = (reverse("quiz_detail", args=[concours.pk]), "Retour au concours")
+        retour = (reverse("quiz_detail", args=[concours.pk]), gettext("Retour au concours"))
     else:
-        retour = (reverse("class_list"), "Retour aux classes")
+        retour = (reverse("class_list"), gettext("Retour aux classes"))
     return render(request, "grader/class_detail.html",
                   {"group": group, "import_form": import_form,
                    "xlsx_form": xlsx_form, "retour": retour,
@@ -610,7 +630,7 @@ def class_labels_pdf(request, pk):
     group = get_object_or_404(_my_classes(request), pk=pk)
     students = list(group.students.all())
     if not students:
-        messages.error(request, "Aucun candidat : importez d'abord la liste.")
+        messages.error(request, gettext("Aucun candidat : importez d'abord la liste."))
         return redirect("class_detail", pk=pk)
     pdf = labels_mod.generate_labels_pdf(
         group, students, exemplaires=services.etiquettes_par_candidat(group))
@@ -624,7 +644,7 @@ def class_labels_pdf(request, pk):
 
 @login_required
 def quiz_create(request):
-    droits.exiger(request.user, droits.CREER, "créer une épreuve")
+    droits.exiger(request.user, droits.CREER, gettext("créer une épreuve"))
     # « Nouveau concours » (menu Concours) : liste de candidats propre au
     # concours, identification par étiquette QR ou grille de n°
     is_concours = request.GET.get("concours") == "1"
@@ -641,8 +661,8 @@ def quiz_create(request):
                        "annee": prec.annee,         # l'année du concours (13 novembre 2026)
                        "type_epreuve": request.GET.get("type", "ecrit"),
                        "note_sur": 20, "entete": prec.entete,
-                       "title": f"{racine.title} — "
-                                f"{'oral' if request.GET.get('type') == 'oral' else 'écrit'}"}
+                       "title": (gettext("%(titre)s — oral") if request.GET.get("type") == "oral"
+                                 else gettext("%(titre)s — écrit")) % {"titre": racine.title}}
     form = QuizForm(request.POST or None, user=request.user, concours=is_concours,
                     precedentes=_my_quizzes(request), initial=initial)
     if request.method == "POST" and form.is_valid():
@@ -652,7 +672,8 @@ def quiz_create(request):
         precedente = quiz.epreuve_precedente
         if precedente is not None and not is_concours:
             # étape suivante : une liste à part, celle des admis
-            base = f"{quiz.title.strip()} — admis de {precedente.title}"[:110]
+            base = (gettext("%(titre)s — admis de %(precedente)s")
+                    % {"titre": quiz.title.strip(), "precedente": precedente.title})[:110]
             name, i = base, 2
             while ClassGroup.objects.filter(owner=request.user, name=name).exists():
                 name = f"{base} ({i})"
@@ -660,9 +681,7 @@ def quiz_create(request):
             quiz.class_group = ClassGroup.objects.create(owner=request.user, name=name)
         # Concours : conteneur de candidats dédié, séparé des classes
         if is_concours:
-            title = quiz.title.strip()
-            base = (title if "concours" in title.lower()
-                    else f"Concours — {title}")[:110]
+            base = services._nom_liste_concours(quiz.title.strip())
             name, i = base, 2
             while ClassGroup.objects.filter(owner=request.user, name=name).exists():
                 name = f"{base} ({i})"
@@ -680,10 +699,9 @@ def quiz_create(request):
             services.creer_matieres(quiz, services.MATIERES_ORAL[quiz.annee])
         if precedente is not None:
             if quiz.annee:      # une seule année pour tout le concours, étapes d'avant comprises
-                services.changer_annee(quiz, quiz.annee)
+                services.changer_annee(quiz, quiz.annee, _my_quizzes(request))
             ajoutes, _, n_admis = services.faire_passer_admis(quiz)
-            messages.success(request, f"{ajoutes} admis de « {precedente.title} » "
-                                      "ajoutés aux candidats de cette épreuve.")
+            messages.success(request, gettext('%(ajoutes)s admis de « %(title)s » ajoutés aux candidats de cette épreuve.') % {"ajoutes": ajoutes, "title": precedente.title})
         return redirect("quiz_detail", pk=quiz.pk)
     return render(request, "grader/quiz_form.html",
                   {"form": form, "is_concours": is_concours})
@@ -758,39 +776,27 @@ def _generer_fiche_qcm(quiz, count, progres=None):
         pdf_bytes = sheet_pdf.generate_sheet_pdf(
             quiz, layout, serials=list(range(1, count + 1)), progres=progres)
         filename = f"fiches_concours_quiz_{quiz.pk}.pdf"
-        msg = (f"{count} exemplaires de la fiche anonyme générés. "
-               "Chaque copie est identifiée par l'étiquette QR du "
-               "candidat, collée dans l'emplacement réservé : "
-               "imprimez aussi la planche d'étiquettes (page "
-               "« Candidats & étiquettes QR »). Les candidats "
-               "inconnus seront créés automatiquement au scan.")
+        msg = (gettext("%(count)s exemplaires de la fiche anonyme générés. Chaque copie est identifiée par l'étiquette QR du candidat, collée dans l'emplacement réservé : imprimez aussi la planche d'étiquettes (page « Candidats & étiquettes QR »). Les candidats inconnus seront créés automatiquement au scan.") % {"count": count})
     elif quiz.id_mode == "qr":
         pdf_bytes, _ = services.copies_nominatives_pdf(quiz, layout, progres)
         filename = f"fiches_nominatives_quiz_{quiz.pk}.pdf"
-        msg = (f"Fiches nominatives générées : {n_etudiants} fiches "
-               "avec nom et QR code — distribuez à chaque étudiant la sienne.")
+        msg = (gettext('Fiches nominatives générées : %(n_etudiants)s fiches avec nom et QR code — distribuez à chaque étudiant la sienne.') % {"n_etudiants": n_etudiants})
         if quiz.place_anonyme:
-            msg = (f"Copies anonymes générées : {n_etudiants} copies "
-                   "avec un n° de place et le QR, sans nom. Imprimez "
-                   "aussi la liste des candidats et des places pour "
-                   "le surveillant.")
+            msg = (gettext('Copies anonymes générées : %(n_etudiants)s copies avec un n° de place et le QR, sans nom. Imprimez aussi la liste des candidats et des places pour le surveillant.') % {"n_etudiants": n_etudiants})
         elif quiz.talon_nom:
-            msg = (f"Copies à talon générées : {n_etudiants} copies, nom et QR "
-                   "imprimés. Avant la correction, découpez le "
-                   "talon au massicot (trait pointillé) : la "
-                   "copie devient anonyme et reste lue par son QR.")
+            msg = (gettext('Copies à talon générées : %(n_etudiants)s copies, nom et QR imprimés. Avant la correction, découpez le talon au massicot (trait pointillé) : la copie devient anonyme et reste lue par son QR.') % {"n_etudiants": n_etudiants})
     else:
         pdf_bytes = sheet_pdf.generate_sheet_pdf(quiz, layout)
         filename = f"fiche_quiz_{quiz.pk}.pdf"
-        msg = "Fiche de réponses générée. Imprimez-la pour vos étudiants."
+        msg = gettext("Fiche de réponses générée. Imprimez-la pour vos étudiants.")
         if quiz.id_mode == "grid":
-            msg += (" Chaque élève colle son étiquette QR dans le cadre "
+            msg += (gettext(" Chaque élève colle son étiquette QR dans le cadre "
                     "en haut à droite (planche d'étiquettes : page "
                     "« Candidats & étiquettes QR »), ou à défaut "
-                    "noircit son n° d'inscription dans la grille.")
+                    "noircit son n° d'inscription dans la grille."))
         if quiz.id_mode == "sticker" or (quiz.auto_enroll and quiz.id_mode == "qr"):
-            msg += (" Imprimez aussi la planche d'étiquettes QR des candidats "
-                    "(page « Candidats & étiquettes QR ») à coller sur les copies.")
+            msg += (gettext(" Imprimez aussi la planche d'étiquettes QR des candidats "
+                    "(page « Candidats & étiquettes QR ») à coller sur les copies."))
     layout["signature"] = layout_mod.layout_signature(quiz)
     # cases déplacées (3 colonnes depuis le 7 novembre 2026, questions
     # modifiées…) : une feuille imprimée avant serait lue de travers
@@ -804,33 +810,36 @@ def _generer_fiche_qcm(quiz, count, progres=None):
         quiz.subject_pdf.save(f"sujet_quiz_{quiz.pk}.pdf",
                               ContentFile(subject_bytes), save=False)
         layout["sujet_version"] = sheet_pdf.SUJET_VERSION
-        msg = ("Deux documents générés : le SUJET (questions) à "
+        msg = (gettext("Deux documents générés : le SUJET (questions) à "
                "distribuer, et la FEUILLE DE RÉPONSES à imprimer, "
-               "remplir et scanner.")
+               "remplir et scanner."))
     quiz.save()
     a_dire = [("success", msg)]
     if layout_mod.versions_de(layout):
         # deux versions, A et B (23 novembre 2026)
         if quiz.id_mode == "qr":
-            a_dire.append(("info", "Deux versions, A et B : les copies alternent A, B, A, B… "
-                                   "(dans l'ordre des salles). Remettez à chacun le sujet de la "
-                                   "version imprimée en haut de sa copie. Chaque copie est "
-                                   "corrigée selon sa version."))
+            a_dire.append(("info", gettext(
+                "Deux versions, A et B : les copies alternent A, B, A, B… "
+                "(dans l'ordre des salles). Remettez à chacun le sujet de la "
+                "version imprimée en haut de sa copie. Chaque copie est "
+                "corrigée selon sa version.")))
         elif quiz.sheet_mode == "split":
-            a_dire.append(("info", "Deux versions, A et B : le sujet et la feuille de réponses "
-                                   "de chaque version se téléchargent séparément. Remettez à "
-                                   "chaque candidat le sujet et la feuille de la même version "
-                                   "(« VERSION A » ou « VERSION B » en haut de chaque page). "
-                                   "Chaque copie est corrigée selon sa version."))
+            a_dire.append(("info", gettext(
+                "Deux versions, A et B : le sujet et la feuille de réponses "
+                "de chaque version se téléchargent séparément. Remettez à "
+                "chaque candidat le sujet et la feuille de la même version "
+                "(« VERSION A » ou « VERSION B » en haut de chaque page). "
+                "Chaque copie est corrigée selon sa version.")))
         else:
-            a_dire.append(("info", "Deux versions, A et B : la fiche de chaque version se "
-                                   "télécharge séparément. Distribuez-les en alternant A et "
-                                   "B. Chaque copie est corrigée selon sa version."))
+            a_dire.append(("info", gettext(
+                "Deux versions, A et B : la fiche de chaque version se "
+                "télécharge séparément. Distribuez-les en alternant A et "
+                "B. Chaque copie est corrigée selon sa version.")))
     if cases_deplacees:
-        a_dire.append(("warning", "Les cases de la feuille ont changé de place : "
-                                  "une feuille imprimée avant cette génération "
-                                  "serait lue de travers. Imprimez et "
-                                  "distribuez la nouvelle."))
+        a_dire.append(("warning", gettext("Les cases de la feuille ont changé de place : "
+                                          "une feuille imprimée avant cette génération "
+                                          "serait lue de travers. Imprimez et "
+                                          "distribuez la nouvelle.")))
     return a_dire
 
 
@@ -871,8 +880,8 @@ def quiz_detail(request, pk):
         # épreuve écrite ou orale : page à part (views_epreuves)
         from .views_epreuves import epreuve_detail
         if request.method == "GET" and services.moderniser_calage(quiz):
-            messages.info(request, "Fiche mise à jour : les carrés noirs des coins sont remplacés par un "
-                               "cadre fin. Les copies déjà imprimées restent lisibles.")
+            messages.info(request, gettext("Fiche mise à jour : les carrés noirs des coins sont remplacés par un "
+                               "cadre fin. Les copies déjà imprimées restent lisibles."))
         return epreuve_detail(request, quiz, services.fil_etapes(quiz, _my_quizzes(request)))
     qform = QuestionForm(quiz=quiz)
     bulk_form = BulkQcmForm(quiz=quiz)
@@ -885,24 +894,24 @@ def quiz_detail(request, pk):
     # l'ouverture de la page, seulement si rien de ce qui est lu au scan ne
     # bouge (voir services.moderniser_fiche_grille).
     if request.method == "GET" and services.moderniser_fiche_grille(quiz):
-        messages.info(request, "Fiche de réponses mise à jour : plus de cases NOM "
+        messages.info(request, gettext("Fiche de réponses mise à jour : plus de cases NOM "
                                "et PRÉNOM, la copie est identifiée par le code QR. "
-                               "Les copies déjà imprimées restent lisibles.")
+                               "Les copies déjà imprimées restent lisibles."))
     elif request.method == "GET" and services.moderniser_calage(quiz):
-        messages.info(request, "Fiche mise à jour : les carrés noirs des coins sont remplacés par un "
-                               "cadre fin. Les copies déjà imprimées restent lisibles.")
+        messages.info(request, gettext("Fiche mise à jour : les carrés noirs des coins sont remplacés par un "
+                               "cadre fin. Les copies déjà imprimées restent lisibles."))
     if request.method == "GET" and services.actualiser_sujet(quiz):
-        messages.info(request, "Sujet mis à jour : sa présentation et ses consignes "
-                               "suivent maintenant le type de copie choisi.")
+        messages.info(request, gettext("Sujet mis à jour : sa présentation et ses consignes "
+                               "suivent maintenant le type de copie choisi."))
 
     if request.method == "POST":
         # Deux droits distincts se croisent ici : modifier l'epreuve, et
         # lancer sa correction. On n'exige que celui du geste demande.
         if "launch_grading" in request.POST:
             droits.exiger(request.user, droits.CORRIGER,
-                          "lancer la correction des copies")
+                          gettext("lancer la correction des copies"))
         else:
-            droits.exiger(request.user, droits.CREER, "modifier cette épreuve")
+            droits.exiger(request.user, droits.CREER, gettext("modifier cette épreuve"))
         next_order = (quiz.questions.order_by("-order").values_list("order", flat=True).first() or 0) + 1
         if "add_question" in request.POST:
             qform = QuestionForm(request.POST, quiz=quiz)
@@ -925,17 +934,13 @@ def quiz_detail(request, pk):
                     q.save()
                 if decales:
                     if len(decales) == 1:
-                        suite = (f"l'ancienne question n° {decales[0]} devient "
-                                 f"n° {decales[0] + 1}")
+                        suite = (gettext("l'ancienne question n° %(decales)s devient n° %(decales2)s") % {"decales": decales[0], "decales2": decales[0] + 1})
                     else:
-                        suite = (f"les anciennes questions n° {decales[0]} à {decales[-1]} "
-                                 f"deviennent n° {decales[0] + 1} à {decales[-1] + 1}")
-                    messages.success(request, f"Question ajoutée au n° {numero} ; {suite}.")
+                        suite = (gettext('les anciennes questions n° %(decales)s à %(decales2)s deviennent n° %(decales3)s à %(decales4)s') % {"decales": decales[0], "decales2": decales[-1], "decales3": decales[0] + 1, "decales4": decales[-1] + 1})
+                    messages.success(request, gettext('Question ajoutée au n° %(numero)s ; %(suite)s.') % {"numero": numero, "suite": suite})
                     if quiz.layout_json:
                         messages.warning(
-                            request, "Régénérez la fiche, et ne distribuez aucune fiche "
-                                     "imprimée avant ce changement : ses réponses à partir "
-                                     f"du n° {numero} seraient lues décalées d'une question.")
+                            request, gettext("Régénérez la fiche, et ne distribuez aucune fiche imprimée avant ce changement : ses réponses à partir du n° %(numero)s seraient lues décalées d'une question.") % {"numero": numero})
                 return redirect("quiz_detail", pk=pk)
         elif "bulk_add" in request.POST:
             bulk_form = BulkQcmForm(request.POST, quiz=quiz)
@@ -947,7 +952,7 @@ def quiz_detail(request, pk):
                             num_choices=bulk_form.cleaned_data["num_choices"],
                             correct_choice=ord(letter) - ord("A"))
                         next_order += 1
-                messages.success(request, "Questions QCM créées.")
+                messages.success(request, gettext("Questions QCM créées."))
                 return redirect("quiz_detail", pk=pk)
         elif "import_questions" in request.POST:
             import_form = QuestionImportForm(request.POST, request.FILES)
@@ -959,51 +964,44 @@ def quiz_detail(request, pk):
                 except importers.ImportError_ as exc:
                     items, errors = [], [str(exc)]
                 except Exception as exc:  # noqa: BLE001 — fichier corrompu
-                    items, errors = [], [f"Fichier illisible : {exc}"]
+                    items, errors = [], [gettext("Fichier illisible : %(exc)s") % {"exc": exc}]
                 # Questionnaire dans l'autre langue (arabe dans une épreuve réglée en
                 # français, 9 novembre 2026) : une épreuve encore vide prend sa langue,
                 # sinon la feuille sortirait de gauche à droite, choix A B C D.
                 langue_lue = importers.langue_des_questions(items)
                 if items and langue_lue and langue_lue != quiz.language:
-                    noms = {"ar": "arabe", "fr": "français"}
+                    noms = {"ar": gettext("arabe"), "fr": gettext("français")}
                     if not quiz.questions.exists() and not quiz.batches.exists():
                         quiz.language = langue_lue
                         quiz.save(update_fields=["language"])
-                        messages.info(request, f"Questionnaire en {noms[langue_lue]} : "
-                                               f"l'épreuve passe en {noms[langue_lue]}"
-                                               + (" (feuilles de droite à gauche, choix "
-                                                  "أ ب ت ث)." if langue_lue == "ar"
-                                                  else " (choix A, B, C, D)."))
+                        messages.info(request, (
+                            gettext("Questionnaire en %(langue)s : l'épreuve passe en "
+                                    "%(langue)s (feuilles de droite à gauche, choix أ ب ت ث).")
+                            if langue_lue == "ar" else
+                            gettext("Questionnaire en %(langue)s : l'épreuve passe en "
+                                    "%(langue)s (choix A, B, C, D).")) % {"langue": noms[langue_lue]})
                     else:
-                        messages.warning(request, f"Questions en {noms[langue_lue]} dans une "
-                                                  f"épreuve en {noms.get(quiz.language, quiz.language)} : "
-                                                  "la feuille garde la langue de l'épreuve. "
-                                                  "Changez-la dans ses réglages s'il le faut.")
+                        messages.warning(request, gettext("Questions en %(noms)s dans une épreuve en %(get)s : la feuille garde la langue de l'épreuve. Changez-la dans ses réglages s'il le faut.") % {"noms": noms[langue_lue], "get": noms.get(quiz.language, quiz.language)})
                 n = _add_questions(quiz, items, next_order, errors)
                 if n:
-                    messages.success(request, f"{n} question(s) importée(s) depuis "
-                                              f"« {f.name} ».")
+                    messages.success(request, gettext('%(n)s question(s) importée(s) depuis « %(name)s ».') % {"n": n, "name": f.name})
                 if any(it.get("ocr") for it in items):
                     messages.warning(
-                        request, "Ce PDF n'a pas de texte : ses questions ont été lues par "
+                        request, gettext("Ce PDF n'a pas de texte : ses questions ont été lues par "
                                  "reconnaissance de caractères (OCR). Relisez-les dans le "
                                  "tableau des questions : une lettre ou un chiffre peut y "
-                                 "être mal lu.")
+                                 "être mal lu."))
                 sans_corrige = [next_order + k for k, it in enumerate(items)
                                 if it["qtype"] == "qcm" and it["correct"] is None]
                 if sans_corrige:
                     numeros = ", ".join(map(str, sans_corrige[:20]))
                     messages.warning(
-                        request, f"{len(sans_corrige)} question(s) sans bonne réponse "
-                                 f"(n° {numeros}{' …' if len(sans_corrige) > 20 else ''}) : "
-                                 "renseignez-la dans le tableau des questions, ou scannez "
-                                 "la fiche remplie avec le corrigé. La correction des "
-                                 "copies attend qu'elles le soient toutes.")
+                        request, gettext("%(len)s question(s) sans bonne réponse (n° %(numeros)s%(if)s) : renseignez-la dans le tableau des questions, ou scannez la fiche remplie avec le corrigé. La correction des copies attend qu'elles le soient toutes.") % {"len": len(sans_corrige), "numeros": numeros, "if": ' …' if len(sans_corrige) > 20 else ''})
                 if errors:
-                    messages.error(request, "Non importé — " + " ; ".join(errors[:12])
-                                   + (" …" if len(errors) > 12 else ""))
+                    messages.error(request, gettext("Non importé — %(erreurs)s") % {
+                        "erreurs": " ; ".join(errors[:12]) + (" …" if len(errors) > 12 else "")})
                 elif not n:
-                    messages.error(request, "Aucune question trouvée dans ce fichier.")
+                    messages.error(request, gettext("Aucune question trouvée dans ce fichier."))
                 return redirect("quiz_detail", pk=pk)
         elif "copy_questions" in request.POST:
             bank_form = QuestionBankForm(request.POST, quizzes=_my_quizzes(request),
@@ -1019,9 +1017,10 @@ def quiz_detail(request, pk):
                          if wanted is None or q.order in wanted]
                 errors = []
                 n = _add_questions(quiz, items, next_order, errors)
-                messages.success(request, f"{n} question(s) reprise(s) de « {source.title} ».")
+                messages.success(request, gettext('%(n)s question(s) reprise(s) de « %(title)s ».') % {"n": n, "title": source.title})
                 if errors:
-                    messages.error(request, "Non reprises — " + " ; ".join(errors[:12]))
+                    messages.error(request, gettext("Non reprises — %(erreurs)s") % {
+                        "erreurs": " ; ".join(errors[:12])})
                 return redirect("quiz_detail", pk=pk)
         elif "edit_question" in request.POST:
             # corrigé et barème modifiables à tout moment : les notes déjà
@@ -1035,9 +1034,9 @@ def quiz_detail(request, pk):
             bareme = request.POST.get("points")
             if bareme is not None:
                 try:
-                    q.points = max(float(bareme.replace(",", ".")), 0.0)
+                    q.points = max(_nombre_fini(bareme), 0.0)
                 except ValueError:
-                    messages.error(request, "Barème invalide.")
+                    messages.error(request, gettext("Barème invalide."))
                     return redirect("quiz_detail", pk=pk)
             if q.qtype == "qcm":
                 raw = (request.POST.get("correct") or "").strip()
@@ -1049,8 +1048,9 @@ def quiz_detail(request, pk):
             journal.question_modifiee(request.user, q, bonne_avant=ancienne_bonne,
                                       bareme_avant=ancien_bareme)
             n = services.rescore_quiz(quiz)
-            messages.success(request, f"Question {q.order} modifiée"
-                             + (f" — {n} copie(s) recalculée(s)." if n else "."))
+            messages.success(request, (
+                gettext("Question %(numero)s modifiée — %(n)s copie(s) recalculée(s).") if n
+                else gettext("Question %(numero)s modifiée.")) % {"numero": q.order, "n": n})
             return redirect("quiz_detail", pk=pk)
         elif "launch_grading" in request.POST:
             from .views_epreuves import lancer_correction
@@ -1067,10 +1067,10 @@ def quiz_detail(request, pk):
                 fichiers = [f.name for f in (fiche.image, fiche.overlay_image) if f]
                 fiche.delete()
                 services._effacer_fichiers(fichiers)
-                messages.success(request, "Corrigé scanné supprimé. Les bonnes "
+                messages.success(request, gettext("Corrigé scanné supprimé. Les bonnes "
                                           "réponses déjà enregistrées restent en "
                                           "place : modifiez-les dans la liste des "
-                                          "questions si besoin.")
+                                          "questions si besoin."))
             return redirect("quiz_detail", pk=pk)
         elif "delete_question" in request.POST:
             question_pk = _int_or_none(request.POST.get("delete_question"))
@@ -1093,8 +1093,8 @@ def quiz_detail(request, pk):
                     quiz, request.POST["title"], request.user)
                 quiz.refresh_from_db()
                 if renomme[0] or renomme[1]:
-                    messages.info(request, "Titre modifié : les PDF de "
-                                           "l'épreuve portent le nouveau titre.")
+                    messages.info(request, gettext("Titre modifié : les PDF de "
+                                           "l'épreuve portent le nouveau titre."))
             if "entete" in request.POST:
                 quiz.entete = request.POST["entete"].strip()[:2000]
             if "duree" in request.POST:
@@ -1108,8 +1108,7 @@ def quiz_detail(request, pk):
             if request.POST.get("format_impression") in dict(Quiz.FORMATS):
                 quiz.format_impression = request.POST["format_impression"]
             try:
-                raw = (request.POST.get("wrong_penalty") or "0").replace(",", ".")
-                quiz.wrong_penalty = abs(float(raw))
+                quiz.wrong_penalty = abs(_nombre_fini(request.POST.get("wrong_penalty") or "0"))
             except (ValueError, TypeError):
                 ok = False
             new_mode = request.POST.get("sheet_mode")
@@ -1121,9 +1120,9 @@ def quiz_detail(request, pk):
                 quiz.versions = int(request.POST["versions"])
             if quiz.versions == 2 and quiz.sheet_mode == "grid":
                 quiz.versions = 1
-                messages.error(request, "Deux versions : choisissez « Questionnaire complet » "
+                messages.error(request, gettext("Deux versions : choisissez « Questionnaire complet » "
                                         "ou « Sujet séparé + feuille de réponses ». L'application "
-                                        "doit imprimer le sujet de chaque version, dans son ordre.")
+                                        "doit imprimer le sujet de chaque version, dans son ordre."))
             new_id = request.POST.get("id_mode")
             if new_id in dict(_id_modes(quiz)):
                 quiz.id_mode = new_id
@@ -1141,7 +1140,8 @@ def quiz_detail(request, pk):
                 pass
             ancienne_note = quiz.note_admission
             if "note_admission" in request.POST:
-                valide, valeur = _lire_note_admission(request.POST["note_admission"])
+                valide, valeur = _lire_note_admission(request.POST["note_admission"],
+                                                      quiz.max_score)
                 if valide:
                     quiz.note_admission = valeur
                 else:
@@ -1158,7 +1158,7 @@ def quiz_detail(request, pk):
                                      "note_admission", "talon_nom", "place_anonyme",
                                      "format_impression", "annee", "versions"])
             if quiz.annee != ancienne_annee:
-                services.changer_annee(quiz, quiz.annee)        # toutes les étapes
+                services.changer_annee(quiz, quiz.annee, _my_quizzes(request))   # toutes les étapes
             # Le cartouche et le format ne concernent que le sujet, jamais scanné : on
             # le refait tout de suite, sans toucher à la feuille de réponses.
             if (quiz.entete, quiz.duree, quiz.date_epreuve, quiz.format_impression) != ancien_sujet:
@@ -1170,18 +1170,18 @@ def quiz_detail(request, pk):
                           objet="Note minimale d'admission",
                           avant=ancienne_note, apres=quiz.note_admission)
             services.rescore_quiz(quiz)     # la pénalité a pu changer
-            messages.success(request, "Réglages du quiz enregistrés.") if ok else \
-                messages.error(request, "Certaines valeurs étaient invalides.")
+            messages.success(request, gettext("Réglages du quiz enregistrés.")) if ok else \
+                messages.error(request, gettext("Certaines valeurs étaient invalides."))
             return redirect("quiz_detail", pk=pk)
         elif "generate_pdf" in request.POST:
             students = list(quiz.class_group.students.all())
             if not quiz.questions.exists():
-                messages.error(request, "Ajoutez d'abord des questions.")
+                messages.error(request, gettext("Ajoutez d'abord des questions."))
             elif quiz.id_mode == "qr" and not quiz.exemplaires_anonymes and not students:
                 messages.error(
-                    request, "Le mode QR génère une fiche par étudiant : "
+                    request, gettext("Le mode QR génère une fiche par étudiant : "
                              "importez d'abord la liste des étudiants de la classe "
-                             "(ou activez le mode concours pour des fiches anonymes).")
+                             "(ou activez le mode concours pour des fiches anonymes)."))
             else:
                 try:
                     count = max(1, min(int(request.POST.get("qr_count", 100)), 2000))
@@ -1241,15 +1241,15 @@ def quiz_detail(request, pk):
 
 @login_required
 def quiz_upload(request, pk):
-    droits.exiger(request.user, droits.CORRIGER, "téléverser des copies")
+    droits.exiger(request.user, droits.CORRIGER, gettext("téléverser des copies"))
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if quiz.type_epreuve == "oral":
         # notes de l'oral : un fichier Excel, et lui seul (13 novembre 2026)
-        messages.error(request, "Les notes de l'oral s'importent d'un fichier Excel, sur la "
-                                "page de l'épreuve : plus de fiches scannées.")
+        messages.error(request, gettext("Les notes de l'oral s'importent d'un fichier Excel, sur la "
+                                "page de l'épreuve : plus de fiches scannées."))
         return redirect("quiz_detail", pk=pk)
     if not quiz.layout_json:
-        messages.error(request, "Générez d'abord la fiche de réponses PDF.")
+        messages.error(request, gettext("Générez d'abord la fiche de réponses PDF."))
         return redirect("quiz_detail", pk=pk)
     if request.method == "POST":
         form = UploadForm(request.POST, request.FILES)
@@ -1263,9 +1263,7 @@ def quiz_upload(request, pk):
                 n_pages = sum(b.total_pages for b in pending)
                 messages.success(
                     request,
-                    f"{batch.total_pages} page(s) reçue(s) et mises en attente "
-                    f"({n_pages} page(s) en attente au total). Téléversez les autres "
-                    "copies, puis cliquez sur « Lancer la correction ».")
+                    gettext('%(total_pages)s page(s) reçue(s) et mises en attente (%(n_pages)s page(s) en attente au total). Téléversez les autres copies, puis cliquez sur « Lancer la correction ».') % {"total_pages": batch.total_pages, "n_pages": n_pages})
                 return redirect("quiz_detail", pk=pk)
             if not quiz.corrige_complet:
                 # Corrigé incomplet : on garde les copies sans les noter —
@@ -1275,14 +1273,13 @@ def quiz_upload(request, pk):
                                               label=form.cleaned_data["label"])
                 messages.error(
                     request,
-                    f"{batch.total_pages} page(s) reçue(s) et mises en attente : "
-                    + str(services.CorrigeIncomplet(quiz)))
+                    gettext("%(n)s page(s) reçue(s) et mises en attente : %(raison)s") % {
+                        "n": batch.total_pages, "raison": str(services.CorrigeIncomplet(quiz))})
                 return redirect("quiz_detail", pk=pk)
             batch = services.create_batch(quiz, files, label=form.cleaned_data["label"])
             services.start_batch(batch)
             messages.success(request,
-                             f"{batch.total_pages} page(s) reçue(s) — correction "
-                             "automatique en cours, les notes arrivent au fil de l'eau.")
+                             gettext("%(total_pages)s page(s) reçue(s) — correction automatique en cours, les notes arrivent au fil de l'eau.") % {"total_pages": batch.total_pages})
             return redirect("batch_detail", pk=batch.pk)
     return redirect("quiz_detail", pk=pk)
 
@@ -1293,18 +1290,18 @@ def quiz_answer_key(request, pk):
 
     La fiche est lue comme une copie, renseigne le corrigé des questions QCM
     et reste conservée avec l'épreuve (historique du barème)."""
-    droits.exiger(request.user, droits.CREER, "renseigner le corrigé")
+    droits.exiger(request.user, droits.CREER, gettext("renseigner le corrigé"))
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if request.method != "POST":
         return redirect("quiz_detail", pk=pk)
     if not quiz.layout_json:
-        messages.error(request, "Générez d'abord la fiche de réponses PDF : "
-                                "c'est elle qu'on imprime pour le corrigé.")
+        messages.error(request, gettext("Générez d'abord la fiche de réponses PDF : "
+                                "c'est elle qu'on imprime pour le corrigé."))
         return redirect("quiz_detail", pk=pk)
 
     form = AnswerKeyUploadForm(request.POST, request.FILES)
     if not form.is_valid():
-        messages.error(request, "Sélectionnez la fiche scannée du corrigé.")
+        messages.error(request, gettext("Sélectionnez la fiche scannée du corrigé."))
         return redirect("quiz_detail", pk=pk)
     # Instantané des bonnes réponses : la lecture du corrigé peut en
     # changer plusieurs d'un coup, chacune doit apparaître au journal.
@@ -1313,7 +1310,7 @@ def quiz_answer_key(request, pk):
         pages, n_lues, ambigues = services.read_answer_key(
             quiz, request.FILES.getlist("files"))
     except Exception as exc:  # noqa: BLE001 — fichier illisible
-        messages.error(request, f"Corrigé illisible : {exc}")
+        messages.error(request, gettext('Corrigé illisible : %(exc)s') % {"exc": exc})
         return redirect("quiz_detail", pk=pk)
 
     for q in quiz.questions.all():
@@ -1329,31 +1326,24 @@ def quiz_answer_key(request, pk):
                for p in pages if p.page_index is not None} - {""}
     if attendue and lues_en and attendue not in lues_en:
         autre = ", ".join(sorted(lues_en))
-        messages.info(request, f"Fiche déposée en version {attendue}, lue en version {autre} : "
-                               "elle remplit le même corrigé, et se range avec la version "
-                               f"{autre}.")
+        messages.info(request, gettext('Fiche déposée en version %(attendue)s, lue en version %(autre)s : elle remplit le même corrigé, et se range avec la version %(autre)s.') % {"attendue": attendue, "autre": autre})
     if n_lues:
         messages.success(
             request,
-            f"Corrigé lu : {n_lues} bonne(s) réponse(s) renseignée(s) sur "
-            f"{len(pages)} page(s). Les copies déjà scannées ont été "
-            "recalculées.")
+            gettext('Corrigé lu : %(n_lues)s bonne(s) réponse(s) renseignée(s) sur %(len)s page(s). Les copies déjà scannées ont été recalculées.') % {"n_lues": n_lues, "len": len(pages)})
     reste = list(quiz.questions_sans_corrige.values_list("order", flat=True))
     if reste:
         nums = ", ".join(str(n) for n in reste[:15])
         messages.error(
             request,
-            f"{len(reste)} question(s) restent sans bonne réponse (n° {nums}) : "
-            "case laissée vide ou plusieurs cases noircies sur la fiche. "
-            "Renseignez-les à la main dans le tableau des questions, ou "
-            "rescannez un corrigé plus net.")
+            gettext('%(len)s question(s) restent sans bonne réponse (n° %(nums)s) : case laissée vide ou plusieurs cases noircies sur la fiche. Renseignez-les à la main dans le tableau des questions, ou rescannez un corrigé plus net.') % {"len": len(reste), "nums": nums})
     for page in echecs[:10]:
-        messages.error(request, f"{page.source_name} : {page.error_message}")
+        messages.error(request, gettext('%(source_name)s : %(error_message)s') % {"source_name": page.source_name, "error_message": page.error_message})
     if len(echecs) > 10:
-        messages.error(request, f"… et {len(echecs) - 10} autre(s) page(s) illisible(s).")
+        messages.error(request, gettext('… et %(len)s autre(s) page(s) illisible(s).') % {"len": len(echecs) - 10})
     if not n_lues and not echecs:
-        messages.error(request, "Aucune bonne réponse n'a pu être lue sur "
-                                "cette fiche.")
+        messages.error(request, gettext("Aucune bonne réponse n'a pu être lue sur "
+                                "cette fiche."))
     return redirect("quiz_detail", pk=pk)
 
 
@@ -1361,7 +1351,7 @@ def quiz_answer_key(request, pk):
 def batch_delete(request, pk):
     """Confirmation, puis suppression d'un lot téléversé par erreur."""
     batch = get_object_or_404(_my_batches(request), pk=pk)
-    droits.exiger(request.user, droits.CORRIGER, "supprimer un lot de copies")
+    droits.exiger(request.user, droits.CORRIGER, gettext("supprimer un lot de copies"))
     if request.method == "POST":
         quiz_pk = batch.quiz_id
         nom = str(batch)
@@ -1370,8 +1360,7 @@ def batch_delete(request, pk):
         except services.LotEnCours as exc:
             messages.error(request, str(exc))
             return redirect("batch_detail", pk=pk)
-        messages.success(request, f"Lot « {nom} » supprimé : {n} page(s) retirée(s) "
-                                  "des résultats. La suppression est inscrite au journal.")
+        messages.success(request, gettext('Lot « %(nom)s » supprimé : %(n)s page(s) retirée(s) des résultats. La suppression est inscrite au journal.') % {"nom": nom, "n": n})
         return redirect("quiz_detail", pk=quiz_pk)
     copies = batch.sheets
     return render(request, "grader/batch_delete.html", {
@@ -1391,15 +1380,15 @@ def batch_detail(request, pk):
     if request.method == "POST" and ("resume" in request.POST
                                      or "reidentifier" in request.POST):
         droits.exiger(request.user, droits.CORRIGER,
-                      "lancer la correction des copies")
+                      gettext("lancer la correction des copies"))
     if request.method == "POST" and "reidentifier" in request.POST:
         n = services.reidentifier_lot(batch, request.user)
         if n:
-            messages.success(request, f"{n} copie(s) identifiée(s) automatiquement.")
+            messages.success(request, gettext('%(n)s copie(s) identifiée(s) automatiquement.') % {"n": n})
         else:
-            messages.info(request, "Aucune copie de plus n'a pu être identifiée "
+            messages.info(request, gettext("Aucune copie de plus n'a pu être identifiée "
                                    "par son nom : affectez-les à l'écran de "
-                                   "vérification.")
+                                   "vérification."))
         return redirect("batch_detail", pk=pk)
     if request.method == "POST" and "resume" in request.POST:
         if batch.status == "error" or stalled:
@@ -1411,7 +1400,7 @@ def batch_detail(request, pk):
             batch.status = "processing"
             batch.save(update_fields=["status", "updated_at"])
             services.start_batch(batch)
-            messages.success(request, "Correction du lot relancée.")
+            messages.success(request, gettext("Correction du lot relancée."))
         return redirect("batch_detail", pk=pk)
     sheets_page = _page(request, batch.sheets.select_related("student"))
     first_review_id = (batch.sheets.filter(status__in=["ok", "no_match"])
@@ -1445,22 +1434,23 @@ def _identification(sheet):
         return None
     lu = sheet.id_read or ""
     if lu.startswith(("QR", "Fiche")):
-        return {"methode": "qr", "texte": "Reconnu par son code QR"}
+        return {"methode": "qr", "texte": gettext("Reconnu par son code QR")}
     if lu and not sheet.ocr_name_raw:
         return {"methode": "grille",
-                "texte": f"Reconnu par son n° d'inscription ({lu})"}
+                "texte": gettext("Reconnu par son n° d'inscription (%(lu)s)") % {"lu": lu}}
     if sheet.student_confirmed:              # affectée à l'écran de vérification
-        return {"methode": "main", "texte": "Affecté à la main"}
+        return {"methode": "main", "texte": gettext("Affecté à la main")}
     if sheet.ocr_name_raw and sheet.match_score < omr.SEUIL_ECART:
         return {"methode": "ocr",
-                "texte": f"Nom écrit peu lisible (lu « {sheet.ocr_name_raw} ») : "
-                         "attribué par élimination, seul étudiant de la classe "
-                         "encore sans copie — vérifiez sur l'image"}
+                "texte": gettext("Nom écrit peu lisible (lu « %(lu)s ») : attribué par "
+                                 "élimination, seul étudiant de la classe encore sans copie "
+                                 "— vérifiez sur l'image") % {"lu": sheet.ocr_name_raw}}
     if sheet.ocr_name_raw:
         return {"methode": "ocr",
-                "texte": f"Reconnu par le nom écrit, lu « {sheet.ocr_name_raw} » "
-                         f"(ressemblance {sheet.match_score:.0f} %)"}
-    return {"methode": "main", "texte": "Affecté à la main"}
+                "texte": gettext("Reconnu par le nom écrit, lu « %(lu)s » (ressemblance "
+                                 "%(pct)s %%)") % {"lu": sheet.ocr_name_raw,
+                                                   "pct": f"{sheet.match_score:.0f}"}}
+    return {"methode": "main", "texte": gettext("Affecté à la main")}
 
 
 @login_required
@@ -1492,7 +1482,7 @@ def sheet_review(request, pk):
     services.nettoyer_controle(sheet)
 
     if request.method == "POST":
-        droits.exiger(request.user, droits.CORRIGER, "vérifier les copies")
+        droits.exiger(request.user, droits.CORRIGER, gettext("vérifier les copies"))
         # affectation — seulement d'une copie non identifiée : la liste
         # n'est affichée que pour elle, et un envoi fabriqué à la main ne
         # doit pas davantage réaffecter une copie reconnue.
@@ -1516,12 +1506,15 @@ def sheet_review(request, pk):
                 val = request.POST.get(f"points_{a.pk}", "").strip().replace(",", ".")
                 if val != "":
                     try:
-                        pts = float(val)
+                        pts = _nombre_fini(val)
                     except ValueError:
-                        messages.error(request, f"Note invalide pour la question "
-                                                f"{a.question.order} : « {val} ».")
+                        messages.error(request, gettext('Note invalide pour la question %(order)s : « %(val)s ».') % {"order": a.question.order, "val": val})
                         continue
                     nouvelle = max(min(pts, a.question.points), 0.0)
+                    # la note déjà lue, renvoyée telle quelle par le formulaire, n'est pas une
+                    # saisie : ni ligne au journal, ni « Note saisie » (24 novembre 2026)
+                    if a.points_awarded is not None and abs(nouvelle - a.points_awarded) < 1e-9:
+                        continue
                     journal.noter(
                         request.user, "note", copie=sheet,
                         objet=f"{journal.libelle_copie(sheet)} — question {a.question.order}",
@@ -1532,9 +1525,9 @@ def sheet_review(request, pk):
         services.rescore_sheet(sheet)
         if "save_next" in request.POST and next_id:
             messages.success(
-                request, f"Copie {position + 1}/{len(sheet_ids)} enregistrée.")
+                request, gettext('Copie %(position)s/%(len)s enregistrée.') % {"position": position + 1, "len": len(sheet_ids)})
             return redirect("sheet_review", pk=next_id)
-        messages.success(request, "Corrections enregistrées.")
+        messages.success(request, gettext("Corrections enregistrées."))
         if "retour_resultats" in request.POST:       # demande du 9 novembre 2026
             return redirect("quiz_results", pk=quiz.pk)
         return redirect("batch_detail", pk=sheet.batch_id)
@@ -1572,16 +1565,20 @@ def _lire_date_epreuve(texte):
         return False, None
 
 
-def _lire_note_admission(texte):
-    """« 10 », « 10,5 » ou vide (pas de seuil) -> (valide, valeur)."""
-    brut = (texte or "").strip().replace(",", ".")
+def _lire_note_admission(texte, maximum=None):
+    """« 10 », « 10,5 » ou vide (pas de seuil) -> (valide, valeur). Refusés : un nombre
+    négatif, « nan », « inf », et une note au-dessus du maximum de l'épreuve quand elle en a
+    un : personne n'aurait été admis, sans rien dire (24 novembre 2026)."""
+    brut = (texte or "").strip()
     if not brut:
         return True, None
     try:
-        valeur = float(brut)
+        valeur = _nombre_fini(brut)
     except ValueError:
         return False, None
-    return (valeur >= 0), (valeur if valeur >= 0 else None)
+    if valeur < 0 or (maximum and valeur > maximum):
+        return False, None
+    return True, valeur
 
 
 @login_required
@@ -1599,11 +1596,15 @@ def quiz_note_admission(request, pk):
         retour += f"?batch={lot}"
     if request.method != "POST":
         return redirect(retour)
-    droits.exiger(request.user, droits.CREER, "régler la note d'admission")
-    valide, valeur = _lire_note_admission(request.POST.get("note_admission"))
+    droits.exiger(request.user, droits.CREER, gettext("régler la note d'admission"))
+    maximum = quiz.max_score
+    valide, valeur = _lire_note_admission(request.POST.get("note_admission"), maximum)
     if not valide:
-        messages.error(request, "Note minimale invalide : saisissez un nombre, "
-                                "par exemple 10 ou 10,5.")
+        messages.error(request, gettext("Note minimale invalide : saisissez un nombre de 0 à "
+                                        "%(max)s, par exemple 10 ou 10,5.")
+                       % {"max": format(maximum or 0, "g")} if maximum else
+                       gettext("Note minimale invalide : saisissez un nombre, "
+                               "par exemple 10 ou 10,5."))
     else:
         journal.noter(request.user, "note_admission", quiz=quiz,
                       objet="Note minimale d'admission",
@@ -1611,11 +1612,13 @@ def quiz_note_admission(request, pk):
         quiz.note_admission = valeur
         quiz.save(update_fields=["note_admission"])
         if valeur is None:
-            messages.success(request, "Note minimale retirée.")
+            messages.success(request, gettext("Note minimale retirée."))
         else:
-            qui = "admis" if quiz.auto_enroll else "réussites"
-            messages.success(request, f"Note minimale fixée à {valeur:g} : liste "
-                                      f"et bulletins des {qui} ci-dessous.")
+            texte = (gettext("Note minimale fixée à %(valeur)s : liste et bulletins des admis "
+                             "ci-dessous.") if quiz.auto_enroll else
+                     gettext("Note minimale fixée à %(valeur)s : liste et bulletins des "
+                             "réussites ci-dessous."))
+            messages.success(request, texte % {"valeur": format(valeur, "g")})
     return redirect(retour + "#admission")
 
 
@@ -1686,7 +1689,7 @@ def quiz_results(request, pk):
     if batch:
         unmatched = unmatched.filter(batch=batch)
     if request.method == "POST":
-        droits.exiger(request.user, droits.CORRIGER, "gérer les copies non identifiées")
+        droits.exiger(request.user, droits.CORRIGER, gettext("gérer les copies non identifiées"))
         if "masquer_non_identifiees" in request.POST:
             unmatched.filter(alerte_masquee=False).update(alerte_masquee=True)
         elif "reafficher_non_identifiees" in request.POST:
@@ -1753,8 +1756,8 @@ def quiz_admis_pdf(request, pk):
         batch = quiz.batches.filter(pk=batch_pk).first()
     admission = services.admissions(quiz, services.compute_results(quiz, batch))
     if admission is None:
-        messages.error(request, "Indiquez d'abord la note minimale "
-                                "d'admission (ci-dessous).")
+        messages.error(request, gettext("Indiquez d'abord la note minimale "
+                                "d'admission (ci-dessous)."))
         return redirect(reverse("quiz_results", args=[pk]) + "#admission")
     data = bulletin_mod.generate_liste_admis_pdf(quiz, admission, batch)
     resp = HttpResponse(data, content_type="application/pdf")
@@ -1797,7 +1800,7 @@ def quiz_copie_correcteur_pdf(request, pk):
     l'autre remplit le même corrigé (la lecture ramène la B à la A)."""
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if not quiz.layout_json or not quiz.a_des_qcm:
-        messages.error(request, "Générez d'abord la fiche de réponses PDF.")
+        messages.error(request, gettext("Générez d'abord la fiche de réponses PDF."))
         return redirect("quiz_detail", pk=pk)
     disposition, nom = quiz.layout_json, f"copie_correcteur_{quiz.pk}"
     version = request.GET.get("version", "")
@@ -1832,7 +1835,7 @@ def quiz_parcours(request, pk):
     chaine = services.chaine_epreuves(quiz, _my_quizzes(request))
     if request.method == "POST" and "coefficients" in request.POST:
         # coefficients de la moyenne finale (المعدل النهائي, 13 novembre 2026)
-        droits.exiger(request.user, droits.CREER, "régler la moyenne finale")
+        droits.exiger(request.user, droits.CREER, gettext("régler la moyenne finale"))
 
         def lire(nom, defaut):
             brut = (request.POST.get(nom) or "").strip().replace(",", ".")
@@ -1852,25 +1855,39 @@ def quiz_parcours(request, pk):
             else:
                 valeurs[q] = lire(f"coef_{q.pk}", q.coefficient_final)
         if any(v is None or not 0 <= v <= 99 for v in valeurs.values()):
-            messages.error(request, "Coefficient invalide : de 0 à 99 pour chaque étape.")
+            messages.error(request, gettext("Coefficient invalide : de 0 à 99 pour chaque étape."))
         elif any(v is None or not 0.1 <= v <= 99 for v in matieres.values()):
-            messages.error(request, "Coefficient de matière invalide : de 0,1 à 99.")
+            messages.error(request, gettext("Coefficient de matière invalide : de 0,1 à 99."))
         elif not any(valeurs.values()) and not matieres:
-            messages.error(request, "Une étape au moins doit compter dans la moyenne finale.")
+            messages.error(request, gettext("Une étape au moins doit compter dans la moyenne finale."))
         else:
+            # chaque coefficient changé passe au journal : il décide des admis (24 novembre 2026)
             for q, v in valeurs.items():
                 if q.coefficient_final != v:
+                    journal.noter(request.user, "bareme", quiz=q,
+                                  objet=f"Coefficient de l'étape « {q.title} » (moyenne finale)",
+                                  avant=q.coefficient_final, apres=v)
                     q.coefficient_final = v
                     q.save(update_fields=["coefficient_final"])
             changees = [m for m, v in matieres.items() if m.coefficient != v]
             for m in changees:
+                journal.noter(request.user, "bareme", quiz=m.quiz,
+                              objet=f"Coefficient de la matière « {m.text} »",
+                              avant=m.coefficient, apres=matieres[m])
                 m.coefficient = matieres[m]
                 m.save(update_fields=["coefficient"])
-            messages.success(request, "Coefficients de la moyenne finale enregistrés."
-                             + (" La moyenne de l'épreuve de chaque matière modifiée (et ses "
-                                "admis) suit le nouveau coefficient." if changees else ""))
+            messages.success(request, gettext(
+                "Coefficients de la moyenne finale enregistrés. La moyenne de l'épreuve de "
+                "chaque matière modifiée (et ses admis) suit le nouveau coefficient.")
+                if changees else gettext("Coefficients de la moyenne finale enregistrés."))
         return redirect("quiz_parcours", pk=pk)
-    parcours = services.parcours_concours(chaine)
+    if request.GET.get("format") in ("xlsx", "pdf", "admis_pdf", "admis_xlsx"):
+        # documents en français, même demandés depuis l'interface en arabe : le résultat
+        # final de chaque candidat aussi (24 novembre 2026)
+        with translation.override(settings.LANGUAGE_CODE):
+            parcours = services.parcours_concours(chaine)
+    else:
+        parcours = services.parcours_concours(chaine)
     if request.GET.get("format") == "xlsx":
         resp = HttpResponse(
             parcours_workbook(parcours),
@@ -1901,8 +1918,8 @@ def quiz_parcours(request, pk):
         "n_trouves": len(trouves), "candidats_page": _page(request, trouves, PAGE_RESULTATS),
         "querystring": urlencode({"q": recherche}) if recherche else "",
         # à droite de « Rechercher » : la liste des admis au concours, s'il y en a
-        "liens_admis": [("?format=admis_pdf", "Liste des admis (PDF)"),
-                        ("?format=admis_xlsx", "Liste des admis (Excel)")]
+        "liens_admis": [("?format=admis_pdf", gettext("Liste des admis (PDF)")),
+                        ("?format=admis_xlsx", gettext("Liste des admis (Excel)"))]
                        if parcours["n_admis_final"] else [],
     })
 
@@ -1917,12 +1934,12 @@ def quiz_emargement_pdf(request, pk):
     if quiz.place_anonyme:
         lignes = services.liste_emargement(quiz)
         if not lignes:
-            messages.error(request, "Générez d'abord les copies anonymes à n° de place.")
+            messages.error(request, gettext("Générez d'abord les copies anonymes à n° de place."))
             return redirect("quiz_detail", pk=pk)
     else:
         lignes = [(None, s) for s in services.etudiants_par_salle(quiz)]
         if not lignes:
-            messages.error(request, "Aucun étudiant dans la liste : ajoutez-les d'abord.")
+            messages.error(request, gettext("Aucun étudiant dans la liste : ajoutez-les d'abord."))
             return redirect("quiz_detail", pk=pk)
     # écrit en matières : la liste de la séance d'une matière, à son nom (13 novembre 2026)
     matiere = next((m.text for m in quiz.matieres
@@ -1946,8 +1963,8 @@ def quiz_bulletins_pdf(request, pk):
     if request.GET.get("admis"):
         # Bulletins des seuls admis, par ordre de mérite.
         if admission is None:
-            messages.error(request, "Indiquez d'abord la note minimale "
-                                    "d'admission dans les réglages de l'épreuve.")
+            messages.error(request, gettext("Indiquez d'abord la note minimale "
+                                    "d'admission dans les réglages de l'épreuve."))
             return redirect("quiz_results", pk=pk)
         rows = admission["admis"]
         nom = f"bulletins_admis_{quiz.pk}.pdf"
@@ -1966,7 +1983,13 @@ def _media_quiz(path):
     """Quiz auquel se rattache un document de /media/ (fiche PDF, scan,
     image redressée, image de contrôle, recadrage, fichier téléversé),
     ou None si le document n'est rattaché à aucun quiz."""
-    quiz = Quiz.objects.filter(Q(sheet_pdf=path) | Q(subject_pdf=path)).first()
+    # copies et sujet de chaque matière d'un écrit (layout_json["documents_matieres"]) :
+    # seuls ceux de la première étaient retrouvés, les autres répondaient « introuvable »
+    # aux enseignants (24 novembre 2026)
+    quiz = Quiz.objects.filter(
+        Q(sheet_pdf=path) | Q(subject_pdf=path)
+        | Q(layout_json__documents_matieres__contains=[{"copies": path}])
+        | Q(layout_json__documents_matieres__contains=[{"sujet": path}])).first()
     if quiz is not None:
         return quiz.pk
     sheet = (SheetScan.objects.select_related("batch")

@@ -1,75 +1,75 @@
-{% extends "grader/base.html" %}
+{% extends "grader/base.html" %}{% load i18n %}
 {% block content %}
 <header class="page-head">
   <div class="page-head__text">
     <h1>{{ group.name }}</h1>
-    <p class="page-head__meta"><b>{{ students_total }}</b> candidat(s) inscrit(s)
+    <p class="page-head__meta"><b>{{ students_total }}</b> {% translate "candidat(s) inscrit(s)" %}
       {% with profs=group.enseignants.all %}{% if profs %}
-      · enseignant{{ profs|length|pluralize }} :
+      {% blocktranslate trimmed with profs=profs|length|pluralize %}· enseignant{{ profs }} :{% endblocktranslate %}
       {% for p in profs %}<b>{{ p.get_full_name|default:p.username }}</b>{% if not forloop.last %}, {% endif %}{% endfor %}
       {% endif %}{% endwith %}</p>
   </div>
   <div class="page-head__actions">
     <a class="btn small secondary" href="{{ retour.0 }}">← {{ retour.1 }}</a>
     {% if students_total %}
-    {% if ecrit_concours %}<a class="btn small secondary" href="{% url 'class_candidats_xlsx' group.pk %}">Exporter la liste (Excel)</a>{% endif %}
+    {% if ecrit_concours %}<a class="btn small secondary" href="{% url 'class_candidats_xlsx' group.pk %}">{% translate "Exporter la liste (Excel)" %}</a>{% endif %}
     <a class="btn small" href="{% url 'class_labels_pdf' group.pk %}"
-       target="_blank">Planche d'étiquettes (PDF){% if etiquettes_par_candidat > 1 %} : {{ etiquettes_par_candidat }} par candidat{% endif %}</a>
+       target="_blank">{% translate "Planche d'étiquettes (PDF)" %}{% if etiquettes_par_candidat > 1 %} {% blocktranslate trimmed %}: {{ etiquettes_par_candidat }} par candidat{% endblocktranslate %}{% endif %}</a>
     {% endif %}
   </div>
 </header>
 {% if verification %}{% include "grader/_verification.html" %}{% endif %}
 {% if not perms.grader.creer_epreuve %}
-<div class="card"><p class="helptext">Votre compte est en lecture seule : demandez le droit « créer des épreuves » à l'administrateur pour modifier cette liste.</p></div>
+<div class="card"><p class="helptext">{% translate "Votre compte est en lecture seule : demandez le droit « créer des épreuves » à l'administrateur pour modifier cette liste." %}</p></div>
 {% else %}
 <details class="card plie-carte"{% if not students_total or xlsx_form.errors or import_form.errors %} open{% endif %}>
-  <summary>Importer ou ajouter des candidats</summary>
+  <summary>{% translate "Importer ou ajouter des candidats" %}</summary>
   <div class="grid2 plie-carte__contenu">
     <div class="sous-carte">
-      <h2>Importer depuis un fichier</h2>
-      {% include "grader/_import_liste.html" with champ=xlsx_form.file bouton="import_xlsx" libelle="Importer le fichier" %}
-      <p class="helptext">Une ligne qui porte la CIN, la date de naissance ou la salle crée aussi la fiche de son n° au registre des inscriptions. Chaque ligne est vérifiée par son n° contre ce registre.</p>
+      <h2>{% translate "Importer depuis un fichier" %}</h2>
+      {% include "grader/_import_liste.html" with champ=xlsx_form.file bouton="import_xlsx" libelle=_("Importer le fichier") %}
+      <p class="helptext">{% translate "Une ligne qui porte la CIN, la date de naissance ou la salle crée aussi la fiche de son n° au registre des inscriptions. Chaque ligne est vérifiée par son n° contre ce registre." %}</p>
     </div>
     <div>
     <div class="sous-carte">
-      <h2>Importer depuis la base de données</h2>
+      <h2>{% translate "Importer depuis la base de données" %}</h2>
       {% if n_registre or autres_groupes %}
       <form method="post">{% csrf_token %}
-        <label for="id_source">Liste à importer</label>
+        <label for="id_source">{% translate "Liste à importer" %}</label>
         <select id="id_source" name="source">
-          {% if n_registre %}<option value="registre">Registre des inscriptions — {{ n_registre }} étudiant{{ n_registre|pluralize }}</option>{% endif %}
+          {% if n_registre %}<option value="registre">{% blocktranslate trimmed with n_registre2=n_registre|pluralize %}Registre des inscriptions — {{ n_registre }} étudiant{{ n_registre2 }}{% endblocktranslate %}</option>{% endif %}
           {% for g in autres_groupes %}
-          <option value="groupe:{{ g.pk }}">{{ g.name }} — {{ g.n }} étudiant{{ g.n|pluralize }}</option>
+          <option value="groupe:{{ g.pk }}">{% blocktranslate trimmed with name=g.name n=g.n n2=g.n|pluralize %}{{ name }} — {{ n }} étudiant{{ n2 }}{% endblocktranslate %}</option>
           {% endfor %}
         </select>
-        <label for="id_filtre">Filtrer (facultatif)</label>
+        <label for="id_filtre">{% translate "Filtrer (facultatif)" %}</label>
         <input id="id_filtre" type="text" name="filtre" maxlength="100" autocomplete="off"
-               placeholder="Prénom, nom ou début de n° — vide : toute la liste">
-        <p><button class="btn" name="importer_base" value="1" type="submit">Importer</button></p>
+               placeholder="{% translate "Prénom, nom ou début de n° — vide : toute la liste" %}">
+        <p><button class="btn" name="importer_base" value="1" type="submit">{% translate "Importer" %}</button></p>
       </form>
-      <span class="helptext">Les étudiants déjà présents (même n°) ne sont pas recréés. Depuis le registre, chacun garde son identité enregistrée et son QR code.</span>
+      <span class="helptext">{% translate "Les étudiants déjà présents (même n°) ne sont pas recréés. Depuis le registre, chacun garde son identité enregistrée et son QR code." %}</span>
       {% else %}
-      <p class="helptext">La base est encore vide : inscrivez des étudiants au <a href="{% url 'inscriptions' %}">registre des inscriptions</a> ou créez une autre classe.</p>
+      <p class="helptext">{% translate "La base est encore vide : inscrivez des étudiants au" %} <a href="{% url 'inscriptions' %}">{% translate "registre des inscriptions" %}</a> {% translate "ou créez une autre classe." %}</p>
       {% endif %}
     </div>
     <div class="sous-carte">
-      <h2>Ajouter des inscrits</h2>
+      <h2>{% translate "Ajouter des inscrits" %}</h2>
       <form method="post">{% csrf_token %}
-        <label for="id_numeros">N° d'inscription</label>
+        <label for="id_numeros">{% translate "N° d'inscription" %}</label>
         <textarea id="id_numeros" name="numeros" rows="3"
                   placeholder="104523, 104524 …"></textarea>
-        <span class="helptext">Un ou plusieurs n° du registre (séparés par des espaces, virgules ou retours à la ligne) : l'étudiant est ajouté {% if est_concours %}aux candidats du concours{% else %}à la classe{% endif %} sous son identité enregistrée. <a href="{% url 'inscriptions' %}">Registre des inscriptions</a></span>
-        <p><button class="btn" name="ajouter_inscrits" value="1" type="submit">Ajouter</button></p>
+        <span class="helptext">{% translate "Un ou plusieurs n° du registre (séparés par des espaces, virgules ou retours à la ligne) : l'étudiant est ajouté" %} {% if est_concours %}{% translate "aux candidats du concours" %}{% else %}{% translate "à la classe" %}{% endif %} {% translate "sous son identité enregistrée." %} <a href="{% url 'inscriptions' %}">{% translate "Registre des inscriptions" %}</a></span>
+        <p><button class="btn" name="ajouter_inscrits" value="1" type="submit">{% translate "Ajouter" %}</button></p>
       </form>
     </div>
     <div class="sous-carte">
-      <h2>Copier-coller une liste</h2>
+      <h2>{% translate "Copier-coller une liste" %}</h2>
       <form method="post">{% csrf_token %}
         {{ import_form.text.errors }}
         {{ import_form.text }}
         <span class="helptext">{{ import_form.text.help_text }}</span>
         <p><button class="btn secondary" name="import" value="1" type="submit">
-          Importer le texte</button></p>
+          {% translate "Importer le texte" %}</button></p>
       </form>
     </div>
     </div>
@@ -78,30 +78,32 @@
 {% endif %}
 <div class="card">
   <div class="card__head">
-    <h2>Candidats ({{ students_total }})</h2>
+    <h2>{% blocktranslate trimmed %}Candidats ({{ students_total }}){% endblocktranslate %}</h2>
   </div>
   {% if students_page.object_list %}
-  {# Un seul formulaire : cases à cocher (écrit d'un concours seulement), « supprimer les cochés » et ✕ de chaque ligne. #}
+  {#Un seul formulaire : cases à cocher (écrit d'un concours seulement), « supprimer les cochés » et ✕ de chaque ligne.#}
   <form method="post">{% csrf_token %}
   {% if perms.grader.creer_epreuve and ecrit_concours %}
   <div class="barre-choix">
     <button class="btn small danger" name="supprimer_choix" value="1" type="submit"
             data-compter-coches data-total="{{ students_total }}"
-            data-confirmer="Supprimer les candidats cochés ? Ceux qui ont des copies corrigées sont gardés.">Supprimer les cochés</button>
+            data-confirmer-un="{% translate "Supprimer {n} candidat ? Ceux qui ont des copies corrigées sont gardés." %}"
+            data-confirmer-plusieurs="{% translate "Supprimer {n} candidats ? Ceux qui ont des copies corrigées sont gardés." %}"
+            data-confirmer="{% translate "Supprimer les candidats cochés ? Ceux qui ont des copies corrigées sont gardés." %}">{% translate "Supprimer les cochés" %}</button>
     {% if students_page.paginator.num_pages > 1 %}
-    <label class="case"><input type="checkbox" name="tous" value="1"> les {{ students_total }} candidats, toutes pages comprises</label>
+    <label class="case"><input type="checkbox" name="tous" value="1"> {% blocktranslate trimmed %}les {{ students_total }} candidats, toutes pages comprises{% endblocktranslate %}</label>
     {% else %}
-    <span class="helptext">La case de l'en-tête coche toute la liste.</span>
+    <span class="helptext">{% translate "La case de l'en-tête coche toute la liste." %}</span>
     {% endif %}
   </div>
   {% endif %}
-  {% include "grader/_pagination.html" with page=students_page label="Candidats" %}
+  {% include "grader/_pagination.html" with page=students_page label=_("Candidats") %}
   <div class="table-wrap table-wrap--ajuste">
     <table>
-    <tr>{% if perms.grader.creer_epreuve and ecrit_concours %}<th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="Tout cocher"></th>{% endif %}<th>N°</th><th>Prénom</th><th>Nom</th>{% if avec_fiches %}<th>CIN</th><th>Lieu</th><th>Délivrée le</th><th>Né(e) le</th><th>Centre</th><th>Salle</th>{% endif %}<th>QR</th><th></th></tr>
+    <tr>{% if perms.grader.creer_epreuve and ecrit_concours %}<th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="{% translate "Tout cocher" %}"></th>{% endif %}<th>{% translate "N°" %}</th><th>{% translate "Prénom" %}</th><th>{% translate "Nom" %}</th>{% if avec_fiches %}<th>{% translate "CIN" %}</th><th>{% translate "Lieu" %}</th><th>{% translate "Délivrée le" %}</th><th>{% translate "Né(e) le" %}</th><th>{% translate "Centre" %}</th><th>{% translate "Salle" %}</th>{% endif %}<th>{% translate "QR" %}</th><th></th></tr>
     {% for s in students_page %}
     <tr class="ligne-lien">
-      {% if perms.grader.creer_epreuve and ecrit_concours %}<td class="col-choix"><input type="checkbox" name="choix" value="{{ s.pk }}" aria-label="Choisir {{ s.full_name|default:s.student_number }}"></td>{% endif %}
+      {% if perms.grader.creer_epreuve and ecrit_concours %}<td class="col-choix"><input type="checkbox" name="choix" value="{{ s.pk }}" aria-label="{% blocktranslate trimmed with full_name=s.full_name|default:s.student_number %}Choisir {{ full_name }}{% endblocktranslate %}"></td>{% endif %}
       <td>{% if s.inscrit and user.is_superuser or s.inscrit and s.inscrit.cree_par_id == user.pk %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'inscriptions' %}?modifier={{ s.inscrit_id }}#fiche-inscrit"><b>{{ s.student_number }}</b></a>{% else %}{{ s.student_number|default:"—" }}{% endif %}</td>
       <td>{{ s.first_name|default:"—" }}</td><td>{{ s.last_name|default:"—" }}</td>
       {% if avec_fiches %}{% with i=s.inscrit %}
@@ -112,18 +114,18 @@
       <td>{{ i.centre|default:"—" }}</td>
       <td class="cellule--serree">{{ i.salle|default:"—" }}</td>
       {% endwith %}{% endif %}
-      <td><img class="qr-mini" src="{% url 'student_qr' s.pk %}" alt="QR {{ s.full_name }}"
+      <td><img class="qr-mini" src="{% url 'student_qr' s.pk %}" alt="{% blocktranslate trimmed with full_name=s.full_name %}QR {{ full_name }}{% endblocktranslate %}"
                width="46" height="46" loading="lazy"></td>
       <td>{% if perms.grader.creer_epreuve %}
         <button class="btn small danger" name="delete_student" value="{{ s.pk }}" type="submit"
-                data-confirmer="Supprimer {{ s.full_name|default:s.student_number }} ?">✕</button>
+                data-confirmer="{% blocktranslate trimmed with full_name=s.full_name|default:s.student_number %}Supprimer {{ full_name }} ?{% endblocktranslate %}">✕</button>
       {% endif %}</td>
     </tr>
     {% endfor %}
   </table>
   </div>
-  {% include "grader/_pagination.html" with page=students_page label="Candidats" %}
+  {% include "grader/_pagination.html" with page=students_page label=_("Candidats") %}
   </form>
-  {% else %}<p>Aucun candidat : importez la liste ci-dessus.</p>{% endif %}
+  {% else %}<p>{% translate "Aucun candidat : importez la liste ci-dessus." %}</p>{% endif %}
 </div>
 {% endblock %}

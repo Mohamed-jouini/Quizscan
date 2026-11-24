@@ -1,12 +1,12 @@
-{% extends "erreur.html" %}
-{# Rendue sans contexte de requête : aucune variable, rien qui puisse      #}
-{# échouer à son tour.                                                      #}
-{% block titre %}Erreur du serveur{% endblock %}
+{% extends "erreur.html" %}{% load i18n %}
+{#Rendue sans contexte de requête : aucune variable, rien qui puisse#}
+{#échouer à son tour.#}
+{% block titre %}{% translate "Erreur du serveur" %}{% endblock %}
 {% block code %}500{% endblock %}
-{% block titre_page %}Une erreur est survenue{% endblock %}
+{% block titre_page %}{% translate "Une erreur est survenue" %}{% endblock %}
 {% block texte %}
-<p>Le serveur a rencontré un problème en préparant cette page. Vos données
-  ne sont pas perdues : réessayez dans un instant.</p>
-<p>Si l'erreur se répète, signalez à l'administrateur l'heure et la page
-  concernée : le détail est inscrit dans le journal du serveur.</p>
+<p>{% blocktranslate trimmed %}Le serveur a rencontré un problème en préparant cette page. Vos données
+  ne sont pas perdues : réessayez dans un instant.{% endblocktranslate %}</p>
+<p>{% blocktranslate trimmed %}Si l'erreur se répète, signalez à l'administrateur l'heure et la page
+  concernée : le détail est inscrit dans le journal du serveur.{% endblocktranslate %}</p>
 {% endblock %}

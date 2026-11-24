@@ -1,19 +1,19 @@
-{% extends "public/base.html" %}
-{% block title %}Résultats{% endblock %}
+{% extends "public/base.html" %}{% load i18n %}
+{% block title %}{% translate "Résultats" %}{% endblock %}
 {% block content %}
 <section class="pub-hero pub-hero--court">
-  <h1>Mes résultats</h1>
+  <h1>{% translate "Mes résultats" %}</h1>
   {% include "public/_recherche.html" %}
 </section>
 
 {% if trop %}
-<p class="pub-alerte">Trop de recherches depuis votre connexion. Réessayez dans quelques minutes.</p>
+<p class="pub-alerte">{% translate "Trop de recherches depuis votre connexion. Réessayez dans quelques minutes." %}</p>
 {% elif numero %}
   {% if groupes %}
   <section class="pub-section">
     <div class="pub-identite">
       <span class="avatar">{{ identite.first_name|slice:":1" }}{{ identite.last_name|slice:":1" }}</span>
-      <span><b>{{ identite.full_name }}</b><small>N° d'inscription {{ identite.student_number|default:numero }}</small></span>
+      <span><b>{{ identite.full_name }}</b><small>{% with n=identite.student_number|default:numero %}{% blocktranslate %}N° d'inscription {{ n }}{% endblocktranslate %}{% endwith %}</small></span>
     </div>
     <div class="pub-groupes">
       {% for g in groupes %}
@@ -22,8 +22,8 @@
           {% if not g.multi %}<span class="carte-bouton__icone" aria-hidden="true">{% include "grader/_icone_epreuve.html" with quiz=g.racine %}</span>{% endif %}
           <div class="groupe__nom">
             <h2 class="groupe__titre">{{ g.titre }}</h2>
-            <span class="badge grey">{% if g.multi %}{{ g.etapes|length }} étapes{% else %}{{ g.racine.type_court }}{% endif %}</span>
-            <span class="groupe__classe">{% if g.concours %}Concours{% else %}{{ g.racine.class_group.name }}{% endif %}</span>
+            <span class="badge grey">{% if g.multi %}{% with n=g.etapes|length %}{% blocktranslate %}{{ n }} étapes{% endblocktranslate %}{% endwith %}{% else %}{{ g.racine.type_court }}{% endif %}</span>
+            <span class="groupe__classe">{% if g.concours %}{% translate "Concours" %}{% else %}{{ g.racine.class_group.name }}{% endif %}</span>
           </div>
         </header>
         {% if g.multi %}
@@ -44,10 +44,10 @@
         {% endif %}
         {% if g.final %}{# résultat final du concours, le verdict seul (16 novembre 2026) #}
         <div class="groupe__final">
-          <span class="groupe__final-libelle">Résultat final du concours{% if g.final == "a_venir" %}<small>Il sera connu après l'oral.</small>{% endif %}</span>
-          {% if g.final == "admis" %}<p class="pub-verdict pub-verdict--admis">Admis au concours</p>
-          {% elif g.final == "refuse" %}<p class="pub-verdict pub-verdict--refuse">Non admis au concours</p>
-          {% else %}<p class="pub-verdict pub-verdict--attente">À venir</p>{% endif %}
+          <span class="groupe__final-libelle">{% translate "Résultat final du concours" %}{% if g.final == "a_venir" %}<small>{% translate "Il sera connu après l'oral." %}</small>{% endif %}</span>
+          {% if g.final == "admis" %}<p class="pub-verdict pub-verdict--admis">{% translate "Admis au concours" %}</p>
+          {% elif g.final == "refuse" %}<p class="pub-verdict pub-verdict--refuse">{% translate "Non admis au concours" %}</p>
+          {% else %}<p class="pub-verdict pub-verdict--attente">{% translate "À venir" %}</p>{% endif %}
         </div>
         {% endif %}
       </article>
@@ -55,7 +55,7 @@
     </div>
   </section>
   {% else %}
-  <p class="pub-vide">Aucun résultat publié pour le n° <b>{{ numero }}</b>. Vérifiez le numéro ; si vos résultats ne sont pas encore publiés, revenez plus tard.</p>
+  <p class="pub-vide">{% blocktranslate trimmed %}Aucun résultat publié pour le n° <b>{{ numero }}</b>. Vérifiez le numéro ; si vos résultats ne sont pas encore publiés, revenez plus tard.{% endblocktranslate %}</p>
   {% endif %}
 {% endif %}
 {% endblock %}

@@ -1,4 +1,4 @@
-{% comment %}
+{% load i18n %}{% comment %}
 Recherche juste au-dessus d'une liste de résultats : prénom, nom ou n° d'inscription,
 dans toute la liste et pas seulement la page affichée. La page se recharge et revient
 sur la liste (ancre).
@@ -9,19 +9,19 @@ et liens, facultatif : [(adresse, texte)] à droite de « Rechercher » (exports
   {% if batch %}<input type="hidden" name="batch" value="{{ batch.pk }}">{% endif %}
   <div class="recherche-etudiant__champ">
     <svg class="recherche-etudiant__loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-    <label for="{{ champ }}" class="visually-hidden">Rechercher un {{ sujet }}</label>
+    <label for="{{ champ }}" class="visually-hidden">{% blocktranslate trimmed %}Rechercher un {{ sujet }}{% endblocktranslate %}</label>
     <input id="{{ champ }}" type="search" name="q" value="{{ recherche }}" autocomplete="off"
-           placeholder="Rechercher un {{ sujet }} — prénom, nom ou n° d'inscription">
+           placeholder="{% blocktranslate trimmed %}Rechercher un {{ sujet }} — prénom, nom ou n° d'inscription{% endblocktranslate %}">
     {% if recherche %}
     <a class="recherche-etudiant__effacer" href="?{% if batch %}batch={{ batch.pk }}{% endif %}#{{ ancre }}"
-       title="Effacer la recherche" aria-label="Effacer la recherche">
+       title="{% translate "Effacer la recherche" %}" aria-label="{% translate "Effacer la recherche" %}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
     {% endif %}
   </div>
-  <button class="btn" type="submit">Rechercher</button>
+  <button class="btn" type="submit">{% translate "Rechercher" %}</button>
   {% for adresse, texte in liens %}<a class="btn secondary" href="{{ adresse }}">{{ texte }}</a>{% endfor %}
   {% if recherche %}
   <span class="recherche-etudiant__bilan {% if not n %}is-vide{% endif %}">
-    {{ n }} résultat{{ n|pluralize }} pour « {{ recherche }} »</span>
+    {% blocktranslate trimmed with n2=n|pluralize %}{{ n }} résultat{{ n2 }} pour « {{ recherche }} »{% endblocktranslate %}</span>
   {% endif %}
 </form>

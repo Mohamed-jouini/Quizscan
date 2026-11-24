@@ -287,7 +287,7 @@ def main():
     grille = ecrit.layout_json["pages"][0]["note_grid"]
     pages_par_copie = 1 + ecrit.layout_json["pages_redaction"]
     img = render_page(pdf_e, 2 * pages_par_copie)          # copie de CHERIF
-    for row, d in zip(grille["rows"], [13, 1]):             # 13,5 : 13 puis ,5
+    for row, d in zip(grille["rows"], [13, 2]):             # 13,5 : 13 puis ,50
         if d is not None:
             cx, cy = row[d]
             cv2.circle(img, (mm2px(cx), mm2px(cy)), mm2px(grille["r"] * 0.9),
@@ -325,7 +325,7 @@ def main():
     # ---- PDF du scanner à 1200 ppp (8 novembre 2026 : pages de garde talon découpé,
     # 9910 × 12694 pixels, toutes refusées « Image démesurée ») : lues, note juste
     img = render_page(pdf_e, pages_par_copie)               # copie de BAKIR
-    for row, d in zip(grille["rows"], [9, 1]):              # 9,5
+    for row, d in zip(grille["rows"], [9, 2]):              # 9,5 : 9 puis ,50
         cx, cy = row[d]
         cv2.circle(img, (mm2px(cx), mm2px(cy)), mm2px(grille["r"] * 0.9), (20, 20, 20), -1)
     gris = cv2.cvtColor(simulate_scan(couper(img, 30.0)), cv2.COLOR_BGR2GRAY)

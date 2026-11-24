@@ -1,16 +1,16 @@
-{% extends "public/base.html" %}
-{% block title %}Accueil{% endblock %}
+{% extends "public/base.html" %}{% load i18n %}
+{% block title %}{% translate "Accueil" %}{% endblock %}
 {% block content %}
 <section class="pub-hero">
-  <h1>Résultats et communiqués</h1>
-  <p>Saisissez votre n° d'inscription ou votre n° de CIN pour consulter vos notes publiées.</p>
+  <h1>{% translate "Résultats et communiqués" %}</h1>
+  <p>{% translate "Saisissez votre n° d'inscription ou votre n° de CIN pour consulter vos notes publiées." %}</p>
   {% include "public/_recherche.html" %}
 </section>
 
 <section class="pub-section">
   <div class="pub-section__tete">
-    <h2>Derniers communiqués</h2>
-    {% if n_avis > avis|length %}<a href="{% url 'public_communiques' %}">Tous les communiqués ({{ n_avis }})</a>{% endif %}
+    <h2>{% translate "Derniers communiqués" %}</h2>
+    {% if n_avis > avis|length %}<a href="{% url 'public_communiques' %}">{% blocktranslate %}Tous les communiqués ({{ n_avis }}){% endblocktranslate %}</a>{% endif %}
   </div>
   {% if avis %}
   <div class="pub-cartes">
@@ -18,11 +18,11 @@
     {% include "public/_carte_avis.html" with longueur=160 %}
     {% endfor %}
   </div>
-  {% else %}<p class="pub-vide">Aucun communiqué publié pour l'instant.</p>{% endif %}
+  {% else %}<p class="pub-vide">{% translate "Aucun communiqué publié pour l'instant." %}</p>{% endif %}
 </section>
 
 <section class="pub-section">
-  <div class="pub-section__tete"><h2>Résultats publiés</h2></div>
+  <div class="pub-section__tete"><h2>{% translate "Résultats publiés" %}</h2></div>
   {% if groupes %}
   <ul class="pub-epreuves">
     {% for g in groupes %}
@@ -30,7 +30,7 @@
       {% if g.multi %}
       <span class="pub-epreuves__nom">
         <b>{{ g.titre }}</b>
-        <span>{% if g.concours %}Concours{% else %}{{ g.racine.class_group.name }}{% endif %}{% if g.publie_le %} · publié le {{ g.publie_le|date:"d/m/Y" }}{% endif %}</span>
+        <span>{% include "public/_origine.html" with concours=g.concours classe=g.racine.class_group.name publie_le=g.publie_le %}</span>
       </span>
       <span class="pub-epreuves__etapes">
         {% for e in g.etapes %}<a class="btn small secondary" title="{{ e.quiz.title }}" href="{% url 'public_epreuve' e.quiz.pk %}">{{ e.quiz.type_court }}</a>{% endfor %}
@@ -38,13 +38,13 @@
       {% else %}
       <a href="{% url 'public_epreuve' g.racine.pk %}">
         <b>{{ g.titre }}</b>
-        <span>{% if g.concours %}Concours{% else %}{{ g.racine.class_group.name }}{% endif %}{% if g.publie_le %} · publié le {{ g.publie_le|date:"d/m/Y" }}{% endif %}</span>
+        <span>{% include "public/_origine.html" with concours=g.concours classe=g.racine.class_group.name publie_le=g.publie_le %}</span>
       </a>
-      {% if g.racine.admis_publies %}<span class="badge ok">liste des {% if g.concours %}admis{% else %}réussis{% endif %}</span>{% endif %}
+      {% if g.racine.admis_publies %}<span class="badge ok">{% if g.concours %}{% translate "liste des admis" %}{% else %}{% translate "liste des réussis" %}{% endif %}</span>{% endif %}
       {% endif %}
     </li>
     {% endfor %}
   </ul>
-  {% else %}<p class="pub-vide">Aucun résultat publié pour l'instant.</p>{% endif %}
+  {% else %}<p class="pub-vide">{% translate "Aucun résultat publié pour l'instant." %}</p>{% endif %}
 </section>
 {% endblock %}

@@ -1,36 +1,37 @@
-{% extends "public/base.html" %}
+{% extends "public/base.html" %}{% load i18n %}
 {% block title %}{{ quiz.title }}{% endblock %}
 {% block content %}
 <section class="pub-hero pub-hero--court">
   <h1>{{ quiz.title }}</h1>
-  <p>{% if quiz.auto_enroll %}Concours{% else %}{{ quiz.class_group.name }}{% endif %}{% if quiz.publie_le %} · publié le {{ quiz.publie_le|date:"d/m/Y" }}{% endif %}</p>
+  <p>{% include "public/_origine.html" with concours=quiz.auto_enroll classe=quiz.class_group.name publie_le=quiz.publie_le %}</p>
   {% if quiz.resultats_publies %}{% include "public/_recherche.html" %}{% endif %}
 </section>
 
 {% if admis is not None %}
 <section class="pub-section">
   <div class="pub-section__tete">
-    <h2>Liste des {% if quiz.auto_enroll %}admis{% else %}réussis{% endif %}, par n° d'inscription</h2>
-    <span class="badge ok">{{ admis|length }} {% if quiz.auto_enroll %}admis{% else %}réussi(s){% endif %}</span>
+    <h2>{% if quiz.auto_enroll %}{% translate "Liste des admis, par n° d'inscription" %}{% else %}{% translate "Liste des réussis, par n° d'inscription" %}{% endif %}</h2>
+    <span class="badge ok">{% with n=admis|length %}{% if quiz.auto_enroll %}{% blocktranslate %}{{ n }} admis{% endblocktranslate %}{% else %}{% blocktranslate %}{{ n }} réussi(s){% endblocktranslate %}{% endif %}{% endwith %}</span>
   </div>
   {% if admis %}
-  {% include "grader/_pagination.html" with page=admis_page label="Lignes" %}
+  {% translate "Lignes" as lignes %}
+  {% include "grader/_pagination.html" with page=admis_page label=lignes %}
   {# Ni rang ni note : le résultat seul (13 novembre 2026) #}
   <div class="pub-tableau">
     <table>
-      <thead><tr><th>N° d'inscription</th><th>Prénom</th><th>Nom</th><th>Résultat</th></tr></thead>
+      <thead><tr><th>{% translate "N° d'inscription" %}</th><th>{% translate "Prénom" %}</th><th>{% translate "Nom" %}</th><th>{% translate "Résultat" %}</th></tr></thead>
       <tbody>
       {% for a in admis_page %}
       <tr><td>{{ a.numero|default:"—" }}</td><td>{{ a.prenom }}</td><td>{{ a.nom }}</td>
-        <td><span class="badge ok">{% if quiz.auto_enroll %}Admis{% else %}Réussi{% endif %}</span></td></tr>
+        <td><span class="badge ok">{% if quiz.auto_enroll %}{% translate "Admis" %}{% else %}{% translate "Réussi" %}{% endif %}</span></td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
-  {% include "grader/_pagination.html" with page=admis_page label="Lignes" %}
-  {% else %}<p class="pub-vide">Aucun {% if quiz.auto_enroll %}admis{% else %}réussi{% endif %} pour l'instant.</p>{% endif %}
+  {% include "grader/_pagination.html" with page=admis_page label=lignes %}
+  {% else %}<p class="pub-vide">{% if quiz.auto_enroll %}{% translate "Aucun admis pour l'instant." %}{% else %}{% translate "Aucun réussi pour l'instant." %}{% endif %}</p>{% endif %}
 </section>
 {% elif quiz.resultats_publies %}
-<p class="pub-vide">Les résultats de cette épreuve se consultent individuellement, avec le n° d'inscription ou la CIN.</p>
+<p class="pub-vide">{% translate "Les résultats de cette épreuve se consultent individuellement, avec le n° d'inscription ou la CIN." %}</p>
 {% endif %}
 {% endblock %}

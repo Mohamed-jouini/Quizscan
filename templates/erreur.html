@@ -1,12 +1,12 @@
-{% load static qs_statique %}<!doctype html>
-{# Base des pages d'erreur (400, 403, 404, 500, refus CSRF).                #}
-{# Autonome, sans barre latérale ni compte : elle doit s'afficher même pour  #}
-{# un visiteur non connecté, et la 500 est rendue sans contexte de requête.  #}
-<html lang="fr">
+{% load i18n %}{% load static qs_statique %}{% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}<!doctype html>
+{#Base des pages d'erreur (400, 403, 404, 500, refus CSRF).#}
+{#Autonome, sans barre latérale ni compte : elle doit s'afficher même pour#}
+{#un visiteur non connecté, et la 500 est rendue sans contexte de requête.#}
+<html lang="{{ LANGUAGE_CODE|default:"fr" }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block titre %}Erreur{% endblock %} — QuizScan</title>
+<title>{% block titre %}{% translate "Erreur" %}{% endblock %} {% translate "— QuizScan" %}</title>
 <link rel="stylesheet" href="{% statique 'grader/quizscan.css' %}">
 <script src="{% statique 'grader/theme.js' %}"></script>
 </head>
@@ -17,7 +17,7 @@
   <div class="erreur__texte">{% block texte %}{% endblock %}</div>
   <p class="erreur__actions">
     {% block actions %}
-    <a class="btn" href="{% url 'dashboard' %}">Retour au tableau de bord</a>
+    <a class="btn" href="{% url 'dashboard' %}">{% translate "Retour au tableau de bord" %}</a>
     {% endblock %}
   </p>
 </main>
