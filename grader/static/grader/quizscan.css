@@ -897,6 +897,8 @@ body.auth-page{
 }
 .alert svg{flex:none;width:18px;height:18px;margin-top:1px;fill:none;
   stroke:currentColor;stroke-width:1.8}
+/* Information sur la page de connexion (formulaire expiré, 24 novembre 2026) */
+.alert--info{background:var(--qs-ok-bg);border-color:var(--qs-line);color:var(--qs-ok-ink)}
 
 /* Décor « papier découpé » : chaque couche porte son ombre. */
 .auth__art{position:relative;overflow:hidden;background:var(--art-1)}

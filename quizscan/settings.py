@@ -151,6 +151,9 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
+# Formulaire de connexion, de déconnexion ou de langue renvoyé avec un jeton périmé (flèche
+# « retour ») : on mène où la personne allait, sans page 403 (grader/views.py, echec_csrf)
+CSRF_FAILURE_VIEW = "grader.views.echec_csrf"
 
 # ---------------------------------------------------------------------------
 # Configuration par variables d'environnement (déploiement Docker / Caddy).

@@ -6370,3 +6370,15 @@ msgstr "فشل إنشاء الوثائق: %(exc)s"
 #: grader/views.py
 msgid "Note minimale invalide : saisissez un nombre de 0 à %(max)s, par exemple 10 ou 10,5."
 msgstr "عدد أدنى غير صالح: أدخل عددًا من 0 إلى %(max)s، مثلًا 10 أو 10,5."
+
+#: grader/views.py
+msgid "La page de connexion avait expiré : reconnectez-vous."
+msgstr "انتهت صلاحية صفحة الدخول: سجّل الدخول من جديد."
+
+#: grader/views.py
+msgid "La page avait expiré : cliquez de nouveau sur « Déconnexion »."
+msgstr "انتهت صلاحية الصفحة: انقر من جديد على « تسجيل الخروج »."
+
+#: grader/views.py
+msgid "La page avait expiré : cliquez de nouveau sur le bouton de langue."
+msgstr "انتهت صلاحية الصفحة: انقر من جديد على زر اللغة."

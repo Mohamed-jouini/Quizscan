@@ -158,6 +158,35 @@ def main():
     page = Client().get("/comptes/login/?next=/classes/").content.decode()
     connexion = next(f for f in page.split("<form")[1:] if 'name="password"' in f)
     assert 'name="next"' not in connexion.split("</form>")[0]
+    # flèche « retour » après la connexion : le navigateur renvoie l'ancien formulaire, et
+    # son jeton CSRF a changé à la connexion. Avant le 24 novembre 2026 : « 403 Formulaire
+    # expiré » ; maintenant, le tableau de bord pour qui est connecté
+    navigateur = Client(enforce_csrf_checks=True)
+    page = navigateur.get("/comptes/login/?next=/concours/").content.decode()
+    jeton = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page).group(1)
+    envoi = {"csrfmiddlewaretoken": jeton, "username": "cpt_retour", "password": ANCIEN}
+    r = navigateur.post("/comptes/login/?next=/concours/", envoi)
+    assert r.status_code == 302 and r["Location"] == "/", r.status_code
+    for _ in range(3):
+        r = navigateur.post("/comptes/login/?next=/concours/", envoi)
+        assert r.status_code == 302 and r["Location"] == "/", (r.status_code, r.get("Location"))
+    # déconnexion et langue depuis une page restée ouverte : pas de 403 non plus
+    r = navigateur.post("/i18n/setlang/", {"csrfmiddlewaretoken": jeton, "language": "ar",
+                                           "next": "/classes/"})
+    assert r.status_code == 302 and r["Location"] == "/classes/", r.status_code
+    assert navigateur.cookies.get("django_language") is None, "langue changée sans jeton valable"
+    r = navigateur.post("/comptes/logout/", {"csrfmiddlewaretoken": jeton})
+    assert r.status_code == 302 and r["Location"] == "/" and "_auth_user_id" in navigateur.session
+    # sans compte : un formulaire neuf, avec un mot d'explication
+    r = Client(enforce_csrf_checks=True).post("/comptes/login/", envoi, follow=True)
+    assert r.status_code == 200 and "avait expiré" in r.content.decode(), r.status_code
+    r = Client(enforce_csrf_checks=True).post("/comptes/administration/", envoi, follow=True)
+    assert r.status_code == 200 and "avait expiré" in r.content.decode(), r.status_code
+    # ailleurs, la page « Formulaire expiré » reste
+    r = navigateur.post("/classes/", {"csrfmiddlewaretoken": jeton, "name": "x"})
+    assert r.status_code == 403 and "Formulaire expiré" in r.content.decode()
+    print("  flèche « retour » : formulaire de connexion renvoyé, jeton périmé, tableau de "
+          "bord et non « 403 Formulaire expiré » OK")
     # un enseignant garde le formulaire de l'administration, qu'il n'a pas le droit d'ouvrir
     assert cp.get("/comptes/administration/").status_code == 200
     ca = Client()

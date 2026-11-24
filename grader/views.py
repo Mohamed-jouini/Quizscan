@@ -18,6 +18,7 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone, translation
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.static import serve as file_serve
 from django.utils.translation import gettext
 
@@ -139,6 +140,43 @@ class ConnexionView(LoginView):
 
     def get_redirect_url(self):
         return ""
+
+
+def echec_csrf(request, reason=""):
+    """Formulaire refusé faute de jeton CSRF valable : resté ouvert trop longtemps, ou renvoyé
+    par la flèche « retour » du navigateur après une connexion (le jeton change à chaque
+    connexion ; demande de l'utilisateur, 24 novembre 2026, « 403 Formulaire expiré » après
+    plusieurs retours). Sur une page de connexion, de déconnexion ou de langue, rien n'est fait
+    et rien ne se perd : on mène là où la personne allait — son tableau de bord ou
+    l'administration si elle est déjà connectée, sinon un formulaire neuf avec un mot
+    d'explication. Ailleurs, la page 403 habituelle (CSRF_FAILURE_VIEW)."""
+    chemin, connecte = request.path, request.user.is_authenticated
+    if chemin == reverse("login"):
+        if connecte:
+            return redirect("dashboard")
+        messages.info(request, gettext("La page de connexion avait expiré : reconnectez-vous."))
+        return redirect("login")
+    if chemin in (reverse("admin_login"), reverse("admin:login")):
+        if connecte and request.user.is_staff:
+            return redirect("admin:index")
+        messages.info(request, gettext("La page de connexion avait expiré : reconnectez-vous."))
+        return redirect("admin_login")
+    if chemin == reverse("logout"):
+        if not connecte:
+            return redirect("login")
+        messages.info(request, gettext("La page avait expiré : cliquez de nouveau sur "
+                                       "« Déconnexion »."))
+        return redirect("dashboard")
+    if chemin == reverse("set_language"):
+        suite = request.POST.get("next") or "/"
+        if not url_has_allowed_host_and_scheme(suite, allowed_hosts={request.get_host()},
+                                               require_https=request.is_secure()):
+            suite = "/"
+        messages.info(request, gettext("La page avait expiré : cliquez de nouveau sur le "
+                                       "bouton de langue."))
+        return redirect(suite)
+    from django.views.csrf import csrf_failure
+    return csrf_failure(request, reason=reason)
 
 
 class AdminLoginView(LoginView):
