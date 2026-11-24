@@ -49,4 +49,18 @@
     const bouton = ev.target.closest(".theme-toggle");
     if (bouton) poser(suivant());
   });
+
+  // Fleche « retour » apres un changement de langue (24 novembre 2026) : le navigateur
+  // remet la page qu'il avait gardee (cache de navigation), dans la langue d'alors, sans la
+  // redemander au serveur. Si le cookie de langue dit autre chose que la page, on la
+  // recharge : le serveur la rend dans la langue choisie. Seulement au retour (page remise
+  // du cache, ou navigation « back_forward ») : un rechargement est de type « reload »,
+  // il ne se relance donc pas en boucle.
+  window.addEventListener("pageshow", function (ev) {
+    const navigation = performance.getEntriesByType ?
+      performance.getEntriesByType("navigation")[0] : null;
+    if (!ev.persisted && !(navigation && navigation.type === "back_forward")) return;
+    const choix = document.cookie.match(/(?:^|;\s*)django_language=(fr|ar)(?:;|$)/);
+    if (choix && choix[1] !== document.documentElement.lang) location.reload();
+  });
 }
