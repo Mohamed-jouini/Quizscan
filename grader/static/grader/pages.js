@@ -150,6 +150,7 @@
       var t = type(), qcm = t === "qcm", oral = t === "oral";
       cacher("note_sur", qcm);
       cacher("sheet_mode", !qcm);
+      cacher("versions", !qcm);         // deux versions : un QCM seulement
       cacher("wrong_penalty", !qcm);
       cacher("id_mode", oral);
       cacher("anonymat", oral);

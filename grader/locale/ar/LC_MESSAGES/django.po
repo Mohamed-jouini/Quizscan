@@ -6382,3 +6382,7 @@ msgstr "انتهت صلاحية الصفحة: انقر من جديد على « �
 #: grader/views.py
 msgid "La page avait expiré : cliquez de nouveau sur le bouton de langue."
 msgstr "انتهت صلاحية الصفحة: انقر من جديد على زر اللغة."
+
+#: templates/grader/quiz_detail.html
+msgid "En deux versions, une seule : celle du sujet A, qui remplit le corrigé des deux versions (une copie de la version B déjà imprimée se lit aussi)."
+msgstr "في النسختين، نسخة واحدة: نسخة الموضوع A، وهي تملأ الإجابة النموذجية للنسختين (نسخة المصحح للنسخة B المطبوعة من قبل تُقرأ أيضًا)."

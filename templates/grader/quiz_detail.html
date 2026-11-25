@@ -147,44 +147,9 @@
 
 {% include "grader/_correction_en_attente.html" %}
 
-{% if n_qcm and corrige_versions %}
-{% comment %}QCM en deux versions (23 novembre 2026) : le corrigé en deux moitiés, version A à
-  gauche, version B à droite, chacune avec sa fiche scannée et ses corrigés lus. Un seul
-  corrigé derrière : l'une ou l'autre fiche le remplit pour les deux versions.{% endcomment %}
-<div class="card {% if sans_corrige %}card--alerte{% else %}card--valide{% endif %}" id="corrige-versions">
-  <div class="grid2 corrige-versions">
-    {% for cv in corrige_versions %}
-    <div class="corrige-versions__cote">
-      {% if sans_corrige %}
-      <h2>{% blocktranslate trimmed with version=cv.version %}Corrigé incomplet — version {{ version }}{% endblocktranslate %}</h2>
-      <p class="helptext helptext--serre">
-        {% blocktranslate trimmed with sans_corrige=sans_corrige|length %}{{ sans_corrige }} question(s) sur {{ n_qcm }} sans bonne réponse : n°{% endblocktranslate %}
-        {% for n in cv.manquantes %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if cv.version != "A" %} {% blocktranslate trimmed with version=cv.version %}(numéros de la version {{ version }}){% endblocktranslate %}{% endif %}.
-        <b>{% translate "La correction des copies ne peut pas démarrer" %}</b> {% translate "tant qu'il en manque une." %}
-      </p>
-      {% else %}
-      <h2>{% blocktranslate trimmed with version=cv.version %}Corrigé complet — version {{ version }}{% endblocktranslate %}</h2>
-      <p class="helptext helptext--serre">{% blocktranslate trimmed %}{{ n_qcm }} question(s) QCM{% endblocktranslate %}{% if cv.version != "A" %}{% blocktranslate trimmed with version=cv.version %}, dans l'ordre de la version {{ version }}{% endblocktranslate %}{% endif %} {% translate ": les copies peuvent être corrigées." %}</p>
-      {% endif %}
-      {% if perms.grader.creer_epreuve %}
-      <form method="post" action="{% url 'quiz_answer_key' quiz.pk %}" enctype="multipart/form-data">
-        {% csrf_token %}
-        <input type="hidden" name="version" value="{{ cv.version }}">
-        <label class="label--haut" for="{{ cv.form.files.id_for_label }}">{% blocktranslate trimmed with version=cv.version %}Fiche du corrigé scannée — version {{ version }}{% endblocktranslate %}</label>
-        {{ cv.form.files }}
-        <span class="helptext">{% blocktranslate trimmed with version=cv.version %}La copie du correcteur de la version {{ version }}, noircie en suivant le sujet {{ version }}, puis scannée.{% endblocktranslate %}</span>
-        <p style="margin-bottom:0"><button class="btn" type="submit"
-          {% if not quiz.sheet_pdf %}disabled title="{% translate "Générez d'abord la fiche PDF" %}"{% endif %}>
-          {% blocktranslate trimmed with version=cv.version %}Lire le corrigé scanné — version {{ version }}{% endblocktranslate %}</button></p>
-      </form>
-      {% endif %}
-      {% include "grader/_corriges_scannes.html" with fiches=cv.fiches %}
-    </div>
-    {% endfor %}
-  </div>
-  <span class="helptext">{% translate "Un seul corrigé pour les deux versions : une fiche A ou une fiche B le remplit pour les deux, et il se règle aussi à la main dans le tableau de la version A. Les fiches de corrigé sont conservées avec l'épreuve : elles font foi sur l'origine du barème." %}</span>
-</div>
-{% elif n_qcm %}
+{% if n_qcm %}
+{% comment %}Le corrigé, un seul, QCM en deux versions compris (25 novembre 2026 : « fait un seul ») :
+  la fiche scannée, d'une version ou de l'autre, remplit le même corrigé ; sa version se lit sur la page.{% endcomment %}
 <div class="card {% if sans_corrige %}card--alerte{% else %}card--valide{% endif %}">
   <div class="card__duo card__duo--haut">
     <div class="card__duo-texte">
@@ -335,9 +300,7 @@
         {% endif %}
         <a class="btn secondary" href="{% url 'quiz_emargement_pdf' quiz.pk %}" target="_blank">{% blocktranslate trimmed with auto_enroll=quiz.auto_enroll|oui_non:"candidats,étudiants" %}📋 Liste des {{ auto_enroll }}{% endblocktranslate %}{% if quiz.place_anonyme %} {% translate "et des places" %}{% endif %} {% translate "par salle" %}</a>
         {% if quiz.a_des_qcm %}
-        {% if quiz.layout_json.versions %}
-        {% for v in quiz.layout_json.versions %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}?version={{ v }}" target="_blank" title="{% blocktranslate trimmed %}La feuille de réponses de la version {{ v }}, sans candidat : noircissez-y les bonnes réponses en suivant le sujet {{ v }}, puis envoyez-la dans « Corrigé scanné »{% endblocktranslate %}">{% blocktranslate trimmed %}✅ Copie du correcteur — version {{ v }}{% endblocktranslate %}</a>{% endfor %}
-        {% else %}<a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}" target="_blank" title="{% translate "La feuille de réponses sans candidat : noircissez-y les bonnes réponses, puis envoyez-la dans « Corrigé scanné »" %}">{% translate "✅ Copie du correcteur" %}</a>{% endif %}
+        <a class="btn secondary" href="{% url 'quiz_copie_correcteur_pdf' quiz.pk %}" target="_blank" title="{% if quiz.layout_json.versions %}{% blocktranslate trimmed with v="A" %}La feuille de réponses de la version {{ v }}, sans candidat : noircissez-y les bonnes réponses en suivant le sujet {{ v }}, puis envoyez-la dans « Corrigé scanné »{% endblocktranslate %}{% else %}{% translate "La feuille de réponses sans candidat : noircissez-y les bonnes réponses, puis envoyez-la dans « Corrigé scanné »" %}{% endif %}">{% translate "✅ Copie du correcteur" %}</a>
         {% endif %}
       {% endif %}
       {% if quiz.sheet_pdf and quiz.layout_json.versions %}
@@ -351,7 +314,7 @@
     </form>
     {% endif %}
     {% if quiz.sheet_pdf and quiz.layout_json.versions %}<span class="helptext"><b>{% translate "Deux versions, A et B" %}</b> {% translate ": la version B a ses questions et leurs choix dans un autre ordre. Remettez à chaque candidat" %} {% if quiz.sheet_mode == "split" %}{% translate "le sujet et la feuille de réponses de la même version" %}{% else %}{% translate "une fiche, en alternant A et B" %}{% endif %} {% translate ": la version est imprimée en haut de chaque page et lue au scan, chaque copie est corrigée selon la sienne." %}{% if quiz.id_mode == "qr" %} {% translate "Les copies nominatives alternent A et B dans l'ordre des salles." %}{% endif %}</span>{% endif %}
-    {% if quiz.sheet_pdf and quiz.a_des_qcm %}<span class="helptext"><b>{% translate "Copie du correcteur" %}</b> {% translate ": la feuille de réponses sans candidat, marquée « CORRIGÉ ». Le correcteur y noircit la bonne réponse de chaque question, puis la scanne dans « Corrigé scanné » : le corrigé se remplit tout seul." %}{% if quiz.layout_json.versions %} {% translate "En deux versions, une seule suffit, A ou B, selon le sujet que suit le correcteur : l'une ou l'autre remplit le même corrigé, pour les deux versions." %}{% endif %}</span>{% endif %}
+    {% if quiz.sheet_pdf and quiz.a_des_qcm %}<span class="helptext"><b>{% translate "Copie du correcteur" %}</b> {% translate ": la feuille de réponses sans candidat, marquée « CORRIGÉ ». Le correcteur y noircit la bonne réponse de chaque question, puis la scanne dans « Corrigé scanné » : le corrigé se remplit tout seul." %}{% if quiz.layout_json.versions %} {% translate "En deux versions, une seule : celle du sujet A, qui remplit le corrigé des deux versions (une copie de la version B déjà imprimée se lit aussi)." %}{% endif %}</span>{% endif %}
     <span class="helptext">
       {% if quiz.sheet_mode == "split" %}
         <b>{% translate "Sujet" %}</b> {% translate ": les questions et leurs choix, à distribuer (non scanné)." %}

@@ -664,7 +664,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
 | `test_e2e_design.py` | une seule feuille de style pour toutes les pages, aucun style redéclaré en ligne, aucun jeton défini deux fois |
 | `test_e2e_corrige.py` | bonne réponse facultative, corrigé scanné et conservé, correction bloquée tant qu'il manque une réponse, copie du correcteur (sans candidat, « CORRIGÉ ») lue par le corrigé scanné |
-| `test_e2e_versions.py` | QCM en deux versions : réglage refusé sans sujet imprimé, pages A puis B (A au millimètre, B fixe), sujets dans l'ordre du tirage, copies alternées, copie B lue et ramenée à la version A, corrigé sur feuille B, copies manquantes, questionnaire complet |
+| `test_e2e_versions.py` | QCM en deux versions : réglage refusé sans sujet imprimé (page du QCM et création d'un concours), pages A puis B (A au millimètre, B fixe), sujets dans l'ordre du tirage, copies alternées, copie B lue et ramenée à la version A, une seule copie du correcteur et un seul corrigé (fiche A ou B), copies manquantes, questionnaire complet |
 | `test_e2e_robustesse.py` | pannes d'OCR (Tesseract absent, paquet de langue manquant), fiches de plus de 12 pages, QR collés de travers dans leur cadre, QR abîmés (tache sur un coin, stylo, coin arraché, froissé, impression pâle, 100 dpi en JPEG 10, copies d'avant en correction M), contenu de la planche d'étiquettes, identifiants d'URL bricolés |
 
 Pour tout lancer : `for t in test_e2e*.py; do python $t || break; done`
@@ -909,8 +909,9 @@ et les choix disparaissent pour celle-ci.
 
 ## QCM en deux versions, A et B
 
-Réglage « Versions du sujet » de la page d'un QCM (avec un questionnaire complet ou un
-sujet séparé ; pas avec une fiche de réponses seule, dont le sujet vient d'ailleurs) :
+Réglage « Versions du sujet » de la page d'un QCM, et du formulaire de création d'un concours
+depuis le 25 novembre 2026 (QCM seulement ; avec un questionnaire complet ou un sujet séparé,
+pas avec une fiche de réponses seule, dont le sujet vient d'ailleurs) :
 
 - la **version B** imprime les QCM dans un autre ordre, et les choix de chacun aussi ;
   une réponse rédigée garde sa place. Le tirage est fixé par l'épreuve : la même version
@@ -924,18 +925,18 @@ sujet séparé ; pas avec une fiche de réponses seule, dont le sujet vient d'ai
   (« Sujet — version A », « Feuille de réponses — version B »…) ; les boutons du sujet et
   de la feuille des deux versions ensemble ne sont plus proposés. Copies nominatives (QR) :
   un seul PDF, « Copies (A et B alternées) » dans l'ordre des salles, à remettre avec le
-  sujet de la même version. La copie du correcteur existe dans les deux versions (« Copie du
-  correcteur — version A / B ») : une seule suffit, celle du sujet que suit le correcteur,
-  l'une ou l'autre remplit le même corrigé ;
+  sujet de la même version. Une seule « Copie du correcteur » (25 novembre 2026, demande de
+  l'utilisateur) : celle de la version A, qui remplit le corrigé des deux versions ; une
+  copie de la version B imprimée avant se lit aussi ;
 - **page du QCM** : le tableau des questions de la version A (à gauche, où se règle le
   corrigé) et, en regard, celui de la version B : n° imprimé, question et choix dans son
   ordre, n° de la question dans la version A, et sa bonne réponse lettrée pour la version
   B (lecture seule : elle suit le corrigé de la version A). Avant la génération des PDF,
   c'est l'aperçu du tirage qu'elle fixera ;
-- **corrigé** : son cadre est coupé en deux, version A à gauche, version B à droite, chacune
-  avec sa fiche scannée à déposer, ses questions sans bonne réponse (à ses n°) et ses
-  fiches de corrigé lues (rangées selon la version lue au scan ; une fiche déposée du
-  mauvais côté est lue quand même, et signalée). Derrière, un seul corrigé ;
+- **corrigé** : un seul cadre, comme pour une version (25 novembre 2026 ; du 23 au
+  25 novembre il était coupé en deux, A à gauche, B à droite) : une seule fiche à déposer,
+  A ou B (sa version se lit sur la page), les questions sans bonne réponse aux n° de la
+  version A, et une liste des fiches lues, la page de chacune comptée dans sa version ;
 - **correction** : la réponse lue sur une copie B est ramenée à la question et au choix de
   la version A. Corrigé, notes, statistiques, exports ne voient que la version A ; un
   corrigé noirci sur une feuille B se lit juste. Le relevé de notes et l'écran de

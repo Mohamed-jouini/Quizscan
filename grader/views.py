@@ -881,34 +881,20 @@ def _generer_fiche_qcm(quiz, count, progres=None):
     return a_dire
 
 
-def _corrige_par_version(quiz, version_b, sans_corrige):
-    """Le corrigé d'un QCM en deux versions, en deux moitiés pour sa page (demande du
-    23 novembre 2026) : pour chaque version, son formulaire de fiche scannée, ses questions
-    sans bonne réponse (aux n° de la version) et ses fiches de corrigé lues (la page
-    comptée dans la version). Liste vide hors deux versions générées."""
+def _fiches_de_corrige(quiz):
+    """Les fiches de corrigé lues, les 12 plus récentes. QCM en deux versions : un seul corrigé
+    (25 novembre 2026), et la page de chaque fiche est comptée dans sa version — la page 1
+    d'une copie du correcteur B n'est pas « page 2 »."""
+    fiches = list(quiz.answer_key_sheets.all()[:12])
     disposition = quiz.layout_json or {}
-    versions = layout_mod.versions_de(disposition)
-    if "B" not in versions:
-        return []
-    num_b = {ligne["question"].order: ligne["num"] for ligne in version_b}
-    fiches = list(quiz.answer_key_sheets.all()[:40])
-    moities = []
-    for v in versions:
-        pages_v = [p["page_index"] for p in layout_mod.pages_de_version(disposition, v)]
-        lues = []
+    if len(layout_mod.versions_de(disposition)) > 1:
         for fiche in fiches:
-            if (layout_mod.version_de_page(disposition, fiche.page_index) or "A") == v:
-                fiche.page_version = (pages_v.index(fiche.page_index) + 1
-                                      if fiche.page_index in pages_v else None)
-                lues.append(fiche)
-        moities.append({
-            "version": v,
-            "form": AnswerKeyUploadForm(auto_id=f"id_corrige_{v.lower()}_%s"),
-            "manquantes": (sans_corrige if v == "A"
-                           else sorted(num_b.get(o, o) for o in sans_corrige)),
-            "fiches": lues[:12],
-        })
-    return moities
+            version = layout_mod.version_de_page(disposition, fiche.page_index)
+            pages = [p["page_index"] for p in layout_mod.pages_de_version(disposition, version)
+                     ] if version else []
+            if fiche.page_index in pages:
+                fiche.page_version = pages.index(fiche.page_index) + 1
+    return fiches
 
 
 @login_required
@@ -1248,12 +1234,10 @@ def quiz_detail(request, pk):
     sans_corrige = list(quiz.questions_sans_corrige.values_list("order", flat=True))
     # QCM en deux versions : les questions de la version B, à côté de celles de la A
     version_b, version_b_apercu = services.questions_version_b(quiz)
-    corrige_versions = _corrige_par_version(quiz, version_b, sans_corrige)
     from .views_epreuves import correction_en_attente, suivre_generation
     return render(request, "grader/quiz_detail.html", {
         **correction_en_attente(quiz),
         "version_b": version_b, "version_b_apercu": version_b_apercu,
-        "corrige_versions": corrige_versions,
         "quiz": quiz, "qform": qform, "bulk_form": bulk_form,
         "generation": suivre_generation(request, quiz),
         "fil": services.fil_etapes(quiz, _my_quizzes(request)),
@@ -1264,7 +1248,7 @@ def quiz_detail(request, pk):
         "sans_corrige": sans_corrige,
         "n_qcm": quiz.questions.filter(qtype="qcm").count(),
         "answer_key_form": AnswerKeyUploadForm(),
-        "answer_key_sheets": quiz.answer_key_sheets.all()[:12],
+        "answer_key_sheets": _fiches_de_corrige(quiz),
         "n_answer_key_sheets": quiz.answer_key_sheets.count(),
         "batches": quiz.batches.all(),
         "upload_form": UploadForm(),
@@ -1358,13 +1342,6 @@ def quiz_answer_key(request, pk):
                       apres=journal.lettre(q, q.correct_choice))
 
     echecs = [p for p in pages if p.status in ("no_markers", "error")]
-    # QCM en deux versions : une fiche déposée du côté de l'autre version est lue quand même
-    attendue = request.POST.get("version", "")
-    lues_en = {layout_mod.version_de_page(quiz.layout_json, p.page_index)
-               for p in pages if p.page_index is not None} - {""}
-    if attendue and lues_en and attendue not in lues_en:
-        autre = ", ".join(sorted(lues_en))
-        messages.info(request, gettext('Fiche déposée en version %(attendue)s, lue en version %(autre)s : elle remplit le même corrigé, et se range avec la version %(autre)s.') % {"attendue": attendue, "autre": autre})
     if n_lues:
         messages.success(
             request,
@@ -1833,16 +1810,18 @@ def quiz_copie_correcteur_pdf(request, pk):
     feuille de réponses, un exemplaire sans candidat ni QR, marqué « CORRIGÉ ». Le
     correcteur y noircit les bonnes réponses et l'envoie dans « Corrigé scanné ».
 
-    QCM en deux versions : ?version=B donne celle de la version B (demande du 23 novembre
-    2026), pour un correcteur qui suit le sujet B ; sans précision, la version A. L'une ou
-    l'autre remplit le même corrigé (la lecture ramène la B à la A)."""
+    QCM en deux versions : une seule copie du correcteur, celle de la version A (demande de
+    l'utilisateur, 25 novembre 2026 : « fait un seul ») ; ?version=B, lien d'avant, donne
+    encore celle de la B. L'une ou l'autre remplit le même corrigé (la lecture ramène la B à
+    la A)."""
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if not quiz.layout_json or not quiz.a_des_qcm:
         messages.error(request, gettext("Générez d'abord la fiche de réponses PDF."))
         return redirect("quiz_detail", pk=pk)
     disposition, nom = quiz.layout_json, f"copie_correcteur_{quiz.pk}"
-    version = request.GET.get("version", "")
-    if version in layout_mod.versions_de(disposition):
+    versions = layout_mod.versions_de(disposition)
+    version = request.GET.get("version", "") or ("A" if "A" in versions else "")
+    if version in versions:
         disposition = {**disposition, "versions": [version],
                        "pages": layout_mod.pages_de_version(disposition, version)}
         nom += f"_version_{version}"

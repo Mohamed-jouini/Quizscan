@@ -189,8 +189,10 @@ def main():
     assert "Demandez-la à l'administrateur" in texte, (
         "la 403 n'affiche pas le message qui dit quoi faire")
 
+    # sur la page de connexion, un jeton périmé mène au formulaire neuf (24 novembre 2026,
+    # views.echec_csrf) : la page « Formulaire expiré » se voit sur les autres formulaires
     strict = Client(enforce_csrf_checks=True)
-    reponse = strict.post("/comptes/login/", {"username": "x", "password": "y"})
+    reponse = strict.post("/classes/", {"name": "x"})
     assert reponse.status_code == 403
     texte = visible(reponse.content.decode())
     _verifier(texte, "refus CSRF")

@@ -367,7 +367,7 @@ class QuizForm(forms.ModelForm):
         model = Quiz
         fields = ["title", "annee", "type_epreuve", "epreuve_precedente", "class_group",
                   "language", "note_sur",
-                  "sheet_mode", "entete", "duree", "date_epreuve",
+                  "sheet_mode", "versions", "entete", "duree", "date_epreuve",
                   "id_mode", "id_digits", "anonymat", "grading_mode", "wrong_penalty"]
         widgets = {"grading_mode": forms.RadioSelect,
                    "type_epreuve": forms.RadioSelect,
@@ -404,6 +404,9 @@ class QuizForm(forms.ModelForm):
             (v, gettext("Oral — notes importées d'un fichier Excel") if v == "oral" else libelle)
             for v, libelle in self.fields["type_epreuve"].choices]
         self.fields["note_sur"].required = False
+        # QCM en deux versions, à choisir dès la création d'un concours (demande de
+        # l'utilisateur, 25 novembre 2026) ; sans le champ (formulaire d'avant), une seule
+        self.fields["versions"].required = False
         if concours:
             # 1re ou 2e année, à choisir à la création (13 novembre 2026) ; une étape
             # suivante la reprend de la précédente (vue)
@@ -420,6 +423,7 @@ class QuizForm(forms.ModelForm):
             self.fields["sheet_mode"].initial = "split"
         else:
             del self.fields["annee"]            # une année : concours seulement
+            del self.fields["versions"]         # réglage de la page du QCM, pour une classe
             # quiz de classe : correction toujours immédiate
             del self.fields["grading_mode"]
             qs = ClassGroup.objects.classes()       # pas la liste de candidats d'un concours
@@ -443,6 +447,14 @@ class QuizForm(forms.ModelForm):
     def clean(self):
         data = super().clean()
         _appliquer_anonymat(self, data)
+        if "versions" in self.fields:
+            if data.get("type_epreuve", "qcm") != "qcm":
+                data["versions"] = 1            # écrit, oral : une seule version
+            elif data.get("versions") == 2 and data.get("sheet_mode") == "grid":
+                # comme dans les réglages du QCM : le sujet de chaque version sort de
+                # l'application, dans son ordre
+                self.add_error("versions", gettext(
+                    "Deux versions : choisissez « Questionnaire complet » ou « Sujet séparé + feuille de réponses ». L'application doit imprimer le sujet de chaque version, dans son ordre."))
         precedente = data.get("epreuve_precedente")
         if precedente is not None and (precedente.type_epreuve
                                        != ETAPE_PRECEDENTE.get(data.get("type_epreuve"))):
@@ -453,6 +465,9 @@ class QuizForm(forms.ModelForm):
 
     def clean_type_epreuve(self):
         return self.cleaned_data.get("type_epreuve") or "qcm"
+
+    def clean_versions(self):
+        return self.cleaned_data.get("versions") or 1
 
     def clean_note_sur(self):
         return self.cleaned_data.get("note_sur") or 20.0

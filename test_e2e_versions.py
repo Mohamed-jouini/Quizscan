@@ -115,6 +115,28 @@ def main():
     url = reverse("quiz_detail", args=[quiz.pk])
     print("QCM en deux versions :")
 
+    # ---- 0) à la création d'un concours (25 novembre 2026) : le choix des deux versions
+    creer = reverse("quiz_create") + "?concours=1"
+    page = c.get(creer).content.decode()
+    assert 'name="versions"' in page and "Versions du sujet" in page
+    assert 'name="versions"' not in c.get(reverse("quiz_create")).content.decode(), \
+        "le choix se fait sur la page du QCM, pour une classe"
+    concours = {"type_epreuve": "qcm", "language": "fr", "id_mode": "sticker", "id_digits": "6",
+                "anonymat": "", "grading_mode": "immediate", "wrong_penalty": "0", "annee": "1"}
+    r = c.post(creer, dict(concours, title="Concours grille", sheet_mode="grid", versions="2"))
+    assert r.status_code == 200 and "versions" in r.context["form"].errors
+    assert not Quiz.objects.filter(owner=prof, title="Concours grille").exists()
+    r = c.post(creer, dict(concours, title="Concours A et B", sheet_mode="split", versions="2"))
+    assert r.status_code == 302, r.context["form"].errors
+    assert Quiz.objects.get(owner=prof, title="Concours A et B").versions == 2
+    c.post(creer, dict(concours, title="Concours sans le champ", sheet_mode="split"))
+    assert Quiz.objects.get(owner=prof, title="Concours sans le champ").versions == 1
+    c.post(creer, dict(concours, title="Écrit A et B", type_epreuve="ecrit", sheet_mode="split",
+                       versions="2"))
+    assert Quiz.objects.get(owner=prof, title="Écrit A et B").versions == 1, "écrit : une version"
+    print("  création d'un concours : deux versions au choix (QCM avec sujet imprimé), refusées "
+          "avec une fiche de réponses seule ; écrit et formulaire d'avant : une seule OK")
+
     # ---- 1) réglage : pas avec une fiche de réponses seule
     reglages = {"update_settings": "1", "title": quiz.title, "id_mode": "qr", "anonymat": "",
                 "wrong_penalty": "0", "id_digits": "6"}
@@ -180,8 +202,8 @@ def main():
     # nominatives restent dans un seul PDF, A et B alternées (demande du 23 novembre 2026)
     assert quiz.subject_pdf.url not in page and "Sujet (questions)" not in page
     assert "Sujet — version A" in page and "Sujet — version B" in page
-    assert "Copie du correcteur — version A" in page and "Copie du correcteur — version B" in page
-    assert "?version=B" in page
+    # une seule copie du correcteur, celle de la version A (25 novembre 2026, « fait un seul »)
+    assert "Copie du correcteur — version" not in page and page.count("✅ Copie du correcteur") == 1
     assert f'href="{quiz.sheet_pdf.url}"' in page and "Copies (A et B alternées)" in page
     assert "Feuille de réponses</a>" not in page and "{#" not in page and "{% comment" not in page
     lignes = r.context["version_b"]
@@ -229,12 +251,14 @@ def main():
     url_correcteur = reverse("quiz_copie_correcteur_pdf", args=[quiz.pk])
     correcteur = textes(c.get(url_correcteur).content)
     assert len(correcteur) == 1 and "VERSION A" in correcteur[0]
-    # la copie du correcteur de la version B, pour qui suit le sujet B (23 novembre 2026)
+    # une seule copie du correcteur sur la page, celle de la version A (25 novembre 2026,
+    # « fait un seul ») ; le lien d'avant vers celle de la B donne encore la B
+    page = c.get(url).content.decode()
+    assert page.count(f'href="{url_correcteur}"') == 1 and f"{url_correcteur}?version=" not in page
     correcteur_b = c.get(url_correcteur + "?version=B").content
     assert [("VERSION B" in t, "VERSION A" in t) for t in textes(correcteur_b)] == [(True, False)]
-    assert "VERSION A" in textes(c.get(url_correcteur + "?version=A").content)[0]
-    print("  copies nominatives : A, B, A, B dans l'ordre des salles ; copie du correcteur "
-          "en version A, et en version B OK")
+    print("  copies nominatives : A, B, A, B dans l'ordre des salles ; une seule copie du "
+          "correcteur, en version A OK")
 
     # ---- 5) scan : mêmes réponses en A et en B, même note, réponses ramenées à la version A
     envois = []
@@ -265,42 +289,39 @@ def main():
     assert "Version B" in page and "Copie en version B" in page
     print("  relevé de notes et écran de vérification : « copie en version B » OK")
 
-    # la copie du correcteur B, noircie en suivant le sujet B : les bonnes réponses de la A
+    # une copie du correcteur B déjà imprimée, noircie en suivant le sujet B : les bonnes
+    # réponses de la A, par l'unique envoi du corrigé
     Question.objects.filter(quiz=quiz, qtype="qcm").update(correct_choice=None)
     feuille_b = noircir(render_page(correcteur_b, 0), pages_b[0], CORRIGE)
     c.post(reverse("quiz_answer_key", args=[quiz.pk]),
-           {"version": "B",
-            "files": [SimpleUploadedFile("corrige_b.jpg", jpg(simulate_scan(feuille_b)))]})
+           {"files": [SimpleUploadedFile("corrige_b.jpg", jpg(simulate_scan(feuille_b)))]})
     lu = dict(quiz.questions.filter(qtype="qcm").values_list("order", "correct_choice"))
     assert lu == CORRIGE, (lu, CORRIGE)
     print("  copie du correcteur B noircie et scannée : les bonnes réponses de la version A OK")
-    # le corrigé en deux moitiés (23 novembre 2026) : la fiche B lue de son côté
+    # un seul corrigé à l'écran (25 novembre 2026, « fait un seul ») : un encart, un envoi, une
+    # liste de fiches, la page de chacune comptée dans sa version
     r = c.get(url)
     page = r.content.decode()
-    cv = r.context["corrige_versions"]
-    assert [m["version"] for m in cv] == ["A", "B"]
-    assert "Corrigé complet — version A" in page and "Corrigé complet — version B" in page
-    assert [f.page_version for f in cv[1]["fiches"]] == [1] and not cv[0]["fiches"]
-    assert 'id="id_corrige_a_files"' in page and 'id="id_corrige_b_files"' in page
-    # une question sans bonne réponse : son n° de chaque côté
+    assert "corrige_versions" not in r.context
+    assert f"Corrigé complet — {len(CORRIGE)} question(s) QCM" in page
+    assert "Corrigé complet — version" not in page and page.count("Lire le corrigé scanné") == 1
+    assert [f.page_version for f in r.context["answer_key_sheets"]] == [1]
+    # une question sans bonne réponse : son n° dans la version A, celle du tableau à remplir
     t = next(t for t in tirage if t["num"] != t["order"])
     Question.objects.filter(quiz=quiz, order=t["order"]).update(correct_choice=None)
-    r = c.get(url)
-    cv = r.context["corrige_versions"]
-    assert (cv[0]["manquantes"], cv[1]["manquantes"]) == ([t["order"]], [t["num"]]), cv
-    assert "Corrigé incomplet — version B" in r.content.decode()
+    page = c.get(url).content.decode()
+    assert f"Corrigé incomplet — 1 question(s) sur {len(CORRIGE)} sans bonne réponse" in page
+    assert f"Questions n° {t['order']}." in page and "Corrigé incomplet — version" not in page
     Question.objects.filter(quiz=quiz, order=t["order"]).update(correct_choice=CORRIGE[t["order"]])
-    # une fiche A déposée du côté B : lue quand même, rangée avec la version A
+    # une copie du correcteur A dans le même envoi : lue, rangée avec l'autre
     feuille_a = noircir(render_page(c.get(url_correcteur).content, 0), pages_a[0], CORRIGE)
     r = c.post(reverse("quiz_answer_key", args=[quiz.pk]),
-               {"version": "B",
-                "files": [SimpleUploadedFile("corrige_a.jpg", jpg(simulate_scan(feuille_a)))]},
+               {"files": [SimpleUploadedFile("corrige_a.jpg", jpg(simulate_scan(feuille_a)))]},
                follow=True)
-    assert "Fiche déposée en version B, lue en version A" in r.content.decode()
-    cv = r.context["corrige_versions"]
-    assert (len(cv[0]["fiches"]), len(cv[1]["fiches"])) == (1, 1)
-    print("  corrigé en deux moitiés : fiches lues de leur côté, questions manquantes aux n° "
-          "de chaque version, fiche déposée du mauvais côté signalée OK")
+    assert "Fiche déposée" not in r.content.decode()
+    assert [f.page_version for f in r.context["answer_key_sheets"]] == [1, 1]
+    print("  un seul corrigé : un envoi pour une copie du correcteur A ou B, une liste de "
+          "fiches, questions manquantes aux n° de la version A OK")
 
     # ---- 6) copies manquantes : seul le 4e (pas scanné)
     manquantes = services.copies_manquantes(quiz)
