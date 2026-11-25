@@ -354,30 +354,47 @@
     fausses ne dit pas vers quoi. Si presque toutes se portent sur la même
     case, c'est soit un bon distracteur, soit un énoncé ambigu, soit une
     bonne réponse erronée.{% endblocktranslate %}</p>
+  {% if stats.repartition_versions %}
+  {% comment %}Les deux versions (25 novembre 2026, « corige pour les deux version A et B ») :
+    un tableau par version, côte à côte comme sur la page du QCM, chacun avec ses copies, ses
+    n° et les lettres de sa feuille.{% endcomment %}
+  <div class="grid2">
+    {% for rv in stats.repartition_versions %}
+    <div>
+      <h3>{% blocktranslate trimmed with version=rv.version %}Version {{ version }}{% endblocktranslate %}
+        <small class="helptext">{% blocktranslate trimmed with n=rv.n %}{{ n }} copie(s){% endblocktranslate %}</small></h3>
+      {% if rv.n %}
+      <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="{% blocktranslate trimmed with version=rv.version %}Répartition des copies par case, version {{ version }}{% endblocktranslate %}">
+        <table class="table--espacee">
+        <tr><th>{% translate "Q" %}</th>{% if rv.version != "A" %}<th>{% translate "Version A" %}</th>{% endif %}<th>{% translate "Répartition des copies par case" %}</th></tr>
+        {% for l in rv.questions %}{% if l.repartition %}
+        <tr>
+          <td><b>{{ l.num }}</b></td>
+          {% if rv.version != "A" %}<td>{% translate "n°" %} {{ l.question.order }}</td>{% endif %}
+          <td>{% include "grader/_repartition_cases.html" with repartition=l.repartition %}</td>
+        </tr>
+        {% endif %}{% endfor %}
+        </table>
+      </div>
+      {% else %}<p class="helptext">{% blocktranslate trimmed with version=rv.version %}Aucune copie de la version {{ version }} n'est encore lue.{% endblocktranslate %}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
   <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="{% translate "Répartition des copies par case" %}">
     <table class="table--espacee">
     <tr><th>{% translate "Q" %}</th><th>{% translate "Répartition des copies par case" %}</th></tr>
     {% for s in stats.questions %}{% if s.repartition %}
     <tr>
       <td><b>{{ s.num }}</b></td>
-      <td>
-        <div class="choix">
-          {% for c in s.repartition %}
-          <span class="choix__part {% if c.bonne %}is-bonne{% endif %}"
-                title="{% blocktranslate trimmed with titre=c.titre n=c.n pct=c.pct %}{{ titre }} — {{ n }} copie(s), {{ pct }} %{% endblocktranslate %}">
-            <i class="choix__jauge"><b style="height:{{ c.pct }}%"></b></i>
-            <span class="choix__lettre">{{ c.lettre }}</span>
-            <small>{{ c.pct }} %</small>
-          </span>
-          {% endfor %}
-        </div>
-      </td>
+      <td>{% include "grader/_repartition_cases.html" with repartition=s.repartition %}</td>
     </tr>
     {% endif %}{% endfor %}
   </table>
   </div>
+  {% endif %}
   <p class="helptext">{% translate "La case encadrée est la bonne réponse enregistrée." %}
-    {% include "grader/_stats_versions.html" %}</p>
+    {% include "grader/_stats_versions.html" with repartition=True %}</p>
 </div>
 {% endif %}
 {% endif %}

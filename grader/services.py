@@ -3267,15 +3267,33 @@ def compute_stats(quiz, rows, version=""):
 
     # QCM : les notes se lisent sur 20 (13 novembre 2026), les statistiques aussi
     facteur = 20 / max_score if quiz.est_qcm else 1
-    par_version = []
+    par_version, repartition_versions = [], []
     if versions and not version:
         for v in versions:
-            notes = [r["score"] for r in rows if version_de_ligne(quiz, r) == v]
+            lignes_v = [r for r in rows if version_de_ligne(quiz, r) == v]
+            notes = [r["score"] for r in lignes_v]
             par_version.append({"version": v, "n": len(notes),
                                 "mean": (round(sum(notes) / len(notes) * facteur, 2)
                                          if notes else None)})
+            # « Où sont parties les réponses », version par version (25 novembre 2026,
+            # « corige pour les deux version A et B ») : ses copies, ses n° et les lettres
+            # de sa feuille, comme le tableau de la page du QCM
+            de_v = layout_mod.questions_imprimees(quiz.layout_json, v)
+            lignes_q = []
+            for st in questions:
+                q = st["question"]
+                if q.qtype != "qcm":
+                    continue
+                num, perm = de_v.get(q.order, (q.order, None))
+                reponses = [r["answers"][q.order] for r in lignes_v if q.order in r["answers"]]
+                lignes_q.append({"num": num, "question": q,
+                                 "repartition": _repartition(q, reponses, perm)})
+            lignes_q.sort(key=lambda l: l["num"])
+            repartition_versions.append({"version": v, "n": len(lignes_v),
+                                         "questions": lignes_q})
     return {
         "version": version, "par_version": par_version, "num_b": bool(en_b),
+        "repartition_versions": repartition_versions,
         "n": n,
         "mean": round(moyenne * facteur, 2),
         "median": round(median * facteur, 2),

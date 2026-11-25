@@ -965,7 +965,9 @@ pas avec une fiche de réponses seule, dont le sujet vient d'ailleurs) :
   sur la page Résultats, trois pastilles. « Les deux versions » : toutes les copies, aux n°
   et lettres de la version A (la réponse d'une copie B y est comptée à sa question et à
   son choix dans la version A), avec le nombre de copies et la moyenne de chaque version,
-  et le n° de chaque question dans la version B. « Version A » ou « Version B » : les copies
+  et le n° de chaque question dans la version B ; « Où sont parties les réponses » y montre
+  un tableau par version, côte à côte (même jour, « corige pour les deux version A et B ») :
+  ses copies, ses n° et les lettres de sa feuille. « Version A » ou « Version B » : les copies
   de cette version seulement, aux n° et lettres de sa feuille (cases dans son ordre, et
   colonne « Version A » pour la B). L'alerte « Bonne réponse à vérifier » porte toujours sur
   toutes les copies, aux n° de la version A ; l'export Excel aussi.

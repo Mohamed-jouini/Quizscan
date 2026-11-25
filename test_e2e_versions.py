@@ -374,6 +374,25 @@ def main():
             ("ABCD"[j], int(j == cases.index(COPIE[o])), j == cases.index(CORRIGE[o]))
             for j in range(len(cases))], (o, st["repartition"])
     assert services.compute_stats(quiz, lignes, "A")["n"] == 2
+    # « Où sont parties les réponses » des deux versions (25 novembre 2026, « corige pour les
+    # deux version A et B ») : un tableau par version, ses copies, ses n° et ses lettres
+    rv = {x["version"]: x for x in tout["repartition_versions"]}
+    assert (rv["A"]["n"], rv["B"]["n"]) == (2, 1)
+    assert [l["num"] for l in rv["A"]["questions"]] == [n for n, _, ch, _ in QUESTIONS if ch]
+    assert [l["num"] for l in rv["B"]["questions"]] == sorted(l["num"] for l in rv["B"]["questions"])
+    for l in rv["A"]["questions"]:                  # copies A : COPIE et CORRIGE
+        o = l["question"].order
+        assert [(c["lettre"], c["n"], c["bonne"]) for c in l["repartition"]] == [
+            ("ABCD"[j], (COPIE[o] == j) + (CORRIGE[o] == j), j == CORRIGE[o])
+            for j in range(4)], (o, l["repartition"])
+    for l in rv["B"]["questions"]:                  # copie B : COPIE, cases de la feuille B
+        o = l["question"].order
+        cases = items_b[o].get("perm") or list(range(len(items_b[o]["bubbles"])))
+        assert l["num"] == items_b[o]["num"]
+        assert [(c["lettre"], c["n"], c["bonne"]) for c in l["repartition"]] == [
+            ("ABCD"[j], int(j == cases.index(COPIE[o])), j == cases.index(CORRIGE[o]))
+            for j in range(len(cases))], (o, l["repartition"])
+    assert not seule_b["repartition_versions"], "une version seule : un seul tableau"
     url_resultats = reverse("quiz_results", args=[quiz.pk])
     r = c.get(url_resultats)
     page = r.content.decode()
@@ -381,10 +400,14 @@ def main():
     assert "Les deux versions" in page and "<th>Version B</th>" in page
     assert "2 copie(s), moyenne" in page and "1 copie(s), moyenne" in page
     assert f'href="{url_resultats}?version=B#statistiques"' in page
+    assert 'aria-label="Répartition des copies par case, version A"' in page
+    assert 'aria-label="Répartition des copies par case, version B"' in page
+    assert "Un tableau par version" in page
     r = c.get(url_resultats + "?version=B")
     page = r.content.decode()
     assert r.context["version_stats"] == "B" and r.context["stats"]["n"] == 1
     assert "— version B</h2>" in page and "<th>Version A</th>" in page
+    assert "Répartition des copies par case, version" not in page
     assert "aux n° et lettres de la feuille B" in page
     assert c.get(url_resultats + "?version=C").context["version_stats"] == ""
     print("  statistiques : les deux versions (n° et lettres de la version A, n° B en regard, "

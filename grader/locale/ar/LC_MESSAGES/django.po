@@ -6518,3 +6518,15 @@ msgstr "النسخة B"
 #: grader/views.py
 msgid "Les deux versions"
 msgstr "النسختان معًا"
+
+#: templates/grader/_stats_versions.html
+msgid "Un tableau par version, avec ses copies, ses n° et les lettres de sa feuille ; « Version A » : le n° de chaque question dans la version A, celle du corrigé."
+msgstr "جدول لكل نسخة، بأوراقها وأرقامها وحروف ورقتها؛ «النسخة A»: رقم كل سؤال في النسخة A، نسخة الإجابة النموذجية."
+
+#: templates/grader/results.html
+msgid "%(n)s copie(s)"
+msgstr "%(n)s ورقة"
+
+#: templates/grader/results.html
+msgid "Répartition des copies par case, version %(version)s"
+msgstr "توزيع الأوراق حسب الخانة، النسخة %(version)s"

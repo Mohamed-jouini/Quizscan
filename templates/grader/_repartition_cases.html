@@ -1,0 +1,13 @@
+{% load i18n %}{% comment %}
+Les barres d'une question dans « Où sont parties les réponses » : une par case, la bonne
+encadrée. Paramètre : repartition (services._repartition).
+{% endcomment %}<div class="choix">
+  {% for c in repartition %}
+  <span class="choix__part {% if c.bonne %}is-bonne{% endif %}"
+        title="{% blocktranslate trimmed with titre=c.titre n=c.n pct=c.pct %}{{ titre }} — {{ n }} copie(s), {{ pct }} %{% endblocktranslate %}">
+    <i class="choix__jauge"><b style="height:{{ c.pct }}%"></b></i>
+    <span class="choix__lettre">{{ c.lettre }}</span>
+    <small>{{ c.pct }} %</small>
+  </span>
+  {% endfor %}
+</div>
