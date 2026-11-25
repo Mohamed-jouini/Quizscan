@@ -417,6 +417,28 @@ def pages_equivalentes(disposition, page_index):
             if rang < len(pages)]
 
 
+def questions_imprimees(disposition, version):
+    """Les QCM tels que les imprime une version : {n° de la question dans la version A :
+    (n° imprimé, perm)}, perm[case] étant le choix d'origine de chaque case (None : les
+    choix gardent leur ordre). Vide pour la version A ou une fiche d'une seule version, dont
+    les n° et les lettres sont ceux de la version A. Sert à montrer une copie B comme sa
+    feuille (25 novembre 2026 : son tableau donnait les n° et les lettres de la version A,
+    son image ceux de la feuille B ; l'utilisateur l'a pris pour une erreur)."""
+    if not version or version == "A":
+        return {}
+    return {item["order"]: (item.get("num", item["order"]), item.get("perm"))
+            for page in pages_de_version(disposition, version)
+            for item in page.get("qcm", [])}
+
+
+def case_imprimee(choix, perm):
+    """La case qui porte, dans l'ordre d'une version, le choix « choix » de la version A
+    (perm[case] = choix d'origine) ; « choix » lui-même sans mélange ou hors du tirage."""
+    if choix is None or not perm or choix not in perm:
+        return choix
+    return perm.index(choix)
+
+
 def tirage_version_b(quiz, questions):
     """L'ordre de la version B : [{"num": n° imprimé, "order": n° de la question dans la
     version A, "perm": choix d'origine de chaque case}], un par QCM, dans l'ordre des n°.

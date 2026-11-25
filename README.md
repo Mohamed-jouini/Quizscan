@@ -664,7 +664,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
 | `test_e2e_design.py` | une seule feuille de style pour toutes les pages, aucun style redéclaré en ligne, aucun jeton défini deux fois |
 | `test_e2e_corrige.py` | bonne réponse facultative, corrigé scanné et conservé, correction bloquée tant qu'il manque une réponse, copie du correcteur (sans candidat, « CORRIGÉ ») lue par le corrigé scanné |
-| `test_e2e_versions.py` | QCM en deux versions : réglage refusé sans sujet imprimé (page du QCM et création d'un concours), pages A puis B (A au millimètre, B fixe), sujets dans l'ordre du tirage, copies alternées, copie B lue et ramenée à la version A, une seule copie du correcteur (sans « VERSION A ») et un seul corrigé (fiche A ou B), copies manquantes, questionnaire complet |
+| `test_e2e_versions.py` | QCM en deux versions : réglage refusé sans sujet imprimé (page du QCM et création d'un concours), pages A puis B (A au millimètre, B fixe), sujets dans l'ordre du tirage, copies alternées, copie B lue et ramenée à la version A, mais montrée comme sa feuille (relevé et écran de vérification : n° et lettres de la feuille B), bonne réponse en gras dans les deux tableaux, une seule copie du correcteur (sans « VERSION A ») et un seul corrigé (fiche A ou B), copies manquantes, questionnaire complet |
 | `test_e2e_robustesse.py` | pannes d'OCR (Tesseract absent, paquet de langue manquant), fiches de plus de 12 pages, QR collés de travers dans leur cadre, QR abîmés (tache sur un coin, stylo, coin arraché, froissé, impression pâle, 100 dpi en JPEG 10, copies d'avant en correction M), contenu de la planche d'étiquettes, identifiants d'URL bricolés |
 
 Pour tout lancer : `for t in test_e2e*.py; do python $t || break; done`
@@ -947,7 +947,10 @@ pas avec une fiche de réponses seule, dont le sujet vient d'ailleurs) :
 - **correction** : la réponse lue sur une copie B est ramenée à la question et au choix de
   la version A. Corrigé, notes, statistiques, exports ne voient que la version A ; un
   corrigé noirci sur une feuille B se lit juste. Le relevé de notes et l'écran de
-  vérification d'une copie B le signalent (numérotation de la version A).
+  vérification d'une copie B suivent sa feuille (25 novembre 2026 ; ils donnaient les n° et
+  les lettres de la version A, l'image ceux de la feuille B) : questions dans l'ordre
+  imprimé, lettre lue et lettre attendue telles que sur la feuille B, et, à l'écran, une
+  colonne « Version A » avec le n° de chaque question dans la version A, celle du corrigé.
 
 ## Le corrigé : saisi, ou scanné
 

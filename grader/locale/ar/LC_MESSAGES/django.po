@@ -6390,3 +6390,7 @@ msgstr "في النسختين، نسخة واحدة: نسخة الموضوع A،
 #: templates/grader/quiz_detail.html
 msgid "La bonne réponse est en gras : sa lettre change d'une version à l'autre quand ses choix ont changé de place, c'est la même réponse."
 msgstr "الإجابة الصحيحة مكتوبة بالخط العريض: يتغيّر حرفها من نسخة إلى أخرى عندما تتغيّر مواضع خياراتها، وهي الإجابة نفسها."
+
+#: templates/grader/sheet_review.html
+msgid "Copie en version %(version)s : questions et lettres de la feuille %(version)s, comme sur l'image de contrôle. La colonne « Version A » donne le n° de chaque question dans la version A, celle du corrigé."
+msgstr "ورقة من النسخة %(version)s: أسئلة الورقة %(version)s وحروفها، كما في صورة المراقبة. يعطي عمود «النسخة A» رقم كل سؤال في النسخة A، نسخة الإجابة النموذجية."

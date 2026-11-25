@@ -120,17 +120,21 @@
         constat des cases noircies et ne se modifie pas. Seules les réponses
         manuscrites sont à noter ici.{% endblocktranslate %}
       </p>
+      {% comment %}Copie en version B : n° et lettres de sa feuille, comme l'image de contrôle
+        (25 novembre 2026 ; ils étaient ceux de la version A) ; « Version A » : le n° de la
+        question dans la version A, celle du corrigé.{% endcomment %}
       {% if version %}<p class="helptext helptext--serre"><span class="badge info">{% blocktranslate trimmed %}Version {{ version }}{% endblocktranslate %}</span>
-        {% if version != "A" %}{% blocktranslate trimmed %}Copie en version {{ version }} : le tableau donne les questions et les lettres de la version A (celle du corrigé) ; l'image de contrôle montre les cases telles qu'imprimées sur la feuille {{ version }}.{% endblocktranslate %}{% endif %}</p>{% endif %}
+        {% if version != "A" %}{% blocktranslate trimmed %}Copie en version {{ version }} : questions et lettres de la feuille {{ version }}, comme sur l'image de contrôle. La colonne « Version A » donne le n° de chaque question dans la version A, celle du corrigé.{% endblocktranslate %}{% endif %}</p>{% endif %}
       <div class="table-wrap">
         <table>
-        <tr><th>{% translate "Q" %}</th><th>{% translate "Détecté" %}</th><th>{% translate "Attendu" %}</th><th>{% translate "Points" %}</th></tr>
+        <tr><th>{% translate "Q" %}</th>{% if version and version != "A" %}<th>{% translate "Version A" %}</th>{% endif %}<th>{% translate "Détecté" %}</th><th>{% translate "Attendu" %}</th><th>{% translate "Points" %}</th></tr>
         {% for a in answers %}
         <tr>
-          <td>{{ a.question.order }}</td>
+          <td>{{ a.num }}</td>
+          {% if version and version != "A" %}<td>{% translate "n°" %} {{ a.question.order }}</td>{% endif %}
           {% if a.question.qtype == "qcm" %}
-          <td>{{ a.detected_letter }}{% if a.is_multiple %} <span class="badge warn">{% translate "multiple" %}</span>{% endif %}</td>
-          <td>{{ a.question.correct_letter }}</td>
+          <td>{{ a.lettre_lue }}{% if a.is_multiple %} <span class="badge warn">{% translate "multiple" %}</span>{% endif %}</td>
+          <td>{{ a.lettre_attendue }}</td>
           <td>{{ a.points_awarded|floatformat:"-2"|default:"—" }} / {{ a.question.points|floatformat:"-2" }}</td>
           {% else %}
           <td colspan="2">

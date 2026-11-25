@@ -13,7 +13,7 @@ from . import layout as L
 from .fonts import font_for, has_arabic, load_fonts, runs, shape, text_width_pt, wrap
 from .labels_pdf import _ellipsize
 from .langue import en_francais
-from .models import nom_et_prenom
+from .models import choice_letter, nom_et_prenom
 
 PAGE_W, PAGE_H = 210.0, 297.0
 
@@ -121,12 +121,14 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
         _draw(c, nom, X0, 48.0, corps, bold=True)
         if s.student_number:
             _draw(c, f"N° {s.student_number}", X1, 48.0, 10, align="right", gray=0.3)
-        # QCM en deux versions (23 novembre 2026) : le détail suit la version A
+        # QCM en deux versions (23 novembre 2026) : le détail d'une copie B suit sa feuille,
+        # ses n° et ses lettres (25 novembre 2026 ; il suivait la version A)
         version = next((L.version_de_page(quiz.layout_json, f.page_index)
                         for f in r.get("sheets", []) if f.page_index is not None), "")
+        imprimees = L.questions_imprimees(quiz.layout_json, version)
         if version and version != "A":
-            _draw(c, f"Copie en version {version} : les questions sont numérotées comme "
-                     "dans la version A.", X0, 53.0, 8.5, gray=0.4)
+            _draw(c, f"Copie en version {version} : questions et lettres comme sur la "
+                     f"feuille {version}.", X0, 53.0, 8.5, gray=0.4)
 
         # Résultat : bonnes réponses (une QCM = 1 point) et note sur 20 (QCM, demande du
         # 13 novembre 2026), ou pourcentage (écrit, oral)
@@ -197,12 +199,15 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
         c.line(X0 * mm, _y(y), X1 * mm, _y(y))
         y += 5.5
 
-        for q in quiz.questions.order_by("order"):
+        questions = sorted(quiz.questions.order_by("order"),
+                           key=lambda q: imprimees.get(q.order, (q.order, None))[0])
+        for q in questions:
             a = r["answers"].get(q.order)
+            num, perm = imprimees.get(q.order, (q.order, None))
             if y > 280.0:
                 c.showPage()
                 y = 25.0
-            _draw(c, str(q.order), cols[0], y, 9.5, bold=True)
+            _draw(c, str(num), cols[0], y, 9.5, bold=True)
             if q.qtype == "qcm":
                 _draw(c, "QCM", cols[1], y, 9)
                 if a is None:
@@ -211,11 +216,14 @@ def generate_bulletins_pdf(quiz, rows, batch=None, admission=None):
                     color_ok = None
                 else:
                     detected = (MULTI_TEXT if a.is_multiple
-                                else a.detected_letter)
+                                else "—" if a.detected_choice is None
+                                else choice_letter(L.case_imprimee(a.detected_choice, perm),
+                                                   quiz.language))
                     pts = f"{(a.points_awarded or 0):g} / {q.points:g}"
                     color_ok = a.is_correct
                 _draw(c, detected, cols[2], y, 10, bold=True)
-                _draw(c, q.correct_letter, cols[3], y, 10)
+                _draw(c, choice_letter(L.case_imprimee(q.correct_choice, perm), quiz.language),
+                      cols[3], y, 10)
                 _draw(c, pts, cols[4], y, 9.5)
                 if a is not None:
                     if color_ok:

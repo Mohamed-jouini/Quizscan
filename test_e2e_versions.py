@@ -69,6 +69,35 @@ def textes(pdf):
         return [p.get_text() for p in doc]
 
 
+def lignes_du_releve(pdf):
+    """Les lignes QCM du tableau d'un relevé de notes : (n°, réponse, attendue), d'après la
+    position des mots (une ligne : des mots à moins de 4 pt de hauteur les uns des autres,
+    les colonnes n'ayant pas toutes le même corps)."""
+    with pymupdf.open(stream=pdf, filetype="pdf") as doc:
+        mots = doc[0].get_text("words")
+    lignes, y_avant = [], None
+    for x0, y0, _, y1, mot, *_ in sorted(mots, key=lambda m: m[1] + m[3]):
+        y = (y0 + y1) / 2
+        if y_avant is None or y - y_avant > 4:
+            lignes.append([])
+        lignes[-1].append((x0, mot))
+        y_avant = y
+    lignes = [[m for _, m in sorted(l)] for l in lignes]
+    return [(l[0], l[2], l[3]) for l in lignes if len(l) > 3 and l[1] == "QCM"]
+
+
+def comme_sur_la_feuille(page, reponses):
+    """(n° imprimé, lettre lue, lettre attendue, n° dans la version A) des QCM d'une page,
+    dans l'ordre imprimé : les lettres des cases de cette page (perm sur une page B)."""
+    lignes = []
+    for item in page["qcm"]:
+        cases = item.get("perm") or list(range(len(item["bubbles"])))
+        o = item["order"]
+        lignes.append((item.get("num", o), "ABCD"[cases.index(reponses[o])],
+                       "ABCD"[cases.index(CORRIGE[o])], o))
+    return sorted(lignes)
+
+
 def noircir(img, page, reponses):
     """Noircit, pour chaque question de la page, la case qui porte le choix voulu (choix de
     la version A) : sur une page B, la case k porte le choix perm[k]."""
@@ -291,14 +320,35 @@ def main():
     assert b.overlay_image, "image de contrôle de la copie B"
     print("  scan : copies A et B aux mêmes réponses notées 5 / 6, réponses de la copie B "
           "ramenées à la version A ; la copie complète 6 / 6 OK")
-    # relevé de notes et écran de vérification : la copie B le dit
+    # relevé de notes et écran de vérification : la copie B le dit, et les deux suivent sa
+    # feuille — n° imprimés dans leur ordre, lettres des cases de la feuille B (25 novembre
+    # 2026, « corige » sur captures : ils donnaient les n° et les lettres de la version A,
+    # l'image ceux de la feuille B) ; la copie A, ceux de la version A
+    attendu_b = comme_sur_la_feuille(pages_b[0], COPIE)
+    attendu_a = comme_sur_la_feuille(pages_a[0], COPIE)
+    assert [l[0] for l in attendu_b] != [l[3] for l in attendu_b], "tirage sans effet"
     releve = c.get(reverse("quiz_bulletins_pdf", args=[quiz.pk]) + f"?student={ordre[1].pk}")
-    assert "Copie en version B" in "".join(textes(releve.content))
+    assert "Copie en version B : questions et lettres comme sur la feuille B" in \
+        " ".join(textes(releve.content)[0].split())
+    assert lignes_du_releve(releve.content) == [(str(n), lue, bonne) for n, lue, bonne, _
+                                                in attendu_b], lignes_du_releve(releve.content)
     releve_a = c.get(reverse("quiz_bulletins_pdf", args=[quiz.pk]) + f"?student={ordre[0].pk}")
     assert "Copie en version" not in "".join(textes(releve_a.content))
-    page = c.get(reverse("sheet_review", args=[b.pk])).content.decode()
-    assert "Version B" in page and "Copie en version B" in page
-    print("  relevé de notes et écran de vérification : « copie en version B » OK")
+    assert lignes_du_releve(releve_a.content) == [(str(n), lue, bonne) for n, lue, bonne, _
+                                                  in attendu_a]
+    r = c.get(reverse("sheet_review", args=[b.pk]))
+    page = r.content.decode()
+    assert "Version B" in page and "Copie en version B" in page and "<th>Version A</th>" in page
+    lignes = [(a.num, a.lettre_lue, a.lettre_attendue, a.question.order)
+              for a in r.context["answers"] if a.question.qtype == "qcm"]
+    assert lignes == attendu_b, (lignes, attendu_b)
+    assert [a.num for a in r.context["answers"]] == sorted(a.num for a in r.context["answers"])
+    r = c.get(reverse("sheet_review", args=[copies[ordre[0].last_name].pk]))
+    assert "<th>Version A</th>" not in r.content.decode()
+    assert [(a.num, a.lettre_lue, a.lettre_attendue, a.question.order) for a in
+            r.context["answers"] if a.question.qtype == "qcm"] == attendu_a
+    print("  relevé de notes et écran de vérification : la copie B avec les n° et les lettres "
+          "de sa feuille, la copie A avec ceux de la version A OK")
 
     # une copie du correcteur B déjà imprimée, noircie en suivant le sujet B : les bonnes
     # réponses de la A, par l'unique envoi du corrigé

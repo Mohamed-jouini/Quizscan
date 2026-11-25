@@ -1468,6 +1468,27 @@ def _identification(sheet):
     return {"methode": "main", "texte": gettext("Affecté à la main")}
 
 
+def _comme_sur_la_feuille(quiz, answers, version):
+    """Les réponses d'une copie avec le n° et les lettres de sa feuille (num, lettre_lue,
+    lettre_attendue), dans l'ordre imprimé : ceux de la version B pour une copie B (25
+    novembre 2026, « corige » sur captures : son tableau donnait ceux de la version A, son
+    image ceux de la feuille B). Elles restent enregistrées dans la version A, celle du
+    corrigé, des notes et des statistiques."""
+    imprimees = layout_mod.questions_imprimees(quiz.layout_json, version)
+    lignes = list(answers)
+    for a in lignes:
+        q = a.question
+        a.num, perm = imprimees.get(q.order, (q.order, None))
+        if q.qtype == "qcm":
+            a.lettre_lue = ("—" if a.detected_choice is None else "✱" if a.is_multiple
+                            else choice_letter(layout_mod.case_imprimee(a.detected_choice, perm),
+                                               quiz.language))
+            a.lettre_attendue = choice_letter(layout_mod.case_imprimee(q.correct_choice, perm),
+                                              quiz.language)
+    lignes.sort(key=lambda a: a.num)
+    return lignes
+
+
 @login_required
 def sheet_review(request, pk):
     sheet = get_object_or_404(_my_sheets(request), pk=pk)
@@ -1555,14 +1576,16 @@ def sheet_review(request, pk):
         s.code_copie = codes.get(s.pk, "")
     suite = services.suite_de_copie(sheet, liste)
     propose, ressemblance = services.proposition(sheet, liste)
+    # QCM en deux versions : la version de cette copie (23 novembre 2026), et ses réponses
+    # avec les n° et les lettres de sa feuille (25 novembre 2026)
+    version = layout_mod.version_de_page(quiz.layout_json, sheet.page_index)
     return render(request, "grader/sheet_review.html", {
         "sheet": sheet, "quiz": quiz, "students": liste,
         "code_copie": codes.get(sheet.student_id, ""), "avec_codes": bool(codes),
         "propose": suite or propose, "suite": suite, "ressemblance": round(ressemblance),
         "identification": _identification(sheet),
-        "answers": answers,
-        # QCM en deux versions : la version de cette copie (23 novembre 2026)
-        "version": layout_mod.version_de_page(quiz.layout_json, sheet.page_index),
+        "answers": _comme_sur_la_feuille(quiz, answers, version),
+        "version": version,
         "position": position + 1, "total": len(sheet_ids),
         "prev_id": prev_id, "next_id": next_id,
         "a_enregistrer": a_enregistrer,
