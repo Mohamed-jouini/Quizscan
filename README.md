@@ -935,7 +935,11 @@ pas avec une fiche de réponses seule, dont le sujet vient d'ailleurs) :
   corrigé) et, en regard, celui de la version B : n° imprimé, question et choix dans son
   ordre, n° de la question dans la version A, et sa bonne réponse lettrée pour la version
   B (lecture seule : elle suit le corrigé de la version A). Avant la génération des PDF,
-  c'est l'aperçu du tirage qu'elle fixera ;
+  c'est l'aperçu du tirage qu'elle fixera. La bonne réponse est en gras dans les choix des
+  deux tableaux (25 novembre 2026) : sa lettre diffère souvent d'une version à l'autre, les
+  choix ayant changé de place (l'utilisateur l'avait prise pour une erreur), mais c'est le
+  même mot en gras. Chaque choix est isolé (`<bdi>`) : dans un QCM arabe, des choix en
+  lettres latines (Na, So…) se lisent aussi de droite à gauche, dans l'ordre des lettres ;
 - **corrigé** : un seul cadre, comme pour une version (25 novembre 2026 ; du 23 au
   25 novembre il était coupé en deux, A à gauche, B à droite) : une seule fiche à déposer,
   A ou B (sa version se lit sur la page), les questions sans bonne réponse aux n° de la

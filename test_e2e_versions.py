@@ -217,8 +217,17 @@ def main():
         assert l["question"].order == t["order"]
         assert l["choix"] == [par_ordre[t["order"]][1][k] for k in t["perm"]]
         assert l["bonne"] == "ABCD"[t["perm"].index(CORRIGE[t["order"]])], (l, t)
+        assert l["choix"][l["place"]] == par_ordre[t["order"]][1][CORRIGE[t["order"]]]
+    # la bonne réponse en gras dans les deux tableaux (25 novembre 2026 : sa lettre change
+    # d'une version à l'autre, ce que l'utilisateur a pris pour une erreur) : le même mot
+    tableau_a, _, tableau_b = page.partition('id="version-b"')
+    for n, _, choix, bonne in QUESTIONS:
+        if choix:
+            gras = f"<b>{choix[bonne]}</b>"
+            assert tableau_a.count(gras) == 1 and tableau_b.count(gras) == 1, n
+    assert "La bonne réponse est en gras" in tableau_b
     print("  page de l'épreuve : version A à gauche, version B en regard (son ordre, ses "
-          "choix, sa bonne réponse) OK")
+          "choix, sa bonne réponse, en gras comme dans la version A) OK")
     sujet_b = "".join(textes(c.get(reverse("quiz_version_pdf", args=[quiz.pk, "B", "sujet"])).content))
     assert "VERSION B" in sujet_b and "VERSION A" not in sujet_b
     position = 0

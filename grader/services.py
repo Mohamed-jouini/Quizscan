@@ -2378,7 +2378,8 @@ def questions_version_b(quiz):
     """La version B d'un QCM en deux versions, pour la page de l'épreuve (demande du
     23 novembre 2026) : une ligne par question, dans l'ordre de la version B — {num : n°
     imprimé, question : la question (son n° dans la version A), choix : ses choix dans
-    l'ordre de la version B, bonne : la lettre de sa bonne réponse dans cet ordre}. D'après
+    l'ordre de la version B, bonne : la lettre de sa bonne réponse dans cet ordre, place : sa
+    place parmi ces choix}. D'après
     la disposition enregistrée (ce qui est imprimé) ; avant la génération, l'aperçu du
     tirage qu'elle fixera (apercu : vrai). Liste vide pour un QCM d'une seule version."""
     from .models import choice_letter
@@ -2403,12 +2404,16 @@ def questions_version_b(quiz):
         choix = list(source.choices or [])
         if len(choix) == len(perm):
             choix = [choix[k] for k in perm]
-        bonne = None
+        bonne = place = None
         if source.qtype == "qcm" and source.correct_choice is not None:
-            k = perm.index(source.correct_choice) if source.correct_choice in perm \
+            place = perm.index(source.correct_choice) if source.correct_choice in perm \
                 else source.correct_choice
-            bonne = choice_letter(k, quiz.language)
-        lignes.append({"num": q.order, "question": source, "choix": choix, "bonne": bonne})
+            bonne = choice_letter(place, quiz.language)
+        # place : la bonne réponse parmi « choix », mise en gras (25 novembre 2026 : sa lettre
+        # diffère de celle de la version A, les choix ayant changé de place, ce que
+        # l'utilisateur a pris pour une erreur ; le même mot en gras dans les deux tableaux)
+        lignes.append({"num": q.order, "question": source, "choix": choix, "bonne": bonne,
+                       "place": place})
     return lignes, apercu
 
 

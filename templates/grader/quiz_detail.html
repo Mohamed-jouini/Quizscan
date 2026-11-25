@@ -226,8 +226,9 @@
         <td>{% if q.qtype == "qcm" %}{% blocktranslate trimmed with num_bubbles=q.num_bubbles %}QCM · {{ num_bubbles }} choix{% endblocktranslate %}{% else %}{% translate "Manuscrite" %}{% endif %}
             {% if q.text %}<span class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>{{ q.text|truncatechars:50 }}</span>{% endif %}
             {% if q.qtype == "qcm" and q.choices %}
+              {#la bonne réponse en gras (25 novembre 2026), comme dans le tableau de la version B ; chaque choix isolé (bdi) : en arabe, des choix en lettres latines (Na, So…) suivent aussi l'ordre de droite à gauche des lettres أ ب ت ث#}
               <div class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>
-                {% for ch in q.choices %}{{ ch }}{% if not forloop.last %} · {% endif %}{% endfor %}
+                {% for ch in q.choices %}<bdi>{% if forloop.counter0 == q.correct_choice %}<b>{{ ch }}</b>{% else %}{{ ch }}{% endif %}</bdi>{% if not forloop.last %} · {% endif %}{% endfor %}
               </div>
             {% endif %}</td>
         {% if perms.grader.creer_epreuve %}
@@ -352,7 +353,7 @@
           <td>{% if l.question.qtype == "qcm" %}{% blocktranslate trimmed with num_bubbles=l.question.num_bubbles %}QCM · {{ num_bubbles }} choix{% endblocktranslate %}{% else %}{% translate "Manuscrite" %}{% endif %}
               {% if l.question.text %}<span class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>{{ l.question.text|truncatechars:50 }}</span>{% endif %}
               {% if l.choix %}<div class="helptext"{% if quiz.language == "ar" %} dir="rtl"{% endif %}>
-                {% for ch in l.choix %}{{ ch }}{% if not forloop.last %} · {% endif %}{% endfor %}
+                {% for ch in l.choix %}<bdi>{% if forloop.counter0 == l.place %}<b>{{ ch }}</b>{% else %}{{ ch }}{% endif %}</bdi>{% if not forloop.last %} · {% endif %}{% endfor %}
               </div>{% endif %}</td>
           <td>{% translate "n°" %} {{ l.question.order }}</td>
           <td>{% if l.question.qtype == "qcm" %}<b>{{ l.bonne|default:"—" }}</b>{% else %}—{% endif %}</td>
@@ -361,7 +362,7 @@
         {% endfor %}
         </table>
       </div>
-      <span class="helptext">{% if version_b_apercu %}<b>{% translate "Aperçu" %}</b> {% translate ": la version B est fixée à la génération des PDF." %} {% endif %}{% translate "Les questions de la version B et leurs choix, dans l'ordre imprimé. Sa bonne réponse suit le corrigé de la version A : modifiez-le dans le tableau de la version A, les deux versions se corrigent ensemble." %}</span>
+      <span class="helptext">{% if version_b_apercu %}<b>{% translate "Aperçu" %}</b> {% translate ": la version B est fixée à la génération des PDF." %} {% endif %}{% translate "Les questions de la version B et leurs choix, dans l'ordre imprimé. Sa bonne réponse suit le corrigé de la version A : modifiez-le dans le tableau de la version A, les deux versions se corrigent ensemble." %} {% translate "La bonne réponse est en gras : sa lettre change d'une version à l'autre quand ses choix ont changé de place, c'est la même réponse." %}</span>
     </div>
     {% endif %}
     {% if perms.grader.creer_epreuve %}

@@ -6386,3 +6386,7 @@ msgstr "انتهت صلاحية الصفحة: انقر من جديد على زر
 #: templates/grader/quiz_detail.html
 msgid "En deux versions, une seule : celle du sujet A, qui remplit le corrigé des deux versions (une copie de la version B déjà imprimée se lit aussi)."
 msgstr "في النسختين، نسخة واحدة: نسخة الموضوع A، وهي تملأ الإجابة النموذجية للنسختين (نسخة المصحح للنسخة B المطبوعة من قبل تُقرأ أيضًا)."
+
+#: templates/grader/quiz_detail.html
+msgid "La bonne réponse est en gras : sa lettre change d'une version à l'autre quand ses choix ont changé de place, c'est la même réponse."
+msgstr "الإجابة الصحيحة مكتوبة بالخط العريض: يتغيّر حرفها من نسخة إلى أخرى عندما تتغيّر مواضع خياراتها، وهي الإجابة نفسها."
