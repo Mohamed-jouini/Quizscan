@@ -2099,3 +2099,8 @@ fieldset.matiere legend{font-weight:600;font-size:13px;padding:0 6px}
 /* QCM en deux versions : le sujet et la feuille de chaque version (23 novembre 2026) */
 .versions-documents{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .cellule--date{white-space:nowrap}
+/* Copies manquantes : l'export et l'import de la liste sans les absents, sur une ligne
+   (concours, 25 novembre 2026) */
+.manquantes__actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 4px}
+.manquantes__actions form{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0}
+.shell .manquantes__actions input[type=file]{width:auto;max-width:300px;padding:5px 8px;font-size:13px}

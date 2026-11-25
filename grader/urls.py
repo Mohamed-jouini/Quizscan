@@ -23,6 +23,7 @@ urlpatterns = [
     path("quiz/<int:pk>/resultats.xlsx", views.quiz_results_xlsx, name="quiz_results_xlsx"),
     path("quiz/<int:pk>/copies-manquantes.xlsx", views.quiz_copies_manquantes_xlsx,
          name="quiz_copies_manquantes_xlsx"),
+    path("quiz/<int:pk>/absents/", views.quiz_absents, name="quiz_absents"),
     path("quiz/<int:pk>/copie-correcteur.pdf", views.quiz_copie_correcteur_pdf,
          name="quiz_copie_correcteur_pdf"),
     path("quiz/<int:pk>/version-<str:version>/<str:document>.pdf", views.quiz_version_pdf,

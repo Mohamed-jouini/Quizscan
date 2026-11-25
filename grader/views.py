@@ -1855,6 +1855,85 @@ def quiz_copie_correcteur_pdf(request, pk):
 
 
 @login_required
+def quiz_absents(request, pk):
+    """Retire d'une épreuve de concours ses absents (demande de l'utilisateur, 25 novembre
+    2026) : la liste des copies manquantes exportée, vidée des lignes de ceux qui n'ont pas
+    composé, puis réimportée. En deux temps : l'import montre qui sera supprimé (cette page,
+    d'après la session), la confirmation supprime. Jamais un candidat dont une page est
+    scannée (services.absents_du_fichier, services.supprimer_absents)."""
+    quiz = get_object_or_404(_my_quizzes(request), pk=pk)
+    if not quiz.auto_enroll or quiz.type_epreuve == "oral":
+        raise Http404("Réservé aux épreuves écrites d'un concours.")
+    retour = reverse("quiz_results", args=[pk]) + "#copies-manquantes"
+    cle = f"absents_{quiz.pk}"
+    if request.method == "POST":
+        droits.exiger(request.user, droits.CREER, gettext("modifier les listes d'étudiants"))
+        if "annuler" in request.POST:
+            request.session.pop(cle, None)
+            return redirect(retour)
+        if "confirmer" in request.POST:
+            attente = request.session.pop(cle, None)
+            if not attente:
+                messages.error(request, gettext("Importez d'abord la liste sans les absents."))
+                return redirect(retour)
+            n = services.supprimer_absents(quiz, attente["absents"])
+            messages.success(request, gettext(
+                "%(n)s candidat(s) absent(s) supprimé(s) de « %(liste)s ».") % {
+                    "n": n, "liste": quiz.class_group.name})
+            if n < len(attente["absents"]):
+                messages.warning(request, gettext(
+                    "%(n)s candidat(s) gardé(s) : une page de leur copie a été scannée depuis "
+                    "l'import.") % {"n": len(attente["absents"]) - n})
+            return redirect(retour)
+        fichier = request.FILES.get("fichier")
+        if fichier is None:
+            messages.error(request, gettext("Choisissez le fichier de la liste."))
+            return redirect(retour)
+        try:
+            fiches = importers.lire_liste_exportee(fichier.name, fichier.read())
+        except importers.ImportError_ as exc:
+            messages.error(request, str(exc))
+            return redirect(retour)
+        except Exception as exc:      # noqa: BLE001 — fichier corrompu
+            messages.error(request, gettext('Fichier illisible : %(exc)s') % {"exc": exc})
+            return redirect(retour)
+        bilan = services.absents_du_fichier(quiz, fiches)
+        if not bilan["absents"]:
+            request.session.pop(cle, None)
+            messages.warning(request, gettext(
+                "Aucun absent à retirer : chaque candidat de la liste des copies manquantes est "
+                "encore dans le fichier, ou une page de sa copie est scannée."))
+            return redirect(retour)
+        request.session[cle] = {
+            "absents": [m["etudiant"].pk for m in bilan["absents"]],
+            "gardes": [m["etudiant"].pk for m in bilan["gardes"]],
+            "restent": len(bilan["restent"]),
+            "inconnues": bilan["inconnues"][:30], "n_inconnues": len(bilan["inconnues"])}
+        return redirect("quiz_absents", pk=pk)
+    attente = request.session.get(cle)
+    if not attente:
+        return redirect(retour)
+    par_pk = quiz.class_group.students.in_bulk(attente["absents"] + attente["gardes"])
+    codes = services.codes_imprimes(quiz)
+
+    def lignes(pks):
+        etudiants = [par_pk[p] for p in pks if p in par_pk]
+        for s in etudiants:
+            s.code_copie = codes.get(s.pk, "")
+        return etudiants
+    absents = lignes(attente["absents"])
+    return render(request, "grader/absents.html", {
+        "quiz": quiz, "absents": absents[:MAX_ABSENTS_AFFICHES], "n_absents": len(absents),
+        "gardes": lignes(attente["gardes"])[:MAX_ABSENTS_AFFICHES],
+        "n_gardes": len(attente["gardes"]), "restent": attente["restent"],
+        "inconnues": attente["inconnues"], "n_inconnues": attente["n_inconnues"],
+        "retour": retour})
+
+
+MAX_ABSENTS_AFFICHES = 500
+
+
+@login_required
 def quiz_copies_manquantes_xlsx(request, pk):
     """Les copies manquantes de l'épreuve, toutes, en Excel : candidat, code d'anonymat,
     salle, matières ou pages sans copie (13 novembre 2026)."""

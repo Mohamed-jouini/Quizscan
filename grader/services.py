@@ -2374,6 +2374,79 @@ def copies_manquantes(quiz, limite=MAX_MANQUANTES_AFFICHEES):
             "en_lecture": quiz.batches.filter(status__in=("pending", "processing")).exists()}
 
 
+# Absents d'une épreuve de concours (demande de l'utilisateur, 25 novembre 2026) : la liste
+# des copies manquantes exportée en Excel, vidée des lignes de ceux qui n'ont pas composé,
+# puis réimportée ; les candidats qui n'y sont plus sont supprimés de l'épreuve, après
+# confirmation. Jamais un candidat dont une page est scannée, ici ou ailleurs : même règle
+# que la suppression d'un candidat sur sa liste.
+
+def _cle_numero(texte):
+    """Un n° d'inscription comparable : chiffres latins, sans espace ni zéros de tête (un
+    tableur retire ceux d'un n° qu'il prend pour un nombre)."""
+    from .importers import chiffres_latins
+    numero = "".join(chiffres_latins(texte or "").split())
+    return numero.lstrip("0") or numero
+
+
+def _cle_nom(nom, prenom):
+    from .importers import norm
+    return norm(nom), norm(prenom)
+
+
+def _avec_copie(quiz):
+    """Les candidats de la liste de l'épreuve qui ont une page scannée, dans n'importe
+    quelle épreuve."""
+    return set(SheetScan.objects.filter(student__class_group=quiz.class_group)
+               .values_list("student_id", flat=True))
+
+
+def absents_du_fichier(quiz, fiches):
+    """Les absents d'après la liste des copies manquantes réimportée sans eux (fiches :
+    importers.lire_liste_exportee) : les candidats de la liste qui ne sont plus dans le
+    fichier. Une ligne garde un candidat par son n° ou par son nom (un homonyme gardé à tort
+    reste dans la liste, rien n'est perdu).
+
+    Retourne {absents : lignes de copies_manquantes à supprimer (copie entière manquante,
+    aucune page scannée nulle part), gardes : lignes sorties du fichier dont une page est
+    scannée (le candidat a composé), restent : lignes encore dans le fichier, inconnues :
+    lignes du fichier sans copie manquante (n° ou nom : copie scannée depuis l'export, ou
+    candidat inconnu)}."""
+    numeros = {_cle_numero(f["numero"]) for f in fiches} - {""}
+    noms = {_cle_nom(f["nom"], f["prenom"]) for f in fiches if f["nom"] or f["prenom"]}
+    avec_copie = _avec_copie(quiz)
+    absents, gardes, restent, vus = [], [], [], set()
+    for m in copies_manquantes(quiz, limite=None)["lignes"]:
+        s = m["etudiant"]
+        numero, nom = _cle_numero(s.student_number), _cle_nom(s.last_name, s.first_name)
+        if (numero and numero in numeros) or nom in noms:
+            restent.append(m)
+            vus.update(cle for cle in (("n", numero), ("p", nom)) if any(cle[1]))
+        elif m["toutes"] and s.pk not in avec_copie:
+            absents.append(m)
+        else:
+            gardes.append(m)
+    inconnues = [f["numero"] or f"{f['prenom']} {f['nom']}".strip() for f in fiches
+                 if ("n", _cle_numero(f["numero"])) not in vus
+                 and ("p", _cle_nom(f["nom"], f["prenom"])) not in vus]
+    return {"absents": absents, "gardes": gardes, "restent": restent, "inconnues": inconnues}
+
+
+def supprimer_absents(quiz, pks):
+    """Supprime de la liste de l'épreuve les candidats « pks » encore absents à la
+    confirmation : copie entière toujours manquante, aucune page scannée nulle part (une
+    copie arrivée entre l'import et la confirmation garde son candidat). Retourne le nombre
+    de candidats supprimés."""
+    voulus, avec_copie = set(pks), _avec_copie(quiz)
+    choisis = [m["etudiant"].pk for m in copies_manquantes(quiz, limite=None)["lignes"]
+               if m["etudiant"].pk in voulus and m["toutes"]
+               and m["etudiant"].pk not in avec_copie]
+    a_supprimer = quiz.class_group.students.filter(pk__in=choisis, sheets__isnull=True)
+    n = a_supprimer.count()
+    if n:
+        a_supprimer.delete()
+    return n
+
+
 def questions_version_b(quiz):
     """La version B d'un QCM en deux versions, pour la page de l'épreuve (demande du
     23 novembre 2026) : une ligne par question, dans l'ordre de la version B — {num : n°

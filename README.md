@@ -665,6 +665,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_design.py` | une seule feuille de style pour toutes les pages, aucun style redéclaré en ligne, aucun jeton défini deux fois |
 | `test_e2e_corrige.py` | bonne réponse facultative, corrigé scanné et conservé, correction bloquée tant qu'il manque une réponse, copie du correcteur (sans candidat, « CORRIGÉ ») lue par le corrigé scanné |
 | `test_e2e_versions.py` | QCM en deux versions : réglage refusé sans sujet imprimé (page du QCM et création d'un concours), pages A puis B (A au millimètre, B fixe), sujets dans l'ordre du tirage, copies alternées, copie B lue et ramenée à la version A, mais montrée comme sa feuille (relevé et écran de vérification : n° et lettres de la feuille B), bonne réponse en gras dans les deux tableaux, une seule copie du correcteur (sans « VERSION A ») et un seul corrigé (fiche A ou B), copies manquantes, questionnaire complet |
+| `test_e2e_absents.py` | absents d'un concours : la liste des copies manquantes réimportée sans eux, page de confirmation, annuler, candidat gardé par son n° (zéro de tête retiré) ou son nom, jamais un candidat dont une page est scannée (ici, ailleurs, ou avant la confirmation), fichier non reconnu refusé, liste vidée, pas pour une classe ni sans le droit de créer |
 | `test_e2e_robustesse.py` | pannes d'OCR (Tesseract absent, paquet de langue manquant), fiches de plus de 12 pages, QR collés de travers dans leur cadre, QR abîmés (tache sur un coin, stylo, coin arraché, froissé, impression pâle, 100 dpi en JPEG 10, copies d'avant en correction M), contenu de la planche d'étiquettes, identifiants d'URL bricolés |
 
 Pour tout lancer : `for t in test_e2e*.py; do python $t || break; done`
@@ -776,7 +777,16 @@ démarrage elle est vide — créez l'administrateur avec `createsuperuser`.
   matière par matière ; pour un QCM de plusieurs pages, page par page), dans l'ordre des
   copies, avec le code d'anonymat imprimé dessus, le n° d'inscription et la salle : on
   retrouve chaque copie, on la repasse au scanner, un nouvel envoi l'ajoute. Les 300
-  premières à l'écran, toutes dans l'export Excel. Un absent reste dans la liste.
+  premières à l'écran, toutes dans l'export Excel. Un absent reste dans la liste, jusqu'à
+  ce qu'on le retire (concours, 25 novembre 2026) : on exporte la liste, on y supprime la
+  ligne de chaque candidat qui n'a pas composé, puis on l'importe (« Importer la liste sans
+  les absents », à côté de l'export). Une page montre les candidats qui ne sont plus dans le
+  fichier ; la confirmation les supprime de la liste des candidats de l'épreuve. Ceux qui y
+  restent gardent leur copie à retrouver. Un candidat reste gardé par son n° (même si le
+  tableur en a retiré les zéros de tête) ou, sans n°, par son nom. Jamais un candidat dont
+  une page est scannée, ici, dans une autre épreuve, ou entre l'import et la confirmation.
+  Le fichier doit garder la ligne d'intitulés de l'export (colonne « N° d'inscription »).
+  Il faut le droit de créer des épreuves ; une classe n'a pas cet import.
 - Moyenne finale (المعدل النهائي) : la page « Résultats du concours » donne, pour chaque
   candidat noté à toutes les étapes, la moyenne de toutes ses notes sur 20, chacune avec
   son coefficient (23 novembre 2026) : la note du QCM (ou d'une épreuve d'une seule note),

@@ -1,0 +1,45 @@
+{% extends "grader/base.html" %}{% load i18n %}
+{% comment %}
+Absents d'une épreuve de concours (demande de l'utilisateur, 25 novembre 2026) : après l'import
+de la liste des copies manquantes vidée de leurs lignes, ceux qui seront supprimés, à confirmer.
+Paramètres : views.quiz_absents.
+{% endcomment %}
+{% block content %}
+<header class="page-head">
+  <div class="page-head__text">
+    <h1>{% translate "Retirer les absents" %}</h1>
+    <p class="page-head__meta"><b>{{ quiz.title }}</b> <span class="badge grey">{{ quiz.class_group.name }}</span></p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn small secondary" href="{{ retour }}">{% translate "← Retour aux résultats" %}</a>
+  </div>
+</header>
+
+<div class="card">
+  <h2>{% blocktranslate trimmed with n=n_absents %}{{ n }} candidat(s) absent(s) à supprimer{% endblocktranslate %}</h2>
+  <p class="helptext helptext--serre">{% blocktranslate trimmed with liste=quiz.class_group.name %}Dans la liste des copies manquantes, mais plus dans le fichier importé, et aucune page de leur copie n'est scannée : ils seront supprimés de la liste des candidats « {{ liste }} ».{% endblocktranslate %}</p>
+  <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="{% translate "Absents à supprimer" %}">
+    <table>
+      <tr><th>{% translate "Code" %}</th><th>{% translate "N° d'inscription" %}</th><th>{% translate "Prénom et nom" %}</th><th>{% translate "Salle" %}</th></tr>
+      {% for s in absents %}
+      <tr>
+        <td><b>{{ s.code_copie|default:"—" }}</b></td>
+        <td>{{ s.student_number|default:"—" }}</td>
+        <td>{{ s.full_name }}</td>
+        <td dir="auto">{{ s.salle|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% if n_absents > absents|length %}<p class="helptext">{% blocktranslate trimmed with lignes=absents|length %}Les {{ lignes }} premiers ; tous seront supprimés.{% endblocktranslate %}</p>{% endif %}
+  {% if restent %}<p class="helptext helptext--serre">{% blocktranslate trimmed %}{{ restent }} candidat(s) encore dans le fichier : ils restent dans la liste des copies manquantes, leur copie est à retrouver.{% endblocktranslate %}</p>{% endif %}
+  {% if n_gardes %}<p class="helptext helptext--serre">{% blocktranslate trimmed with n=n_gardes %}{{ n }} candidat(s) sorti(s) du fichier mais gardé(s) : une page de leur copie est scannée, ils ont composé.{% endblocktranslate %}
+    {% for s in gardes|slice:":30" %}{{ s.full_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if n_gardes > 30 %} …{% endif %}</p>{% endif %}
+  {% if n_inconnues %}<p class="helptext helptext--serre">{% blocktranslate trimmed with n=n_inconnues %}{{ n }} ligne(s) du fichier sans copie manquante (copie scannée depuis l'export, ou candidat inconnu), ignorée(s) :{% endblocktranslate %}
+    {{ inconnues|join:", " }}{% if n_inconnues > inconnues|length %} …{% endif %}</p>{% endif %}
+  <form method="post">{% csrf_token %}
+    <button class="btn danger" type="submit" name="confirmer" value="1">{% blocktranslate trimmed with n=n_absents %}Supprimer les absents ({{ n }}){% endblocktranslate %}</button>
+    <button class="btn secondary" type="submit" name="annuler" value="1">{% translate "Annuler" %}</button>
+  </form>
+</div>
+{% endblock %}

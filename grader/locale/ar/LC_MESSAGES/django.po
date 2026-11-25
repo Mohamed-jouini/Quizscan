@@ -6394,3 +6394,79 @@ msgstr "الإجابة الصحيحة مكتوبة بالخط العريض: يت
 #: templates/grader/sheet_review.html
 msgid "Copie en version %(version)s : questions et lettres de la feuille %(version)s, comme sur l'image de contrôle. La colonne « Version A » donne le n° de chaque question dans la version A, celle du corrigé."
 msgstr "ورقة من النسخة %(version)s: أسئلة الورقة %(version)s وحروفها، كما في صورة المراقبة. يعطي عمود «النسخة A» رقم كل سؤال في النسخة A، نسخة الإجابة النموذجية."
+
+#: templates/grader/_copies_manquantes.html
+msgid "Liste sans les absents (Excel)"
+msgstr "القائمة دون الغائبين (Excel)"
+
+#: templates/grader/_copies_manquantes.html
+msgid "Importer la liste sans les absents"
+msgstr "استيراد القائمة دون الغائبين"
+
+#: templates/grader/_copies_manquantes.html
+msgid "Absents : exportez la liste, supprimez-y la ligne de chaque candidat qui n'a pas composé, puis importez-la. Les candidats qui ne sont plus dans le fichier sont supprimés de cette épreuve, après confirmation ; ceux qui y restent gardent leur copie à retrouver. Un candidat dont une page est scannée n'est jamais supprimé."
+msgstr "الغائبون: صدّر القائمة، واحذف منها سطر كل مترشح لم يجتز الاختبار، ثم استوردها. يُحذف من هذا الاختبار المترشحون الذين لم يعودوا في الملف، بعد التأكيد؛ ويبقى الآخرون، وأوراقهم يجب العثور عليها. لا يُحذف أبدًا مترشح مُسحت صفحة من ورقته."
+
+#: templates/grader/absents.html
+msgid "Retirer les absents"
+msgstr "حذف الغائبين"
+
+#: templates/grader/absents.html
+msgid "%(n)s candidat(s) absent(s) à supprimer"
+msgstr "%(n)s مترشحًا غائبًا للحذف"
+
+#: templates/grader/absents.html
+msgid "Dans la liste des copies manquantes, mais plus dans le fichier importé, et aucune page de leur copie n'est scannée : ils seront supprimés de la liste des candidats « %(liste)s »."
+msgstr "في قائمة الأوراق الناقصة، لكنهم لم يعودوا في الملف المستورد، ولم تُمسح أي صفحة من أوراقهم: سيُحذفون من قائمة المترشحين «%(liste)s»."
+
+#: templates/grader/absents.html
+msgid "Absents à supprimer"
+msgstr "الغائبون المراد حذفهم"
+
+#: templates/grader/absents.html
+msgid "Les %(lignes)s premiers ; tous seront supprimés."
+msgstr "أول %(lignes)s؛ سيُحذفون جميعًا."
+
+#: templates/grader/absents.html
+msgid "%(restent)s candidat(s) encore dans le fichier : ils restent dans la liste des copies manquantes, leur copie est à retrouver."
+msgstr "%(restent)s مترشحًا ما زالوا في الملف: يبقون في قائمة الأوراق الناقصة، وأوراقهم يجب العثور عليها."
+
+#: templates/grader/absents.html
+msgid "%(n)s candidat(s) sorti(s) du fichier mais gardé(s) : une page de leur copie est scannée, ils ont composé."
+msgstr "%(n)s مترشحًا خرجوا من الملف لكن احتُفظ بهم: مُسحت صفحة من أوراقهم، فقد اجتازوا الاختبار."
+
+#: templates/grader/absents.html
+msgid "%(n)s ligne(s) du fichier sans copie manquante (copie scannée depuis l'export, ou candidat inconnu), ignorée(s) :"
+msgstr "%(n)s سطرًا من الملف دون ورقة ناقصة (ورقة مُسحت بعد التصدير، أو مترشح غير معروف)، أُهملت:"
+
+#: grader/importers.py
+msgid "Liste non reconnue : il y faut la ligne d'intitulés de l'export, avec la colonne « N° d'inscription »."
+msgstr "قائمة غير معروفة: يجب أن تحتوي على سطر عناوين التصدير، مع عمود «N° d'inscription»."
+
+#: grader/importers.py
+msgid "Importez la liste exportée : un fichier Excel (.xlsx) ou CSV."
+msgstr "استورد القائمة المصدَّرة: ملف Excel (.xlsx) أو CSV."
+
+#: grader/views.py
+msgid "Choisissez le fichier de la liste."
+msgstr "اختر ملف القائمة."
+
+#: grader/views.py
+msgid "Aucun absent à retirer : chaque candidat de la liste des copies manquantes est encore dans le fichier, ou une page de sa copie est scannée."
+msgstr "لا غائب للحذف: كل مترشح في قائمة الأوراق الناقصة ما زال في الملف، أو مُسحت صفحة من ورقته."
+
+#: grader/views.py
+msgid "Importez d'abord la liste sans les absents."
+msgstr "استورد أولًا القائمة دون الغائبين."
+
+#: grader/views.py
+msgid "%(n)s candidat(s) absent(s) supprimé(s) de « %(liste)s »."
+msgstr "حُذف %(n)s مترشحًا غائبًا من «%(liste)s»."
+
+#: grader/views.py
+msgid "%(n)s candidat(s) gardé(s) : une page de leur copie a été scannée depuis l'import."
+msgstr "احتُفظ بـ%(n)s مترشحًا: مُسحت صفحة من ورقتهم منذ الاستيراد."
+
+#: templates/grader/absents.html
+msgid "Supprimer les absents (%(n)s)"
+msgstr "حذف الغائبين (%(n)s)"

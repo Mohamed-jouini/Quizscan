@@ -439,6 +439,27 @@ def rows_to_fiches(rows):
     return out
 
 
+def lire_liste_exportee(name, data):
+    """Une liste de candidats exportée par l'application puis réimportée (les copies
+    manquantes, vidées de leurs absents ; 25 novembre 2026) -> ses lignes, comme
+    rows_to_fiches. Un tableau seulement (Excel ou CSV), avec sa ligne d'intitulés et la
+    colonne « N° d'inscription » : l'import en déduit des suppressions, il ne devine pas les
+    colonnes d'un autre fichier. Une liste vidée de toutes ses lignes se lit (vide)."""
+    ext = _ext(name)
+    if ext in (".xlsx", ".xlsm"):
+        rows = _xlsx_rows(data)
+    elif ext == ".csv":
+        rows = _csv_rows(data)
+    else:
+        raise ImportError_(gettext("Importez la liste exportée : un fichier Excel (.xlsx) "
+                                   "ou CSV."))
+    rang, colonnes = _trouver_entete(rows) if rows else (None, {})
+    if rang is None or "number" not in colonnes:
+        raise ImportError_(gettext("Liste non reconnue : il y faut la ligne d'intitulés de "
+                                   "l'export, avec la colonne « N° d'inscription »."))
+    return rows_to_fiches(rows[rang:])
+
+
 def parse_candidates_file(name, data):
     """Fichier Excel / CSV / Word / PDF / texte -> [(nom, prénom, numéro)]."""
     return [(f["nom"], f["prenom"], f["numero"]) for f in parse_fiches_file(name, data)]
