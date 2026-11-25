@@ -349,6 +349,46 @@ def main():
             r.context["answers"] if a.question.qtype == "qcm"] == attendu_a
     print("  relevé de notes et écran de vérification : la copie B avec les n° et les lettres "
           "de sa feuille, la copie A avec ceux de la version A OK")
+    # statistiques (25 novembre 2026, « corrige les statistiques pour les deux versions ») : les
+    # deux versions ensemble, aux n° et lettres de la version A, avec le n° B de chaque
+    # question et un résumé par version ; une version seule, aux n° et lettres de sa feuille
+    lignes = services.compute_results(quiz)
+    tout = services.compute_stats(quiz, lignes)
+    assert [(v["version"], v["n"]) for v in tout["par_version"]] == [("A", 2), ("B", 1)]
+    num_b = {t["order"]: t["num"] for t in tirage}
+    assert [st["num_b"] for st in tout["questions"]] == [
+        num_b.get(st["question"].order, st["question"].order) for st in tout["questions"]]
+    assert [st["num"] for st in tout["questions"]] == [n for n, _, _, _ in QUESTIONS]
+    seule_b = services.compute_stats(quiz, lignes, "B")
+    assert (seule_b["n"], seule_b["version"], seule_b["par_version"]) == (1, "B", [])
+    assert [st["num"] for st in seule_b["questions"]] == [n for n, _, _, _ in QUESTIONS], \
+        "dans l'ordre de la feuille B"
+    items_b = {i["order"]: i for i in pages_b[0]["qcm"]}
+    for st in seule_b["questions"]:
+        if st["question"].qtype != "qcm":
+            continue
+        o = st["question"].order
+        cases = items_b[o].get("perm") or list(range(len(items_b[o]["bubbles"])))
+        assert st["num"] == items_b[o]["num"]
+        assert [(c["lettre"], c["n"], c["bonne"]) for c in st["repartition"]] == [
+            ("ABCD"[j], int(j == cases.index(COPIE[o])), j == cases.index(CORRIGE[o]))
+            for j in range(len(cases))], (o, st["repartition"])
+    assert services.compute_stats(quiz, lignes, "A")["n"] == 2
+    url_resultats = reverse("quiz_results", args=[quiz.pk])
+    r = c.get(url_resultats)
+    page = r.content.decode()
+    assert r.context["stats"] is r.context["stats_toutes"] and r.context["version_stats"] == ""
+    assert "Les deux versions" in page and "<th>Version B</th>" in page
+    assert "2 copie(s), moyenne" in page and "1 copie(s), moyenne" in page
+    assert f'href="{url_resultats}?version=B#statistiques"' in page
+    r = c.get(url_resultats + "?version=B")
+    page = r.content.decode()
+    assert r.context["version_stats"] == "B" and r.context["stats"]["n"] == 1
+    assert "— version B</h2>" in page and "<th>Version A</th>" in page
+    assert "aux n° et lettres de la feuille B" in page
+    assert c.get(url_resultats + "?version=C").context["version_stats"] == ""
+    print("  statistiques : les deux versions (n° et lettres de la version A, n° B en regard, "
+          "résumé par version), ou la version B seule aux n° et lettres de sa feuille OK")
 
     # une copie du correcteur B déjà imprimée, noircie en suivant le sujet B : les bonnes
     # réponses de la A, par l'unique envoi du corrigé

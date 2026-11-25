@@ -6470,3 +6470,51 @@ msgstr "احتُفظ بـ%(n)s مترشحًا: مُسحت صفحة من ورقت
 #: templates/grader/absents.html
 msgid "Supprimer les absents (%(n)s)"
 msgstr "حذف الغائبين (%(n)s)"
+
+#: templates/grader/_stats_versions.html
+msgid "Copies de la version B seulement, aux n° et lettres de la feuille B."
+msgstr "أوراق النسخة B وحدها، بأرقام الورقة B وحروفها."
+
+#: templates/grader/_stats_versions.html
+msgid "« Version A » : le n° de chaque question dans la version A, celle du corrigé."
+msgstr "«النسخة A»: رقم كل سؤال في النسخة A، نسخة الإجابة النموذجية."
+
+#: templates/grader/_stats_versions.html
+msgid "Copies de la version A seulement."
+msgstr "أوراق النسخة A وحدها."
+
+#: templates/grader/_stats_versions.html
+msgid "Les deux versions ensemble, aux n° et lettres de la version A, celle du corrigé : la réponse d'une copie B y est comptée à sa question et à son choix dans la version A."
+msgstr "النسختان معًا، بأرقام النسخة A وحروفها، نسخة الإجابة النموذجية: تُحتسب إجابة ورقة من النسخة B في سؤالها وخيارها في النسخة A."
+
+#: templates/grader/_stats_versions.html
+msgid "« Version B » : le n° de chaque question dans la version B."
+msgstr "«النسخة B»: رقم كل سؤال في النسخة B."
+
+#: templates/grader/results.html
+msgid "(n° de la version A)"
+msgstr "(أرقام النسخة A)"
+
+#: templates/grader/results.html
+msgid "Statistiques"
+msgstr "الإحصائيات"
+
+#: templates/grader/results.html
+msgid "Aucune copie de la version %(version)s n'est encore lue."
+msgstr "لم تُقرأ بعد أي ورقة من النسخة %(version)s."
+
+#: templates/grader/results.html
+msgid "%(n)s copie(s), moyenne %(moyenne)s"
+msgstr "%(n)s ورقة، المعدل %(moyenne)s"
+
+#: templates/grader/results.html
+msgid "aucune copie"
+msgstr "لا ورقة"
+
+#: templates/grader/results.html
+msgid "Version B"
+msgstr "النسخة B"
+
+#: grader/views.py
+msgid "Les deux versions"
+msgstr "النسختان معًا"

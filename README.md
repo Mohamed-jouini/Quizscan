@@ -664,7 +664,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
 | `test_e2e_design.py` | une seule feuille de style pour toutes les pages, aucun style redéclaré en ligne, aucun jeton défini deux fois |
 | `test_e2e_corrige.py` | bonne réponse facultative, corrigé scanné et conservé, correction bloquée tant qu'il manque une réponse, copie du correcteur (sans candidat, « CORRIGÉ ») lue par le corrigé scanné |
-| `test_e2e_versions.py` | QCM en deux versions : réglage refusé sans sujet imprimé (page du QCM et création d'un concours), pages A puis B (A au millimètre, B fixe), sujets dans l'ordre du tirage, copies alternées, copie B lue et ramenée à la version A, mais montrée comme sa feuille (relevé et écran de vérification : n° et lettres de la feuille B), bonne réponse en gras dans les deux tableaux, une seule copie du correcteur (sans « VERSION A ») et un seul corrigé (fiche A ou B), copies manquantes, questionnaire complet |
+| `test_e2e_versions.py` | QCM en deux versions : réglage refusé sans sujet imprimé (page du QCM et création d'un concours), pages A puis B (A au millimètre, B fixe), sujets dans l'ordre du tirage, copies alternées, copie B lue et ramenée à la version A, mais montrée comme sa feuille (relevé et écran de vérification : n° et lettres de la feuille B), bonne réponse en gras dans les deux tableaux, statistiques des deux versions ensemble ou d'une seule (aux n° et lettres de sa feuille), une seule copie du correcteur (sans « VERSION A ») et un seul corrigé (fiche A ou B), copies manquantes, questionnaire complet |
 | `test_e2e_absents.py` | absents d'un concours : la liste des copies manquantes réimportée sans eux, page de confirmation, annuler, candidat gardé par son n° (zéro de tête retiré) ou son nom, jamais un candidat dont une page est scannée (ici, ailleurs, ou avant la confirmation), fichier non reconnu refusé, liste vidée, pas pour une classe ni sans le droit de créer |
 | `test_e2e_robustesse.py` | pannes d'OCR (Tesseract absent, paquet de langue manquant), fiches de plus de 12 pages, QR collés de travers dans leur cadre, QR abîmés (tache sur un coin, stylo, coin arraché, froissé, impression pâle, 100 dpi en JPEG 10, copies d'avant en correction M), contenu de la planche d'étiquettes, identifiants d'URL bricolés |
 
@@ -955,12 +955,20 @@ pas avec une fiche de réponses seule, dont le sujet vient d'ailleurs) :
   A ou B (sa version se lit sur la page), les questions sans bonne réponse aux n° de la
   version A, et une liste des fiches lues, la page de chacune comptée dans sa version ;
 - **correction** : la réponse lue sur une copie B est ramenée à la question et au choix de
-  la version A. Corrigé, notes, statistiques, exports ne voient que la version A ; un
+  la version A. Corrigé, notes, exports ne voient que la version A ; un
   corrigé noirci sur une feuille B se lit juste. Le relevé de notes et l'écran de
   vérification d'une copie B suivent sa feuille (25 novembre 2026 ; ils donnaient les n° et
   les lettres de la version A, l'image ceux de la feuille B) : questions dans l'ordre
   imprimé, lettre lue et lettre attendue telles que sur la feuille B, et, à l'écran, une
-  colonne « Version A » avec le n° de chaque question dans la version A, celle du corrigé.
+  colonne « Version A » avec le n° de chaque question dans la version A, celle du corrigé ;
+- **statistiques** (25 novembre 2026, « corrige les statistiques pour les deux versions ») :
+  sur la page Résultats, trois pastilles. « Les deux versions » : toutes les copies, aux n°
+  et lettres de la version A (la réponse d'une copie B y est comptée à sa question et à
+  son choix dans la version A), avec le nombre de copies et la moyenne de chaque version,
+  et le n° de chaque question dans la version B. « Version A » ou « Version B » : les copies
+  de cette version seulement, aux n° et lettres de sa feuille (cases dans son ordre, et
+  colonne « Version A » pour la B). L'alerte « Bonne réponse à vérifier » porte toujours sur
+  toutes les copies, aux n° de la version A ; l'export Excel aussi.
 
 ## Le corrigé : saisi, ou scanné
 

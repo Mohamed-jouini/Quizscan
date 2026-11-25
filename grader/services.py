@@ -2161,17 +2161,22 @@ def _discrimination(rows, ordre, deja_filtrees=False):
     return indice, "faible", DISCRIMINATION[-1][2]
 
 
-def _repartition(question, reponses):
+def _repartition(question, reponses, perm=None):
     """Combien de copies pour chaque case, et combien hors des cases.
 
     « Multiple » (plusieurs cases noircies) et « sans réponse » sont comptés
     à part : ce ne sont pas des choix, mais ils expliquent une partie des
     fausses et méritent d'être visibles.
+    perm : l'ordre des cases d'une version (layout.questions_imprimees) ; les cases suivent
+    alors cet ordre, avec ses lettres (statistiques de la version B, 25 novembre 2026).
     """
     total = len(reponses)
     if not total:
         return []
-    comptes = {i: 0 for i, _ in question.letter_options}
+    cases = question.letter_options
+    if perm and len(perm) == len(cases):
+        cases = [(perm[j], lettre) for j, (_, lettre) in enumerate(cases)]
+    comptes = {i: 0 for i, _ in cases}
     multiples = vides = 0
     for a in reponses:
         if a.is_multiple:
@@ -2185,7 +2190,7 @@ def _repartition(question, reponses):
                "n": comptes[i],
                "pct": round(comptes[i] / total * 100),
                "bonne": i == question.correct_choice}
-              for i, lettre in question.letter_options]
+              for i, lettre in cases]
     # Colonnes étroites : le libellé court sous la barre, le long en infobulle.
     for court, titre, n in (("✱", gettext("Plusieurs cases cochées"), multiples),
                             ("∅", gettext("Sans réponse"), vides)):
@@ -3164,9 +3169,25 @@ def resume_epreuve(quiz):
     }
 
 
-def compute_stats(quiz, rows):
+def version_de_ligne(quiz, r):
+    """« A » ou « B » : la version de la copie d'une ligne de résultats (celle de sa
+    première page lue) ; « » pour une épreuve d'une seule version."""
+    return next((layout_mod.version_de_page(quiz.layout_json, f.page_index)
+                 for f in r.get("sheets", []) if f.page_index is not None), "")
+
+
+def compute_stats(quiz, rows, version=""):
     """Statistiques de l'épreuve à partir des résultats par étudiant :
-    résumé global, histogramme des notes et taux de réussite par question."""
+    résumé global, histogramme des notes et taux de réussite par question.
+
+    QCM en deux versions (25 novembre 2026, « corrige les statistiques pour les deux
+    versions ») : version « » : toutes les copies, aux n° et lettres de la version A, celle
+    du corrigé, où les réponses des copies B sont ramenées ; avec, par question, son n° dans
+    la version B (« num_b ») et un résumé par version (« par_version »). Version « A » ou
+    « B » : les copies de cette version seulement, aux n° et lettres de sa feuille."""
+    versions = layout_mod.versions_de(quiz.layout_json)
+    if version:
+        rows = [r for r in rows if version_de_ligne(quiz, r) == version]
     if not rows:
         return None
     scores = sorted(r["score"] for r in rows)
@@ -3196,12 +3217,19 @@ def compute_stats(quiz, rows):
     for r in rows:
         for ordre in r["answers"]:
             par_question.setdefault(ordre, []).append(r)
+    # n° et ordre des cases de la feuille de la version montrée (rien pour la version A) ;
+    # pour toutes les copies, le n° de chaque question dans la version B, en regard
+    imprimees = layout_mod.questions_imprimees(quiz.layout_json, version)
+    en_b = (layout_mod.questions_imprimees(quiz.layout_json, "B")
+            if "B" in versions and not version else {})
     questions = []
     for q in quiz.questions.order_by("order"):
         presentes = par_question.get(q.order, [])
         reponses = [r["answers"][q.order] for r in presentes]
+        num, perm = imprimees.get(q.order, (q.order, None))
         st = {"question": q, "correct": 0, "wrong": 0, "blank": 0,
-              "graded": 0, "points_sum": 0.0, "n": len(reponses)}
+              "graded": 0, "points_sum": 0.0, "n": len(reponses), "num": num,
+              "num_b": en_b.get(q.order, (q.order, None))[0] if en_b else None}
         if q.qtype == "qcm":
             for a in reponses:          # règles d'Answer.is_blank / is_correct
                 if a.detected_choice is None and not a.is_multiple:
@@ -3223,7 +3251,7 @@ def compute_stats(quiz, rows):
                     st["discrimination_aide"] = mesure
                 st["discrimination_libelle"] = NIVEAUX_DISCRIMINATION[st["discrimination_label"]]
                 st["corrige_suspect"] = st["discrimination"] < 0
-            st["repartition"] = _repartition(q, reponses)
+            st["repartition"] = _repartition(q, reponses, perm)
             convergence = _convergence_suspecte(st, st["repartition"])
             if convergence:
                 st["corrige_suspect"] = True
@@ -3234,10 +3262,20 @@ def compute_stats(quiz, rows):
             st["success"] = (round(st["points_sum"] / (st["graded"] * q.points) * 100)
                              if st["graded"] and q.points else 0)
         questions.append(st)
+    if imprimees:
+        questions.sort(key=lambda st: st["num"])          # dans l'ordre de la feuille B
 
     # QCM : les notes se lisent sur 20 (13 novembre 2026), les statistiques aussi
     facteur = 20 / max_score if quiz.est_qcm else 1
+    par_version = []
+    if versions and not version:
+        for v in versions:
+            notes = [r["score"] for r in rows if version_de_ligne(quiz, r) == v]
+            par_version.append({"version": v, "n": len(notes),
+                                "mean": (round(sum(notes) / len(notes) * facteur, 2)
+                                         if notes else None)})
     return {
+        "version": version, "par_version": par_version, "num_b": bool(en_b),
         "n": n,
         "mean": round(moyenne * facteur, 2),
         "median": round(median * facteur, 2),

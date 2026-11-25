@@ -1747,6 +1747,25 @@ def quiz_results(request, pk):
             for s in r["sheets"]:
                 s.libelle = (matieres[s.page_index].text
                              if 0 <= (s.page_index or 0) < len(matieres) else "")
+    # QCM en deux versions (25 novembre 2026) : les statistiques des deux ensemble (n° et
+    # lettres de la version A, celle du corrigé), ou d'une seule, aux n° et lettres de sa
+    # feuille. L'alerte « bonne réponse à vérifier » porte toujours sur toutes les copies.
+    stats_toutes = services.compute_stats(quiz, rows)
+    versions = layout_mod.versions_de(quiz.layout_json)
+    version_stats = request.GET.get("version", "")
+    if version_stats not in versions:
+        version_stats = ""
+    liens_versions = []
+    for v in ([""] + versions if versions else []):
+        qs = urlencode(dict(parametres, **({"version": v} if v else {})))
+        liens_versions.append({
+            "libelle": (gettext("Version %(version)s") % {"version": v} if v
+                        else gettext("Les deux versions")),
+            "url": reverse("quiz_results", args=[pk]) + (f"?{qs}" if qs else "")
+            + "#statistiques",
+            "actif": v == version_stats})
+    if version_stats:
+        parametres["version"] = version_stats         # gardée par la pagination
     return render(request, "grader/results.html", {
         "fil": services.fil_etapes(quiz, _my_quizzes(request)),
         "matieres": matieres,
@@ -1762,7 +1781,10 @@ def quiz_results(request, pk):
         "unmatched_total": unmatched.count(), "n_masquees": n_masquees,
         "n_incompletes": sum(1 for r in rows if r["questions_manquantes"]),
         "pending_pages": sum(b.total_pages for b in quiz.batches.filter(status="pending")),
-        "stats": services.compute_stats(quiz, rows),
+        "stats": (services.compute_stats(quiz, rows, version_stats) if version_stats
+                  else stats_toutes),
+        "stats_toutes": stats_toutes,
+        "liens_versions": liens_versions, "version_stats": version_stats,
         "admission": admission,
     })
 

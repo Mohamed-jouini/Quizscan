@@ -126,6 +126,7 @@ def main():
     assert "Copies manquantes : 4 candidats" in page
     assert f'action="{url}"' in page and "Importer la liste sans les absents" in page
     assert page.index("Exporter la liste (Excel)") < page.index("Importer la liste sans les absents")
+    assert "Les deux versions" not in page, "une seule version : pas de choix de statistiques"
     export = c.get(reverse("quiz_copies_manquantes_xlsx", args=[quiz.pk])).content
     print("Absents d'un concours :")
     print("  bouton « Importer la liste sans les absents » à côté de l'export OK")

@@ -1,0 +1,5 @@
+{% load i18n %}{% comment %}
+QCM en deux versions (25 novembre 2026) : dans quels n° et quelles lettres se lisent les
+statistiques montrées. Paramètres : stats (services.compute_stats), liens_versions, colonne (le
+tableau a la colonne du n° dans l'autre version).
+{% endcomment %}{% if liens_versions %}{% if stats.version == "B" %}{% translate "Copies de la version B seulement, aux n° et lettres de la feuille B." %}{% if colonne %} {% translate "« Version A » : le n° de chaque question dans la version A, celle du corrigé." %}{% endif %}{% elif stats.version == "A" %}{% translate "Copies de la version A seulement." %}{% else %}{% translate "Les deux versions ensemble, aux n° et lettres de la version A, celle du corrigé : la réponse d'une copie B y est comptée à sa question et à son choix dans la version A." %}{% if colonne %} {% translate "« Version B » : le n° de chaque question dans la version B." %}{% endif %}{% endif %}{% endif %}

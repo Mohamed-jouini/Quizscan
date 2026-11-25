@@ -250,15 +250,15 @@
 <div class="card">{% include "grader/_copies_manquantes.html" %}</div>
 {% endif %}
 
-{% if stats.suspectes %}
+{% if stats_toutes.suspectes %}
 <div class="note note--warn">
   <span class="note__icon">
     <svg viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>
   </span>
   <div class="note__body">
-    <b>{% blocktranslate trimmed with suspectes=stats.suspectes|length|pluralize %}Bonne réponse à vérifier —
+    <b>{% blocktranslate trimmed with suspectes=stats_toutes.suspectes|length|pluralize %}Bonne réponse à vérifier —
       question{{ suspectes }}
-      n°{% endblocktranslate %} {% for n in stats.suspectes %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}.</b>
+      n°{% endblocktranslate %} {% for n in stats_toutes.suspectes %}{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if liens_versions %} {% translate "(n° de la version A)" %}{% endif %}.</b>
     {% blocktranslate trimmed %}Les meilleures copies s'y trompent plus que les plus faibles, ce qui
     n'arrive pratiquement jamais sur une question simplement difficile.
     Vérifiez la bonne réponse enregistrée : si elle est fausse, toute la
@@ -267,10 +267,21 @@
 </div>
 {% endif %}
 
+{% comment %}QCM en deux versions (25 novembre 2026) : les statistiques des deux ensemble, ou
+  d'une seule, aux n° et lettres de sa feuille (services.compute_stats).{% endcomment %}
+{% if liens_versions and stats_toutes %}
+<div class="filtres" id="statistiques">
+  <span class="filtres__label">{% translate "Statistiques" %}</span>
+  {% for v in liens_versions %}
+  <a class="filtre {% if v.actif %}is-active{% endif %}" href="{{ v.url }}">{{ v.libelle }}</a>
+  {% endfor %}
+</div>
+{% if not stats %}<p class="helptext">{% blocktranslate trimmed with version=version_stats %}Aucune copie de la version {{ version }} n'est encore lue.{% endblocktranslate %}</p>{% endif %}
+{% endif %}
 {% if stats %}
 <div class="grid2">
   <div class="card">
-    <h2>{% translate "Statistiques de l'épreuve" %}</h2>
+    <h2>{% translate "Statistiques de l'épreuve" %}{% if stats.version %} {% blocktranslate trimmed with v=stats.version %}— version {{ v }}{% endblocktranslate %}{% endif %}</h2>
     <p>
       {% blocktranslate trimmed with n=stats.n %}{{ n }} étudiant(s) —
       moyenne{% endblocktranslate %} <b>{{ stats.mean|floatformat:"-2" }}</b>{% blocktranslate trimmed %},
@@ -280,6 +291,7 @@
       plus basse{% endblocktranslate %} <b>{{ stats.worst|floatformat:"-2" }}</b>
       {% blocktranslate trimmed with max_score=stats.max_score|floatformat:"-2" %}(sur {{ max_score }}).{% endblocktranslate %}
     </p>
+    {% if stats.par_version %}<p class="helptext helptext--serre">{% for v in stats.par_version %}<b>{% blocktranslate trimmed with version=v.version %}Version {{ version }}{% endblocktranslate %}</b> : {% if v.n %}{% blocktranslate trimmed with n=v.n moyenne=v.mean|floatformat:"-2" %}{{ n }} copie(s), moyenne {{ moyenne }}{% endblocktranslate %}{% else %}{% translate "aucune copie" %}{% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
     <p class="helptext helptext--serre">{% blocktranslate trimmed %}L'écart-type mesure la dispersion :
       petit, les notes se serrent autour de la moyenne ; grand, la classe se
       partage entre deux groupes très inégaux.{% endblocktranslate %}</p>
@@ -301,14 +313,15 @@
     <h2>{% translate "Réussite par question" %}</h2>
     <div class="table-wrap table-wrap--defile" tabindex="0" role="region" aria-label="{% translate "Réussite par question" %}">
       <table>
-      <tr><th>{% translate "Q" %}</th><th>{% translate "Réussite" %}</th><th>{% translate "Justes" %}</th><th>{% translate "Fausses" %}</th><th>{% translate "Vides" %}</th>
+      <tr><th>{% translate "Q" %}</th>{% if stats.num_b %}<th>{% translate "Version B" %}</th>{% elif stats.version == "B" %}<th>{% translate "Version A" %}</th>{% endif %}<th>{% translate "Réussite" %}</th><th>{% translate "Justes" %}</th><th>{% translate "Fausses" %}</th><th>{% translate "Vides" %}</th>
           <th>{% translate "Discrimination" %}</th></tr>
       {% for s in stats.questions %}
       <tr {% if s.success < 40 %}class="ligne--alerte"{% endif %}>
-        <td><b>{{ s.question.order }}</b>
+        <td><b>{{ s.num }}</b>
             {% if s.question.qtype == "open" %}<span class="helptext">{% translate "manuscrite" %}</span>{% endif %}</td>
+        {% if stats.num_b %}<td>{% translate "n°" %} {{ s.num_b }}</td>{% elif stats.version == "B" %}<td>{% translate "n°" %} {{ s.question.order }}</td>{% endif %}
         <td><span class="bar" style="width:{{ s.success }}%;max-width:80px"></span>
-            {% blocktranslate trimmed with success=s.success %}&nbsp;{{ success }} %{% endblocktranslate %}</td>
+            <span class="cellule--serree">{% blocktranslate trimmed with success=s.success %}&nbsp;{{ success }} %{% endblocktranslate %}</span></td>
         {% if s.question.qtype == "qcm" %}
         <td>{{ s.correct }}</td><td>{{ s.wrong }}</td><td>{{ s.blank }}</td>
         {% else %}
@@ -328,7 +341,8 @@
     <p class="helptext">{% blocktranslate trimmed %}Les lignes surlignées (&lt; 40 % de réussite) signalent
       les questions les plus ratées. La discrimination compare la réussite du
       tiers fort et du tiers faible du classement : elle n'est calculée qu'à
-      partir de dix copies.{% endblocktranslate %}</p>
+      partir de dix copies.{% endblocktranslate %}
+      {% include "grader/_stats_versions.html" with colonne=True %}</p>
   </div>
   {% endif %}
 </div>
@@ -345,7 +359,7 @@
     <tr><th>{% translate "Q" %}</th><th>{% translate "Répartition des copies par case" %}</th></tr>
     {% for s in stats.questions %}{% if s.repartition %}
     <tr>
-      <td><b>{{ s.question.order }}</b></td>
+      <td><b>{{ s.num }}</b></td>
       <td>
         <div class="choix">
           {% for c in s.repartition %}
@@ -362,7 +376,8 @@
     {% endif %}{% endfor %}
   </table>
   </div>
-  <p class="helptext">{% translate "La case encadrée est la bonne réponse enregistrée." %}</p>
+  <p class="helptext">{% translate "La case encadrée est la bonne réponse enregistrée." %}
+    {% include "grader/_stats_versions.html" %}</p>
 </div>
 {% endif %}
 {% endif %}
