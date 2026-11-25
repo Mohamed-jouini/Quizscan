@@ -664,7 +664,7 @@ vérifient l'identification de l'étudiant et la note calculée. Autres tests :
 | `test_e2e_comptes.py` | création d'un compte, bascule de rôle, désactivation, réinitialisation d'un mot de passe, changement par l'enseignant |
 | `test_e2e_design.py` | une seule feuille de style pour toutes les pages, aucun style redéclaré en ligne, aucun jeton défini deux fois |
 | `test_e2e_corrige.py` | bonne réponse facultative, corrigé scanné et conservé, correction bloquée tant qu'il manque une réponse, copie du correcteur (sans candidat, « CORRIGÉ ») lue par le corrigé scanné |
-| `test_e2e_versions.py` | QCM en deux versions : réglage refusé sans sujet imprimé (page du QCM et création d'un concours), pages A puis B (A au millimètre, B fixe), sujets dans l'ordre du tirage, copies alternées, copie B lue et ramenée à la version A, une seule copie du correcteur et un seul corrigé (fiche A ou B), copies manquantes, questionnaire complet |
+| `test_e2e_versions.py` | QCM en deux versions : réglage refusé sans sujet imprimé (page du QCM et création d'un concours), pages A puis B (A au millimètre, B fixe), sujets dans l'ordre du tirage, copies alternées, copie B lue et ramenée à la version A, une seule copie du correcteur (sans « VERSION A ») et un seul corrigé (fiche A ou B), copies manquantes, questionnaire complet |
 | `test_e2e_robustesse.py` | pannes d'OCR (Tesseract absent, paquet de langue manquant), fiches de plus de 12 pages, QR collés de travers dans leur cadre, QR abîmés (tache sur un coin, stylo, coin arraché, froissé, impression pâle, 100 dpi en JPEG 10, copies d'avant en correction M), contenu de la planche d'étiquettes, identifiants d'URL bricolés |
 
 Pour tout lancer : `for t in test_e2e*.py; do python $t || break; done`
@@ -919,15 +919,18 @@ pas avec une fiche de réponses seule, dont le sujet vient d'ailleurs) :
   de choix garde ses cases dans l'ordre ; évitez les choix du type « toutes les réponses
   ci-dessus » ;
 - **« VERSION A » ou « VERSION B »** est imprimé en haut de chaque page du sujet et de la
-  feuille de réponses (et rappelé dans les remarques du sujet). La feuille B a ses propres
+  feuille de réponses (et rappelé dans les remarques du sujet), pas sur la copie du
+  correcteur (voir « documents »). La feuille B a ses propres
   codes de page : le scan reconnaît la version, rien à cocher pour le candidat ;
 - **documents** : le sujet et la feuille de chaque version se téléchargent séparément
   (« Sujet — version A », « Feuille de réponses — version B »…) ; les boutons du sujet et
   de la feuille des deux versions ensemble ne sont plus proposés. Copies nominatives (QR) :
   un seul PDF, « Copies (A et B alternées) » dans l'ordre des salles, à remettre avec le
   sujet de la même version. Une seule « Copie du correcteur » (25 novembre 2026, demande de
-  l'utilisateur) : celle de la version A, qui remplit le corrigé des deux versions ; une
-  copie de la version B imprimée avant se lit aussi ;
+  l'utilisateur) : celle de la version A, sans « VERSION A » imprimé (mention barrée par
+  l'utilisateur le même jour ; le scan lit la version au code de page), qui remplit le
+  corrigé des deux versions ; une copie de la version B imprimée avant se lit aussi (un
+  ancien lien `?version=B` la donne encore, avec sa mention « VERSION B ») ;
 - **page du QCM** : le tableau des questions de la version A (à gauche, où se règle le
   corrigé) et, en regard, celui de la version B : n° imprimé, question et choix dans son
   ordre, n° de la question dans la version A, et sa bonne réponse lettrée pour la version

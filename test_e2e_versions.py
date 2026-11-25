@@ -250,7 +250,9 @@ def main():
         assert s.last_name in texte
     url_correcteur = reverse("quiz_copie_correcteur_pdf", args=[quiz.pk])
     correcteur = textes(c.get(url_correcteur).content)
-    assert len(correcteur) == 1 and "VERSION A" in correcteur[0]
+    # la copie du correcteur, celle de la version A, sans « VERSION A » imprimé (25 novembre
+    # 2026, barré par l'utilisateur) : le scan lit la version au code de page
+    assert len(correcteur) == 1 and "CORRIGÉ" in correcteur[0] and "VERSION" not in correcteur[0]
     # une seule copie du correcteur sur la page, celle de la version A (25 novembre 2026,
     # « fait un seul ») ; le lien d'avant vers celle de la B donne encore la B
     page = c.get(url).content.decode()

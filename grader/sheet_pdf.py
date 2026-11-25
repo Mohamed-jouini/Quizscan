@@ -276,6 +276,12 @@ def generate_sheet_pdf(quiz, layout, students=None, serials=None, places=None, p
         total_pages = pages_copie if mode == "ecrit" else pages_de_la_copie
         matiere = page.get("matiere", "")       # écrit en matières : à son nom
         version = page.get("version", "")       # QCM en deux versions : « A » ou « B »
+        if corrige and version == "A":
+            # la copie du correcteur, une seule depuis le 25 novembre 2026, celle de la A :
+            # sans « VERSION A » (barré par l'utilisateur sur le PDF). Le scan lit la version
+            # au code de page ; une copie B (lien d'avant) garde sa mention, qui évite de la
+            # noircir dans l'ordre du sujet A.
+            version = ""
 
         # Repères ArUco (avec leur marge blanche débordant légèrement)
         # Calage : cadre fin autour de la page et code de page en haut (plus
