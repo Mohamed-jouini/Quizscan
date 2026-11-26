@@ -436,6 +436,26 @@ def main():
     assert compte.has_perm(droits.TELEVERSER) and compte.has_perm(droits.LANCER)
     assert not compte.has_perm(droits.QUESTIONS), "case décochée : le droit reste"
     assert "téléverser" in patron_client.get("/admin/auth/user/").content.decode()
+    # par la liste détaillée seule, les cases envoyées telles qu'affichées (26 novembre 2026 :
+    # « lorsque j'ajoute et enregistre, ça ne s'ajoute pas » — la case vide le retirait)
+    fiche = {"username": redacteur.username, "first_name": "", "last_name": "", "email": "",
+             "role": "enseignant", "is_active": "on", "classes": [],
+             "date_joined_0": "2026-01-01", "date_joined_1": "00:00:00"}
+    detail = [str(p.pk) for p in compte.user_permissions.all()]
+    questions_pk = str(_permission(droits.QUESTIONS).pk)
+    envoi = patron_client.post(f"/admin/auth/user/{redacteur.pk}/change/", dict(
+        fiche, peut_televerser="on", peut_lancer="on", user_permissions=detail + [questions_pk]))
+    assert envoi.status_code == 302, f"fiche du compte -> {envoi.status_code}"
+    compte = get_user_model().objects.get(pk=redacteur.pk)
+    assert compte.has_perm(droits.QUESTIONS), "ajouté dans la liste détaillée, puis perdu"
+    assert compte.has_perm(droits.TELEVERSER) and compte.has_perm(droits.LANCER)
+    lancer_pk = str(_permission(droits.LANCER).pk)
+    envoi = patron_client.post(f"/admin/auth/user/{redacteur.pk}/change/", dict(
+        fiche, peut_televerser="on", peut_lancer="on", peut_saisir_questions="on",
+        user_permissions=[p for p in detail + [questions_pk] if p != lancer_pk]))
+    compte = get_user_model().objects.get(pk=redacteur.pk)
+    assert not compte.has_perm(droits.LANCER), "retiré de la liste détaillée, mais resté"
+    assert compte.has_perm(droits.QUESTIONS) and compte.has_perm(droits.TELEVERSER)
     page = patron_client.get(f"/admin/auth/user/{redacteur.pk}/change/").content.decode()
     for nom in ("Téléverser les copies scannées", "Lancer la correction",
                 "Saisir les questions et le corrigé",

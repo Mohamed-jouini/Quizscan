@@ -6574,3 +6574,7 @@ msgstr "إطلاق الإصلاح"
 #: grader/views.py
 msgid "saisir les questions"
 msgstr "إدخال الأسئلة"
+
+#: grader/useradmin.py
+msgid "Les droits de QuizScan y figurent aussi (« quiz | … ») : les ajouter ou les retirer ici revient à cocher ou décocher leur case dans « Autorisations » ; si les deux se contredisent, la case l'emporte."
+msgstr "تظهر فيها صلاحيات QuizScan أيضًا («quiz | …»): إضافتها أو سحبها هنا تعادل تأشير خانتها أو إلغاء تأشيرها في «الصلاحيات»؛ وإن تعارض الاثنان، فالمعتمد هو الخانة."

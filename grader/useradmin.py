@@ -23,6 +23,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import Permission
 from django.urls import reverse
 from django.utils.html import format_html
+from django.utils.text import format_lazy
 from django.utils.translation import gettext, gettext_lazy
 
 from . import droits
@@ -119,6 +120,7 @@ class CompteChangeForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         instance = kwargs.get("instance") or self.instance
+        self._compte_existant = bool(instance and instance.pk)
 
         # Toutes les classes sont proposées : une classe peut avoir plusieurs
         # enseignants, en cocher une ici n'en retire personne.
@@ -197,12 +199,17 @@ class CompteChangeForm(forms.ModelForm):
 
         Un administrateur les a toutes de toute façon (has_perm répond
         toujours oui à un super-utilisateur) : on ne lui en attribue pas.
+
+        Une case n'agit que si on l'a cochée ou décochée (26 novembre 2026) : les mêmes
+        droits figurent dans les permissions détaillées, enregistrées juste avant ; une case
+        laissée telle quelle retirait le droit qu'on venait d'y ajouter. Si les deux se
+        contredisent, la case l'emporte. Un compte neuf reçoit ce que disent ses cases.
         """
         if compte.is_superuser:
             return
-        for nom, coche in [(droits.CREER, self.cleaned_data.get("peut_creer")),
-                           (droits.CORRIGER, self.cleaned_data.get("peut_corriger"))] + [
-                (droit, self.cleaned_data.get(champ)) for champ, droit in DROITS_FINS]:
+        cases = [("peut_creer", droits.CREER), ("peut_corriger", droits.CORRIGER)] + DROITS_FINS
+        for nom, coche in [(droit, self.cleaned_data.get(champ)) for champ, droit in cases
+                           if champ in self.changed_data or not self._compte_existant]:
             permission = _permission(nom)
             if coche:
                 compte.user_permissions.add(permission)
@@ -250,8 +257,14 @@ class CompteAdmin(TitresFrancais, UserAdmin):
                        "peut_televerser", "peut_lancer")}),
         (gettext_lazy("Permissions détaillées"), {
             "classes": ("collapse",),
-            "description": gettext_lazy("Réglages avancés de Django. Le rôle ci-dessus "
-                                        "suffit dans la plupart des établissements."),
+            "description": format_lazy(
+                "{} {}",
+                gettext_lazy("Réglages avancés de Django. Le rôle ci-dessus "
+                             "suffit dans la plupart des établissements."),
+                gettext_lazy("Les droits de QuizScan y figurent aussi (« quiz | … ») : les "
+                             "ajouter ou les retirer ici revient à cocher ou décocher leur "
+                             "case dans « Autorisations » ; si les deux se contredisent, la "
+                             "case l'emporte.")),
             "fields": ("groups", "user_permissions")}),
         (gettext_lazy("Historique"), {"classes": ("collapse",),
                                       "fields": ("last_login", "date_joined")}),
