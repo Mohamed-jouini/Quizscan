@@ -51,6 +51,14 @@ def _compte(nom, *droits_accordes):
     return compte
 
 
+def _issue(reponse):
+    """« refus » : droit manquant, retour au tableau de bord sans page 403 (26 novembre
+    2026) ; sinon le code de la réponse."""
+    if reponse.status_code == 302 and reponse.url == "/":
+        return "refus"
+    return reponse.status_code
+
+
 def _client(compte):
     c = Client()
     c.force_login(compte)
@@ -76,7 +84,7 @@ def main():
 
     # ---------------------------------------------------------------- 1
     for compte, attendu in ((createur, 302), (les_deux, 302),
-                            (correcteur, 403), (spectateur, 403)):
+                            (correcteur, "refus"), (spectateur, "refus")):
         groupe = ClassGroup.objects.create(name=f"DR {compte.username}",
                                            owner=compte)
         reponse = _client(compte).post("/quiz/nouveau/", {
@@ -88,9 +96,9 @@ def main():
         if reponse.status_code == 200 and hasattr(reponse, "context"):
             formulaire = (reponse.context or {}).get("form")
             detail = f" — erreurs du formulaire : {formulaire.errors}" if formulaire else ""
-        assert reponse.status_code == attendu, (
+        assert _issue(reponse) == attendu, (
             f"{compte.username} : création d'épreuve -> "
-            f"{reponse.status_code}, attendu {attendu}{detail}")
+            f"{_issue(reponse)}, attendu {attendu}{detail}")
     print("  création      refusée sans le droit, acceptée avec OK")
 
     # ---------------------------------------------------------------- 2
@@ -111,15 +119,15 @@ def main():
     lot_ecrit = ScanBatch.objects.create(quiz=ecrit, label="DR lot écrit",
                                          status="pending", total_pages=1)
     for epreuve, lot_epreuve in ((quiz, lot), (ecrit, lot_ecrit)):
-        for compte, attendu in ((createur, 403), (spectateur, 403),
+        for compte, attendu in ((createur, "refus"), (spectateur, "refus"),
                                 (correcteur, 302)):
             epreuve.owner = compte
             epreuve.save(update_fields=["owner"])
             reponse = _client(compte).post(f"/quiz/{epreuve.pk}/",
                                            {"launch_grading": "1"})
-            assert reponse.status_code == attendu, (
+            assert _issue(reponse) == attendu, (
                 f"{compte.username} : lancement de la correction ({epreuve.title}) "
-                f"-> {reponse.status_code}, attendu {attendu}")
+                f"-> {_issue(reponse)}, attendu {attendu}")
         epreuve.owner = les_deux
         epreuve.save(update_fields=["owner"])
         lot_epreuve.refresh_from_db()
@@ -161,6 +169,26 @@ def main():
     assert reponse_qcm.points_awarded == 1.0, (
         f"la note du QCM a bougé : {reponse_qcm.points_awarded}")
     print("  note de QCM   inchangée malgré un envoi direct OK")
+
+    # Sans le droit de corriger (26 novembre 2026) : l'écran de vérification est en lecture
+    # seule, et un envoi fabriqué ramène au tableau de bord sans rien changer ni page 403.
+    manuscrite = Question.objects.create(quiz=quiz, order=2, qtype="open", points=2)
+    reponse_open = Answer.objects.create(sheet=copie, question=manuscrite, points_awarded=1.5)
+    quiz.owner = createur
+    quiz.save(update_fields=["owner"])
+    page = _client(createur).get(f"/copies/{copie.pk}/").content.decode()
+    assert f'name="points_{reponse_open.pk}"' not in page, "note modifiable sans le droit"
+    assert "Enregistrer et retour au lot" not in page and "Retour au lot" in page
+    envoi = _client(createur).post(f"/copies/{copie.pk}/", {f"points_{reponse_open.pk}": "2"})
+    reponse_open.refresh_from_db()
+    assert _issue(envoi) == "refus" and reponse_open.points_awarded == 1.5, (
+        _issue(envoi), reponse_open.points_awarded)
+    quiz.owner = les_deux
+    quiz.save(update_fields=["owner"])
+    page = _client(les_deux).get(f"/copies/{copie.pk}/").content.decode()
+    assert f'name="points_{reponse_open.pk}"' in page and "Enregistrer et retour au lot" in page
+    print("  vérification  lecture seule sans le droit de corriger ; envoi direct : retour au "
+          "tableau de bord, rien de changé OK")
 
     # L'administrateur non plus : la réponse lue ne se modifie pour personne.
     User.objects.filter(username="dr_admin").delete()

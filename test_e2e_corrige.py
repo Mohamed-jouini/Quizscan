@@ -79,6 +79,11 @@ def champs_du_formulaire(page, bouton, valeur):
     raise AssertionError(f"aucun formulaire avec le bouton {bouton}={valeur}")
 
 
+def au_tableau(reponse):
+    """Droit manquant : retour au tableau de bord, sans page 403 (26 novembre 2026)."""
+    return (reponse.status_code, getattr(reponse, "url", None)) == (302, "/")
+
+
 def main():
     logging.disable(logging.WARNING)
     Quiz.objects.filter(owner__username="prof_cor").delete()
@@ -212,8 +217,8 @@ def main():
     quiz2.class_group.enseignants.add(lecteur)
     c_lecteur = Client()
     c_lecteur.force_login(lecteur)
-    assert c_lecteur.post(f"/quiz/{quiz2.pk}/",
-                          {"delete_answer_key": page2.pk}).status_code == 403
+    assert au_tableau(c_lecteur.post(f"/quiz/{quiz2.pk}/",
+                                     {"delete_answer_key": page2.pk}))
     assert AnswerKeySheet.objects.filter(pk=page2.pk).exists()
     lecteur.delete()
     r = c.post(f"/quiz/{quiz2.pk}/", {"delete_answer_key": page2.pk})

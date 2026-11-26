@@ -30,6 +30,10 @@ urlpatterns = [
 urlpatterns += [
     re_path(r"^media/(?P<path>.*)$", protected_media),
 ]
+# Droit manquant : un compte connecté revient au tableau de bord, sans page « Accès refusé »
+# (26 novembre 2026, voir grader.views.acces_refuse).
+handler403 = "grader.views.acces_refuse"
+
 if not settings.DEBUG:
     # En production (application interne à faible trafic), Django sert
     # lui-même ses fichiers statiques (en DEBUG, runserver s'en charge).

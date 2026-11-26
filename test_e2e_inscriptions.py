@@ -88,7 +88,7 @@ def test_identite(c, prof, autre):
     assert groupe.students.get().first_name == "Omar Ali"
     c2 = Client()
     c2.force_login(autre)
-    assert c2.get(url + f"?modifier={i.pk}").status_code == 403
+    assert au_tableau(c2.get(url + f"?modifier={i.pk}"))
     print("  modifier : fiche préremplie, liste de classe mise à jour, "
           "réservé à l'auteur OK")
 
@@ -528,12 +528,14 @@ def test_communiques(c, prof, autre):
     assert anonyme.get(reverse("public_communique", args=[brouillon.pk])).status_code == 404
     c2 = Client()
     c2.force_login(autre)
-    assert c2.get(reverse("communiques") + f"?modifier={publie.pk}").status_code == 403
-    assert c2.post(reverse("communiques"), {"supprimer": publie.pk}).status_code == 403
+    assert au_tableau(c2.get(reverse("communiques") + f"?modifier={publie.pk}"))
+    assert au_tableau(c2.post(reverse("communiques"), {"supprimer": publie.pk}))
+    assert Communique.objects.filter(pk=publie.pk).exists()
     print("  communiqués : publié visible, brouillon caché, auteur seul modifie OK")
 
     i = Inscrit.objects.get(numero="104526")
-    assert c2.post(reverse("inscriptions"), {"supprimer": i.pk}).status_code == 403
+    assert au_tableau(c2.post(reverse("inscriptions"), {"supprimer": i.pk}))
+    assert Inscrit.objects.filter(pk=i.pk).exists()
     c.post(reverse("inscriptions"), {"supprimer": i.pk})
     assert not Inscrit.objects.filter(numero="104526").exists()
     restes = Student.objects.filter(student_number="104526")
@@ -548,6 +550,11 @@ def test_fonctions():
     assert inscriptions.meme_nom("Bén Salem", "SAMIA", "BEN SALEM", "Samia")
     assert inscriptions.meme_nom("Samia", "Ben Salem", "BEN SALEM", "Samia")
     print("  n° nettoyé, QR relu, noms comparés sans casse ni accents OK")
+
+
+def au_tableau(reponse):
+    """Droit manquant : retour au tableau de bord, sans page 403 (26 novembre 2026)."""
+    return (reponse.status_code, getattr(reponse, "url", None)) == (302, "/")
 
 
 def main():

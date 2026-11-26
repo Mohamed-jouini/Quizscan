@@ -42,6 +42,11 @@ def _gestes(**filtre):
                 .values_list("action", flat=True))
 
 
+def au_tableau(reponse):
+    """Droit manquant : retour au tableau de bord, sans page 403 (26 novembre 2026)."""
+    return (reponse.status_code, getattr(reponse, "url", None)) == (302, "/")
+
+
 def main():
     logging.disable(logging.ERROR)
     User = get_user_model()
@@ -141,7 +146,7 @@ def main():
         f"réponse de QCM modifiée : case {r_qcm.detected_choice}, "
         f"{r_qcm.points_awarded} pt")
     assert not Modification.objects.filter(copie=copie, action="case_qcm").exists()
-    assert a.get("/admin/grader/answer/add/").status_code == 403, \
+    assert au_tableau(a.get("/admin/grader/answer/add/")), \
         "une réponse ne doit pas pouvoir être saisie à la main"
     print("  administration réponse de QCM non modifiable, même par l'administrateur OK")
 
@@ -150,7 +155,7 @@ def main():
     entree = Modification.objects.filter(quiz=quiz).first()
     for url in ("/admin/grader/modification/add/",
                 f"/admin/grader/modification/{entree.pk}/delete/"):
-        assert a.get(url).status_code == 403, f"{url} accessible"
+        assert au_tableau(a.get(url)), f"{url} accessible"
     a.post(f"/admin/grader/modification/{entree.pk}/change/",
            {"avant": "falsifié", "apres": "falsifié"})
     entree.refresh_from_db()
@@ -172,7 +177,7 @@ def main():
     l.force_login(lecteur)
     quiz.owner = lecteur
     quiz.save(update_fields=["owner"])
-    assert l.post(f"/lots/{lot.pk}/supprimer/").status_code == 403, (
+    assert au_tableau(l.post(f"/lots/{lot.pk}/supprimer/")), (
         "un compte sans le droit de corriger a supprimé un lot")
     quiz.owner = prof
     quiz.save(update_fields=["owner"])

@@ -169,7 +169,9 @@ def main():
         cl.post(reverse("inscriptions"), dict(fiche, numero="990003", cin="SEC990003")),
         cl.post(reverse("quiz_results", args=[qa.pk]), {"masquer_non_identifiees": "1"}),
     ]
-    assert [r.status_code for r in refus] == [403] * len(refus), [r.status_code for r in refus]
+    # droit manquant : retour au tableau de bord, sans page 403 (26 novembre 2026)
+    assert all((r.status_code, getattr(r, "url", None)) == (302, "/") for r in refus), \
+        [(r.status_code, getattr(r, "url", None)) for r in refus]
     assert not ClassGroup.objects.filter(name="SEC lecteur").exists()
     assert not Communique.objects.filter(titre="SEC faux").exists()
     assert Student.objects.filter(pk=cand_a.pk).exists()

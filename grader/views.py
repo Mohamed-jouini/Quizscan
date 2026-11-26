@@ -142,6 +142,18 @@ class ConnexionView(LoginView):
         return ""
 
 
+def acces_refuse(request, exception=None):
+    """Droit manquant (PermissionDenied ; demande de l'utilisateur, 26 novembre 2026 : un
+    compte sans le droit de changer une note voyait « 403 Accès refusé ») : un compte
+    connecté revient tout droit à son tableau de bord, sans message. Rien n'a changé : le
+    refus tombe avant tout enregistrement (droits.exiger en tête de chaque geste). Un
+    visiteur non connecté (envoi anonyme trop gros, grader.securite) garde la page 403."""
+    if getattr(request, "user", None) is not None and request.user.is_authenticated:
+        return redirect("dashboard")
+    from django.views.defaults import permission_denied
+    return permission_denied(request, exception)
+
+
 def echec_csrf(request, reason=""):
     """Formulaire refusé faute de jeton CSRF valable : resté ouvert trop longtemps, ou renvoyé
     par la flèche « retour » du navigateur après une connexion (le jeton change à chaque
@@ -1511,8 +1523,11 @@ def sheet_review(request, pk):
     # noter les réponses manuscrites. Une copie reconnue (QR, n°) garde son
     # étudiant ; une case lue sur un QCM ne se retouche pas — pour personne
     # (voir grader/droits.py).
-    a_enregistrer = sheet.student is None or any(
-        a.question.qtype == "open" for a in answers)
+    # Sans le droit de corriger, l'écran est en lecture seule (26 novembre 2026) : ni champ
+    # ni bouton « Enregistrer », plutôt qu'une note tapée pour rien puis refusée.
+    peut_corriger = request.user.has_perm(droits.CORRIGER)
+    a_enregistrer = peut_corriger and (sheet.student is None or any(
+        a.question.qtype == "open" for a in answers))
     # Image de contrôle d'avant la correction : cadres NOM/PRÉNOM sur une
     # fiche de concours qui n'en a pas — effacés une fois pour toutes.
     services.nettoyer_controle(sheet)
@@ -1588,7 +1603,7 @@ def sheet_review(request, pk):
         "version": version,
         "position": position + 1, "total": len(sheet_ids),
         "prev_id": prev_id, "next_id": next_id,
-        "a_enregistrer": a_enregistrer,
+        "a_enregistrer": a_enregistrer, "peut_corriger": peut_corriger,
         "historique": sheet.modifications.all()[:30],
     })
 

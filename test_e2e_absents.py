@@ -223,10 +223,10 @@ def main():
     assert "Copies manquantes : 2 candidats" in page and "sans les absents" not in page
     r = c.post(reverse("quiz_absents", args=[quiz_c.pk]),
                {"fichier": SimpleUploadedFile("liste.xlsx", reduire(export, set()))})
-    assert r.status_code == 403
+    assert (r.status_code, getattr(r, "url", None)) == (302, "/"), "retour au tableau de bord"
     assert Student.objects.filter(class_group=quiz_c.class_group).count() == 2
     print("  pas pour une classe (404) ; sans le droit de créer : pas de bouton, envoi "
-          "refusé (403) OK")
+          "refusé, retour au tableau de bord sans rien changer OK")
     nettoyer()
     print("Tous les contrôles des absents sont passés.")
 

@@ -1042,7 +1042,11 @@ réellement un administrateur d'établissement :
 - **« Autorisations »** : *Créer des épreuves* et *Corriger les copies* se
   donnent séparément. Aucune des deux ne permet de modifier la note d'un QCM,
   établie par lecture optique ; seul un administrateur peut rectifier une
-  case mal lue ;
+  case mal lue. Un geste sans le droit voulu (changer une note, créer, supprimer…)
+  ramène tout droit au tableau de bord, sans rien changer et sans page « Accès refusé »
+  (26 novembre 2026, demande de l'utilisateur) ; seul un visiteur sans compte voit encore
+  la page 403. Sans le droit de corriger, l'écran de vérification d'une copie est en
+  lecture seule : la note s'y lit, sans champ ni bouton « Enregistrer » ;
 - décocher **« Actif »** ferme l'accès sans supprimer le compte. Supprimer le
   compte d'un enseignant qui part est possible aussi : ses classes, épreuves
   et notes sont conservées, sans titulaire, et peuvent être confiées à un

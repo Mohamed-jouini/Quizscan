@@ -185,9 +185,18 @@ def main():
 
     lecteur = Client()
     lecteur.force_login(sans_droit)
-    texte = controler(lecteur, "/quiz/nouveau/", attendu=403, etiquette="page 403")
-    assert "Demandez-la à l'administrateur" in texte, (
-        "la 403 n'affiche pas le message qui dit quoi faire")
+    # droit manquant : retour au tableau de bord, sans page 403 (26 novembre 2026) ; la page
+    # 403 reste celle d'un visiteur sans compte (envoi trop gros, grader.securite)
+    refus = lecteur.get("/quiz/nouveau/")
+    assert (refus.status_code, getattr(refus, "url", None)) == (302, "/"), (
+        refus.status_code, getattr(refus, "url", None))
+    gros = Client().post(reverse("public_resultat"), data="numero=" + "1" * 1_100_000,
+                         content_type="application/x-www-form-urlencoded")
+    assert gros.status_code == 403
+    texte = visible(gros.content.decode())
+    _verifier(texte, "page 403")
+    assert "Accès refusé" in texte and "comptes connectés" in texte, (
+        "la 403 n'est pas la nôtre, ou n'affiche pas son message")
 
     # sur la page de connexion, un jeton périmé mène au formulaire neuf (24 novembre 2026,
     # views.echec_csrf) : la page « Formulaire expiré » se voit sur les autres formulaires
