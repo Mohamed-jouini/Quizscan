@@ -1039,10 +1039,11 @@ réellement un administrateur d'établissement :
 - **« Concours »** : les listes de candidats des concours, une par étape, cochées à
   part des classes ; l'enseignant voit les étapes cochées, leurs candidats, copies
   et résultats ;
-- **« Autorisations »** : un **tableau** (26 novembre 2026, demande de l'utilisateur :
-  « donne la main de choisir Ajouter, Modifier, Supprimer, Vérifier »), une ligne par
-  domaine, une case par geste, et « Lancer la correction » dessous ; ce que permet chaque
-  case est écrit sous le tableau :
+- **« Autorisations »** (26 novembre 2026, demande de l'utilisateur : « donne la main de
+  choisir Ajouter, Modifier, Supprimer, Vérifier ») : un encadré par domaine, et dedans une
+  case par geste, devant la ligne qui dit ce qu'il permet (« Ajouter : créer un concours ou
+  un quiz… » ; d'abord un tableau à colonnes, que l'utilisateur a barré). « Lancer la
+  correction » est dans l'encadré des copies :
 
   | Domaine | Ajouter | Modifier | Supprimer | Vérifier |
   |---|---|---|---|---|

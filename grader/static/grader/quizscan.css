@@ -2104,16 +2104,14 @@ fieldset.matiere legend{font-weight:600;font-size:13px;padding:0 6px}
 .manquantes__actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 4px}
 .manquantes__actions form{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0}
 .shell .manquantes__actions input[type=file]{width:auto;max-width:300px;padding:5px 8px;font-size:13px}
-/* Tableau des droits d'un compte, dans l'administration (26 novembre 2026) : un domaine par
-   ligne, un geste par colonne, ce que permet chaque case dessous. */
-.tableau-droits__table{border-collapse:collapse;margin:2px 0 10px}
-.tableau-droits__table th,.tableau-droits__table td{padding:7px 16px;border-bottom:1px solid var(--qs-line);text-align:center}
-.tableau-droits__table thead th{font-size:12px;font-weight:700;color:var(--qs-muted)}
-.tableau-droits__table th[scope="row"]{text-align:start;font-weight:600;color:var(--qs-ink)}
-.tableau-droits__table input[type=checkbox]{width:17px;height:17px;margin:0}
-.tableau-droits__vide{color:var(--qs-faint)}
-.tableau-droits__lancer{margin:4px 0 10px;font-size:13px;color:var(--qs-muted)}
-.tableau-droits__legende{margin:6px 0 0;font-size:12.5px;color:var(--qs-muted);line-height:1.55}
-.tableau-droits__legende dt{margin-top:7px;font-weight:600;color:var(--qs-ink)}
-.tableau-droits__legende dd{margin:0}
-.tableau-droits__lancer label{display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--qs-ink)}
+/* Droits d'un compte, dans l'administration (26 novembre 2026) : un encadré par domaine, une
+   case par geste sur la ligne qui dit ce qu'il permet. */
+.droits-compte{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px;margin:2px 0 4px}
+.droits-compte__groupe{border:1px solid var(--qs-line);border-radius:12px;padding:10px 14px 6px;min-width:0}
+.droits-compte__titre{margin:0 0 4px;font-weight:700;font-size:13.5px;color:var(--qs-ink)}
+.droits-compte label.droits-compte__case{display:flex;align-items:flex-start;gap:9px;margin:7px 0;
+  font-size:13px;font-weight:400;line-height:1.45;color:var(--qs-muted);cursor:pointer;
+  width:auto;min-width:0;padding:0;float:none}
+.droits-compte label.droits-compte__case::after{content:none}
+.droits-compte__case input[type=checkbox]{flex:none;width:16px;height:16px;margin:2px 0 0}
+.droits-compte__case b{color:var(--qs-ink)}

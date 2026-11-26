@@ -1,23 +1,17 @@
 {% comment %}
-Le tableau des droits d'un compte (26 novembre 2026 ; grader/useradmin.py, TableauDroits) : un
-domaine par ligne, un geste par colonne, « lancer la correction » dessous, et ce que permet chaque
-case. Les textes viennent de grader/droits.py (traduits) ; aucun ici.
-{% endcomment %}<div class="tableau-droits" id="{{ widget.attrs.id }}">
-  <table class="tableau-droits__table">
-    <thead><tr><th></th>{% for geste in tableau.gestes %}<th scope="col">{{ geste }}</th>{% endfor %}</tr></thead>
-    <tbody>
-    {% for ligne in tableau.lignes %}
-    <tr>
-      <th scope="row">{{ ligne.libelle }}</th>
-      {% for case in ligne.cases %}<td>{% if case %}<input type="checkbox" name="{{ widget.name }}" value="{{ case.code }}" id="{{ widget.attrs.id }}_{{ case.code }}" aria-label="{{ case.libelle }}" title="{{ case.libelle }} : {{ case.aide }}"{% if case.coche %} checked{% endif %}>{% else %}<span class="tableau-droits__vide" aria-hidden="true">—</span>{% endif %}</td>{% endfor %}
-    </tr>
+Les droits d'un compte (26 novembre 2026 ; grader/useradmin.py, TableauDroits) : un encadré par
+domaine, et dedans une case par geste, sur la ligne qui dit ce qu'il permet. Les textes viennent
+de grader/droits.py et de useradmin.py (traduits) ; aucun ici.
+{% endcomment %}<div class="droits-compte" id="{{ widget.attrs.id }}">
+  {% for groupe in groupes %}
+  <div class="droits-compte__groupe" role="group" aria-labelledby="{{ widget.attrs.id }}_{{ groupe.domaine }}">
+    <p class="droits-compte__titre" id="{{ widget.attrs.id }}_{{ groupe.domaine }}">{{ groupe.libelle }}</p>
+    {% for case in groupe.cases %}
+    <label class="droits-compte__case" for="{{ widget.attrs.id }}_{{ case.code }}">
+      <input type="checkbox" name="{{ widget.name }}" value="{{ case.code }}" id="{{ widget.attrs.id }}_{{ case.code }}"{% if case.coche %} checked{% endif %}>
+      <span><b>{{ case.geste }}</b>{% if rtl %}: {% else %} : {% endif %}{{ case.aide }}</span>
+    </label>
     {% endfor %}
-    </tbody>
-  </table>
-  <p class="tableau-droits__lancer"><label><input type="checkbox" name="{{ widget.name }}" value="{{ tableau.lancer.code }}" id="{{ widget.attrs.id }}_{{ tableau.lancer.code }}"{% if tableau.lancer.coche %} checked{% endif %}> <b>{{ tableau.lancer.libelle }}</b></label> — {{ tableau.lancer.aide }}</p>
-  <dl class="tableau-droits__legende">
-    {% for ligne in tableau.lignes %}<dt>{{ ligne.libelle }}</dt>
-    <dd>{% for geste, aide in ligne.aides %}<b>{{ geste }}</b> : {{ aide }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</dd>
-    {% endfor %}
-  </dl>
+  </div>
+  {% endfor %}
 </div>

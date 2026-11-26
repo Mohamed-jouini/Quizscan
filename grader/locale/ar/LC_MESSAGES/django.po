@@ -6694,3 +6694,11 @@ msgstr "ما يمكن لهذا الحساب القيام به"
 #: grader/useradmin.py
 msgid "Cochez, domaine par domaine, ce que ce compte peut ajouter, modifier, supprimer ou vérifier ; le détail de chaque case est sous le tableau. Dans tous les cas, la note d'un QCM reste celle de la lecture optique : un enseignant ne la modifie pas."
 msgstr "أشِّر، مجالًا مجالًا، على ما يمكن لهذا الحساب إضافته أو تعديله أو حذفه أو التحقق منه؛ وتفصيل كل خانة تحت الجدول. وفي كل الأحوال، تبقى علامة الاختيار من متعدد هي نتيجة القراءة الضوئية: لا يعدّلها الأستاذ."
+
+#: grader/useradmin.py
+msgid "Cochez, domaine par domaine, ce que ce compte peut faire : chaque case dit ce qu'elle permet. Dans tous les cas, la note d'un QCM reste celle de la lecture optique : un enseignant ne la modifie pas."
+msgstr "أشِّر، مجالًا مجالًا، على ما يمكن لهذا الحساب القيام به: كل خانة تذكر ما تسمح به. وفي كل الأحوال، تبقى علامة الاختيار من متعدد هي نتيجة القراءة الضوئية: لا يعدّلها الأستاذ."
+
+#: grader/useradmin.py
+msgid "Lancer"
+msgstr "إطلاق"

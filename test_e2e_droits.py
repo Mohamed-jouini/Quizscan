@@ -444,7 +444,7 @@ def main():
         return get_user_model().objects.get(pk=compte.pk)
 
     page = patron_client.get(f"/admin/auth/user/{redacteur.pk}/change/").content.decode()
-    assert 'class="tableau-droits__table"' in page and 'value="copie_verifier"' in page
+    assert 'class="droits-compte"' in page and 'value="copie_verifier"' in page
     for nom in ("Copies — ajouter (téléverser les scans)", "Lancer la correction",
                 "Questions et corrigé — supprimer", "Candidats et inscriptions — ajouter",
                 "Tout créer : concours et quiz, questions, candidats, communiqués"):

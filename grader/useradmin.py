@@ -23,7 +23,7 @@ from django.contrib.auth.models import Permission
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.text import format_lazy
-from django.utils.translation import gettext, gettext_lazy
+from django.utils.translation import get_language_bidi, gettext, gettext_lazy
 
 from . import droits
 from .admin_titres import TitresFrancais
@@ -33,32 +33,28 @@ User = get_user_model()
 
 
 class TableauDroits(forms.CheckboxSelectMultiple):
-    """Les droits d'un compte en tableau (26 novembre 2026) : un domaine par ligne, un geste
-    par colonne (ajouter, modifier, supprimer, vérifier), « lancer la correction » dessous,
-    et ce que permet chaque case (grader/templates/grader/widgets/tableau_droits.html)."""
+    """Les droits d'un compte, domaine par domaine (26 novembre 2026) : sous chaque domaine,
+    une case par geste, sur la ligne qui dit ce qu'il permet (« Ajouter : créer un concours
+    ou un quiz… ») — demande de l'utilisateur, qui a barré le tableau à colonnes et dessiné
+    une case devant chaque ligne. « Lancer la correction » est avec les copies
+    (grader/templates/grader/widgets/tableau_droits.html)."""
     template_name = "grader/widgets/tableau_droits.html"
 
     def get_context(self, name, value, attrs):
         contexte = super().get_context(name, value, attrs)
         cochees = {str(v) for v in (value or [])}
-        lignes = []
+        groupes = []
         for domaine, libelle, gestes in droits.TABLEAU:
-            cases, aides = [], []
-            for geste in droits.GESTES:
-                if geste not in gestes:
-                    cases.append(None)
-                    continue
-                code = droits.code_case(domaine, geste)
-                cases.append({"code": code, "coche": code in cochees, "aide": droits.AIDE[code],
-                              "libelle": format_lazy("{} — {}", libelle,
-                                                     droits.LIBELLES_GESTES[geste])})
-                aides.append((droits.LIBELLES_GESTES[geste], droits.AIDE[code]))
-            lignes.append({"libelle": libelle, "cases": cases, "aides": aides})
-        contexte["tableau"] = {
-            "gestes": [droits.LIBELLES_GESTES[g] for g in droits.GESTES], "lignes": lignes,
-            "lancer": {"code": "lancer_correction", "coche": "lancer_correction" in cochees,
-                       "libelle": gettext_lazy("Lancer la correction"),
-                       "aide": droits.AIDE["lancer_correction"]}}
+            codes = [(droits.code_case(domaine, g), droits.LIBELLES_GESTES[g]) for g in gestes]
+            if domaine == "copie":
+                codes.append(("lancer_correction", gettext_lazy("Lancer")))
+            groupes.append({"domaine": domaine, "libelle": libelle, "cases": [
+                {"code": code, "geste": geste, "aide": droits.AIDE[code],
+                 "coche": code in cochees} for code, geste in codes]})
+        contexte["groupes"] = groupes
+        # le gabarit d'un widget n'a pas les processeurs de contexte : le sens de l'écriture
+        # (deux-points sans espace avant en arabe) se donne ici
+        contexte["rtl"] = get_language_bidi()
         return contexte
 
 
@@ -253,10 +249,9 @@ class CompteAdmin(TitresFrancais, UserAdmin):
             "fields": ("concours",)}),
         (gettext_lazy("Autorisations"), {
             "description": gettext_lazy("Cochez, domaine par domaine, ce que ce compte peut "
-                                        "ajouter, modifier, supprimer ou vérifier ; le détail "
-                                        "de chaque case est sous le tableau. Dans tous les cas, "
-                                        "la note d'un QCM reste celle de la lecture optique : "
-                                        "un enseignant ne la modifie pas."),
+                                        "faire : chaque case dit ce qu'elle permet. Dans tous "
+                                        "les cas, la note d'un QCM reste celle de la lecture "
+                                        "optique : un enseignant ne la modifie pas."),
             "fields": ("gestes",)}),
         (gettext_lazy("Permissions détaillées"), {
             "classes": ("collapse",),
