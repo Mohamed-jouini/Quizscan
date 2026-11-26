@@ -30,6 +30,7 @@ navigation au lieu de deux.
 {#apres extrastyle (ou Django injecte forms.css et le CSS des widgets) :#}
 {#a specificite egale, c est la derniere chargee qui l emporte.#}
 <link rel="stylesheet" href="{% statique 'grader/quizscan.css' %}">
+<link rel="icon" type="image/png" href="{% statique 'grader/logo-ispa.png' %}">
 {% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% block stylesheet_rtl %}{% static "admin/css/rtl.css" %}{% endblock %}">{% endif %}
 {% block extrahead %}{% endblock %}
 {% block responsive %}
@@ -53,9 +54,9 @@ navigation au lieu de deux.
   {#Les lister aux deux endroits obligeait à chercher deux fois.#}
   <aside class="side">
     <div class="side__brand">
-      <span class="side__mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
-      </span>
+      {# le logo de l'institut (26 novembre 2026, demande de l'utilisateur) #}
+      <img class="side__logo" src="{% statique 'grader/logo-ispa.png' %}" width="52" height="52"
+           alt="المعهد الأعلى للمحاماة — ISPA">
       <span class="side__name">QuizScan<small>D Technology</small></span>
     </div>
 

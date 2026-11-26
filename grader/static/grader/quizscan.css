@@ -226,12 +226,11 @@ body #container{
   height:calc(100vh - 2 * var(--qs-gutter) - 2px);
 }
 .side__brand{display:flex;align-items:center;gap:10px;padding:4px 10px 20px}
-.side__mark{
-  width:34px;height:34px;border-radius:10px;flex:none;background:var(--qs-accent);
-  display:flex;align-items:center;justify-content:center;
+/* le logo de l'institut (26 novembre 2026) : noir sur blanc, dans une vignette blanche */
+.side__logo{
+  width:52px;height:52px;border-radius:12px;flex:none;background:#fff;padding:3px;
+  object-fit:contain;
 }
-.side__mark svg{width:19px;height:19px;fill:none;stroke:var(--qs-accent-ink);
-  stroke-width:2}
 .side__name{font-weight:700;font-size:17px;letter-spacing:.1px;line-height:1.1;
   color:var(--qs-side-ink)}
 .side__name small{display:block;font-size:9.5px;font-weight:600;letter-spacing:1.3px;
@@ -823,12 +822,10 @@ body.auth-page{
 }
 .brand{display:flex;align-items:center;gap:10px;font-weight:700;
   letter-spacing:.3px;font-size:15px;color:var(--qs-ink);margin-bottom:auto}
-.brand__mark{
-  width:30px;height:30px;border-radius:9px;flex:none;background:var(--qs-accent);
-  display:flex;align-items:center;justify-content:center;
+.brand__logo{
+  width:56px;height:56px;border-radius:12px;flex:none;background:#fff;padding:3px;
+  object-fit:contain;border:1px solid var(--qs-line);
 }
-.brand__mark svg{width:17px;height:17px;fill:none;stroke:var(--qs-accent-ink);
-  stroke-width:2}
 .brand__suffix{opacity:.5;font-weight:600}
 .auth h1{
   font-size:clamp(28px,3.6vw,36px);font-weight:700;letter-spacing:-.8px;
@@ -1461,6 +1458,7 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
   .nav__item.is-active::before{left:12px;right:12px;top:auto;bottom:2px;
     width:auto;height:3px;border-radius:3px}
   .side__brand{padding:0 12px;padding-inline-start:4px}
+  .side__logo{width:40px;height:40px;border-radius:10px;padding:2px}
   .side__name small{display:none}
   .nav{flex-direction:row;gap:4px}
   .nav__item{white-space:nowrap;padding:8px 12px}

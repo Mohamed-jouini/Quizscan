@@ -9,6 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}QuizScan{% endblock %}</title>
 <link rel="stylesheet" href="{% statique 'grader/quizscan.css' %}">
+<link rel="icon" type="image/png" href="{% statique 'grader/logo-ispa.png' %}">
 {#Avant le corps : le theme retenu est pose sans que la page clignote.#}
 <script src="{% statique 'grader/theme.js' %}"></script>
 <script defer src="{% statique 'grader/pages.js' %}"></script>
@@ -25,9 +26,9 @@
 {% with un=request.resolver_match.url_name %}
   <aside class="side">
     <div class="side__brand">
-      <span class="side__mark">
-        <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
-      </span>
+      {# le logo de l'institut (26 novembre 2026, demande de l'utilisateur) #}
+      <img class="side__logo" src="{% statique 'grader/logo-ispa.png' %}" width="52" height="52"
+           alt="المعهد الأعلى للمحاماة — ISPA">
       <span class="side__name">QuizScan<small>D Technology</small></span>
     </div>
 
