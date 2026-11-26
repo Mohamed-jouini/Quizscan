@@ -366,6 +366,85 @@ def main():
         "la classe ou l'épreuve a gardé un enseignant supprimé")
     print("  suppression   compte retiré, classe et épreuve conservées OK")
 
+    # ---------------------------------------------------------------- 8
+    # Droits fins (26 novembre 2026, demande de l'utilisateur) : téléverser les copies,
+    # lancer la correction, saisir les questions se donnent seuls, et chacun ne permet que
+    # son geste. Les droits larges les englobent (sections 1 et 2).
+    televerseur = _compte("dr_televerser", droits.TELEVERSER)
+    lanceur = _compte("dr_lancer", droits.LANCER)
+    redacteur = _compte("dr_questions", droits.QUESTIONS)
+    classe_fine = ClassGroup.objects.create(name="DR droits fins", owner=les_deux)
+    fine = Quiz.objects.create(title="DR droits fins", class_group=classe_fine, owner=les_deux)
+    q_fine = Question.objects.create(quiz=fine, order=1, qtype="qcm", points=1,
+                                     num_choices=4, correct_choice=0)
+    lot_fin = ScanBatch.objects.create(quiz=fine, label="DR lot fin", status="pending",
+                                       total_pages=1)
+
+    def essai(compte, url, donnees=None, methode="post"):
+        fine.owner = compte
+        fine.save(update_fields=["owner"])
+        return _issue(getattr(_client(compte), methode)(url, donnees or {}))
+
+    for compte, permis in ((televerseur, True), (lanceur, False), (redacteur, False)):
+        issue = essai(compte, f"/quiz/{fine.pk}/upload/")
+        assert (issue != "refus") == permis, (compte.username, "téléverser", issue)
+    for compte, permis in ((televerseur, False), (redacteur, False), (lanceur, True)):
+        issue = essai(compte, f"/quiz/{fine.pk}/", {"launch_grading": "1"})
+        assert (issue != "refus") == permis, (compte.username, "lancer", issue)
+    lot_fin.refresh_from_db()
+    assert lot_fin.status != "pending", "le droit de lancer n'a pas lancé la correction"
+    for compte, permis in ((televerseur, False), (lanceur, False), (redacteur, True)):
+        issue = essai(compte, f"/quiz/{fine.pk}/", {"edit_question": q_fine.pk, "correct": "2"})
+        q_fine.refresh_from_db()
+        assert (issue != "refus", q_fine.correct_choice == 2) == (permis, permis), (
+            compte.username, "questions", issue, q_fine.correct_choice)
+    for compte, permis in ((televerseur, False), (redacteur, True)):
+        issue = essai(compte, f"/quiz/{fine.pk}/corrige/")
+        assert (issue != "refus") == permis, (compte.username, "corrigé", issue)
+    # saisir les questions ne règle pas l'épreuve, ne la génère pas, n'en crée pas
+    assert essai(redacteur, f"/quiz/{fine.pk}/",
+                 {"update_settings": "1", "title": "DR piratée"}) == "refus"
+    fine.refresh_from_db()
+    assert fine.title == "DR droits fins"
+    assert essai(redacteur, f"/quiz/{fine.pk}/", {"generate_pdf": "1"}) == "refus"
+    assert essai(redacteur, "/quiz/nouveau/", methode="get") == "refus"
+    # aucun des trois ne vérifie une copie
+    copie_fine = SheetScan.objects.create(batch=lot_fin, source_name="fin.jpg", status="ok")
+    for compte in (televerseur, lanceur, redacteur):
+        assert essai(compte, f"/copies/{copie_fine.pk}/", {"student": ""}) == "refus", compte
+    # l'écran ne propose que le geste permis
+    fine.owner = televerseur
+    fine.save(update_fields=["owner"])
+    page = _client(televerseur).get(f"/quiz/{fine.pk}/").content.decode()
+    assert f'action="/quiz/{fine.pk}/upload/"' in page and 'name="edit_question"' not in page
+    fine.owner = redacteur
+    fine.save(update_fields=["owner"])
+    page = _client(redacteur).get(f"/quiz/{fine.pk}/").content.decode()
+    assert 'name="edit_question"' in page and 'name="add_question"' in page
+    assert f'action="/quiz/{fine.pk}/upload/"' not in page and 'name="update_settings"' not in page
+    print("  droits fins   téléverser, lancer, saisir les questions : chacun son geste, "
+          "rien de plus OK")
+
+    # la fiche du compte : les trois cases, et les permissions dans la liste détaillée
+    envoi = patron_client.post(f"/admin/auth/user/{redacteur.pk}/change/", {
+        "username": redacteur.username, "first_name": "", "last_name": "", "email": "",
+        "role": "enseignant", "is_active": "on", "classes": [],
+        "peut_televerser": "on", "peut_lancer": "on",
+        "date_joined_0": "2026-01-01", "date_joined_1": "00:00:00"})
+    assert envoi.status_code == 302, f"fiche du compte -> {envoi.status_code}"
+    compte = get_user_model().objects.get(pk=redacteur.pk)
+    assert compte.has_perm(droits.TELEVERSER) and compte.has_perm(droits.LANCER)
+    assert not compte.has_perm(droits.QUESTIONS), "case décochée : le droit reste"
+    assert "téléverser" in patron_client.get("/admin/auth/user/").content.decode()
+    page = patron_client.get(f"/admin/auth/user/{redacteur.pk}/change/").content.decode()
+    for nom in ("Téléverser les copies scannées", "Lancer la correction",
+                "Saisir les questions et le corrigé",
+                "Créer les concours et les quiz, et leurs questions"):
+        assert f"quiz | {nom}" in page, f"« {nom} » absent des permissions détaillées"
+    assert 'name="peut_saisir_questions"' in page and 'name="peut_televerser"' in page
+    print("  administration les trois droits fins cochés un à un, et dans les permissions "
+          "détaillées OK")
+
     print("\n✅ TEST DES DROITS DES ENSEIGNANTS RÉUSSI")
 
 

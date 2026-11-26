@@ -271,8 +271,10 @@ def _lire_matieres(post, matieres):
 def _ecrit(request, quiz, fil=None):
     form = EpreuveEcritForm(instance=quiz)
     if request.method == "POST" and "launch_grading" in request.POST:
-        # concours corrigé après scan : le droit de corriger suffit, comme pour un QCM
-        droits.exiger(request.user, droits.CORRIGER, gettext("lancer la correction des copies"))
+        # concours corrigé après scan : le droit de lancer la correction suffit (ou celui de
+        # corriger, qui l'englobe), comme pour un QCM
+        droits.exiger(request.user, droits.LANCER_CORRECTION,
+                      gettext("lancer la correction des copies"))
         return lancer_correction(request, quiz)
     if request.method == "POST":
         droits.exiger(request.user, droits.CREER, gettext("modifier l'épreuve"))

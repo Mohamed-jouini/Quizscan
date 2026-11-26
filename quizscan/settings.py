@@ -72,6 +72,7 @@ TEMPLATES = [
                 "django.template.context_processors.i18n",     # LANGUAGE_CODE, LANGUAGE_BIDI
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "grader.droits.contexte",     # droits_compte : les gestes permis au compte
             ],
         },
     },

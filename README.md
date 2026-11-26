@@ -1039,10 +1039,15 @@ réellement un administrateur d'établissement :
 - **« Concours »** : les listes de candidats des concours, une par étape, cochées à
   part des classes ; l'enseignant voit les étapes cochées, leurs candidats, copies
   et résultats ;
-- **« Autorisations »** : *Créer des épreuves* et *Corriger les copies* se
-  donnent séparément. Aucune des deux ne permet de modifier la note d'un QCM,
-  établie par lecture optique ; seul un administrateur peut rectifier une
-  case mal lue. Un geste sans le droit voulu (changer une note, créer, supprimer…)
+- **« Autorisations »** : *Créer les concours et les quiz* (et leurs questions) et
+  *Corriger les copies* (téléverser, lancer la correction, vérifier) se donnent
+  séparément. Depuis le 26 novembre 2026, trois gestes se donnent aussi seuls, à qui ne
+  fait que celui-là : *Saisir les questions* (et le corrigé, sans créer ni régler
+  l'épreuve), *Téléverser les copies scannées*, *Lancer la correction* (ou la reprendre).
+  Les droits larges les englobent : les comptes d'avant ne perdent rien. Les cinq
+  figurent aussi dans les permissions détaillées du compte (« quiz | … »). Aucun ne
+  permet de modifier la note d'un QCM, établie par lecture optique ; seul un
+  administrateur peut rectifier une case mal lue. Un geste sans le droit voulu (changer une note, créer, supprimer…)
   ramène tout droit au tableau de bord, sans rien changer et sans page « Accès refusé »
   (26 novembre 2026, demande de l'utilisateur) ; seul un visiteur sans compte voit encore
   la page 403. Sans le droit de corriger, l'écran de vérification d'une copie est en

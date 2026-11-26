@@ -909,6 +909,13 @@ def _fiches_de_corrige(quiz):
     return fiches
 
 
+# Les gestes de la page d'une épreuve qui ne la règlent pas, dans l'ordre où quiz_detail les
+# traite (le premier présent est celui qu'elle fait) : la correction, et les questions et le
+# corrigé (26 novembre 2026 : droits fins, grader/droits.py). Tout autre geste la règle.
+GESTES_EPREUVE = ("add_question", "bulk_add", "import_questions", "copy_questions",
+                  "edit_question", "launch_grading", "delete_answer_key", "delete_question")
+
+
 @login_required
 def quiz_detail(request, pk):
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
@@ -941,11 +948,15 @@ def quiz_detail(request, pk):
                                "suivent maintenant le type de copie choisi."))
 
     if request.method == "POST":
-        # Deux droits distincts se croisent ici : modifier l'epreuve, et
-        # lancer sa correction. On n'exige que celui du geste demande.
-        if "launch_grading" in request.POST:
-            droits.exiger(request.user, droits.CORRIGER,
+        # Trois droits se croisent ici : régler l'épreuve, en saisir les questions (et le
+        # corrigé), lancer sa correction (26 novembre 2026). On n'exige que celui du geste
+        # que la vue va faire : le premier présent, dans l'ordre où elle les traite.
+        geste = next((g for g in GESTES_EPREUVE if g in request.POST), None)
+        if geste == "launch_grading":
+            droits.exiger(request.user, droits.LANCER_CORRECTION,
                           gettext("lancer la correction des copies"))
+        elif geste:
+            droits.exiger(request.user, droits.SAISIR_QUESTIONS, gettext("saisir les questions"))
         else:
             droits.exiger(request.user, droits.CREER, gettext("modifier cette épreuve"))
         next_order = (quiz.questions.order_by("-order").values_list("order", flat=True).first() or 0) + 1
@@ -1275,7 +1286,7 @@ def quiz_detail(request, pk):
 
 @login_required
 def quiz_upload(request, pk):
-    droits.exiger(request.user, droits.CORRIGER, gettext("téléverser des copies"))
+    droits.exiger(request.user, droits.TELEVERSER_COPIES, gettext("téléverser des copies"))
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if quiz.type_epreuve == "oral":
         # notes de l'oral : un fichier Excel, et lui seul (13 novembre 2026)
@@ -1324,7 +1335,7 @@ def quiz_answer_key(request, pk):
 
     La fiche est lue comme une copie, renseigne le corrigé des questions QCM
     et reste conservée avec l'épreuve (historique du barème)."""
-    droits.exiger(request.user, droits.CREER, gettext("renseigner le corrigé"))
+    droits.exiger(request.user, droits.SAISIR_QUESTIONS, gettext("renseigner le corrigé"))
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if request.method != "POST":
         return redirect("quiz_detail", pk=pk)
@@ -1406,7 +1417,7 @@ def batch_detail(request, pk):
     # l'épreuve, QCM ou écrit (16 novembre 2026)
     if request.method == "POST" and ("resume" in request.POST
                                      or "reidentifier" in request.POST):
-        droits.exiger(request.user, droits.CORRIGER,
+        droits.exiger(request.user, droits.LANCER_CORRECTION,
                       gettext("lancer la correction des copies"))
     if request.method == "POST" and "reidentifier" in request.POST:
         n = services.reidentifier_lot(batch, request.user)

@@ -13,7 +13,7 @@ d'un lot (16 novembre 2026) : le bouton lance tous les lots en attente du concou
       <span class="helptext">{% blocktranslate trimmed %}Téléversez toutes les copies, puis lancez la correction : elles seront
         lues et notées en une seule fois.{% endblocktranslate %}</span>
     </div>
-    {% if perms.grader.corriger_copies %}
+    {% if droits_compte.lancer %}
     <form method="post" action="{% url 'quiz_detail' quiz.pk %}">{% csrf_token %}
       <button class="btn btn--grand" name="launch_grading" value="1" type="submit"
               {% if sans_corrige %}disabled title="{% translate "Complétez d'abord le corrigé" %}"{% endif %}

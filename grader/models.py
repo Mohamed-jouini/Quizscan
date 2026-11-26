@@ -383,14 +383,18 @@ class Quiz(models.Model):
         verbose_name = gettext_lazy("quiz")
         verbose_name_plural = gettext_lazy("quiz")
         ordering = ["-created_at"]
-        # Les deux droits que l'administration accorde compte par compte.
+        # Les droits que l'administration accorde compte par compte (grader/droits.py).
         # Ils sont portés par Quiz parce que c'est l'objet central, mais ils
-        # valent pour tout ce qui en découle : questions, fiches, copies.
+        # valent pour tout ce qui en découle : questions, fiches, copies. Les trois
+        # derniers (26 novembre 2026) se donnent seuls ; les deux premiers les englobent.
         permissions = [
             ("creer_epreuve",
-             "Créer et modifier des épreuves (quiz, concours, questions)"),
+             "Créer les concours et les quiz, et leurs questions"),
             ("corriger_copies",
-             "Téléverser les copies, lancer la correction et la vérifier"),
+             "Corriger les copies : téléverser, lancer la correction, vérifier"),
+            ("televerser_copies", "Téléverser les copies scannées"),
+            ("lancer_correction", "Lancer la correction"),
+            ("saisir_questions", "Saisir les questions et le corrigé"),
         ]
 
     def __str__(self):

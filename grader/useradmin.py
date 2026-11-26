@@ -4,10 +4,12 @@ L'administrateur d'établissement règle ici, pour chaque enseignant :
   - les **classes** dont il a la charge — il ne verra que celles-là ;
   - les **concours** dont il a la charge (une liste de candidats par étape, à part
     des classes) ;
-  - le droit de **créer des épreuves** ;
-  - le droit de **corriger les copies**.
-Les deux droits sont indépendants : préparer les sujets et dépouiller ne sont
-pas toujours le travail de la même personne. Aucun des deux ne permet de
+  - le droit de **créer les concours et les quiz** (et d'en saisir les questions) ;
+  - le droit de **corriger les copies** (téléverser, lancer la correction, vérifier) ;
+  - depuis le 26 novembre 2026, trois gestes seuls : **saisir les questions**,
+    **téléverser les copies scannées**, **lancer la correction**.
+Les droits sont indépendants : préparer les sujets et dépouiller ne sont
+pas toujours le travail de la même personne. Aucun ne permet de
 retoucher la note d'un QCM (voir grader/droits.py).
 
 L'écran livré par Django expose bien plus (groupes, permissions unitaires,
@@ -35,6 +37,11 @@ def _permission(nom_complet):
     application, code = nom_complet.split(".")
     return Permission.objects.get(
         content_type__app_label=application, codename=code)
+
+# Les cases des droits fins (26 novembre 2026), et la permission de chacune.
+DROITS_FINS = [("peut_saisir_questions", droits.QUESTIONS),
+               ("peut_televerser", droits.TELEVERSER),
+               ("peut_lancer", droits.LANCER)]
 
 ROLE_ENSEIGNANT = "enseignant"
 ROLE_ADMIN = "admin"
@@ -81,13 +88,29 @@ class CompteChangeForm(forms.ModelForm):
                   "étapes cochées, leurs candidats, copies et résultats."))
 
     peut_creer = forms.BooleanField(
-        label=gettext_lazy("Créer des épreuves"), required=False,
-        help_text=gettext_lazy("Saisir les questions, régler la fiche, produire les PDF."))
+        label=gettext_lazy("Créer les concours et les quiz"), required=False,
+        help_text=gettext_lazy("Créer les concours et les quiz, en saisir les questions, régler "
+                               "la fiche, produire les PDF."))
     peut_corriger = forms.BooleanField(
         label=gettext_lazy("Corriger les copies"), required=False,
         help_text=gettext_lazy("Téléverser les copies scannées, lancer la correction et "
                   "la vérifier. Ne permet pas de modifier la note d'un QCM : "
                   "elle est établie par lecture optique."))
+    # Droits fins (26 novembre 2026, demande de l'utilisateur) : un seul geste, pour qui ne
+    # fait que celui-là ; inutiles avec le droit large qui les englobe (ci-dessus).
+    peut_saisir_questions = forms.BooleanField(
+        label=gettext_lazy("Saisir les questions"), required=False,
+        help_text=gettext_lazy("Ajouter, modifier ou supprimer les questions d'une épreuve et "
+                               "renseigner son corrigé, sans la créer ni la régler. Compris "
+                               "dans « Créer les concours et les quiz »."))
+    peut_televerser = forms.BooleanField(
+        label=gettext_lazy("Téléverser les copies scannées"), required=False,
+        help_text=gettext_lazy("Envoyer les scans des copies, sans lancer ni vérifier la "
+                               "correction. Compris dans « Corriger les copies »."))
+    peut_lancer = forms.BooleanField(
+        label=gettext_lazy("Lancer la correction"), required=False,
+        help_text=gettext_lazy("Lancer (ou reprendre) la correction des copies téléversées, "
+                               "sans les vérifier. Compris dans « Corriger les copies »."))
 
     class Meta:
         model = User
@@ -108,6 +131,8 @@ class CompteChangeForm(forms.ModelForm):
                 ROLE_ADMIN if instance.is_superuser else ROLE_ENSEIGNANT)
             self.fields["peut_creer"].initial = droits.peut_creer(instance)
             self.fields["peut_corriger"].initial = droits.peut_corriger(instance)
+            for champ, droit in DROITS_FINS:
+                self.fields[champ].initial = instance.has_perm(droit)
         else:
             # Un nouvel enseignant sait faire son métier : les deux droits
             # sont cochés d'office, à décocher si l'établissement le veut.
@@ -175,9 +200,9 @@ class CompteChangeForm(forms.ModelForm):
         """
         if compte.is_superuser:
             return
-        for nom, coche in ((droits.CREER, self.cleaned_data.get("peut_creer")),
-                           (droits.CORRIGER,
-                            self.cleaned_data.get("peut_corriger"))):
+        for nom, coche in [(droits.CREER, self.cleaned_data.get("peut_creer")),
+                           (droits.CORRIGER, self.cleaned_data.get("peut_corriger"))] + [
+                (droit, self.cleaned_data.get(champ)) for champ, droit in DROITS_FINS]:
             permission = _permission(nom)
             if coche:
                 compte.user_permissions.add(permission)
@@ -214,10 +239,15 @@ class CompteAdmin(TitresFrancais, UserAdmin):
                                         "liste de candidats)."),
             "fields": ("concours",)}),
         (gettext_lazy("Autorisations"), {
-            "description": gettext_lazy("Les deux gestes se donnent séparément. Dans tous "
-                                        "les cas, la note d'un QCM reste celle de la "
-                                        "lecture optique : un enseignant ne la modifie pas."),
-            "fields": ("peut_creer", "peut_corriger")}),
+            "description": gettext_lazy("Chaque droit se donne séparément. Les trois derniers "
+                                        "ne servent qu'à qui ne fait que ce geste : « Créer les "
+                                        "concours et les quiz » permet déjà de saisir les "
+                                        "questions, « Corriger les copies » de téléverser et "
+                                        "de lancer la correction. Dans tous les cas, la note "
+                                        "d'un QCM reste celle de la lecture optique : un "
+                                        "enseignant ne la modifie pas."),
+            "fields": ("peut_creer", "peut_corriger", "peut_saisir_questions",
+                       "peut_televerser", "peut_lancer")}),
         (gettext_lazy("Permissions détaillées"), {
             "classes": ("collapse",),
             "description": gettext_lazy("Réglages avancés de Django. Le rôle ci-dessus "
@@ -258,8 +288,15 @@ class CompteAdmin(TitresFrancais, UserAdmin):
         tags = []
         if droits.peut_creer(obj):
             tags.append(gettext("créer"))
+        elif obj.has_perm(droits.QUESTIONS):
+            tags.append(gettext("questions"))
         if droits.peut_corriger(obj):
             tags.append(gettext("corriger"))
+        else:
+            if obj.has_perm(droits.TELEVERSER):
+                tags.append(gettext("téléverser"))
+            if obj.has_perm(droits.LANCER):
+                tags.append(gettext("lancer la correction"))
         if not tags:
             return format_html('<span class="qs-tag">{}</span>', gettext("lecture seule"))
         return format_html(

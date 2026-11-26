@@ -142,7 +142,7 @@
 
     <div class="card">
       <h2>{% translate "3. Copies corrigées à scanner" %}</h2>
-      {% if perms.grader.corriger_copies %}
+      {% if droits_compte.televerser %}
       <form method="post" action="{% url 'quiz_upload' quiz.pk %}" enctype="multipart/form-data">{% csrf_token %}
         <label>{{ upload_form.label.label }}</label>{{ upload_form.label }}
         <label>{{ upload_form.files.label }}</label>{{ upload_form.files }}

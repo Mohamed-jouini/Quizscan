@@ -47,7 +47,7 @@
   <div class="note__body">
     {% blocktranslate trimmed with processed_pages=batch.processed_pages total_pages=batch.total_pages %}Le traitement de ce lot s'est interrompu à {{ processed_pages }} / {{ total_pages }}
     page(s){% endblocktranslate %}{% if batch.error_message %} ({{ batch.error_message }}){% endif %}.
-    {% if perms.grader.corriger_copies %}
+    {% if droits_compte.lancer %}
     <form class="inline" method="post">{% csrf_token %}
       <button class="btn small" name="resume" value="1" type="submit">{% translate "Reprendre la correction" %}</button>
     </form>
@@ -64,7 +64,7 @@
     les notes sont déjà disponibles dans les résultats.{% endblocktranslate %}
     {% if n_attention %}{% blocktranslate trimmed %}{{ n_attention }} copie(s) demandent votre attention
       (non identifiées ou illisibles).{% endblocktranslate %}{% endif %}
-    {% if n_a_identifier and perms.grader.corriger_copies %}
+    {% if n_a_identifier and droits_compte.lancer %}
     <form class="inline" method="post">{% csrf_token %}
       <button class="btn small" name="reidentifier" value="1" type="submit">{% blocktranslate trimmed %}Identifier automatiquement ({{ n_a_identifier }}){% endblocktranslate %}</button>
     </form>

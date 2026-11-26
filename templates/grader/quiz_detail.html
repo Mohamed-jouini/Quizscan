@@ -168,7 +168,7 @@
       <p class="helptext helptext--serre">{% translate "Les copies peuvent être corrigées." %}</p>
       {% endif %}
     </div>
-    {% if perms.grader.creer_epreuve %}
+    {% if droits_compte.questions %}
     <form class="card__duo-action" method="post"
           action="{% url 'quiz_answer_key' quiz.pk %}" enctype="multipart/form-data">
       {% csrf_token %}
@@ -231,7 +231,7 @@
                 {% for ch in q.choices %}<bdi>{% if forloop.counter0 == q.correct_choice %}<b>{{ ch }}</b>{% else %}{{ ch }}{% endif %}</bdi>{% if not forloop.last %} · {% endif %}{% endfor %}
               </div>
             {% endif %}</td>
-        {% if perms.grader.creer_epreuve %}
+        {% if droits_compte.questions %}
         <td colspan="2">
           <form class="inline qedit" method="post">{% csrf_token %}
             {% if q.qtype == "qcm" %}
@@ -365,7 +365,7 @@
       <span class="helptext">{% if version_b_apercu %}<b>{% translate "Aperçu" %}</b> {% translate ": la version B est fixée à la génération des PDF." %} {% endif %}{% translate "Les questions de la version B et leurs choix, dans l'ordre imprimé. Sa bonne réponse suit le corrigé de la version A : modifiez-le dans le tableau de la version A, les deux versions se corrigent ensemble." %} {% translate "La bonne réponse est en gras : sa lettre change d'une version à l'autre quand ses choix ont changé de place, c'est la même réponse." %}</span>
     </div>
     {% endif %}
-    {% if perms.grader.creer_epreuve %}
+    {% if droits_compte.questions %}
     <div class="card">
       <h2>{% translate "Ajout rapide de QCM (corrigé)" %}</h2>
       <form method="post">{% csrf_token %}
@@ -437,7 +437,7 @@
 
 <div class="card">
   <h2>{% translate "Copies scannées" %}</h2>
-  {% if perms.grader.corriger_copies %}
+  {% if droits_compte.televerser %}
   <form method="post" action="{% url 'quiz_upload' quiz.pk %}" enctype="multipart/form-data">
     {% csrf_token %}
     <div class="grid2">

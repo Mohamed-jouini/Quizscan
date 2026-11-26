@@ -15,11 +15,25 @@ def franciser_permissions(**kwargs):
 
     Le nom de la table n'est pas répété : l'écran affiche déjà
     « Application | table | permission ».
+
+    Les droits propres à l'application (Meta.permissions de ses modèles) prennent le
+    libellé déclaré : une permission déjà créée garde sinon son premier libellé (droits
+    fins du 26 novembre 2026 : « Créer les concours et les quiz, et leurs questions »…).
     """
+    from django.apps import apps
     from django.contrib.auth.models import Permission
 
+    declares = {(modele._meta.app_label, code): nom
+                for modele in apps.get_app_config("grader").get_models()
+                for code, nom in modele._meta.permissions}
     a_renommer = []
     for permission in Permission.objects.select_related("content_type"):
+        nom = declares.get((permission.content_type.app_label, permission.codename))
+        if nom is not None:
+            if permission.name != nom:
+                permission.name = nom
+                a_renommer.append(permission)
+            continue
         action, _, reste = permission.codename.partition("_")
         if action not in VERBES or reste != permission.content_type.model:
             continue                   # permission propre à une application
