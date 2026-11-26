@@ -6598,3 +6598,99 @@ msgstr "<b>إضافة</b>: الأوراق الممسوحة.<br><b>تعديل</b>
 #: grader/useradmin.py
 msgid "<b>Lancer</b> : la correction des copies téléversées (ou la reprendre), identifier automatiquement les pages d'un lot.<br><b>Ajouter</b>, <b>modifier</b>, <b>supprimer</b>, <b>vérifier</b> : non. Compris dans « Corriger les copies »."
 msgstr "<b>إطلاق</b>: إصلاح الأوراق المرفوعة (أو استئنافه)، والتعرّف الآلي على صفحات دفعة.<br><b>إضافة</b> و<b>تعديل</b> و<b>حذف</b> و<b>تحقق</b>: لا. مشمول في «إصلاح الأوراق»."
+
+#: templates/grader/class_detail.html
+msgid "Votre compte ne peut pas ajouter de candidats : demandez la case « Candidats et inscriptions — Ajouter » à l'administrateur."
+msgstr "لا يمكن لحسابك إضافة مترشحين: اطلب من المشرف خانة «المترشحون والتسجيلات — إضافة»."
+
+#: templates/grader/class_list.html
+msgid "Votre compte ne peut pas créer de liste : demandez la case « Candidats et inscriptions — Ajouter » à l'administrateur."
+msgstr "لا يمكن لحسابك إنشاء قائمة: اطلب من المشرف خانة «المترشحون والتسجيلات — إضافة»."
+
+#: templates/grader/communiques.html
+msgid "Votre compte ne peut pas publier de communiqué : demandez la case « Communiqués — Ajouter » (ou « Modifier ») à l'administrateur."
+msgstr "لا يمكن لحسابك نشر بلاغ: اطلب من المشرف خانة «البلاغات — إضافة» (أو «تعديل»)."
+
+#: grader/droits.py
+msgid "Vérifier"
+msgstr "التحقق"
+
+#: grader/droits.py
+msgid "créer un concours ou un quiz, et l'étape suivante d'un concours"
+msgstr "إنشاء مناظرة أو اختبار، والمرحلة الموالية من مناظرة"
+
+#: grader/droits.py
+msgid "régler la fiche, produire les PDF, la note minimale, les coefficients, faire passer les admis"
+msgstr "ضبط الورقة، وإنتاج ملفات PDF، والعدد الأدنى للقبول، والضوارب، ونقل المقبولين إلى المرحلة الموالية"
+
+#: grader/droits.py
+msgid "une à une, ajout rapide, import, banque de questions"
+msgstr "واحدًا واحدًا، أو إضافة سريعة، أو استيراد، أو من بنك الأسئلة"
+
+#: grader/droits.py
+msgid "la bonne réponse et le barème, le corrigé scanné"
+msgstr "الإجابة الصحيحة وسلّم التنقيط، والإجابة النموذجية الممسوحة"
+
+#: grader/droits.py
+msgid "des questions, un corrigé scanné"
+msgstr "أسئلة، وإجابة نموذجية ممسوحة"
+
+#: grader/droits.py
+msgid "téléverser les scans des copies"
+msgstr "رفع الأوراق الممسوحة"
+
+#: grader/droits.py
+msgid "noter les réponses manuscrites et les notes d'écrit, importer les notes d'oral — jamais la note d'un QCM"
+msgstr "تنقيط الإجابات المكتوبة بخط اليد وأعداد الكتابي، واستيراد أعداد الشفاهي — ولا تُعدَّل أبدًا علامة الاختيار من متعدد"
+
+#: grader/droits.py
+msgid "un lot de copies, des notes d'oral importées"
+msgstr "دفعة من الأوراق، وأعداد شفاهي مستوردة"
+
+#: grader/droits.py
+msgid "vérifier les copies, affecter une copie non identifiée, publier les résultats"
+msgstr "التحقق من الأوراق، وإسناد ورقة غير معرَّفة، ونشر النتائج"
+
+#: grader/droits.py
+msgid "créer une liste, importer des candidats, inscrire au registre"
+msgstr "إنشاء قائمة، واستيراد مترشحين، والتسجيل في السجل"
+
+#: grader/droits.py
+msgid "une fiche du registre (les siennes)"
+msgstr "بطاقة من السجل (بطاقاته)"
+
+#: grader/droits.py
+msgid "des candidats sans copie, les absents, une fiche du registre (les siennes)"
+msgstr "مترشحون لا ورقة لهم، والغائبون، وبطاقة من السجل (بطاقاته)"
+
+#: grader/droits.py
+msgid "publier un communiqué"
+msgstr "نشر بلاغ"
+
+#: grader/droits.py
+msgid "ses communiqués"
+msgstr "بلاغاته"
+
+#: grader/droits.py
+msgid "lancer ou reprendre la correction, identifier automatiquement les pages d'un lot"
+msgstr "إطلاق الإصلاح أو استئنافه، والتعرّف الآلي على صفحات دفعة"
+
+#: grader/droits.py
+msgid "Concours et quiz"
+msgstr "المناظرات والاختبارات"
+
+#: grader/droits.py
+msgid "Questions et corrigé"
+msgstr "الأسئلة والإجابة النموذجية"
+
+#: grader/droits.py
+msgid "Candidats et inscriptions"
+msgstr "المترشحون والتسجيلات"
+
+#: grader/useradmin.py
+msgid "Ce que ce compte peut faire"
+msgstr "ما يمكن لهذا الحساب القيام به"
+
+#: grader/useradmin.py
+msgid "Cochez, domaine par domaine, ce que ce compte peut ajouter, modifier, supprimer ou vérifier ; le détail de chaque case est sous le tableau. Dans tous les cas, la note d'un QCM reste celle de la lecture optique : un enseignant ne la modifie pas."
+msgstr "أشِّر، مجالًا مجالًا، على ما يمكن لهذا الحساب إضافته أو تعديله أو حذفه أو التحقق منه؛ وتفصيل كل خانة تحت الجدول. وفي كل الأحوال، تبقى علامة الاختيار من متعدد هي نتيجة القراءة الضوئية: لا يعدّلها الأستاذ."

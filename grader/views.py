@@ -389,7 +389,7 @@ def class_list(request):
     form = ClassGroupForm(request.POST or None)
     if request.method == "POST":
         # un compte « lecture seule » (sans droit) ne crée rien
-        droits.exiger(request.user, droits.CREER, gettext("créer une classe"))
+        droits.exiger(request.user, droits.CANDIDAT_AJOUTER, gettext("créer une classe"))
     if request.method == "POST" and form.is_valid():
         group = form.save(commit=False)
         group.owner = request.user
@@ -477,6 +477,11 @@ def _save_candidates(request, group, rows):
     return len(a_creer), updated, len(nouvelles)
 
 
+# Les gestes de la page d'une liste, dans l'ordre où class_detail les traite
+GESTES_LISTE = ("import", "import_xlsx", "ajouter_inscrits", "importer_base",
+                "fermer_verification", "delete_student", "supprimer_choix")
+
+
 @login_required
 def class_detail(request, pk):
     group = get_object_or_404(_my_classes(request), pk=pk)
@@ -486,8 +491,15 @@ def class_detail(request, pk):
     import_form = StudentImportForm()
     xlsx_form = CandidateFileForm()
     if request.method == "POST":
-        if "fermer_verification" not in request.POST:
-            droits.exiger(request.user, droits.CREER, gettext("modifier les listes d'étudiants"))
+        # le droit du geste que la vue va faire : le premier présent, dans l'ordre où elle les
+        # traite (tableau des droits, 26 novembre 2026)
+        geste = next((g for g in GESTES_LISTE if g in request.POST), None)
+        if geste in ("delete_student", "supprimer_choix"):
+            droits.exiger(request.user, droits.CANDIDAT_SUPPRIMER,
+                          gettext("modifier les listes d'étudiants"))
+        elif geste != "fermer_verification":
+            droits.exiger(request.user, droits.CANDIDAT_AJOUTER,
+                          gettext("modifier les listes d'étudiants"))
         if "import" in request.POST:
             import_form = StudentImportForm(request.POST)
             if import_form.is_valid():
@@ -694,7 +706,7 @@ def class_labels_pdf(request, pk):
 
 @login_required
 def quiz_create(request):
-    droits.exiger(request.user, droits.CREER, gettext("créer une épreuve"))
+    droits.exiger(request.user, droits.EPREUVE_AJOUTER, gettext("créer une épreuve"))
     # « Nouveau concours » (menu Concours) : liste de candidats propre au
     # concours, identification par étiquette QR ou grille de n°
     is_concours = request.GET.get("concours") == "1"
@@ -948,17 +960,22 @@ def quiz_detail(request, pk):
                                "suivent maintenant le type de copie choisi."))
 
     if request.method == "POST":
-        # Trois droits se croisent ici : régler l'épreuve, en saisir les questions (et le
-        # corrigé), lancer sa correction (26 novembre 2026). On n'exige que celui du geste
-        # que la vue va faire : le premier présent, dans l'ordre où elle les traite.
+        # Plusieurs droits se croisent ici : régler l'épreuve, en ajouter, modifier ou
+        # supprimer les questions (et le corrigé), lancer sa correction (tableau des droits,
+        # 26 novembre 2026). On n'exige que celui du geste que la vue va faire : le premier
+        # présent, dans l'ordre où elle les traite.
         geste = next((g for g in GESTES_EPREUVE if g in request.POST), None)
         if geste == "launch_grading":
             droits.exiger(request.user, droits.LANCER_CORRECTION,
                           gettext("lancer la correction des copies"))
+        elif geste == "edit_question":
+            droits.exiger(request.user, droits.QUESTION_MODIFIER, gettext("saisir les questions"))
+        elif geste in ("delete_answer_key", "delete_question"):
+            droits.exiger(request.user, droits.QUESTION_SUPPRIMER, gettext("saisir les questions"))
         elif geste:
-            droits.exiger(request.user, droits.SAISIR_QUESTIONS, gettext("saisir les questions"))
+            droits.exiger(request.user, droits.QUESTION_AJOUTER, gettext("saisir les questions"))
         else:
-            droits.exiger(request.user, droits.CREER, gettext("modifier cette épreuve"))
+            droits.exiger(request.user, droits.EPREUVE_MODIFIER, gettext("modifier cette épreuve"))
         next_order = (quiz.questions.order_by("-order").values_list("order", flat=True).first() or 0) + 1
         if "add_question" in request.POST:
             qform = QuestionForm(request.POST, quiz=quiz)
@@ -1286,7 +1303,7 @@ def quiz_detail(request, pk):
 
 @login_required
 def quiz_upload(request, pk):
-    droits.exiger(request.user, droits.TELEVERSER_COPIES, gettext("téléverser des copies"))
+    droits.exiger(request.user, droits.COPIE_AJOUTER, gettext("téléverser des copies"))
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if quiz.type_epreuve == "oral":
         # notes de l'oral : un fichier Excel, et lui seul (13 novembre 2026)
@@ -1335,7 +1352,7 @@ def quiz_answer_key(request, pk):
 
     La fiche est lue comme une copie, renseigne le corrigé des questions QCM
     et reste conservée avec l'épreuve (historique du barème)."""
-    droits.exiger(request.user, droits.SAISIR_QUESTIONS, gettext("renseigner le corrigé"))
+    droits.exiger(request.user, droits.QUESTION_MODIFIER, gettext("renseigner le corrigé"))
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
     if request.method != "POST":
         return redirect("quiz_detail", pk=pk)
@@ -1389,7 +1406,7 @@ def quiz_answer_key(request, pk):
 def batch_delete(request, pk):
     """Confirmation, puis suppression d'un lot téléversé par erreur."""
     batch = get_object_or_404(_my_batches(request), pk=pk)
-    droits.exiger(request.user, droits.CORRIGER, gettext("supprimer un lot de copies"))
+    droits.exiger(request.user, droits.COPIE_SUPPRIMER, gettext("supprimer un lot de copies"))
     if request.method == "POST":
         quiz_pk = batch.quiz_id
         nom = str(batch)
@@ -1534,17 +1551,27 @@ def sheet_review(request, pk):
     # noter les réponses manuscrites. Une copie reconnue (QR, n°) garde son
     # étudiant ; une case lue sur un QCM ne se retouche pas — pour personne
     # (voir grader/droits.py).
-    # Sans le droit de corriger, l'écran est en lecture seule (26 novembre 2026) : ni champ
-    # ni bouton « Enregistrer », plutôt qu'une note tapée pour rien puis refusée.
-    peut_corriger = request.user.has_perm(droits.CORRIGER)
-    a_enregistrer = peut_corriger and (sheet.student is None or any(
-        a.question.qtype == "open" for a in answers))
+    # Sans le droit voulu, l'écran est en lecture seule (26 novembre 2026) : ni champ ni bouton
+    # « Enregistrer », plutôt qu'une note tapée pour rien puis refusée. Affecter une copie non
+    # identifiée : « copies — vérifier » ; noter une réponse : « copies — modifier ».
+    peut_affecter = droits.a_le_droit(request.user, droits.COPIE_VERIFIER)
+    peut_noter = droits.a_le_droit(request.user, droits.COPIE_MODIFIER)
+    a_enregistrer = ((sheet.student is None and peut_affecter)
+                     or (peut_noter and any(a.question.qtype == "open" for a in answers)))
     # Image de contrôle d'avant la correction : cadres NOM/PRÉNOM sur une
     # fiche de concours qui n'en a pas — effacés une fois pour toutes.
     services.nettoyer_controle(sheet)
 
     if request.method == "POST":
-        droits.exiger(request.user, droits.CORRIGER, gettext("vérifier les copies"))
+        affecter = "student" in request.POST and sheet.student is None
+        noter = any(k.startswith("points_") and v.strip() for k, v in request.POST.items())
+        if affecter:
+            droits.exiger(request.user, droits.COPIE_VERIFIER, gettext("vérifier les copies"))
+        if noter:
+            droits.exiger(request.user, droits.COPIE_MODIFIER, gettext("vérifier les copies"))
+        if not (affecter or noter):
+            droits.exiger(request.user, droits.COPIE_VERIFIER + droits.COPIE_MODIFIER,
+                          gettext("vérifier les copies"))
         # affectation — seulement d'une copie non identifiée : la liste
         # n'est affichée que pour elle, et un envoi fabriqué à la main ne
         # doit pas davantage réaffecter une copie reconnue.
@@ -1614,7 +1641,8 @@ def sheet_review(request, pk):
         "version": version,
         "position": position + 1, "total": len(sheet_ids),
         "prev_id": prev_id, "next_id": next_id,
-        "a_enregistrer": a_enregistrer, "peut_corriger": peut_corriger,
+        "a_enregistrer": a_enregistrer, "peut_affecter": peut_affecter,
+        "peut_noter": peut_noter,
         "historique": sheet.modifications.all()[:30],
     })
 
@@ -1660,7 +1688,7 @@ def quiz_note_admission(request, pk):
         retour += f"?batch={lot}"
     if request.method != "POST":
         return redirect(retour)
-    droits.exiger(request.user, droits.CREER, gettext("régler la note d'admission"))
+    droits.exiger(request.user, droits.EPREUVE_MODIFIER, gettext("régler la note d'admission"))
     maximum = quiz.max_score
     valide, valeur = _lire_note_admission(request.POST.get("note_admission"), maximum)
     if not valide:
@@ -1753,7 +1781,8 @@ def quiz_results(request, pk):
     if batch:
         unmatched = unmatched.filter(batch=batch)
     if request.method == "POST":
-        droits.exiger(request.user, droits.CORRIGER, gettext("gérer les copies non identifiées"))
+        droits.exiger(request.user, droits.COPIE_VERIFIER,
+                      gettext("gérer les copies non identifiées"))
         if "masquer_non_identifiees" in request.POST:
             unmatched.filter(alerte_masquee=False).update(alerte_masquee=True)
         elif "reafficher_non_identifiees" in request.POST:
@@ -1915,7 +1944,8 @@ def quiz_absents(request, pk):
     retour = reverse("quiz_results", args=[pk]) + "#copies-manquantes"
     cle = f"absents_{quiz.pk}"
     if request.method == "POST":
-        droits.exiger(request.user, droits.CREER, gettext("modifier les listes d'étudiants"))
+        droits.exiger(request.user, droits.CANDIDAT_SUPPRIMER,
+                      gettext("modifier les listes d'étudiants"))
         if "annuler" in request.POST:
             request.session.pop(cle, None)
             return redirect(retour)
@@ -2002,7 +2032,7 @@ def quiz_parcours(request, pk):
     chaine = services.chaine_epreuves(quiz, _my_quizzes(request))
     if request.method == "POST" and "coefficients" in request.POST:
         # coefficients de la moyenne finale (المعدل النهائي, 13 novembre 2026)
-        droits.exiger(request.user, droits.CREER, gettext("régler la moyenne finale"))
+        droits.exiger(request.user, droits.EPREUVE_MODIFIER, gettext("régler la moyenne finale"))
 
         def lire(nom, defaut):
             brut = (request.POST.get(nom) or "").strip().replace(",", ".")

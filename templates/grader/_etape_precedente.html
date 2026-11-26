@@ -12,7 +12,7 @@ L'encart ne s'affiche QUE s'il reste des admis à ajouter : une fois la liste
     <a href="{% url 'quiz_results' etape.precedente.pk %}" title="{{ etape.precedente.title }}">{{ etape.precedente.de_type }}</a>
     {% blocktranslate trimmed with n_admis=etape.n_admis seuil=etape.seuil|floatformat:"-2" %}pas encore dans la liste des candidats (note minimale modifiée ou copies corrigées depuis)
     — {{ n_admis }} admis en tout (note ≥ {{ seuil }}).{% endblocktranslate %}
-    {% if perms.grader.creer_epreuve %}
+    {% if droits_compte.epreuve_modifier %}
     <form class="inline" method="post">{% csrf_token %}
       <button class="btn small" name="passer_admis" value="1" type="submit">{% translate "Mettre à jour la liste des admis" %}</button>
     </form>

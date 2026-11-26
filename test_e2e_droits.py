@@ -231,7 +231,10 @@ def main():
             "first_name": "", "last_name": "", "email": "",
             "role": "enseignant", "is_active": "on",
             "classes": [str(libre.pk)],
-            "peut_corriger": "on",      # « créer » volontairement décoché
+            # le tableau des droits (26 novembre 2026) : toute la ligne des copies, et lancer ;
+            # rien pour les concours et quiz
+            "gestes": ["televerser_copies", "copie_modifier", "copie_supprimer",
+                       "copie_verifier", "lancer_correction"],
             "last_login_0": "", "last_login_1": "",
             "date_joined_0": "2026-01-01", "date_joined_1": "00:00:00",
         })
@@ -243,10 +246,11 @@ def main():
         "la classe cochée n'a pas été affectée à l'enseignant")
 
     enseignant = get_user_model().objects.get(pk=enseignant.pk)
-    assert not droits.peut_creer(enseignant), (
-        "« Créer des épreuves » était décoché, le droit a pourtant été accordé")
-    assert droits.peut_corriger(enseignant), (
-        "« Corriger les copies » était coché, le droit manque")
+    assert not droits.a_le_droit(enseignant, droits.EPREUVE_AJOUTER), (
+        "« Concours et quiz — ajouter » était décoché, le droit a pourtant été accordé")
+    assert all(droits.a_le_droit(enseignant, d) for d in (
+        droits.COPIE_AJOUTER, droits.COPIE_MODIFIER, droits.COPIE_SUPPRIMER,
+        droits.COPIE_VERIFIER, droits.LANCER_CORRECTION)), "une case des copies manque"
     print("  administration classe affectée, droits posés un à un OK")
 
     # Et le retrait : on décoche la classe, elle redevient sans enseignant.
@@ -262,8 +266,8 @@ def main():
     assert not libre.enseignants.filter(pk=enseignant.pk).exists(), (
         "la classe décochée appartient toujours à l'enseignant")
     enseignant = get_user_model().objects.get(pk=enseignant.pk)
-    assert not droits.peut_corriger(enseignant), (
-        "le droit décoché n'a pas été retiré")
+    assert not droits.cases_permises(enseignant), (
+        "les cases décochées n'ont pas été retirées")
     print("  administration classe et droits retirés OK")
 
     # ---------------------------------------------------------------- 6
@@ -425,45 +429,95 @@ def main():
     print("  droits fins   téléverser, lancer, saisir les questions : chacun son geste, "
           "rien de plus OK")
 
-    # la fiche du compte : les trois cases, et les permissions dans la liste détaillée
-    envoi = patron_client.post(f"/admin/auth/user/{redacteur.pk}/change/", {
-        "username": redacteur.username, "first_name": "", "last_name": "", "email": "",
-        "role": "enseignant", "is_active": "on", "classes": [],
-        "peut_televerser": "on", "peut_lancer": "on",
-        "date_joined_0": "2026-01-01", "date_joined_1": "00:00:00"})
-    assert envoi.status_code == 302, f"fiche du compte -> {envoi.status_code}"
-    compte = get_user_model().objects.get(pk=redacteur.pk)
-    assert compte.has_perm(droits.TELEVERSER) and compte.has_perm(droits.LANCER)
-    assert not compte.has_perm(droits.QUESTIONS), "case décochée : le droit reste"
-    assert "téléverser" in patron_client.get("/admin/auth/user/").content.decode()
-    # par la liste détaillée seule, les cases envoyées telles qu'affichées (26 novembre 2026 :
-    # « lorsque j'ajoute et enregistre, ça ne s'ajoute pas » — la case vide le retirait)
-    fiche = {"username": redacteur.username, "first_name": "", "last_name": "", "email": "",
-             "role": "enseignant", "is_active": "on", "classes": [],
-             "date_joined_0": "2026-01-01", "date_joined_1": "00:00:00"}
-    detail = [str(p.pk) for p in compte.user_permissions.all()]
-    questions_pk = str(_permission(droits.QUESTIONS).pk)
-    envoi = patron_client.post(f"/admin/auth/user/{redacteur.pk}/change/", dict(
-        fiche, peut_televerser="on", peut_lancer="on", user_permissions=detail + [questions_pk]))
-    assert envoi.status_code == 302, f"fiche du compte -> {envoi.status_code}"
-    compte = get_user_model().objects.get(pk=redacteur.pk)
-    assert compte.has_perm(droits.QUESTIONS), "ajouté dans la liste détaillée, puis perdu"
-    assert compte.has_perm(droits.TELEVERSER) and compte.has_perm(droits.LANCER)
-    lancer_pk = str(_permission(droits.LANCER).pk)
-    envoi = patron_client.post(f"/admin/auth/user/{redacteur.pk}/change/", dict(
-        fiche, peut_televerser="on", peut_lancer="on", peut_saisir_questions="on",
-        user_permissions=[p for p in detail + [questions_pk] if p != lancer_pk]))
-    compte = get_user_model().objects.get(pk=redacteur.pk)
-    assert not compte.has_perm(droits.LANCER), "retiré de la liste détaillée, mais resté"
-    assert compte.has_perm(droits.QUESTIONS) and compte.has_perm(droits.TELEVERSER)
+    # ---------------------------------------------------------------- 9
+    # Le tableau des droits (26 novembre 2026, « donne la main de choisir Ajouter, Modifier,
+    # Supprimer, Vérifier ») : une case par domaine et par geste, dans la fiche du compte.
+    def fiche_de(compte, **champs):
+        """La fiche envoyée comme le navigateur : la liste détaillée telle qu'affichée."""
+        donnees = {"username": compte.username, "first_name": "", "last_name": "",
+                   "email": "", "role": "enseignant", "is_active": "on", "classes": [],
+                   "date_joined_0": "2026-01-01", "date_joined_1": "00:00:00",
+                   "user_permissions": [str(p.pk) for p in compte.user_permissions.all()]}
+        donnees.update(champs)
+        envoi = patron_client.post(f"/admin/auth/user/{compte.pk}/change/", donnees)
+        assert envoi.status_code == 302, f"fiche du compte -> {envoi.status_code}"
+        return get_user_model().objects.get(pk=compte.pk)
+
     page = patron_client.get(f"/admin/auth/user/{redacteur.pk}/change/").content.decode()
-    for nom in ("Téléverser les copies scannées", "Lancer la correction",
-                "Saisir les questions et le corrigé",
-                "Créer les concours et les quiz, et leurs questions"):
+    assert 'class="tableau-droits__table"' in page and 'value="copie_verifier"' in page
+    for nom in ("Copies — ajouter (téléverser les scans)", "Lancer la correction",
+                "Questions et corrigé — supprimer", "Candidats et inscriptions — ajouter",
+                "Tout créer : concours et quiz, questions, candidats, communiqués"):
         assert f"quiz | {nom}" in page, f"« {nom} » absent des permissions détaillées"
-    assert 'name="peut_saisir_questions"' in page and 'name="peut_televerser"' in page
-    print("  administration les trois droits fins cochés un à un, et dans les permissions "
-          "détaillées OK")
+    # décocher les cases d'un droit d'avant (« questions — tout ») : il cède sa place
+    compte = fiche_de(redacteur, gestes=["televerser_copies", "lancer_correction"])
+    assert compte.has_perm(droits.TELEVERSER) and compte.has_perm(droits.LANCER)
+    assert not droits.a_le_droit(compte, droits.QUESTION_AJOUTER), "case décochée restée"
+    liste = patron_client.get("/admin/auth/user/").content.decode()
+    assert "Copies 1/4" in liste and "lancer la correction" in liste
+    # une seule case retirée d'un paquet (« tout créer ») : les autres restent, une à une
+    createur_seul = _compte("dr_paquet", droits.CREER)
+    toutes = droits.PAQUETS["creer_epreuve"]
+    compte = fiche_de(createur_seul, gestes=[c for c in toutes if c != "question_supprimer"])
+    assert not compte.has_perm(droits.CREER), "le paquet aurait dû céder la place"
+    assert droits.cases_permises(compte) == [c for c in toutes if c != "question_supprimer"]
+    # par la liste détaillée seule, le tableau envoyé tel qu'affiché : gardé (la case vide le
+    # retirait avant le 26 novembre 2026), puis retiré de même
+    affiche = droits.cases_permises(compte)
+    verifier_pk = str(_permission("grader.copie_verifier").pk)
+    detail = [str(p.pk) for p in compte.user_permissions.all()]
+    compte = fiche_de(compte, gestes=affiche, user_permissions=detail + [verifier_pk])
+    assert droits.a_le_droit(compte, droits.COPIE_VERIFIER), "ajouté à la liste, puis perdu"
+    compte = fiche_de(compte, gestes=affiche + ["copie_verifier"], user_permissions=detail)
+    assert not droits.a_le_droit(compte, droits.COPIE_VERIFIER), "retiré de la liste, resté"
+    print("  tableau       cases posées et retirées une à une, paquet d'avant remplacé par "
+          "ses autres cases, liste détaillée respectée OK")
+
+    # chaque case ne permet que son geste
+    def compte_case(nom, *codes):
+        return _compte(nom, *[f"grader.{c}" for c in codes])
+
+    ajouteur = compte_case("dr_q_ajouter", "question_ajouter")
+    avant = fine.questions.count()
+    assert essai(ajouteur, f"/quiz/{fine.pk}/", {"bulk_add": "1", "answer_key": "AB",
+                                                 "num_choices": "4"}) != "refus"
+    assert fine.questions.count() == avant + 2, "« questions — ajouter » n'a rien ajouté"
+    q_fine.refresh_from_db()
+    bonne = q_fine.correct_choice
+    assert essai(ajouteur, f"/quiz/{fine.pk}/",
+                 {"edit_question": q_fine.pk, "correct": "3"}) == "refus"
+    assert essai(ajouteur, f"/quiz/{fine.pk}/", {"delete_question": q_fine.pk}) == "refus"
+    q_fine.refresh_from_db()
+    assert q_fine.correct_choice == bonne and fine.questions.filter(pk=q_fine.pk).exists()
+    verificateur = compte_case("dr_c_verifier", "copie_verifier")
+    etudiant_fin = Student.objects.create(class_group=classe_fine, last_name="FIN",
+                                          first_name="Copie", student_number="990077")
+    a_noter = Question.objects.create(quiz=fine, order=50, qtype="open", points=4)
+    reponse_fine = Answer.objects.create(sheet=copie_fine, question=a_noter)
+    assert essai(verificateur, f"/copies/{copie_fine.pk}/",
+                 {f"points_{reponse_fine.pk}": "3"}) == "refus", "noter sans « modifier »"
+    assert essai(verificateur, f"/copies/{copie_fine.pk}/",
+                 {"student": etudiant_fin.pk}) != "refus"
+    copie_fine.refresh_from_db()
+    reponse_fine.refresh_from_db()
+    assert copie_fine.student_id == etudiant_fin.pk and reponse_fine.points_awarded is None
+    noteur = compte_case("dr_c_modifier", "copie_modifier")
+    assert essai(noteur, f"/copies/{copie_fine.pk}/", {f"points_{reponse_fine.pk}": "3"}) != "refus"
+    reponse_fine.refresh_from_db()
+    assert reponse_fine.points_awarded == 3
+    effaceur = compte_case("dr_cand_supprimer", "candidat_supprimer")
+    seul = Student.objects.create(class_group=classe_fine, last_name="SEUL", first_name="Sans",
+                                  student_number="990078")
+    classe_fine.enseignants.add(effaceur)          # la liste se voit par ses enseignants
+    client_effaceur = _client(effaceur)
+    assert _issue(client_effaceur.post(f"/classes/{classe_fine.pk}/",
+                                       {"import": "1", "text": "NOUVEAU Jean 990079"})) == "refus"
+    assert not Student.objects.filter(student_number="990079").exists()
+    assert _issue(client_effaceur.post(f"/classes/{classe_fine.pk}/",
+                                       {"delete_student": seul.pk})) != "refus"
+    assert not Student.objects.filter(pk=seul.pk).exists()
+    print("  cases         questions — ajouter, copies — vérifier / modifier, candidats — "
+          "supprimer : chacune son geste OK")
 
     print("\n✅ TEST DES DROITS DES ENSEIGNANTS RÉUSSI")
 

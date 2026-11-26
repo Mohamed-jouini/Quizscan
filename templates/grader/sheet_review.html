@@ -62,10 +62,10 @@
       {% else %}
       {% if sheet.error_message %}<p class="helptext helptext--serre"><b>{{ sheet.error_message }}</b></p>{% endif %}
       <p class="helptext helptext--serre">{% translate "Copie non identifiée" %}{% if sheet.id_read %} {% translate "— identifiant lu :" %} <b>{{ sheet.id_read }}</b>{% translate ", inconnu dans la liste" %}{% elif sheet.ocr_name_raw %} {% translate "— nom lu :" %} <b>{{ sheet.ocr_name_raw }}</b>{% endif %}.
-        {% if not peut_corriger %}{% elif suite %}{% translate "Proposé d'après l'ordre du scan : la page précédente du lot est celle de" %} <b>{{ propose.full_name }}</b>{% translate ". Rien sur cette page ne le confirme : vérifiez que le paquet n'a pas été mélangé, puis enregistrez." %}
+        {% if not peut_affecter %}{% elif suite %}{% translate "Proposé d'après l'ordre du scan : la page précédente du lot est celle de" %} <b>{{ propose.full_name }}</b>{% translate ". Rien sur cette page ne le confirme : vérifiez que le paquet n'a pas été mélangé, puis enregistrez." %}
         {% elif propose %}{% translate "Étudiant proposé :" %} <b>{{ propose.full_name }}</b> {% blocktranslate trimmed %}(ressemblance {{ ressemblance }} %, parmi les étudiants sans copie) — vérifiez sur l'image puis enregistrez.{% endblocktranslate %}{% else %}{% translate "Choisissez l'étudiant :" %}{% endif %}</p>
       {% if sheet.name_crop %}<p><img class="thumb" style="max-height:55px" src="{{ sheet.name_crop.url }}" alt="{% translate "Nom écrit sur la copie" %}"></p>{% endif %}
-      {% if peut_corriger %}
+      {% if peut_affecter %}
       {% if avec_codes %}<p class="helptext helptext--serre">{% translate "Le code imprimé sous le QR, le même que sur le talon, retrouve l'étudiant : tapez-le dans la recherche ci-dessous." %}</p>{% endif %}
       <label for="id_student">{% translate "Affecter à" %}</label>
       {#Recherche dans la liste (pages.js) : nom, n° d'inscription ou code de la copie#}
@@ -100,11 +100,11 @@
           {% elif a.manually_set %}<span class="badge ok">{% blocktranslate trimmed with points_awarded=a.points_awarded|floatformat:"-2" points=a.question.points|floatformat:"-2" %}Note saisie : {{ points_awarded }} / {{ points }}{% endblocktranslate %}</span>
           {% else %}<span class="badge ok">{% blocktranslate trimmed with points_awarded=a.points_awarded|floatformat:"-2" points=a.question.points|floatformat:"-2" %}Note lue : {{ points_awarded }} / {{ points }}{% endblocktranslate %}</span>{% endif %}
         </p>
-        <p class="helptext helptext--serre">{% if quiz.type_epreuve == "oral" %}{% translate "Note noircie par l'examinateur sur la fiche d'évaluation" %}{% else %}{% translate "Note noircie par le correcteur dans le cadre de la page de garde" %}{% endif %}{% if peut_corriger %} :
+        <p class="helptext helptext--serre">{% if quiz.type_epreuve == "oral" %}{% translate "Note noircie par l'examinateur sur la fiche d'évaluation" %}{% else %}{% translate "Note noircie par le correcteur dans le cadre de la page de garde" %}{% endif %}{% if peut_noter %} :
           {% if a.points_awarded is None %}{% translate "lisez-la sur l'image et saisissez-la ci-dessous." %}{% else %}{% translate "vérifiez-la sur l'image ; corrigez-la au besoin." %}{% endif %}{% else %}.{% endif %}</p>
         {% if a.open_crop %}<a class="note-lue__image" href="{{ a.open_crop.url }}" target="_blank" title="{% translate "Agrandir" %}">
           <img src="{{ a.open_crop.url }}" alt="{% translate "Grille de la note sur la copie" %}"></a>{% endif %}
-        {% if peut_corriger %}
+        {% if peut_noter %}
         <label for="id_points_{{ a.pk }}">{% blocktranslate trimmed with points=a.question.points|floatformat:"-2" %}Note sur {{ points }}{% endblocktranslate %}</label>
         <div class="note-lue__saisie">
           <input id="id_points_{{ a.pk }}" class="champ--note" type="text" inputmode="decimal"
@@ -146,7 +146,7 @@
             {% if a.open_crop %}<a class="reponse-manuscrite" href="{{ a.open_crop.url }}" target="_blank" title="{% translate "Agrandir" %}">
               <img src="{{ a.open_crop.url }}" alt="{% translate "Réponse manuscrite" %}"></a>{% endif %}
           </td>
-          <td class="cellule--serree">{% if peut_corriger %}<input class="champ--note" type="text" name="points_{{ a.pk }}"
+          <td class="cellule--serree">{% if peut_noter %}<input class="champ--note" type="text" name="points_{{ a.pk }}"
                      value="{{ a.points_awarded|floatformat:'-2'|default_if_none:'' }}"
                      placeholder="{% translate "note" %}">{% else %}{{ a.points_awarded|floatformat:"-2"|default:"—" }}{% endif %} / {{ a.question.points|floatformat:"-2" }}</td>
           {% endif %}

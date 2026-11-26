@@ -40,7 +40,7 @@
 
   <div class="card">
     <h2>{% translate "2. Importer les notes" %}</h2>
-    {% if perms.grader.corriger_copies %}
+    {% if droits_compte.copie_modifier %}
     <form method="post" enctype="multipart/form-data">{% csrf_token %}
       <label for="id_fichier_notes">{% translate "Fichier Excel rempli (.xlsx)" %}</label>
       <input id="id_fichier_notes" type="file" name="fichier" accept=".xlsx" required>
@@ -76,7 +76,7 @@
         {% endfor %}
       </table>
     </div>
-    {% if lot_import and perms.grader.corriger_copies %}
+    {% if lot_import and droits_compte.copie_supprimer %}
     <p><a class="btn small secondary" href="{% url 'batch_delete' lot_import.pk %}">{% translate "Supprimer les notes importées" %}</a></p>
     {% endif %}
     {% else %}
@@ -86,7 +86,7 @@
 
   <div class="card">
     <h2>{% translate "Réglages" %}</h2>
-    {% if perms.grader.creer_epreuve %}
+    {% if droits_compte.epreuve_modifier %}
     <form method="post">{% csrf_token %}
       <label for="id_title">{% translate "Titre de l'épreuve" %}</label>
       <input id="id_title" type="text" name="title" value="{{ quiz.title }}" maxlength="200" required>

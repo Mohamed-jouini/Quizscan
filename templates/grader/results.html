@@ -86,7 +86,7 @@
 </li></ul>
 {% endif %}
 
-{% if perms.grader.corriger_copies and not batch %}
+{% if droits_compte.copie_verifier and not batch %}
 <div class="card publication" id="publication">
   <div class="card__head">
     <h2>{% translate "Publication sur l'espace public" %}</h2>
@@ -109,7 +109,7 @@
   <div class="card__head">
     <h2>{% if quiz.auto_enroll %}{% translate "Admission" %}{% else %}{% translate "Réussite" %}{% endif %}</h2>
     <span class="badge grey">{% if quiz.note_distincte %}{% blocktranslate trimmed with seuil=admission.seuil|floatformat:"-2" max_score=admission.max_score|floatformat:"-2" %}note minimale {{ seuil }} / {{ max_score }}{% endblocktranslate %}{% else %}{% blocktranslate trimmed with seuil=admission.seuil|floatformat:"-2" max_score=admission.max_score|floatformat:"-2" %}au moins {{ seuil }} bonnes réponses sur {{ max_score }}{% endblocktranslate %}{% endif %}{% if quiz.est_qcm %}{% blocktranslate trimmed with seuil20=admission.seuil20|floatformat:"-2" %}, soit {{ seuil20 }} / 20{% endblocktranslate %}{% endif %}</span>
-    {% if perms.grader.creer_epreuve %}
+    {% if droits_compte.epreuve_modifier %}
     <details class="admission__regler">
       <summary>{% translate "Modifier la note minimale" %}</summary>
       {% include "grader/_note_admission_form.html" with libelle_bouton=_("Recalculer") %}
@@ -135,7 +135,7 @@
     </div>
     {% endif %}
   </div>
-  {% if admission.n_admis and perms.grader.creer_epreuve %}
+  {% if admission.n_admis and droits_compte.epreuve_ajouter %}
   {% if quiz.type_epreuve != "oral" or quiz.epreuves_suivantes.exists %}
   <div class="etape-suivante">
     <span class="etape-suivante__titre">{% translate "Étape suivante du concours :" %}</span>
@@ -184,7 +184,7 @@
   <div class="note__body">
     {% translate "Pour connaître le nombre" %} {% if quiz.auto_enroll %}{% translate "d'admis, leur liste et leurs bulletins" %}{% else %}{% translate "d'étudiants ayant réussi" %}{% endif %}{% blocktranslate trimmed %},
     indiquez la{% endblocktranslate %} <b>{% translate "note minimale" %} {% if quiz.auto_enroll %}{% translate "d'admission" %}{% else %}{% translate "de réussite" %}{% endif %}</b> :
-    {% if perms.grader.creer_epreuve %}
+    {% if droits_compte.epreuve_modifier %}
     {% if quiz.auto_enroll %}
     {% include "grader/_note_admission_form.html" with libelle_bouton=_("Afficher les admis") %}
     {% else %}

@@ -1039,19 +1039,31 @@ réellement un administrateur d'établissement :
 - **« Concours »** : les listes de candidats des concours, une par étape, cochées à
   part des classes ; l'enseignant voit les étapes cochées, leurs candidats, copies
   et résultats ;
-- **« Autorisations »** : *Créer les concours et les quiz* (et leurs questions) et
-  *Corriger les copies* (téléverser, lancer la correction, vérifier) se donnent
-  séparément. Depuis le 26 novembre 2026, trois gestes se donnent aussi seuls, à qui ne
-  fait que celui-là : *Saisir les questions* (et le corrigé, sans créer ni régler
-  l'épreuve), *Téléverser les copies scannées*, *Lancer la correction* (ou la reprendre).
-  Les droits larges les englobent : les comptes d'avant ne perdent rien. Les cinq
-  figurent aussi dans les permissions détaillées du compte (« quiz | … »). Aucun ne
-  permet de modifier la note d'un QCM, établie par lecture optique ; seul un
-  administrateur peut rectifier une case mal lue. Un geste sans le droit voulu (changer une note, créer, supprimer…)
+- **« Autorisations »** : un **tableau** (26 novembre 2026, demande de l'utilisateur :
+  « donne la main de choisir Ajouter, Modifier, Supprimer, Vérifier »), une ligne par
+  domaine, une case par geste, et « Lancer la correction » dessous ; ce que permet chaque
+  case est écrit sous le tableau :
+
+  | Domaine | Ajouter | Modifier | Supprimer | Vérifier |
+  |---|---|---|---|---|
+  | Concours et quiz | créer, étape suivante | fiche, PDF, note minimale, coefficients, passer les admis | — | — |
+  | Questions et corrigé | une à une, ajout rapide, import, banque | bonne réponse, barème, corrigé scanné | questions, corrigé scanné | — |
+  | Copies | téléverser les scans | noter (manuscrites, écrit, notes d'oral) | un lot, notes d'oral importées | vérifier, affecter une copie non identifiée, publier les résultats |
+  | Candidats et inscriptions | listes, imports, registre | ses fiches du registre | candidats sans copie, absents, ses fiches | — |
+  | Communiqués | publier | les siens | les siens | — |
+
+  Chaque case est une permission Django (« quiz | Copies — vérifier »…), visible aussi
+  dans les permissions détaillées. Les droits d'avant (*Créer des épreuves*, *Corriger les
+  copies*, *Saisir les questions*) valent toujours, comme paquets de cases : les comptes en
+  place ne perdent rien ; décocher une case d'un paquet le remplace par ses autres cases.
+  Seule une case cochée ou décochée agit : la liste détaillée, envoyée avec, décide du
+  reste. Aucune case ne permet de modifier la note d'un QCM, établie par lecture optique ;
+  seul un administrateur peut rectifier une case mal lue. Un geste sans le droit voulu
   ramène tout droit au tableau de bord, sans rien changer et sans page « Accès refusé »
-  (26 novembre 2026, demande de l'utilisateur) ; seul un visiteur sans compte voit encore
-  la page 403. Sans le droit de corriger, l'écran de vérification d'une copie est en
-  lecture seule : la note s'y lit, sans champ ni bouton « Enregistrer » ;
+  (26 novembre 2026) ; seul un visiteur sans compte voit encore la page 403. Chaque écran
+  ne montre que les boutons permis : sans « Copies — modifier », l'écran de vérification
+  d'une copie montre la note sans champ ; sans « Copies — vérifier », pas de liste pour
+  affecter une copie non identifiée ;
 - décocher **« Actif »** ferme l'accès sans supprimer le compte. Supprimer le
   compte d'un enseignant qui part est possible aussi : ses classes, épreuves
   et notes sont conservées, sans titulaire, et peuvent être confiées à un

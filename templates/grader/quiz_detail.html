@@ -31,7 +31,7 @@
 </div>
 {% endif %}
 
-{% if perms.grader.creer_epreuve %}
+{% if droits_compte.epreuve_modifier %}
 <form class="card reglages" method="post">
   {% csrf_token %}
   <div class="reglages__large">
@@ -168,7 +168,7 @@
       <p class="helptext helptext--serre">{% translate "Les copies peuvent être corrigées." %}</p>
       {% endif %}
     </div>
-    {% if droits_compte.questions %}
+    {% if droits_compte.question_modifier %}
     <form class="card__duo-action" method="post"
           action="{% url 'quiz_answer_key' quiz.pk %}" enctype="multipart/form-data">
       {% csrf_token %}
@@ -231,8 +231,9 @@
                 {% for ch in q.choices %}<bdi>{% if forloop.counter0 == q.correct_choice %}<b>{{ ch }}</b>{% else %}{{ ch }}{% endif %}</bdi>{% if not forloop.last %} · {% endif %}{% endfor %}
               </div>
             {% endif %}</td>
-        {% if droits_compte.questions %}
+        {% if droits_compte.question_modifier or droits_compte.question_supprimer %}
         <td colspan="2">
+          {% if droits_compte.question_modifier %}
           <form class="inline qedit" method="post">{% csrf_token %}
             {% if q.qtype == "qcm" %}
             <select name="correct" title="{% translate "Bonne réponse" %}"
@@ -249,11 +250,12 @@
                    data-montrer-bouton> {% translate "pt" %}{% endif %}
             <button class="btn small" name="edit_question" value="{{ q.pk }}" hidden title="{% translate "Enregistrer — les notes sont recalculées" %}">✓</button>
           </form>
+          {% else %}{% if q.qtype == "qcm" %}{{ q.correct_letter|default:"—" }} · {% endif %}{% blocktranslate trimmed with points=q.points|floatformat:"-2" %}{{ points }} pt{% endblocktranslate %}{% endif %}
         </td>
-        <td><form class="inline" method="post">{% csrf_token %}
+        <td>{% if droits_compte.question_supprimer %}<form class="inline" method="post">{% csrf_token %}
           <button class="btn small danger" name="delete_question" value="{{ q.pk }}"
                   data-confirmer="{% blocktranslate trimmed with order=q.order %}Supprimer la question {{ order }} ?{% endblocktranslate %}">✕</button>
-        </form></td>
+        </form>{% endif %}</td>
         {% else %}
         {#Sans le droit de modifier l'epreuve : les memes valeurs, en clair.#}
         <td>{% if q.qtype == "qcm" %}{{ q.correct_letter|default:"—" }}{% else %}—{% endif %}</td>
@@ -271,7 +273,7 @@
     <h2 style="margin-top:20px">
       {% if quiz.sheet_mode == "split" %}{% translate "Documents PDF" %}{% else %}{% translate "Fiche de réponses" %}{% endif %}
     </h2>
-    {% if perms.grader.creer_epreuve %}
+    {% if droits_compte.epreuve_modifier %}
     <form method="post">{% csrf_token %}
       {% if quiz.exemplaires_anonymes %}
         <label>{% translate "Nombre d'exemplaires de la fiche anonyme" %}</label>
@@ -365,7 +367,7 @@
       <span class="helptext">{% if version_b_apercu %}<b>{% translate "Aperçu" %}</b> {% translate ": la version B est fixée à la génération des PDF." %} {% endif %}{% translate "Les questions de la version B et leurs choix, dans l'ordre imprimé. Sa bonne réponse suit le corrigé de la version A : modifiez-le dans le tableau de la version A, les deux versions se corrigent ensemble." %} {% translate "La bonne réponse est en gras : sa lettre change d'une version à l'autre quand ses choix ont changé de place, c'est la même réponse." %}</span>
     </div>
     {% endif %}
-    {% if droits_compte.questions %}
+    {% if droits_compte.question_ajouter %}
     <div class="card">
       <h2>{% translate "Ajout rapide de QCM (corrigé)" %}</h2>
       <form method="post">{% csrf_token %}
@@ -437,7 +439,7 @@
 
 <div class="card">
   <h2>{% translate "Copies scannées" %}</h2>
-  {% if droits_compte.televerser %}
+  {% if droits_compte.copie_ajouter %}
   <form method="post" action="{% url 'quiz_upload' quiz.pk %}" enctype="multipart/form-data">
     {% csrf_token %}
     <div class="grid2">

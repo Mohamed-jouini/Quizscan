@@ -385,16 +385,29 @@ class Quiz(models.Model):
         ordering = ["-created_at"]
         # Les droits que l'administration accorde compte par compte (grader/droits.py).
         # Ils sont portés par Quiz parce que c'est l'objet central, mais ils
-        # valent pour tout ce qui en découle : questions, fiches, copies. Les trois
-        # derniers (26 novembre 2026) se donnent seuls ; les deux premiers les englobent.
+        # valent pour tout ce qui en découle. Une case du tableau par geste (26 novembre
+        # 2026) ; les trois premiers sont les paquets d'avant, qui en cochent plusieurs.
         permissions = [
             ("creer_epreuve",
-             "Créer les concours et les quiz, et leurs questions"),
-            ("corriger_copies",
-             "Corriger les copies : téléverser, lancer la correction, vérifier"),
-            ("televerser_copies", "Téléverser les copies scannées"),
+             "Tout créer : concours et quiz, questions, candidats, communiqués"),
+            ("corriger_copies", "Tout corriger : copies, et lancer la correction"),
+            ("saisir_questions", "Questions et corrigé — tout"),
+            ("epreuve_ajouter", "Concours et quiz — ajouter"),
+            ("epreuve_modifier", "Concours et quiz — modifier"),
+            ("question_ajouter", "Questions et corrigé — ajouter"),
+            ("question_modifier", "Questions et corrigé — modifier"),
+            ("question_supprimer", "Questions et corrigé — supprimer"),
+            ("televerser_copies", "Copies — ajouter (téléverser les scans)"),
+            ("copie_modifier", "Copies — modifier (noter)"),
+            ("copie_supprimer", "Copies — supprimer"),
+            ("copie_verifier", "Copies — vérifier"),
             ("lancer_correction", "Lancer la correction"),
-            ("saisir_questions", "Saisir les questions et le corrigé"),
+            ("candidat_ajouter", "Candidats et inscriptions — ajouter"),
+            ("candidat_modifier", "Candidats et inscriptions — modifier"),
+            ("candidat_supprimer", "Candidats et inscriptions — supprimer"),
+            ("communique_ajouter", "Communiqués — ajouter"),
+            ("communique_modifier", "Communiqués — modifier"),
+            ("communique_supprimer", "Communiqués — supprimer"),
         ]
 
     def __str__(self):

@@ -30,6 +30,7 @@ from django.test import Client                          # noqa: E402
 from django.test.utils import setup_test_environment    # noqa: E402
 from django.urls import reverse                         # noqa: E402
 
+from grader import droits                               # noqa: E402
 from grader.models import ClassGroup, Quiz, Student     # noqa: E402
 from test_commun import enseignant_complet              # noqa: E402
 
@@ -102,9 +103,12 @@ def main():
     print("  administration : liste des classes sans le concours, coché à part sur la fiche OK")
 
     def enregistre(**champs):
+        # la fiche envoyée comme le navigateur : le tableau des droits et la liste détaillée
+        # tels qu'affichés (26 novembre 2026)
         base = {"username": "cc_prof", "first_name": "", "last_name": "", "email": "",
-                "role": "enseignant", "is_active": "on", "peut_creer": "on",
-                "peut_corriger": "on", "groups": [], "user_permissions": [], "_save": "1"}
+                "role": "enseignant", "is_active": "on", "gestes": droits.cases_permises(prof),
+                "groups": [], "user_permissions": [str(p.pk) for p in prof.user_permissions.all()],
+                "_save": "1"}
         base.update(champs)
         r = a.post(f"/admin/auth/user/{prof.pk}/change/", base)
         assert r.status_code == 302, r.context["adminform"].form.errors

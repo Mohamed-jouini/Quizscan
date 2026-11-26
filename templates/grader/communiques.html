@@ -13,7 +13,7 @@
 <div class="grid2">
   <div class="card">
     <h2>{% if modifie %}{% translate "Modifier le communiqué" %}{% else %}{% translate "Nouveau communiqué" %}{% endif %}</h2>
-    {% if not perms.grader.creer_epreuve %}<p class="helptext">{% translate "Votre compte est en lecture seule : demandez le droit « créer des épreuves » à l'administrateur pour publier un communiqué." %}</p>
+    {% if modifie and not droits_compte.communique_modifier or not modifie and not droits_compte.communique_ajouter %}<p class="helptext">{% translate "Votre compte ne peut pas publier de communiqué : demandez la case « Communiqués — Ajouter » (ou « Modifier ») à l'administrateur." %}</p>
     {% else %}
     <form method="post" enctype="multipart/form-data">{% csrf_token %}
       {% if modifie %}<input type="hidden" name="modifier" value="{{ modifie.pk }}">{% endif %}
@@ -66,11 +66,13 @@
         {% endif %}{% endwith %}
         {% if user.is_superuser or a.auteur_id == user.pk %}
         <div class="actions-ligne">
-          <a class="btn small secondary" href="?modifier={{ a.pk }}">{% translate "Modifier" %}</a>
+          {% if droits_compte.communique_modifier %}<a class="btn small secondary" href="?modifier={{ a.pk }}">{% translate "Modifier" %}</a>{% endif %}
+          {% if droits_compte.communique_supprimer %}
           <form class="inline" method="post">{% csrf_token %}
             <button class="btn small danger" name="supprimer" value="{{ a.pk }}" type="submit"
                     data-confirmer="{% translate "Supprimer ce communiqué ?" %}">{% translate "Supprimer" %}</button>
           </form>
+          {% endif %}
         </div>
         {% endif %}
       </li>

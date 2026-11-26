@@ -19,8 +19,8 @@
   </div>
 </header>
 {% if verification %}{% include "grader/_verification.html" %}{% endif %}
-{% if not perms.grader.creer_epreuve %}
-<div class="card"><p class="helptext">{% translate "Votre compte est en lecture seule : demandez le droit « créer des épreuves » à l'administrateur pour modifier cette liste." %}</p></div>
+{% if not droits_compte.candidat_ajouter %}
+<div class="card"><p class="helptext">{% translate "Votre compte ne peut pas ajouter de candidats : demandez la case « Candidats et inscriptions — Ajouter » à l'administrateur." %}</p></div>
 {% else %}
 <details class="card plie-carte"{% if not students_total or xlsx_form.errors or import_form.errors %} open{% endif %}>
   <summary>{% translate "Importer ou ajouter des candidats" %}</summary>
@@ -83,7 +83,7 @@
   {% if students_page.object_list %}
   {#Un seul formulaire : cases à cocher (écrit d'un concours seulement), « supprimer les cochés » et ✕ de chaque ligne.#}
   <form method="post">{% csrf_token %}
-  {% if perms.grader.creer_epreuve and ecrit_concours %}
+  {% if droits_compte.candidat_supprimer and ecrit_concours %}
   <div class="barre-choix">
     <button class="btn small danger" name="supprimer_choix" value="1" type="submit"
             data-compter-coches data-total="{{ students_total }}"
@@ -100,10 +100,10 @@
   {% include "grader/_pagination.html" with page=students_page label=_("Candidats") %}
   <div class="table-wrap table-wrap--ajuste">
     <table>
-    <tr>{% if perms.grader.creer_epreuve and ecrit_concours %}<th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="{% translate "Tout cocher" %}"></th>{% endif %}<th>{% translate "N°" %}</th><th>{% translate "Prénom" %}</th><th>{% translate "Nom" %}</th>{% if avec_fiches %}<th>{% translate "CIN" %}</th><th>{% translate "Lieu" %}</th><th>{% translate "Délivrée le" %}</th><th>{% translate "Né(e) le" %}</th><th>{% translate "Centre" %}</th><th>{% translate "Salle" %}</th>{% endif %}<th>{% translate "QR" %}</th><th></th></tr>
+    <tr>{% if droits_compte.candidat_supprimer and ecrit_concours %}<th class="col-choix"><input type="checkbox" class="tout-cocher" aria-label="{% translate "Tout cocher" %}"></th>{% endif %}<th>{% translate "N°" %}</th><th>{% translate "Prénom" %}</th><th>{% translate "Nom" %}</th>{% if avec_fiches %}<th>{% translate "CIN" %}</th><th>{% translate "Lieu" %}</th><th>{% translate "Délivrée le" %}</th><th>{% translate "Né(e) le" %}</th><th>{% translate "Centre" %}</th><th>{% translate "Salle" %}</th>{% endif %}<th>{% translate "QR" %}</th><th></th></tr>
     {% for s in students_page %}
     <tr class="ligne-lien">
-      {% if perms.grader.creer_epreuve and ecrit_concours %}<td class="col-choix"><input type="checkbox" name="choix" value="{{ s.pk }}" aria-label="{% blocktranslate trimmed with full_name=s.full_name|default:s.student_number %}Choisir {{ full_name }}{% endblocktranslate %}"></td>{% endif %}
+      {% if droits_compte.candidat_supprimer and ecrit_concours %}<td class="col-choix"><input type="checkbox" name="choix" value="{{ s.pk }}" aria-label="{% blocktranslate trimmed with full_name=s.full_name|default:s.student_number %}Choisir {{ full_name }}{% endblocktranslate %}"></td>{% endif %}
       <td>{% if s.inscrit and user.is_superuser or s.inscrit and s.inscrit.cree_par_id == user.pk %}<a class="ligne-lien__cible ligne-lien__nom" href="{% url 'inscriptions' %}?modifier={{ s.inscrit_id }}#fiche-inscrit"><b>{{ s.student_number }}</b></a>{% else %}{{ s.student_number|default:"—" }}{% endif %}</td>
       <td>{{ s.first_name|default:"—" }}</td><td>{{ s.last_name|default:"—" }}</td>
       {% if avec_fiches %}{% with i=s.inscrit %}
@@ -116,7 +116,7 @@
       {% endwith %}{% endif %}
       <td><img class="qr-mini" src="{% url 'student_qr' s.pk %}" alt="{% blocktranslate trimmed with full_name=s.full_name %}QR {{ full_name }}{% endblocktranslate %}"
                width="46" height="46" loading="lazy"></td>
-      <td>{% if perms.grader.creer_epreuve %}
+      <td>{% if droits_compte.candidat_supprimer %}
         <button class="btn small danger" name="delete_student" value="{{ s.pk }}" type="submit"
                 data-confirmer="{% blocktranslate trimmed with full_name=s.full_name|default:s.student_number %}Supprimer {{ full_name }} ?{% endblocktranslate %}">✕</button>
       {% endif %}</td>

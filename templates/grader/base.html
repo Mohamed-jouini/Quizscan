@@ -89,7 +89,7 @@
       {% include "grader/_langue.html" %}
       {% include "grader/_theme_toggle.html" %}
       {% block topbar_actions %}
-      {% if perms.grader.creer_epreuve %}
+      {% if droits_compte.epreuve_ajouter %}
       <a class="btn" href="{% url 'quiz_create' %}">
         <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M12 5v14M5 12h14"/></svg>
         {% translate "Nouveau quiz" %}</a>

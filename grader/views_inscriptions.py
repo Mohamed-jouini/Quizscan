@@ -97,7 +97,16 @@ def inscriptions(request):
     form = InscritForm(instance=modifie)
     fichier = CandidateFileForm()
     if request.method == "POST":
-        droits.exiger(request.user, droits.CREER, gettext("modifier le registre des inscriptions"))
+        # le droit du geste que la vue va faire, le premier présent dans l'ordre où elle les
+        # traite (tableau des droits, 26 novembre 2026) : ajouter, modifier ou supprimer
+        geste = next((g for g in ("importer_liste", "fermer_verification", "inscrire",
+                                  "supprimer", "ajouter") if g in request.POST), None)
+        if geste != "fermer_verification":
+            droits.exiger(request.user,
+                          droits.CANDIDAT_SUPPRIMER if geste == "supprimer"
+                          else droits.CANDIDAT_MODIFIER if geste == "inscrire" and modifie
+                          else droits.CANDIDAT_AJOUTER,
+                          gettext("modifier le registre des inscriptions"))
         if "importer_liste" in request.POST:
             fichier = CandidateFileForm(request.POST, request.FILES)
             if fichier.is_valid():
@@ -221,7 +230,10 @@ def communiques(request):
                                    "l'administrateur peut le modifier."))
     form = CommuniqueForm(instance=modifie)
     if request.method == "POST":
-        droits.exiger(request.user, droits.CREER, gettext("publier des communiqués"))
+        droits.exiger(request.user,
+                      droits.COMMUNIQUE_SUPPRIMER if "supprimer" in request.POST
+                      else droits.COMMUNIQUE_MODIFIER if modifie is not None
+                      else droits.COMMUNIQUE_AJOUTER, gettext("publier des communiqués"))
         if "supprimer" in request.POST:
             avis = get_object_or_404(Communique, pk=_int_or_none(request.POST["supprimer"]))
             if not _peut_retirer(request.user, avis, "auteur_id"):
@@ -261,7 +273,7 @@ def _etat_publication(quiz):
 def quiz_publication(request, pk):
     """Publie (ou retire) les résultats d'une épreuve sur l'espace public."""
     quiz = get_object_or_404(_my_quizzes(request), pk=pk)
-    droits.exiger(request.user, droits.CORRIGER, gettext("publier les résultats"))
+    droits.exiger(request.user, droits.COPIE_VERIFIER, gettext("publier les résultats"))
     avant = _etat_publication(quiz)
     quiz.resultats_publies = bool(request.POST.get("resultats_publies"))
     quiz.admis_publies = bool(request.POST.get("admis_publies"))

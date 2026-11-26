@@ -29,14 +29,14 @@ quiz.
     qui n'y sont plus sont supprimés de l'épreuve, après confirmation (25 novembre 2026).{% endcomment %}
   <div class="manquantes__actions">
     <a class="btn small secondary" href="{% url 'quiz_copies_manquantes_xlsx' quiz.pk %}">{% translate "Exporter la liste (Excel)" %}</a>
-    {% if quiz.auto_enroll and perms.grader.creer_epreuve %}
+    {% if quiz.auto_enroll and droits_compte.candidat_supprimer %}
     <form method="post" enctype="multipart/form-data" action="{% url 'quiz_absents' quiz.pk %}">{% csrf_token %}
       <input type="file" name="fichier" accept=".xlsx,.xlsm,.csv" required aria-label="{% translate "Liste sans les absents (Excel)" %}">
       <button class="btn small" type="submit">{% translate "Importer la liste sans les absents" %}</button>
     </form>
     {% endif %}
   </div>
-  {% if quiz.auto_enroll and perms.grader.creer_epreuve %}<p class="helptext helptext--serre">{% translate "Absents : exportez la liste, supprimez-y la ligne de chaque candidat qui n'a pas composé, puis importez-la. Les candidats qui ne sont plus dans le fichier sont supprimés de cette épreuve, après confirmation ; ceux qui y restent gardent leur copie à retrouver. Un candidat dont une page est scannée n'est jamais supprimé." %}</p>{% endif %}
+  {% if quiz.auto_enroll and droits_compte.candidat_supprimer %}<p class="helptext helptext--serre">{% translate "Absents : exportez la liste, supprimez-y la ligne de chaque candidat qui n'a pas composé, puis importez-la. Les candidats qui ne sont plus dans le fichier sont supprimés de cette épreuve, après confirmation ; ceux qui y restent gardent leur copie à retrouver. Un candidat dont une page est scannée n'est jamais supprimé." %}</p>{% endif %}
 </div>
 {% elif manquantes.scannees %}
 <h3 id="copies-manquantes">{% translate "Copies manquantes" %}</h3>

@@ -89,7 +89,7 @@ def epreuve_detail(request, quiz, fil=None):
     if request.method == "POST" and "passer_admis" in request.POST:
         # étape suivante d'un concours : les nouveaux admis de l'épreuve
         # précédente rejoignent la liste des candidats
-        droits.exiger(request.user, droits.CREER, gettext("modifier l'épreuve"))
+        droits.exiger(request.user, droits.EPREUVE_MODIFIER, gettext("modifier l'épreuve"))
         ajoutes, deja, n_admis = services.faire_passer_admis(quiz)
         messages.success(request, gettext('%(ajoutes)s admis ajouté(s) aux candidats (%(n_admis)s admis au total, %(deja)s déjà dans la liste).') % {"ajoutes": ajoutes, "n_admis": n_admis, "deja": deja})
         return redirect("quiz_detail", pk=quiz.pk)
@@ -277,7 +277,7 @@ def _ecrit(request, quiz, fil=None):
                       gettext("lancer la correction des copies"))
         return lancer_correction(request, quiz)
     if request.method == "POST":
-        droits.exiger(request.user, droits.CREER, gettext("modifier l'épreuve"))
+        droits.exiger(request.user, droits.EPREUVE_MODIFIER, gettext("modifier l'épreuve"))
         if "creer_matieres" in request.POST:
             # un écrit de concours créé avant ce choix : ses trois matières
             services.creer_matieres(quiz)
@@ -379,7 +379,7 @@ def _oral(request, quiz, fil=None):
     if request.method == "POST":
         if "ajouter_matiere" in request.POST or "retirer_matiere" in request.POST:
             # notes de l'oral par matière (13 novembre 2026) : une de plus, ou une de moins
-            droits.exiger(request.user, droits.CREER, gettext("modifier l'épreuve"))
+            droits.exiger(request.user, droits.EPREUVE_MODIFIER, gettext("modifier l'épreuve"))
             if "ajouter_matiere" in request.POST:
                 m = services.ajouter_matiere(quiz)
                 messages.success(request, gettext('Note ajoutée : « %(text)s ». Donnez-lui son nom, puis téléchargez le nouveau modèle Excel.') % {"text": m.text})
@@ -394,7 +394,7 @@ def _oral(request, quiz, fil=None):
                     messages.error(request, str(exc))
             return redirect("quiz_detail", pk=quiz.pk)
         if "reglages" in request.POST:
-            droits.exiger(request.user, droits.CREER, gettext("modifier l'épreuve"))
+            droits.exiger(request.user, droits.EPREUVE_MODIFIER, gettext("modifier l'épreuve"))
             ancienne_note = quiz.note_admission     # avant : le formulaire valide l'instance
             reglages_matieres, erreurs = _lire_matieres(request.POST, quiz.matieres)
             for erreur in erreurs:
@@ -418,7 +418,7 @@ def _oral(request, quiz, fil=None):
         elif "importer_notes" in request.POST:
             # Les notes de l'oral ne viennent QUE d'un fichier Excel (demande de
             # l'utilisateur, 13 novembre 2026) : ni fiche scannée, ni saisie à l'écran.
-            droits.exiger(request.user, droits.CORRIGER, gettext("saisir les notes"))
+            droits.exiger(request.user, droits.COPIE_MODIFIER, gettext("saisir les notes"))
             fichier = request.FILES.get("fichier")
             if fichier is None or not fichier.name.lower().endswith(".xlsx"):
                 messages.error(request, gettext("Choisissez le fichier Excel (.xlsx) des notes : le "

@@ -19,7 +19,7 @@ une seule liste (25 novembre 2026), la page comptée dans sa version (page_versi
     <td class="cellule--droite">{% if k.overlay_image %}
       <a class="btn small secondary" href="{{ k.overlay_image.url }}" target="_blank">{% translate "Voir" %}</a>
       {% endif %}
-      {% if droits_compte.questions %}
+      {% if droits_compte.question_supprimer %}
       <form class="inline" method="post">{% csrf_token %}
         <button class="btn small danger" type="submit" name="delete_answer_key" value="{{ k.pk }}"
                 data-confirmer="{% translate "Supprimer ce corrigé scanné ? Les bonnes réponses déjà enregistrées restent en place." %}">{% translate "Supprimer" %}</button>

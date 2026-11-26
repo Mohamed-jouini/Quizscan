@@ -4,13 +4,12 @@ L'administrateur d'établissement règle ici, pour chaque enseignant :
   - les **classes** dont il a la charge — il ne verra que celles-là ;
   - les **concours** dont il a la charge (une liste de candidats par étape, à part
     des classes) ;
-  - le droit de **créer les concours et les quiz** (et d'en saisir les questions) ;
-  - le droit de **corriger les copies** (téléverser, lancer la correction, vérifier) ;
-  - depuis le 26 novembre 2026, trois gestes seuls : **saisir les questions**,
-    **téléverser les copies scannées**, **lancer la correction**.
-Les droits sont indépendants : préparer les sujets et dépouiller ne sont
-pas toujours le travail de la même personne. Aucun ne permet de
-retoucher la note d'un QCM (voir grader/droits.py).
+  - ce qu'il peut faire, dans un **tableau** (26 novembre 2026) : pour chaque domaine
+    (concours et quiz, questions et corrigé, copies, candidats et inscriptions,
+    communiqués), ajouter, modifier, supprimer, vérifier ; et lancer la correction.
+Les cases sont indépendantes : préparer les sujets et dépouiller ne sont pas toujours
+le travail de la même personne. Aucune ne permet de retoucher la note d'un QCM (voir
+grader/droits.py).
 
 L'écran livré par Django expose bien plus (groupes, permissions unitaires,
 empreinte du mot de passe) ; on le réorganise pour que l'essentiel soit
@@ -33,16 +32,35 @@ from .models import ClassGroup
 User = get_user_model()
 
 
-def _permission(nom_complet):
-    """La permission Django derrière « grader.creer_epreuve »."""
-    application, code = nom_complet.split(".")
-    return Permission.objects.get(
-        content_type__app_label=application, codename=code)
+class TableauDroits(forms.CheckboxSelectMultiple):
+    """Les droits d'un compte en tableau (26 novembre 2026) : un domaine par ligne, un geste
+    par colonne (ajouter, modifier, supprimer, vérifier), « lancer la correction » dessous,
+    et ce que permet chaque case (grader/templates/grader/widgets/tableau_droits.html)."""
+    template_name = "grader/widgets/tableau_droits.html"
 
-# Les cases des droits fins (26 novembre 2026), et la permission de chacune.
-DROITS_FINS = [("peut_saisir_questions", droits.QUESTIONS),
-               ("peut_televerser", droits.TELEVERSER),
-               ("peut_lancer", droits.LANCER)]
+    def get_context(self, name, value, attrs):
+        contexte = super().get_context(name, value, attrs)
+        cochees = {str(v) for v in (value or [])}
+        lignes = []
+        for domaine, libelle, gestes in droits.TABLEAU:
+            cases, aides = [], []
+            for geste in droits.GESTES:
+                if geste not in gestes:
+                    cases.append(None)
+                    continue
+                code = droits.code_case(domaine, geste)
+                cases.append({"code": code, "coche": code in cochees, "aide": droits.AIDE[code],
+                              "libelle": format_lazy("{} — {}", libelle,
+                                                     droits.LIBELLES_GESTES[geste])})
+                aides.append((droits.LIBELLES_GESTES[geste], droits.AIDE[code]))
+            lignes.append({"libelle": libelle, "cases": cases, "aides": aides})
+        contexte["tableau"] = {
+            "gestes": [droits.LIBELLES_GESTES[g] for g in droits.GESTES], "lignes": lignes,
+            "lancer": {"code": "lancer_correction", "coche": "lancer_correction" in cochees,
+                       "libelle": gettext_lazy("Lancer la correction"),
+                       "aide": droits.AIDE["lancer_correction"]}}
+        return contexte
+
 
 ROLE_ENSEIGNANT = "enseignant"
 ROLE_ADMIN = "admin"
@@ -88,52 +106,11 @@ class CompteChangeForm(forms.ModelForm):
         help_text=gettext_lazy("Les listes de candidats des concours, une par étape : il voit les "
                   "étapes cochées, leurs candidats, copies et résultats."))
 
-    # Sous chaque case, ce qu'elle permet d'ajouter, de modifier, de supprimer, de vérifier
-    # (26 novembre 2026, demande de l'utilisateur ; l'administration affiche l'aide en HTML).
-    peut_creer = forms.BooleanField(
-        label=gettext_lazy("Créer les concours et les quiz"), required=False,
-        help_text=gettext_lazy(
-            "<b>Ajouter</b> : concours, quiz et leurs questions, listes de candidats, "
-            "inscriptions au registre, communiqués.<br>"
-            "<b>Modifier</b> : réglages et PDF des épreuves, questions et corrigé, listes de "
-            "candidats, ses inscriptions et ses communiqués.<br>"
-            "<b>Supprimer</b> : questions, corrigé scanné, candidats sans copie, ses "
-            "inscriptions et ses communiqués.<br>"
-            "<b>Vérifier</b> : non (voir « Corriger les copies »)."))
-    peut_corriger = forms.BooleanField(
-        label=gettext_lazy("Corriger les copies"), required=False,
-        help_text=gettext_lazy(
-            "<b>Ajouter</b> : téléverser les copies scannées.<br>"
-            "<b>Lancer</b> : la correction (ou la reprendre).<br>"
-            "<b>Vérifier</b> : chaque copie, affecter une copie non identifiée, publier les "
-            "résultats.<br>"
-            "<b>Modifier</b> : noter les réponses manuscrites et les notes d'écrit, importer les "
-            "notes d'oral — jamais la note d'un QCM, établie par lecture optique.<br>"
-            "<b>Supprimer</b> : un lot de copies."))
-    # Droits fins (26 novembre 2026, demande de l'utilisateur) : un seul geste, pour qui ne
-    # fait que celui-là ; inutiles avec le droit large qui les englobe (ci-dessus).
-    peut_saisir_questions = forms.BooleanField(
-        label=gettext_lazy("Saisir les questions"), required=False,
-        help_text=gettext_lazy(
-            "<b>Ajouter</b> : des questions (une à une, ajout rapide, import, banque de "
-            "questions).<br>"
-            "<b>Modifier</b> : la bonne réponse et le barème, le corrigé scanné.<br>"
-            "<b>Supprimer</b> : des questions, un corrigé scanné.<br>"
-            "<b>Vérifier</b> : non. Ne crée ni ne règle l'épreuve, ne produit pas les PDF. "
-            "Compris dans « Créer les concours et les quiz »."))
-    peut_televerser = forms.BooleanField(
-        label=gettext_lazy("Téléverser les copies scannées"), required=False,
-        help_text=gettext_lazy(
-            "<b>Ajouter</b> : les scans des copies.<br>"
-            "<b>Modifier</b>, <b>supprimer</b>, <b>vérifier</b> : non, ni lancer la correction. "
-            "Compris dans « Corriger les copies »."))
-    peut_lancer = forms.BooleanField(
-        label=gettext_lazy("Lancer la correction"), required=False,
-        help_text=gettext_lazy(
-            "<b>Lancer</b> : la correction des copies téléversées (ou la reprendre), identifier "
-            "automatiquement les pages d'un lot.<br>"
-            "<b>Ajouter</b>, <b>modifier</b>, <b>supprimer</b>, <b>vérifier</b> : non. Compris "
-            "dans « Corriger les copies »."))
+    # Le tableau des droits (26 novembre 2026, demande de l'utilisateur : « donne la main de
+    # choisir Ajouter, Modifier, Supprimer, Vérifier ») : une case par domaine et par geste.
+    gestes = forms.MultipleChoiceField(
+        label=gettext_lazy("Ce que ce compte peut faire"), required=False,
+        choices=[(code, code) for code in droits.CASES], widget=TableauDroits)
 
     class Meta:
         model = User
@@ -153,15 +130,12 @@ class CompteChangeForm(forms.ModelForm):
             self.fields["concours"].initial = instance.classes_attribuees.de_concours()
             self.fields["role"].initial = (
                 ROLE_ADMIN if instance.is_superuser else ROLE_ENSEIGNANT)
-            self.fields["peut_creer"].initial = droits.peut_creer(instance)
-            self.fields["peut_corriger"].initial = droits.peut_corriger(instance)
-            for champ, droit in DROITS_FINS:
-                self.fields[champ].initial = instance.has_perm(droit)
+            # les cases qu'il a, par elles-mêmes ou par un droit d'avant (paquet)
+            self.fields["gestes"].initial = droits.cases_permises(instance)
         else:
-            # Un nouvel enseignant sait faire son métier : les deux droits
-            # sont cochés d'office, à décocher si l'établissement le veut.
-            self.fields["peut_creer"].initial = True
-            self.fields["peut_corriger"].initial = True
+            # Un nouvel enseignant sait faire son métier : tout est coché d'office, à
+            # décocher si l'établissement le veut.
+            self.fields["gestes"].initial = list(droits.CASES)
 
         self.fields["is_active"].help_text = (
             gettext_lazy("Décochez pour fermer l'accès sans supprimer le compte : les "
@@ -217,26 +191,36 @@ class CompteChangeForm(forms.ModelForm):
                                       + list(self.cleaned_data.get("concours") or []))
 
     def _enregistrer_droits(self, compte):
-        """Les deux cases deviennent des permissions Django.
+        """Le tableau devient des permissions Django, case par case.
 
         Un administrateur les a toutes de toute façon (has_perm répond
         toujours oui à un super-utilisateur) : on ne lui en attribue pas.
 
-        Une case n'agit que si on l'a cochée ou décochée (26 novembre 2026) : les mêmes
-        droits figurent dans les permissions détaillées, enregistrées juste avant ; une case
-        laissée telle quelle retirait le droit qu'on venait d'y ajouter. Si les deux se
-        contredisent, la case l'emporte. Un compte neuf reçoit ce que disent ses cases.
+        Seules les cases qu'on a cochées ou décochées agissent : les mêmes droits figurent
+        dans les permissions détaillées, enregistrées juste avant (une case laissée telle
+        quelle y retirait le droit qu'on venait d'ajouter, 26 novembre 2026) ; si les deux se
+        contredisent, la case l'emporte. Décocher une case qu'un droit d'avant (paquet)
+        donnait remplace ce paquet par ses autres cases, une à une : on ne retire que ce qu'on
+        a décoché. Un compte neuf reçoit ce que disent ses cases.
         """
         if compte.is_superuser:
             return
-        cases = [("peut_creer", droits.CREER), ("peut_corriger", droits.CORRIGER)] + DROITS_FINS
-        for nom, coche in [(droit, self.cleaned_data.get(champ)) for champ, droit in cases
-                           if champ in self.changed_data or not self._compte_existant]:
-            permission = _permission(nom)
-            if coche:
-                compte.user_permissions.add(permission)
-            else:
-                compte.user_permissions.remove(permission)
+        voulues = set(self.cleaned_data.get("gestes") or [])
+        avant = set(self.fields["gestes"].initial or []) if self._compte_existant else set()
+        a_ajouter, a_retirer = voulues - avant, avant - voulues
+        if not (a_ajouter or a_retirer):
+            return
+        par_code = {p.codename: p for p in Permission.objects.filter(
+            content_type__app_label="grader",
+            codename__in=list(droits.CASES) + list(droits.PAQUETS))}
+        directes = set(compte.user_permissions.filter(content_type__app_label="grader")
+                       .values_list("codename", flat=True))
+        for paquet, cases in droits.PAQUETS.items():
+            if paquet in directes and a_retirer & set(cases):
+                compte.user_permissions.remove(par_code[paquet])
+                a_ajouter |= set(cases) - a_retirer
+        compte.user_permissions.add(*[par_code[c] for c in a_ajouter if c in par_code])
+        compte.user_permissions.remove(*[par_code[c] for c in a_retirer if c in par_code])
 
 
 # django.contrib.auth enregistre déjà User : on reprend la place.
@@ -268,15 +252,12 @@ class CompteAdmin(TitresFrancais, UserAdmin):
                                         "liste de candidats)."),
             "fields": ("concours",)}),
         (gettext_lazy("Autorisations"), {
-            "description": gettext_lazy("Chaque droit se donne séparément. Les trois derniers "
-                                        "ne servent qu'à qui ne fait que ce geste : « Créer les "
-                                        "concours et les quiz » permet déjà de saisir les "
-                                        "questions, « Corriger les copies » de téléverser et "
-                                        "de lancer la correction. Dans tous les cas, la note "
-                                        "d'un QCM reste celle de la lecture optique : un "
-                                        "enseignant ne la modifie pas."),
-            "fields": ("peut_creer", "peut_corriger", "peut_saisir_questions",
-                       "peut_televerser", "peut_lancer")}),
+            "description": gettext_lazy("Cochez, domaine par domaine, ce que ce compte peut "
+                                        "ajouter, modifier, supprimer ou vérifier ; le détail "
+                                        "de chaque case est sous le tableau. Dans tous les cas, "
+                                        "la note d'un QCM reste celle de la lecture optique : "
+                                        "un enseignant ne la modifie pas."),
+            "fields": ("gestes",)}),
         (gettext_lazy("Permissions détaillées"), {
             "classes": ("collapse",),
             "description": format_lazy(
@@ -320,18 +301,17 @@ class CompteAdmin(TitresFrancais, UserAdmin):
     def autorisations(self, obj):
         if obj.is_superuser:
             return format_html('<span class="qs-tag qs-tag--admin">{}</span>', gettext("tout"))
+        # un domaine par étiquette : entier, ou le nombre de ses cases cochées (tableau des droits)
+        permises = set(droits.cases_permises(obj))
         tags = []
-        if droits.peut_creer(obj):
-            tags.append(gettext("créer"))
-        elif obj.has_perm(droits.QUESTIONS):
-            tags.append(gettext("questions"))
-        if droits.peut_corriger(obj):
-            tags.append(gettext("corriger"))
-        else:
-            if obj.has_perm(droits.TELEVERSER):
-                tags.append(gettext("téléverser"))
-            if obj.has_perm(droits.LANCER):
-                tags.append(gettext("lancer la correction"))
+        for domaine, libelle, gestes in droits.TABLEAU:
+            n = sum(1 for g in gestes if droits.code_case(domaine, g) in permises)
+            if n == len(gestes):
+                tags.append(str(libelle))
+            elif n:
+                tags.append(f"{libelle} {n}/{len(gestes)}")
+        if "lancer_correction" in permises:
+            tags.append(gettext("lancer la correction"))
         if not tags:
             return format_html('<span class="qs-tag">{}</span>', gettext("lecture seule"))
         return format_html(

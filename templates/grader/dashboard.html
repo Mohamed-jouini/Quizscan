@@ -168,7 +168,7 @@
         <span class="empty__title">{% translate "Aucune épreuve pour le moment" %}</span>
         <p>{% blocktranslate trimmed %}Une épreuve rassemble les questions, la fiche à imprimer et les
            copies scannées.{% endblocktranslate %}</p>
-        {% if perms.grader.creer_epreuve %}
+        {% if droits_compte.epreuve_ajouter %}
         <a class="btn" href="{% url 'quiz_create' %}">{% translate "Créer la première" %}</a>
         {% endif %}
       </div>

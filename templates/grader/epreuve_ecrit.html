@@ -30,7 +30,7 @@
 <div class="grid2">
   <div class="card">
     <h2>1. {% if matieres %}{% translate "Les matières" %}{% else %}{% translate "Le sujet" %}{% endif %}</h2>
-    {% if perms.grader.creer_epreuve %}
+    {% if droits_compte.epreuve_modifier %}
     <form method="post">{% csrf_token %}
       <label for="id_title">{% translate "Titre de l'épreuve" %}</label>
       <input id="id_title" type="text" name="title" value="{{ quiz.title }}" maxlength="200" required>
@@ -91,7 +91,7 @@
   <div>
     <div class="card">
       <h2>{% translate "2. Documents à imprimer" %}</h2>
-      {% if perms.grader.creer_epreuve %}
+      {% if droits_compte.epreuve_modifier %}
       <form method="post">{% csrf_token %}
         {% if quiz.exemplaires_anonymes %}
         <label for="id_nb">{% translate "Nombre de copies anonymes" %}</label>
@@ -142,7 +142,7 @@
 
     <div class="card">
       <h2>{% translate "3. Copies corrigées à scanner" %}</h2>
-      {% if droits_compte.televerser %}
+      {% if droits_compte.copie_ajouter %}
       <form method="post" action="{% url 'quiz_upload' quiz.pk %}" enctype="multipart/form-data">{% csrf_token %}
         <label>{{ upload_form.label.label }}</label>{{ upload_form.label }}
         <label>{{ upload_form.files.label }}</label>{{ upload_form.files }}

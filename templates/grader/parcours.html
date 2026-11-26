@@ -41,15 +41,15 @@
     <div>
       {% if comp.matiere %}
       <label for="coef_m_{{ comp.matiere.pk }}">{{ comp.etape.type_court }} — <bdi>{{ comp.libelle }}</bdi></label>
-      <input id="coef_m_{{ comp.matiere.pk }}" class="champ--court" type="number" step="0.1" min="0.1" max="99" name="coef_m_{{ comp.matiere.pk }}" value="{{ comp.coefficient|stringformat:'g' }}"{% if not perms.grader.creer_epreuve %} disabled{% endif %}>
+      <input id="coef_m_{{ comp.matiere.pk }}" class="champ--court" type="number" step="0.1" min="0.1" max="99" name="coef_m_{{ comp.matiere.pk }}" value="{{ comp.coefficient|stringformat:'g' }}"{% if not droits_compte.epreuve_modifier %} disabled{% endif %}>
       {% else %}
       <label for="coef_{{ comp.etape.pk }}">{% blocktranslate trimmed with libelle=comp.libelle %}Coefficient {{ libelle }}{% endblocktranslate %}</label>
-      <input id="coef_{{ comp.etape.pk }}" class="champ--court" type="number" step="0.1" min="0" max="99" name="coef_{{ comp.etape.pk }}" value="{{ comp.coefficient|stringformat:'g' }}"{% if not perms.grader.creer_epreuve %} disabled{% endif %}>
+      <input id="coef_{{ comp.etape.pk }}" class="champ--court" type="number" step="0.1" min="0" max="99" name="coef_{{ comp.etape.pk }}" value="{{ comp.coefficient|stringformat:'g' }}"{% if not droits_compte.epreuve_modifier %} disabled{% endif %}>
       {% endif %}
     </div>
     {% endfor %}
   </div>
-  {% if perms.grader.creer_epreuve %}<p><button class="btn small" name="coefficients" value="1" type="submit">{% translate "Enregistrer" %}</button></p>{% endif %}
+  {% if droits_compte.epreuve_modifier %}<p><button class="btn small" name="coefficients" value="1" type="submit">{% translate "Enregistrer" %}</button></p>{% endif %}
 </form>
 
 <div class="card" id="liste-candidats">
