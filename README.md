@@ -858,7 +858,8 @@ compte connecté, et des panneaux arrondis sur un fond dégradé bleu → violet
 Le **logo de l'institut** (المعهد الأعلى للمحاماة — ISPA, `grader/static/grader/logo-ispa.png`,
 26 novembre 2026) est en tête de la barre latérale, de l'administration et de la page de
 connexion, à côté du nom QuizScan, et sert d'icône d'onglet sur toutes les pages. Pour le
-changer, remplacer ce fichier (carré, fond blanc, 256 px).
+changer, remplacer ce fichier (carré, fond blanc, 256 px). Le nom QuizScan est seul à côté du
+logo : plus de « D Technology » en dessous (26 novembre 2026).
 La feuille de style est écrite dans `templates/grader/base.html` : l'application
 est interne et à faible trafic, cela évite une requête de plus et garde les
 pages lisibles même si les fichiers statiques ne sont pas collectés.

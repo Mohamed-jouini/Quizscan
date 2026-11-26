@@ -233,8 +233,6 @@ body #container{
 }
 .side__name{font-weight:700;font-size:17px;letter-spacing:.1px;line-height:1.1;
   color:var(--qs-side-ink)}
-.side__name small{display:block;font-size:9.5px;font-weight:600;letter-spacing:1.3px;
-  color:var(--qs-side-muted);text-transform:uppercase;margin-top:3px}
 
 .nav{display:flex;flex-direction:column;gap:3px}
 .nav__item{
@@ -1459,7 +1457,6 @@ html[data-theme="dark"] .theme-label-when-dark{display:inline}
     width:auto;height:3px;border-radius:3px}
   .side__brand{padding:0 12px;padding-inline-start:4px}
   .side__logo{width:40px;height:40px;border-radius:10px;padding:2px}
-  .side__name small{display:none}
   .nav{flex-direction:row;gap:4px}
   .nav__item{white-space:nowrap;padding:8px 12px}
   .nav__group{display:none}
