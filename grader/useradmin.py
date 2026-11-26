@@ -88,30 +88,52 @@ class CompteChangeForm(forms.ModelForm):
         help_text=gettext_lazy("Les listes de candidats des concours, une par étape : il voit les "
                   "étapes cochées, leurs candidats, copies et résultats."))
 
+    # Sous chaque case, ce qu'elle permet d'ajouter, de modifier, de supprimer, de vérifier
+    # (26 novembre 2026, demande de l'utilisateur ; l'administration affiche l'aide en HTML).
     peut_creer = forms.BooleanField(
         label=gettext_lazy("Créer les concours et les quiz"), required=False,
-        help_text=gettext_lazy("Créer les concours et les quiz, en saisir les questions, régler "
-                               "la fiche, produire les PDF."))
+        help_text=gettext_lazy(
+            "<b>Ajouter</b> : concours, quiz et leurs questions, listes de candidats, "
+            "inscriptions au registre, communiqués.<br>"
+            "<b>Modifier</b> : réglages et PDF des épreuves, questions et corrigé, listes de "
+            "candidats, ses inscriptions et ses communiqués.<br>"
+            "<b>Supprimer</b> : questions, corrigé scanné, candidats sans copie, ses "
+            "inscriptions et ses communiqués.<br>"
+            "<b>Vérifier</b> : non (voir « Corriger les copies »)."))
     peut_corriger = forms.BooleanField(
         label=gettext_lazy("Corriger les copies"), required=False,
-        help_text=gettext_lazy("Téléverser les copies scannées, lancer la correction et "
-                  "la vérifier. Ne permet pas de modifier la note d'un QCM : "
-                  "elle est établie par lecture optique."))
+        help_text=gettext_lazy(
+            "<b>Ajouter</b> : téléverser les copies scannées.<br>"
+            "<b>Lancer</b> : la correction (ou la reprendre).<br>"
+            "<b>Vérifier</b> : chaque copie, affecter une copie non identifiée, publier les "
+            "résultats.<br>"
+            "<b>Modifier</b> : noter les réponses manuscrites et les notes d'écrit, importer les "
+            "notes d'oral — jamais la note d'un QCM, établie par lecture optique.<br>"
+            "<b>Supprimer</b> : un lot de copies."))
     # Droits fins (26 novembre 2026, demande de l'utilisateur) : un seul geste, pour qui ne
     # fait que celui-là ; inutiles avec le droit large qui les englobe (ci-dessus).
     peut_saisir_questions = forms.BooleanField(
         label=gettext_lazy("Saisir les questions"), required=False,
-        help_text=gettext_lazy("Ajouter, modifier ou supprimer les questions d'une épreuve et "
-                               "renseigner son corrigé, sans la créer ni la régler. Compris "
-                               "dans « Créer les concours et les quiz »."))
+        help_text=gettext_lazy(
+            "<b>Ajouter</b> : des questions (une à une, ajout rapide, import, banque de "
+            "questions).<br>"
+            "<b>Modifier</b> : la bonne réponse et le barème, le corrigé scanné.<br>"
+            "<b>Supprimer</b> : des questions, un corrigé scanné.<br>"
+            "<b>Vérifier</b> : non. Ne crée ni ne règle l'épreuve, ne produit pas les PDF. "
+            "Compris dans « Créer les concours et les quiz »."))
     peut_televerser = forms.BooleanField(
         label=gettext_lazy("Téléverser les copies scannées"), required=False,
-        help_text=gettext_lazy("Envoyer les scans des copies, sans lancer ni vérifier la "
-                               "correction. Compris dans « Corriger les copies »."))
+        help_text=gettext_lazy(
+            "<b>Ajouter</b> : les scans des copies.<br>"
+            "<b>Modifier</b>, <b>supprimer</b>, <b>vérifier</b> : non, ni lancer la correction. "
+            "Compris dans « Corriger les copies »."))
     peut_lancer = forms.BooleanField(
         label=gettext_lazy("Lancer la correction"), required=False,
-        help_text=gettext_lazy("Lancer (ou reprendre) la correction des copies téléversées, "
-                               "sans les vérifier. Compris dans « Corriger les copies »."))
+        help_text=gettext_lazy(
+            "<b>Lancer</b> : la correction des copies téléversées (ou la reprendre), identifier "
+            "automatiquement les pages d'un lot.<br>"
+            "<b>Ajouter</b>, <b>modifier</b>, <b>supprimer</b>, <b>vérifier</b> : non. Compris "
+            "dans « Corriger les copies »."))
 
     class Meta:
         model = User

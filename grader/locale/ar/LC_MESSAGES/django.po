@@ -6578,3 +6578,23 @@ msgstr "إدخال الأسئلة"
 #: grader/useradmin.py
 msgid "Les droits de QuizScan y figurent aussi (« quiz | … ») : les ajouter ou les retirer ici revient à cocher ou décocher leur case dans « Autorisations » ; si les deux se contredisent, la case l'emporte."
 msgstr "تظهر فيها صلاحيات QuizScan أيضًا («quiz | …»): إضافتها أو سحبها هنا تعادل تأشير خانتها أو إلغاء تأشيرها في «الصلاحيات»؛ وإن تعارض الاثنان، فالمعتمد هو الخانة."
+
+#: grader/useradmin.py
+msgid "<b>Ajouter</b> : concours, quiz et leurs questions, listes de candidats, inscriptions au registre, communiqués.<br><b>Modifier</b> : réglages et PDF des épreuves, questions et corrigé, listes de candidats, ses inscriptions et ses communiqués.<br><b>Supprimer</b> : questions, corrigé scanné, candidats sans copie, ses inscriptions et ses communiqués.<br><b>Vérifier</b> : non (voir « Corriger les copies »)."
+msgstr "<b>إضافة</b>: المناظرات والاختبارات وأسئلتها، وقوائم المترشحين، والتسجيلات في السجل، والبلاغات.<br><b>تعديل</b>: إعدادات الاختبارات وملفات PDF الخاصة بها، والأسئلة والإجابة النموذجية، وقوائم المترشحين، وتسجيلاته وبلاغاته.<br><b>حذف</b>: الأسئلة، والإجابة النموذجية الممسوحة، والمترشحين الذين لا ورقة لهم، وتسجيلاته وبلاغاته.<br><b>التحقق</b>: لا (انظر «إصلاح الأوراق»)."
+
+#: grader/useradmin.py
+msgid "<b>Ajouter</b> : téléverser les copies scannées.<br><b>Lancer</b> : la correction (ou la reprendre).<br><b>Vérifier</b> : chaque copie, affecter une copie non identifiée, publier les résultats.<br><b>Modifier</b> : noter les réponses manuscrites et les notes d'écrit, importer les notes d'oral — jamais la note d'un QCM, établie par lecture optique.<br><b>Supprimer</b> : un lot de copies."
+msgstr "<b>إضافة</b>: رفع الأوراق الممسوحة.<br><b>إطلاق</b>: الإصلاح (أو استئنافه).<br><b>التحقق</b>: من كل ورقة، وإسناد ورقة غير معرَّفة، ونشر النتائج.<br><b>تعديل</b>: تنقيط الإجابات المكتوبة بخط اليد وأعداد الكتابي، واستيراد أعداد الشفاهي — ولا تُعدَّل أبدًا علامة الاختيار من متعدد، فهي نتيجة القراءة الضوئية.<br><b>حذف</b>: دفعة من الأوراق."
+
+#: grader/useradmin.py
+msgid "<b>Ajouter</b> : des questions (une à une, ajout rapide, import, banque de questions).<br><b>Modifier</b> : la bonne réponse et le barème, le corrigé scanné.<br><b>Supprimer</b> : des questions, un corrigé scanné.<br><b>Vérifier</b> : non. Ne crée ni ne règle l'épreuve, ne produit pas les PDF. Compris dans « Créer les concours et les quiz »."
+msgstr "<b>إضافة</b>: أسئلة (واحدًا واحدًا، أو إضافة سريعة، أو استيراد، أو من بنك الأسئلة).<br><b>تعديل</b>: الإجابة الصحيحة وسلّم التنقيط، والإجابة النموذجية الممسوحة.<br><b>حذف</b>: أسئلة، وإجابة نموذجية ممسوحة.<br><b>التحقق</b>: لا. لا يُنشئ الاختبار ولا يضبطه، ولا يُنتج ملفات PDF. مشمول في «إنشاء المناظرات والاختبارات»."
+
+#: grader/useradmin.py
+msgid "<b>Ajouter</b> : les scans des copies.<br><b>Modifier</b>, <b>supprimer</b>, <b>vérifier</b> : non, ni lancer la correction. Compris dans « Corriger les copies »."
+msgstr "<b>إضافة</b>: الأوراق الممسوحة.<br><b>تعديل</b> و<b>حذف</b> و<b>تحقق</b>: لا، ولا إطلاق الإصلاح. مشمول في «إصلاح الأوراق»."
+
+#: grader/useradmin.py
+msgid "<b>Lancer</b> : la correction des copies téléversées (ou la reprendre), identifier automatiquement les pages d'un lot.<br><b>Ajouter</b>, <b>modifier</b>, <b>supprimer</b>, <b>vérifier</b> : non. Compris dans « Corriger les copies »."
+msgstr "<b>إطلاق</b>: إصلاح الأوراق المرفوعة (أو استئنافه)، والتعرّف الآلي على صفحات دفعة.<br><b>إضافة</b> و<b>تعديل</b> و<b>حذف</b> و<b>تحقق</b>: لا. مشمول في «إصلاح الأوراق»."
